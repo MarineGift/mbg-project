@@ -303,7 +303,9 @@
     },
     "contacts": {
       "title": "Contacts",
-      "empty": "No contacts registered."
+      "empty": "No contacts registered.",
+      "empty": "No contacts registered.",
+      "addContact": "Add Contact"
     },
     "engagements": {
       "title": "Engagements",
@@ -311,7 +313,8 @@
     },
     "tasks": {
       "title": "Tasks",
-      "empty": "No open tasks."
+      "empty": "No open tasks.",
+      "addTask": "Add Task"
     },
     "timeline": {
       "title": "Activity Timeline",

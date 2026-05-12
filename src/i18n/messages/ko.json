@@ -303,7 +303,9 @@
     },
     "contacts": {
       "title": "컨택트",
-      "empty": "등록된 컨택트가 없습니다."
+      "empty": "등록된 컨택트가 없습니다.",
+      "empty": "등록된 컨택트가 없습니다.",
+      "addContact": "컨택트 추가"
     },
     "engagements": {
       "title": "인게이지먼트",
@@ -311,7 +313,9 @@
     },
     "tasks": {
       "title": "태스크",
-      "empty": "열린 태스크가 없습니다."
+      "empty": "열린 태스크가 없습니다.",
+
+      "addTask": "작업 추가"
     },
     "timeline": {
       "title": "활동 타임라인",

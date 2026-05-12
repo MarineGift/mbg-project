@@ -1,10 +1,14 @@
 /**
  * app/(app)/[module]/parties/[id]/page.tsx
  *
- * 거래처 상세 (Phase 1 read-only).
+ * 거래처 상세 (Phase 1 read-only + Phase 2 child add buttons).
  *
  * URL의 module 세그먼트가 4 priority 모듈이 아니면 404.
  * URL module과 party.module이 다르면 정확한 모듈 URL로 redirect.
+ *
+ * 변경 이력:
+ *   - 2026-05-12: PartyTasksList에 partyId + module 전달 (Add Task 버튼)
+ *   - 2026-05-12: PartyContactsList에 partyId 전달 (Add Contact 버튼)
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -64,9 +68,16 @@ export default async function PartyDetailPage({ params }: PageProps) {
 
             {/* Right: contacts + engagements + tasks */}
             <div className="space-y-4">
-              <PartyContactsList contacts={full.contacts} />
+              <PartyContactsList
+                contacts={full.contacts}
+                partyId={full.party.id}
+              />
               <PartyEngagementsList engagements={full.engagements} />
-              <PartyTasksList tasks={full.tasks} />
+              <PartyTasksList
+                tasks={full.tasks}
+                partyId={full.party.id}
+                module={full.party.module}
+              />
             </div>
           </div>
         </div>

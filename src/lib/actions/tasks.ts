@@ -5,8 +5,13 @@
  *   - markTaskComplete:    status='done' + completed_at=now()
  *   - markTaskIncomplete:  status='todo' + completed_at=null
  *   - updateTaskStatus:    임의 상태 변경 (in_progress, blocked, cancelled 등)
+ *   - createTask:          신규 task 생성
+ *   - updateTaskDetails:   상세 수정 (title, description, priority, due_at)
+ *   - deleteTask:          soft delete (deleted_at = now())
  *
- * 태스크 생성/삭제는 Part 8 (Tier 2 폼).
+ * 변경 이력:
+ *   - 2026-05-12: deleteTask에서 존재하지 않는 deleted_by 컬럼 참조 제거.
+ *                 (parties와 동일한 패턴 — actor 추적은 audit log에 위임)
  */
 
 'use server';
@@ -52,16 +57,20 @@ export async function markTaskComplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id')
+    .select('id, party_id, module')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error) {
+    console.error('[tasks.markTaskComplete] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null };
+  const updated = data as { id: string; party_id: string | null; module: string | null };
   revalidatePath('/tasks');
-  if (updated.party_id) {
-    revalidatePath(`/${'investor'}/parties/${updated.party_id}`); // 임시 — 모듈 모름
+  // task에 module이 있으면 그 모듈 경로로 revalidate (이전에 임시로 'investor' 하드코딩)
+  if (updated.party_id && updated.module) {
+    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }
@@ -88,13 +97,20 @@ export async function markTaskIncomplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id')
+    .select('id, party_id, module')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error) {
+    console.error('[tasks.markTaskIncomplete] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
+  const updated = data as { id: string; party_id: string | null; module: string | null };
   revalidatePath('/tasks');
+  if (updated.party_id && updated.module) {
+    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  }
   return { ok: true };
 }
 
@@ -166,6 +182,7 @@ export async function createTask(
     .single();
 
   if (error || !data) {
+    console.error('[tasks.createTask] insert error:', error);
     return {
       ok: false,
       errorCode: 'database',
@@ -174,6 +191,9 @@ export async function createTask(
   }
 
   revalidatePath('/tasks');
+  if (parsed.data.partyId && parsed.data.module) {
+    revalidatePath(`/${parsed.data.module}/parties/${parsed.data.partyId}`);
+  }
   if (parsed.data.engagementId) {
     revalidatePath(`/engagements/${parsed.data.engagementId}`);
   }
@@ -218,13 +238,20 @@ export async function updateTaskDetails(
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id')
+    .select('id, party_id, module')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error) {
+    console.error('[tasks.updateTaskDetails] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
+  const updated = data as { id: string; party_id: string | null; module: string | null };
   revalidatePath('/tasks');
+  if (updated.party_id && updated.module) {
+    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  }
   return { ok: true };
 }
 
@@ -239,23 +266,31 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
   if (!parsed.success) return { ok: false, errorCode: 'validation' };
 
   const supabase = await createSupabaseServerClient();
+  // soft delete — audit log 트리거가 actor 자동 기록.
+  // app.tasks 스키마에 deleted_by 컬럼이 존재하지 않으므로 deleted_at만 설정.
   const { error, data } = await supabase
     .schema('app')
     .from('tasks' as never)
     .update({
       deleted_at: new Date().toISOString(),
-      deleted_by: auth.userId,
     } as never)
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id')
+    .select('id, party_id, module')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error) {
+    console.error('[tasks.deleteTask] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
+  const updated = data as { id: string; party_id: string | null; module: string | null };
   revalidatePath('/tasks');
+  if (updated.party_id && updated.module) {
+    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  }
   return { ok: true };
 }
 
@@ -289,12 +324,19 @@ export async function updateTaskStatus(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id')
+    .select('id, party_id, module')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error) {
+    console.error('[tasks.updateTaskStatus] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
+  const updated = data as { id: string; party_id: string | null; module: string | null };
   revalidatePath('/tasks');
+  if (updated.party_id && updated.module) {
+    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  }
   return { ok: true };
 }
