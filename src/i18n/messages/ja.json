@@ -465,6 +465,12 @@
     "newDraftBody": "AIが新しい返信ドラフトを生成しました。レビューキューを確認してください。"
   },
   "partyForm": {
+    "industryTags": "業界タグ",
+    "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
+    "industryTagsHint": "カンマ区切り。取引先が属する業界。",
+    "interestTags": "関心タグ",
+    "interestTagsPlaceholder": "Early Stage, AI, Growth, ...",
+    "interestTagsHint": "カンマ区切り。取引先が関心を持つ分野。",
     "createTitle": "新規取引先",
     "editTitle": "取引先を編集",
     "createDescription": "新しい取引先を追加 — 投資家、バイヤー、パートナー、顧客など",
@@ -491,9 +497,6 @@
     "city": "都市",
     "website": "ウェブサイト",
     "industry": "業界",
-    "industryTags": "タグ",
-    "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
-    "industryTagsHint": "カンマ区切り",
     "source": "ソース",
     "sourcePlaceholder": "LinkedIn、紹介、カンファレンス ...",
     "notes": "メモ",

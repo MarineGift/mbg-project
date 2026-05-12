@@ -54,3 +54,9 @@ next-env.d.ts
 
 # ===== Claude 빌드 산출물 (선택) =====
 /.claude_cache/
+
+# Phase 2 임시 디버그 파일 (자동 생성)
+*.bak
+tsc_errors.txt
+silent_errors.txt
+phase2_pages.txt

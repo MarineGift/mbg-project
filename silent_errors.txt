@@ -1,8 +1,0 @@
-﻿
-Path                                                       LineNumber Line                         
-----                                                       ---------- ----                         
-C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx         87   const parties = (error ? []
-                                                                       : (data ?? [])) as unknown a
-                                                                      s PartyRow[];                
-
-

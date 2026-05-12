@@ -8,6 +8,8 @@
  * 변경 이력:
  *   - 2026-05-11: DB 스키마와 정합 — 존재하지 않는 industry 컬럼 제거.
  *                 industry_tags / interest_tags 두 배열만 사용.
+ *   - 2026-05-12: deleteParty에서 존재하지 않는 deleted_by 컬럼 참조 제거.
+ *                 (삭제 actor 추적은 audit log 트리거에 위임)
  */
 
 'use server';
@@ -199,13 +201,13 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
   }
 
   const supabase = await createSupabaseServerClient();
-  // soft delete — trigger가 audit 자동 기록
+  // soft delete — audit log 트리거가 actor (auth.uid()) 자동 기록.
+  // deleted_by 컬럼은 app.parties 스키마에 존재하지 않음.
   const { error, data } = await supabase
     .schema('app')
     .from('parties' as never)
     .update({
       deleted_at: new Date().toISOString(),
-      deleted_by: auth.userId,
     } as never)
     .eq('id', parsed.data.partyId)
     .eq('organization_id', auth.organizationId)
