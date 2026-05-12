@@ -1,0 +1,55 @@
+'use client';
+
+import { useState } from 'react';
+import { Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ApproveDraftDialog } from './approve-draft-dialog';
+import { RejectDraftDialog } from './reject-draft-dialog';
+import type { DraftDetail } from '@/types/draft-detail';
+
+interface Props {
+  draft: DraftDetail;
+}
+
+/**
+ * pending_review 상태일 때만 표시되는 하단 액션 바.
+ * Approve / Reject 버튼이 각각 dialog를 열어 확정 절차를 거침.
+ */
+export function DraftActions({ draft }: Props) {
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+
+  if (draft.status !== 'pending_review') {
+    return null;
+  }
+
+  return (
+    <>
+      <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 px-6 py-3 border-t bg-background shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+        <Button
+          variant="outline"
+          onClick={() => setRejectOpen(true)}
+          size="sm"
+        >
+          <X className="h-4 w-4" />
+          Reject
+        </Button>
+        <Button onClick={() => setApproveOpen(true)} size="sm">
+          <Check className="h-4 w-4" />
+          Approve
+        </Button>
+      </div>
+
+      <ApproveDraftDialog
+        draft={draft}
+        open={approveOpen}
+        onOpenChange={setApproveOpen}
+      />
+      <RejectDraftDialog
+        draftId={draft.id}
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+      />
+    </>
+  );
+}

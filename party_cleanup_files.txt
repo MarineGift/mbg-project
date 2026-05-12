@@ -1,0 +1,795 @@
+﻿
+============================================================
+FILE: src\components\parties\party-header.tsx
+============================================================
+
+   1: 'use client';
+   2: 
+   3: import Link from 'next/link';
+   4: import { ArrowLeft, Globe, MapPin, Building2, Pencil } from 'lucide-react';
+   5: import { Button } from '@/components/ui/button';
+   6: import { ModuleBadge } from '@/components/common/module-badge';
+   7: import type { PartyDetail } from '@/types/party-detail';
+   8: import { cn } from '@/lib/utils';
+   9: 
+  10: interface Props {
+  11:   party: PartyDetail;
+  12: }
+  13: 
+  14: const TIER_LABELS: Record<NonNullable<PartyDetail['tier']>, string> = {
+  15:   tier_1: 'Tier 1',
+  16:   tier_2: 'Tier 2',
+  17:   tier_3: 'Tier 3',
+  18:   cold: 'Cold',
+  19: };
+  20: 
+  21: const TIER_COLORS: Record<NonNullable<PartyDetail['tier']>, string> = {
+  22:   tier_1: 'bg-amber-500 text-amber-50',
+  23:   tier_2: 'bg-slate-500 text-slate-50',
+  24:   tier_3: 'bg-stone-400 text-stone-50',
+  25:   cold: 'bg-muted text-muted-foreground',
+  26: };
+  27: 
+  28: const STATUS_COLORS: Record<PartyDetail['status'], string> = {
+  29:   active: 'text-emerald-600 dark:text-emerald-400',
+  30:   paused: 'text-amber-600 dark:text-amber-400',
+  31:   closed_won: 'text-blue-600 dark:text-blue-400',
+  32:   closed_lost: 'text-muted-foreground',
+  33:   archived: 'text-muted-foreground',
+  34: };
+  35: 
+  36: export function PartyHeader({ party }: Props) {
+  37:   return (
+  38:     <header className="border-b bg-background">
+  39:       <div className="px-6 py-3 border-b flex items-center gap-3">
+  40:         <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+  41:           <Link href={`/${party.module}/parties`} aria-label="Back">
+  42:             <ArrowLeft className="h-4 w-4" />
+  43:           </Link>
+  44:         </Button>
+  45:         <ModuleBadge module={party.module} size="sm" />
+  46:         {party.tier && (
+  47:           <span
+  48:             className={cn(
+  49:               'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+  50:               TIER_COLORS[party.tier],
+  51:             )}
+  52:           >
+  53:             {TIER_LABELS[party.tier]}
+  54:           </span>
+  55:         )}
+  56:         <span
+  57:           className={cn(
+  58:             'text-xs font-medium uppercase tracking-wide',
+  59:             STATUS_COLORS[party.status],
+  60:           )}
+  61:         >
+  62:           {party.status}
+  63:         </span>
+  64:         <Button asChild variant="outline" size="sm" className="ml-auto">
+  65:           <Link href={`/${party.module}/parties/${party.id}/edit`}>
+  66:             <Pencil className="h-3.5 w-3.5" />
+  67:             Edit
+  68:           </Link>
+  69:         </Button>
+  70:       </div>
+  71: 
+  72:       <div className="px-6 py-4">
+  73:         <h1 className="text-2xl font-semibold flex items-center gap-2">
+  74:           <Building2 className="h-6 w-6 text-muted-foreground" />
+  75:           {party.name}
+  76:         </h1>
+  77:         <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
+  78:           {party.industry && <span>{party.industry}</span>}
+  79:           {party.countryCode && (
+  80:             <span className="inline-flex items-center gap-1">
+  81:               <MapPin className="h-3 w-3" />
+  82:               {party.countryCode}
+  83:             </span>
+  84:           )}
+  85:           {party.website && (
+  86:             <a
+  87:               href={party.website}
+  88:               target="_blank"
+  89:               rel="noopener noreferrer"
+  90:               className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+  91:             >
+  92:               <Globe className="h-3 w-3" />
+  93:               {party.website.replace(/^https?:\/\//, '')}
+  94:             </a>
+  95:           )}
+  96:         </div>
+  97:         {party.tags.length > 0 && (
+  98:           <div className="flex flex-wrap gap-1 mt-2">
+  99:             {party.tags.map((tag) => (
+ 100:               <span
+ 101:                 key={tag}
+ 102:                 className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs"
+ 103:               >
+ 104:                 {tag}
+ 105:               </span>
+ 106:             ))}
+ 107:           </div>
+ 108:         )}
+ 109:       </div>
+ 110:     </header>
+ 111:   );
+ 112: }
+
+============================================================
+FILE: src\components\parties\party-form.tsx
+============================================================
+
+   1: 'use client';
+   2: 
+   3: import { useTransition } from 'react';
+   4: import { useRouter } from 'next/navigation';
+   5: import { useForm } from 'react-hook-form';
+   6: import { zodResolver } from '@hookform/resolvers/zod';
+   7: import { z } from 'zod';
+   8: import { useTranslations } from 'next-intl';
+   9: import { Loader2, Save, Trash2 } from 'lucide-react';
+  10: import { toast } from 'sonner';
+  11: import {
+  12:   Card,
+  13:   CardContent,
+  14:   CardDescription,
+  15:   CardFooter,
+  16:   CardHeader,
+  17:   CardTitle,
+  18: } from '@/components/ui/card';
+  19: import { Input } from '@/components/ui/input';
+  20: import { Label } from '@/components/ui/label';
+  21: import { Textarea } from '@/components/ui/textarea';
+  22: import { Button } from '@/components/ui/button';
+  23: import {
+  24:   Select,
+  25:   SelectContent,
+  26:   SelectItem,
+  27:   SelectTrigger,
+  28:   SelectValue,
+  29: } from '@/components/ui/select';
+  30: import {
+  31:   Dialog,
+  32:   DialogContent,
+  33:   DialogDescription,
+  34:   DialogFooter,
+  35:   DialogHeader,
+  36:   DialogTitle,
+  37: } from '@/components/ui/dialog';
+  38: import { createParty, updateParty, deleteParty } from '@/lib/actions/parties';
+  39: import type { ModuleType } from '@/types/ai';
+  40: import type { PartyDetail, PartyTier } from '@/types/party-detail';
+  41: import { useState } from 'react';
+  42: 
+  43: interface Props {
+  44:   /** edit 紐⑤뱶硫?existing party, create 紐⑤뱶硫?null + 珥덇린 module */
+  45:   mode: 'create' | 'edit';
+  46:   initialModule: ModuleType;
+  47:   existing?: PartyDetail | null;
+  48: }
+  49: 
+  50: const schema = z.object({
+  51:   name: z.string().min(1, 'Required').max(200),
+  52:   legalName: z.string().max(200).optional().or(z.literal('')),
+  53:   module: z.enum([
+  54:     'investor',
+  55:     'buyer',
+  56:     'partner',
+  57:     'customer',
+  58:     'crowdfunding',
+  59:     'product_launch',
+  60:     'sales',
+  61:   ]),
+  62:   partyType: z.enum(['company', 'individual', 'organization']),
+  63:   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),
+  64:   countryCode: z
+  65:     .string()
+  66:     .max(2)
+  67:     .optional()
+  68:     .or(z.literal(''))
+  69:     .refine((s) => !s || /^[A-Za-z]{2}$/.test(s), 'Must be 2 letters'),
+  70:   region: z.string().max(80).optional().or(z.literal('')),
+  71:   city: z.string().max(120).optional().or(z.literal('')),
+  72:   website: z
+  73:     .string()
+  74:     .max(500)
+  75:     .optional()
+  76:     .or(z.literal(''))
+  77:     .refine(
+  78:       (s) => !s || /^https?:\/\/.+/.test(s),
+  79:       'Must start with http:// or https://',
+  80:     ),
+  81:   industry: z.string().max(120).optional().or(z.literal('')),
+  82:   industryTags: z.string().max(500).optional().or(z.literal('')),
+  83:   source: z.string().max(120).optional().or(z.literal('')),
+  84:   notes: z.string().max(10_000).optional().or(z.literal('')),
+  85: });
+  86: 
+  87: type FormValues = z.infer<typeof schema>;
+  88: 
+  89: const PARTY_TYPES = ['company', 'individual', 'organization'] as const;
+  90: const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
+  91: const MODULES_PRIORITY: readonly ModuleType[] = [
+  92:   'investor',
+  93:   'buyer',
+  94:   'partner',
+  95:   'customer',
+  96: ] as const;
+  97: 
+  98: export function PartyForm({ mode, initialModule, existing }: Props) {
+  99:   const router = useRouter();
+ 100:   const t = useTranslations('partyForm');
+ 101:   const tModules = useTranslations('modules');
+ 102:   const [isPending, startTransition] = useTransition();
+ 103:   const [showDelete, setShowDelete] = useState(false);
+ 104: 
+ 105:   const {
+ 106:     register,
+ 107:     handleSubmit,
+ 108:     formState: { errors, isDirty },
+ 109:     watch,
+ 110:     setValue,
+ 111:   } = useForm<FormValues>({
+ 112:     resolver: zodResolver(schema),
+ 113:     defaultValues: existing
+ 114:       ? {
+ 115:           name: existing.name,
+ 116:           legalName: '',
+ 117:           module: existing.module,
+ 118:           partyType: 'company',
+ 119:           tier: existing.tier ?? 'tier_3',
+ 120:           countryCode: existing.countryCode ?? '',
+ 121:           region: '',
+ 122:           city: '',
+ 123:           website: existing.website ?? '',
+ 124:           industry: existing.industry ?? '',
+ 125:           industryTags: existing.tags.join(', '),
+ 126:           source: existing.source ?? '',
+ 127:           notes: existing.notes ?? '',
+ 128:         }
+ 129:       : {
+ 130:           name: '',
+ 131:           legalName: '',
+ 132:           module: initialModule,
+ 133:           partyType: 'company',
+ 134:           tier: 'tier_3',
+ 135:           countryCode: '',
+ 136:           region: '',
+ 137:           city: '',
+ 138:           website: '',
+ 139:           industry: '',
+ 140:           industryTags: '',
+ 141:           source: '',
+ 142:           notes: '',
+ 143:         },
+ 144:   });
+ 145: 
+ 146:   const selectedModule = watch('module');
+ 147:   const selectedTier = watch('tier');
+ 148:   const selectedPartyType = watch('partyType');
+ 149: 
+ 150:   const onSubmit = (values: FormValues) => {
+ 151:     startTransition(async () => {
+ 152:       const tags = values.industryTags
+ 153:         ?.split(',')
+ 154:         .map((t) => t.trim())
+ 155:         .filter(Boolean) ?? [];
+ 156: 
+ 157:       const payload = {
+ 158:         name: values.name,
+ 159:         legalName: values.legalName || null,
+ 160:         module: values.module,
+ 161:         partyType: values.partyType,
+ 162:         tier: values.tier,
+ 163:         countryCode: values.countryCode || null,
+ 164:         region: values.region || null,
+ 165:         city: values.city || null,
+ 166:         website: values.website || null,
+ 167:         industry: values.industry || null,
+ 168:         industryTags: tags,
+ 169:         interestTags: [],
+ 170:         source: values.source || null,
+ 171:         notes: values.notes || null,
+ 172:       };
+ 173: 
+ 174:       if (mode === 'create') {
+ 175:         const result = await createParty(payload);
+ 176:         if (result.ok && result.partyId) {
+ 177:           toast.success(t('created'));
+ 178:           router.push(`/${values.module}/parties/${result.partyId}`);
+ 179:         } else {
+ 180:           toast.error(result.errorMessage ?? t('saveFailed'));
+ 181:         }
+ 182:       } else if (existing) {
+ 183:         const result = await updateParty({ partyId: existing.id, ...payload });
+ 184:         if (result.ok) {
+ 185:           toast.success(t('updated'));
+ 186:           router.push(`/${values.module}/parties/${existing.id}`);
+ 187:         } else {
+ 188:           toast.error(result.errorMessage ?? t('saveFailed'));
+ 189:         }
+ 190:       }
+ 191:     });
+ 192:   };
+ 193: 
+ 194:   const onDelete = () => {
+ 195:     if (!existing) return;
+ 196:     startTransition(async () => {
+ 197:       const result = await deleteParty({ partyId: existing.id });
+ 198:       // deleteParty媛 ?깃났 ??redirect瑜??몄텧?섎?濡??꾨떖 ????
+ 199:       if (!result.ok) {
+ 200:         toast.error(result.errorMessage ?? t('deleteFailed'));
+ 201:         setShowDelete(false);
+ 202:       }
+ 203:     });
+ 204:   };
+ 205: 
+ 206:   return (
+ 207:     <form onSubmit={handleSubmit(onSubmit)} noValidate>
+ 208:       <Card>
+ 209:         <CardHeader>
+ 210:           <CardTitle>{mode === 'create' ? t('createTitle') : t('editTitle')}</CardTitle>
+ 211:           <CardDescription>
+ 212:             {mode === 'create' ? t('createDescription') : t('editDescription')}
+ 213:           </CardDescription>
+ 214:         </CardHeader>
+ 215:         <CardContent className="space-y-4">
+ 216:           {/* Name */}
+ 217:           <div className="space-y-2">
+ 218:             <Label htmlFor="party-name">{t('name')} *</Label>
+ 219:             <Input
+ 220:               id="party-name"
+ 221:               {...register('name')}
+ 222:               disabled={isPending}
+ 223:               aria-invalid={errors.name ? 'true' : undefined}
+ 224:             />
+ 225:             {errors.name && (
+ 226:               <p className="text-xs text-destructive">{errors.name.message}</p>
+ 227:             )}
+ 228:           </div>
+ 229: 
+ 230:           {/* Module + Type + Tier ????*/}
+ 231:           <div className="grid grid-cols-3 gap-3">
+ 232:             <div className="space-y-2">
+ 233:               <Label htmlFor="party-module">{t('module')} *</Label>
+ 234:               <Select
+ 235:                 value={selectedModule}
+ 236:                 onValueChange={(v) => setValue('module', v as ModuleType, { shouldDirty: true })}
+ 237:                 disabled={isPending}
+ 238:               >
+ 239:                 <SelectTrigger id="party-module">
+ 240:                   <SelectValue />
+ 241:                 </SelectTrigger>
+ 242:                 <SelectContent>
+ 243:                   {MODULES_PRIORITY.map((m) => (
+ 244:                     <SelectItem key={m} value={m}>
+ 245:                       {tModules(m)}
+ 246:                     </SelectItem>
+ 247:                   ))}
+ 248:                 </SelectContent>
+ 249:               </Select>
+ 250:             </div>
+ 251:             <div className="space-y-2">
+ 252:               <Label htmlFor="party-type">{t('partyType')}</Label>
+ 253:               <Select
+ 254:                 value={selectedPartyType}
+ 255:                 onValueChange={(v) =>
+ 256:                   setValue('partyType', v as FormValues['partyType'], { shouldDirty: true })
+ 257:                 }
+ 258:                 disabled={isPending}
+ 259:               >
+ 260:                 <SelectTrigger id="party-type">
+ 261:                   <SelectValue />
+ 262:                 </SelectTrigger>
+ 263:                 <SelectContent>
+ 264:                   {PARTY_TYPES.map((pt) => (
+ 265:                     <SelectItem key={pt} value={pt}>
+ 266:                       {t(`partyTypes.${pt}`)}
+ 267:                     </SelectItem>
+ 268:                   ))}
+ 269:                 </SelectContent>
+ 270:               </Select>
+ 271:             </div>
+ 272:             <div className="space-y-2">
+ 273:               <Label htmlFor="party-tier">{t('tier')}</Label>
+ 274:               <Select
+ 275:                 value={selectedTier}
+ 276:                 onValueChange={(v) =>
+ 277:                   setValue('tier', v as PartyTier, { shouldDirty: true })
+ 278:                 }
+ 279:                 disabled={isPending}
+ 280:               >
+ 281:                 <SelectTrigger id="party-tier">
+ 282:                   <SelectValue />
+ 283:                 </SelectTrigger>
+ 284:                 <SelectContent>
+ 285:                   {TIERS.map((tier) => (
+ 286:                     <SelectItem key={tier} value={tier}>
+ 287:                       {t(`tiers.${tier}`)}
+ 288:                     </SelectItem>
+ 289:                   ))}
+ 290:                 </SelectContent>
+ 291:               </Select>
+ 292:             </div>
+ 293:           </div>
+ 294: 
+ 295:           {/* Legal name */}
+ 296:           <div className="space-y-2">
+ 297:             <Label htmlFor="party-legal">{t('legalName')}</Label>
+ 298:             <Input
+ 299:               id="party-legal"
+ 300:               {...register('legalName')}
+ 301:               disabled={isPending}
+ 302:               placeholder={t('legalNamePlaceholder')}
+ 303:             />
+ 304:           </div>
+ 305: 
+ 306:           {/* Location grid */}
+ 307:           <div className="grid grid-cols-3 gap-3">
+ 308:             <div className="space-y-2">
+ 309:               <Label htmlFor="party-country">{t('countryCode')}</Label>
+ 310:               <Input
+ 311:                 id="party-country"
+ 312:                 {...register('countryCode')}
+ 313:                 disabled={isPending}
+ 314:                 placeholder="KR"
+ 315:                 maxLength={2}
+ 316:                 aria-invalid={errors.countryCode ? 'true' : undefined}
+ 317:               />
+ 318:               {errors.countryCode && (
+ 319:                 <p className="text-xs text-destructive">{errors.countryCode.message}</p>
+ 320:               )}
+ 321:             </div>
+ 322:             <div className="space-y-2">
+ 323:               <Label htmlFor="party-region">{t('region')}</Label>
+ 324:               <Input id="party-region" {...register('region')} disabled={isPending} />
+ 325:             </div>
+ 326:             <div className="space-y-2">
+ 327:               <Label htmlFor="party-city">{t('city')}</Label>
+ 328:               <Input id="party-city" {...register('city')} disabled={isPending} />
+ 329:             </div>
+ 330:           </div>
+ 331: 
+ 332:           {/* Website + Industry */}
+ 333:           <div className="grid grid-cols-2 gap-3">
+ 334:             <div className="space-y-2">
+ 335:               <Label htmlFor="party-website">{t('website')}</Label>
+ 336:               <Input
+ 337:                 id="party-website"
+ 338:                 {...register('website')}
+ 339:                 disabled={isPending}
+ 340:                 placeholder="https://example.com"
+ 341:                 aria-invalid={errors.website ? 'true' : undefined}
+ 342:               />
+ 343:               {errors.website && (
+ 344:                 <p className="text-xs text-destructive">{errors.website.message}</p>
+ 345:               )}
+ 346:             </div>
+ 347:             <div className="space-y-2">
+ 348:               <Label htmlFor="party-industry">{t('industry')}</Label>
+ 349:               <Input id="party-industry" {...register('industry')} disabled={isPending} />
+ 350:             </div>
+ 351:           </div>
+ 352: 
+ 353:           {/* Tags */}
+ 354:           <div className="space-y-2">
+ 355:             <Label htmlFor="party-tags">{t('industryTags')}</Label>
+ 356:             <Input
+ 357:               id="party-tags"
+ 358:               {...register('industryTags')}
+ 359:               disabled={isPending}
+ 360:               placeholder={t('industryTagsPlaceholder')}
+ 361:             />
+ 362:             <p className="text-xs text-muted-foreground">{t('industryTagsHint')}</p>
+ 363:           </div>
+ 364: 
+ 365:           {/* Source */}
+ 366:           <div className="space-y-2">
+ 367:             <Label htmlFor="party-source">{t('source')}</Label>
+ 368:             <Input
+ 369:               id="party-source"
+ 370:               {...register('source')}
+ 371:               disabled={isPending}
+ 372:               placeholder={t('sourcePlaceholder')}
+ 373:             />
+ 374:           </div>
+ 375: 
+ 376:           {/* Notes */}
+ 377:           <div className="space-y-2">
+ 378:             <Label htmlFor="party-notes">{t('notes')}</Label>
+ 379:             <Textarea
+ 380:               id="party-notes"
+ 381:               {...register('notes')}
+ 382:               disabled={isPending}
+ 383:               rows={5}
+ 384:             />
+ 385:           </div>
+ 386:         </CardContent>
+ 387: 
+ 388:         <CardFooter className="flex justify-between">
+ 389:           {mode === 'edit' && (
+ 390:             <Button
+ 391:               type="button"
+ 392:               variant="destructive"
+ 393:               onClick={() => setShowDelete(true)}
+ 394:               disabled={isPending}
+ 395:             >
+ 396:               <Trash2 className="h-4 w-4" />
+ 397:               {t('delete')}
+ 398:             </Button>
+ 399:           )}
+ 400:           <div className="flex gap-2 ml-auto">
+ 401:             <Button
+ 402:               type="button"
+ 403:               variant="outline"
+ 404:               onClick={() => router.back()}
+ 405:               disabled={isPending}
+ 406:             >
+ 407:               {t('cancel')}
+ 408:             </Button>
+ 409:             <Button type="submit" disabled={isPending || (mode === 'edit' && !isDirty)}>
+ 410:               {isPending ? (
+ 411:                 <Loader2 className="h-4 w-4 animate-spin" />
+ 412:               ) : (
+ 413:                 <Save className="h-4 w-4" />
+ 414:               )}
+ 415:               {mode === 'create' ? t('create') : t('save')}
+ 416:             </Button>
+ 417:           </div>
+ 418:         </CardFooter>
+ 419:       </Card>
+ 420: 
+ 421:       {/* Delete confirmation */}
+ 422:       {existing && (
+ 423:         <Dialog open={showDelete} onOpenChange={setShowDelete}>
+ 424:           <DialogContent>
+ 425:             <DialogHeader>
+ 426:               <DialogTitle>{t('deleteConfirmTitle')}</DialogTitle>
+ 427:               <DialogDescription>
+ 428:                 {t('deleteConfirmDescription', { name: existing.name })}
+ 429:               </DialogDescription>
+ 430:             </DialogHeader>
+ 431:             <DialogFooter>
+ 432:               <Button
+ 433:                 variant="outline"
+ 434:                 onClick={() => setShowDelete(false)}
+ 435:                 disabled={isPending}
+ 436:               >
+ 437:                 {t('cancel')}
+ 438:               </Button>
+ 439:               <Button variant="destructive" onClick={onDelete} disabled={isPending}>
+ 440:                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+ 441:                 {t('deleteConfirm')}
+ 442:               </Button>
+ 443:             </DialogFooter>
+ 444:           </DialogContent>
+ 445:         </Dialog>
+ 446:       )}
+ 447:     </form>
+ 448:   );
+ 449: }
+
+============================================================
+FILE: src\lib\actions\parties.ts
+============================================================
+
+   1: /**
+   2:  * lib/actions/parties.ts
+   3:  *
+   4:  * Party Server Actions ???앹꽦, ?섏젙, ??젣.
+   5:  *
+   6:  * ??젣??soft delete (deleted_at = now()). ?몃━嫄곌? audit log ?먮룞.
+   7:  */
+   8: 
+   9: 'use server';
+  10: 
+  11: import { revalidatePath } from 'next/cache';
+  12: import { redirect } from 'next/navigation';
+  13: import { z } from 'zod';
+  14: import { requireAuth, type AuthContext } from '@/lib/auth';
+  15: import { createSupabaseServerClient } from '@/lib/supabase/server';
+  16: import type { ModuleType } from '@/types/ai';
+  17: 
+  18: export interface PartyActionResult {
+  19:   ok: boolean;
+  20:   errorCode?: 'unauthorized' | 'validation' | 'not_found' | 'database';
+  21:   errorMessage?: string;
+  22:   /** create ?깃났 ????party id */
+  23:   partyId?: string;
+  24: }
+  25: 
+  26: const partySchema = z.object({
+  27:   name: z.string().min(1, 'Name is required').max(200),
+  28:   legalName: z.string().max(200).optional().nullable(),
+  29:   module: z.enum([
+  30:     'investor',
+  31:     'buyer',
+  32:     'partner',
+  33:     'customer',
+  34:     'crowdfunding',
+  35:     'product_launch',
+  36:     'sales',
+  37:   ]),
+  38:   partyType: z.enum(['company', 'individual', 'organization']).default('company'),
+  39:   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']).optional().nullable(),
+  40:   countryCode: z
+  41:     .string()
+  42:     .length(2, 'Country code must be 2 letters')
+  43:     .optional()
+  44:     .nullable()
+  45:     .or(z.literal('').transform(() => null)),
+  46:   region: z.string().max(80).optional().nullable(),
+  47:   city: z.string().max(120).optional().nullable(),
+  48:   website: z
+  49:     .string()
+  50:     .url('Must be a valid URL')
+  51:     .max(500)
+  52:     .optional()
+  53:     .nullable()
+  54:     .or(z.literal('').transform(() => null)),
+  55:   industry: z.string().max(120).optional().nullable(),
+  56:   industryTags: z.array(z.string().max(40)).max(20).optional().default([]),
+  57:   interestTags: z.array(z.string().max(40)).max(20).optional().default([]),
+  58:   source: z.string().max(120).optional().nullable(),
+  59:   notes: z.string().max(10_000).optional().nullable(),
+  60: });
+  61: 
+  62: export async function createParty(input: z.input<typeof partySchema>): Promise<PartyActionResult> {
+  63:   let auth: AuthContext;
+  64:   try {
+  65:     auth = await requireAuth();
+  66:   } catch {
+  67:     return { ok: false, errorCode: 'unauthorized' };
+  68:   }
+  69:   const parsed = partySchema.safeParse(input);
+  70:   if (!parsed.success) {
+  71:     return {
+  72:       ok: false,
+  73:       errorCode: 'validation',
+  74:       errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input',
+  75:     };
+  76:   }
+  77: 
+  78:   const supabase = await createSupabaseServerClient();
+  79:   const insertRow: Record<string, unknown> = {
+  80:     organization_id: auth.organizationId,
+  81:     name: parsed.data.name.trim(),
+  82:     legal_name: parsed.data.legalName?.trim() || null,
+  83:     module: parsed.data.module,
+  84:     party_type: parsed.data.partyType,
+  85:     tier: parsed.data.tier ?? 'tier_3',
+  86:     country_code: parsed.data.countryCode || null,
+  87:     region: parsed.data.region?.trim() || null,
+  88:     city: parsed.data.city?.trim() || null,
+  89:     website: parsed.data.website || null,
+  90:     industry: parsed.data.industry?.trim() || null,
+  91:     industry_tags: parsed.data.industryTags ?? [],
+  92:     interest_tags: parsed.data.interestTags ?? [],
+  93:     source: parsed.data.source?.trim() || null,
+  94:     notes: parsed.data.notes?.trim() || null,
+  95:     created_by: auth.userId,
+  96:   };
+  97: 
+  98:   const { data, error } = await supabase
+  99:     .schema('app')
+ 100:     .from('parties' as never)
+ 101:     .insert(insertRow as never)
+ 102:     .select('id')
+ 103:     .single();
+ 104: 
+ 105:   if (error || !data) {
+ 106:     return {
+ 107:       ok: false,
+ 108:       errorCode: 'database',
+ 109:       errorMessage: error?.message ?? 'Insert failed',
+ 110:     };
+ 111:   }
+ 112:   const partyId = (data as { id: string }).id;
+ 113: 
+ 114:   revalidatePath(`/${parsed.data.module}/parties`);
+ 115:   return { ok: true, partyId };
+ 116: }
+ 117: 
+ 118: const updateSchema = partySchema.extend({
+ 119:   partyId: z.string().uuid(),
+ 120: });
+ 121: 
+ 122: export async function updateParty(
+ 123:   input: z.input<typeof updateSchema>,
+ 124: ): Promise<PartyActionResult> {
+ 125:   let auth: AuthContext;
+ 126:   try {
+ 127:     auth = await requireAuth();
+ 128:   } catch {
+ 129:     return { ok: false, errorCode: 'unauthorized' };
+ 130:   }
+ 131:   const parsed = updateSchema.safeParse(input);
+ 132:   if (!parsed.success) {
+ 133:     return {
+ 134:       ok: false,
+ 135:       errorCode: 'validation',
+ 136:       errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input',
+ 137:     };
+ 138:   }
+ 139: 
+ 140:   const supabase = await createSupabaseServerClient();
+ 141:   const updates: Record<string, unknown> = {
+ 142:     name: parsed.data.name.trim(),
+ 143:     legal_name: parsed.data.legalName?.trim() || null,
+ 144:     module: parsed.data.module,
+ 145:     party_type: parsed.data.partyType,
+ 146:     tier: parsed.data.tier ?? 'tier_3',
+ 147:     country_code: parsed.data.countryCode || null,
+ 148:     region: parsed.data.region?.trim() || null,
+ 149:     city: parsed.data.city?.trim() || null,
+ 150:     website: parsed.data.website || null,
+ 151:     industry: parsed.data.industry?.trim() || null,
+ 152:     industry_tags: parsed.data.industryTags ?? [],
+ 153:     interest_tags: parsed.data.interestTags ?? [],
+ 154:     source: parsed.data.source?.trim() || null,
+ 155:     notes: parsed.data.notes?.trim() || null,
+ 156:     updated_by: auth.userId,
+ 157:   };
+ 158: 
+ 159:   const { error, data } = await supabase
+ 160:     .schema('app')
+ 161:     .from('parties' as never)
+ 162:     .update(updates as never)
+ 163:     .eq('id', parsed.data.partyId)
+ 164:     .eq('organization_id', auth.organizationId)
+ 165:     .is('deleted_at', null)
+ 166:     .select('id, module')
+ 167:     .maybeSingle();
+ 168: 
+ 169:   if (error) {
+ 170:     return { ok: false, errorCode: 'database', errorMessage: error.message };
+ 171:   }
+ 172:   if (!data) {
+ 173:     return { ok: false, errorCode: 'not_found' };
+ 174:   }
+ 175:   const updated = data as { id: string; module: ModuleType };
+ 176: 
+ 177:   revalidatePath(`/${updated.module}/parties/${parsed.data.partyId}`);
+ 178:   revalidatePath(`/${updated.module}/parties`);
+ 179:   return { ok: true, partyId: parsed.data.partyId };
+ 180: }
+ 181: 
+ 182: const deleteSchema = z.object({
+ 183:   partyId: z.string().uuid(),
+ 184: });
+ 185: 
+ 186: export async function deleteParty(input: { partyId: string }): Promise<PartyActionResult> {
+ 187:   let auth: AuthContext;
+ 188:   try {
+ 189:     auth = await requireAuth();
+ 190:   } catch {
+ 191:     return { ok: false, errorCode: 'unauthorized' };
+ 192:   }
+ 193:   const parsed = deleteSchema.safeParse(input);
+ 194:   if (!parsed.success) {
+ 195:     return { ok: false, errorCode: 'validation' };
+ 196:   }
+ 197: 
+ 198:   const supabase = await createSupabaseServerClient();
+ 199:   // soft delete ??trigger媛 audit ?먮룞 湲곕줉
+ 200:   const { error, data } = await supabase
+ 201:     .schema('app')
+ 202:     .from('parties' as never)
+ 203:     .update({
+ 204:       deleted_at: new Date().toISOString(),
+ 205:       deleted_by: auth.userId,
+ 206:     } as never)
+ 207:     .eq('id', parsed.data.partyId)
+ 208:     .eq('organization_id', auth.organizationId)
+ 209:     .is('deleted_at', null)
+ 210:     .select('module')
+ 211:     .maybeSingle();
+ 212: 
+ 213:   if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+ 214:   if (!data) return { ok: false, errorCode: 'not_found' };
+ 215:   const module = (data as { module: ModuleType }).module;
+ 216: 
+ 217:   revalidatePath(`/${module}/parties`);
+ 218:   redirect(`/${module}/parties`);
+ 219: }

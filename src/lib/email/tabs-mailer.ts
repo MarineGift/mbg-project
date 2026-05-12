@@ -1,27 +1,53 @@
-import nodemailer, { type Transporter } from 'nodemailer';
+/**
+ * lib/email/tabs-mailer.ts
+ *
+ * TABS Mailer 4 외부 시스템과의 단일 통합점.
+ *
+ * 책임:
+ *   - SMTP 인증 분기 (PLAIN / LOGIN / IP whitelist)
+ *   - 단건 발송 (sendOne) — X-URM-* 헤더 부착
+ *   - 캠페인 등록 (createCampaign)
+ *   - 통계 조회 (getCampaignStats)
+ *   - mail_merge_jobs.progress 동기화 (syncCampaignToMergeJob)
+ *   - quiet hours·rate limit 클라이언트 측 검증
+ *
+ * 비책임:
+ *   - 수신자 명단 해석 (mail-merge-worker)
+ *   - bounces·complaints 후처리 (운영 시 별도 모듈)
+ *   - unsubscribe 관리 (별도)
+ *
+ * 운영 정보 미수령 사항(STEP 7 시작 전 탭스랩 확정 필요):
+ *   1. 캠페인 등록 API 엔드포인트·페이로드 형식
+ *   2. 통계 DB(MS SQL Server) 스키마·접속 방식
+ *   3. X-URM-* 헤더 통과 여부
+ *
+ * 위 3건이 미정인 동안에는 tabs-mailer.mock.ts를 사용한다.
+ */
+
+import nodemailer, { type Transporter, type SentMessageInfo } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
-import { applyLiquidVariables } from '@/lib/ai/prompt-renderer';
-import type {
-  SendOneInput,
-  SendOneOutput,
-  CreateCampaignInput,
-  CreateCampaignOutput,
-  CampaignProgress,
-  CampaignStats,
-  QuietHours,
-  EmailAddress,
-} from '@/types/email';
+import { env, isUsingMockMailer } from '../env';
+import {
+  URM_HEADER_NAMES,
+  type SendOneInput,
+  type SendOneOutput,
+  type CampaignParams,
+  type CampaignCreateResult,
+  type TabsCampaignStats,
+} from '../../types/email';
+import { evaluateQuietHours } from './quiet-hours';
 
-// ───────────────────────────────────────────────────────────────────
-// 에러
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 1. 에러 클래스
+ * ============================================================ */
 
 export class TabsMailerError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  public override readonly cause?: unknown;
+  constructor(message: string, cause?: unknown) {
     super(message);
     this.name = 'TabsMailerError';
+    this.cause = cause;
   }
 }
 
@@ -35,150 +61,100 @@ export class TabsMailerAuthError extends TabsMailerError {
 export class TabsMailerQuietHoursError extends TabsMailerError {
   constructor(
     message: string,
-    public readonly nextSendAfter: Date,
-    public readonly quietHours: QuietHours,
+    public readonly reason: string,
+    public readonly nextAllowedAt?: string,
   ) {
     super(message);
     this.name = 'TabsMailerQuietHoursError';
   }
 }
 
-export class TabsMailerCampaignNotFoundError extends TabsMailerError {
-  constructor(public readonly tabsCampaignId: string) {
-    super(`TABS campaign not found: ${tabsCampaignId}`);
-    this.name = 'TabsMailerCampaignNotFoundError';
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────
-// 모드 식별
-// ───────────────────────────────────────────────────────────────────
-
-function detectMockMode(): boolean {
-  if (env.NODE_ENV === 'test') return true;
-  const host = env.TABS_MAILER_HOST.toLowerCase();
-  return host === 'mock' || host.startsWith('mock.') || host === 'localhost' || host === '127.0.0.1';
-}
-
-// ───────────────────────────────────────────────────────────────────
-// Quiet Hours 평가
-// ───────────────────────────────────────────────────────────────────
-
-export function evaluateQuietHours(
-  now: Date,
-  quietHours: QuietHours,
-): { isQuiet: boolean; nextSendAfter: Date } {
-  const { timezone, start, end, daysOfWeek } = quietHours;
-
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    weekday: 'short',
-    hour12: false,
-  });
-  const parts = fmt.formatToParts(now);
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
-  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
-  const weekdayStr = parts.find((p) => p.type === 'weekday')?.value ?? '';
-  const weekdayMap: Record<string, number> = {
-    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
-  };
-  const dow = weekdayMap[weekdayStr] ?? -1;
-
-  if (daysOfWeek && daysOfWeek.length > 0 && !daysOfWeek.includes(dow)) {
-    return { isQuiet: false, nextSendAfter: now };
-  }
-
-  const nowMin = hour * 60 + minute;
-  const startMin = parseHHMM(start);
-  const endMin = parseHHMM(end);
-
-  let isQuiet = false;
-  if (startMin <= endMin) {
-    isQuiet = nowMin >= startMin && nowMin < endMin;
-  } else {
-    isQuiet = nowMin >= startMin || nowMin < endMin;
-  }
-
-  if (!isQuiet) {
-    return { isQuiet: false, nextSendAfter: now };
-  }
-
-  let deltaMin = endMin - nowMin;
-  if (deltaMin <= 0) deltaMin += 24 * 60;
-  const nextSendAfter = new Date(now.getTime() + deltaMin * 60 * 1000);
-  return { isQuiet: true, nextSendAfter };
-}
-
-function parseHHMM(s: string): number {
-  const parts = s.split(':');
-  const h = Number(parts[0]);
-  const m = Number(parts[1]);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) {
-    throw new TabsMailerError(`Invalid HH:MM format: ${s}`);
-  }
-  return h * 60 + m;
-}
-
-// ───────────────────────────────────────────────────────────────────
-// TabsMailerClient
-// ───────────────────────────────────────────────────────────────────
-
-export class TabsMailerClient {
-  private readonly mock: boolean;
-  private transporter: Transporter | null;
-
+export class TabsMailerRateLimitError extends TabsMailerError {
   constructor(
-    private readonly supabase: SupabaseClient,
-    transporter?: Transporter,
+    message: string,
+    public readonly observed: number,
+    public readonly limit: number,
+    public readonly window: 'minute' | 'hour',
   ) {
-    this.mock = detectMockMode();
+    super(message);
+    this.name = 'TabsMailerRateLimitError';
+  }
+}
 
-    if (transporter) {
-      this.transporter = transporter;
-      return;
-    }
-    if (this.mock) {
-      this.transporter = null;
-      return;
-    }
+export class TabsMailerNotImplementedError extends TabsMailerError {
+  constructor(method: string) {
+    super(
+      `${method}: pending TABS Mailer 4 specification from 탭스랩 — use mock adapter for now`,
+    );
+    this.name = 'TabsMailerNotImplementedError';
+  }
+}
 
-    const config = this.buildTransportConfig();
-    this.transporter = nodemailer.createTransport(config);
+/* ============================================================
+ * 2. ITabsMailerClient 인터페이스
+ * ----------------------------------------------------------
+ * Mock 어댑터(tabs-mailer.mock.ts)가 동일 형태로 구현하므로
+ * 호출자는 인터페이스만 의존하면 된다.
+ * ============================================================ */
+export interface ITabsMailerClient {
+  verify(): Promise<void>;
+  sendOne(input: SendOneInput): Promise<SendOneOutput>;
+  createCampaign(params: CampaignParams): Promise<CampaignCreateResult>;
+  getCampaignStats(tabsCampaignId: string): Promise<TabsCampaignStats>;
+  syncCampaignToMergeJob(
+    supabase: SupabaseClient,
+    organizationId: string,
+    jobId: string,
+  ): Promise<void>;
+  close(): Promise<void>;
+}
+
+/* ============================================================
+ * 3. TabsMailerClient (실 SMTP 어댑터)
+ * ============================================================ */
+
+export interface TabsMailerOptions {
+  /** 단위 테스트에서 nodemailer transporter를 주입할 때 사용. */
+  transporter?: Transporter;
+  /** 단위 테스트에서 시각을 고정할 때 사용. */
+  nowProvider?: () => Date;
+}
+
+export class TabsMailerClient implements ITabsMailerClient {
+  private transporter: Transporter;
+  private readonly nowProvider: () => Date;
+
+  constructor(options: TabsMailerOptions = {}) {
+    this.nowProvider = options.nowProvider ?? (() => new Date());
+    this.transporter = options.transporter ?? this.buildTransporter();
   }
 
-  private buildTransportConfig(): SMTPTransport.Options {
+  private buildTransporter(): Transporter {
     const config: SMTPTransport.Options = {
       host: env.TABS_MAILER_HOST,
       port: env.TABS_MAILER_PORT,
       secure: env.TABS_MAILER_USE_TLS && env.TABS_MAILER_PORT === 465,
       requireTLS: env.TABS_MAILER_USE_TLS && env.TABS_MAILER_PORT !== 465,
+      // SMTP 명시적 STARTTLS는 secure=false + requireTLS=true 조합
     };
 
-    switch (env.TABS_MAILER_AUTH_METHOD) {
-      case 'plain':
-      case 'login': {
-        const user = env.TABS_MAILER_USERNAME;
-        const pass = env.TABS_MAILER_PASSWORD;
-        if (!user || !pass) {
-          throw new TabsMailerAuthError(
-            `TABS_MAILER_USERNAME/PASSWORD required for auth method '${env.TABS_MAILER_AUTH_METHOD}'`,
-          );
-        }
-        config.auth = { type: 'login', user, pass };
-        break;
-      }
-      case 'ip_whitelist':
-        break;
+    if (
+      env.TABS_MAILER_AUTH_METHOD === 'plain' ||
+      env.TABS_MAILER_AUTH_METHOD === 'login'
+    ) {
+      config.auth = {
+        type: 'login',
+        user: env.TABS_MAILER_USERNAME ?? '',
+        pass: env.TABS_MAILER_PASSWORD ?? '',
+      };
     }
-    return config;
+    // ip_whitelist는 auth 미지정 → TABS 측이 IP로 검증
+
+    return nodemailer.createTransport(config);
   }
 
+  /** SMTP 연결·인증 확인. 부팅 헬스체크에서 호출. */
   async verify(): Promise<void> {
-    if (this.mock || !this.transporter) {
-      return;
-    }
     try {
       await this.transporter.verify();
     } catch (err) {
@@ -189,437 +165,301 @@ export class TabsMailerClient {
     }
   }
 
-  close(): void {
-    if (this.transporter && !this.mock) {
-      this.transporter.close();
-    }
-    this.transporter = null;
-  }
-
+  /* --------------------------------------------------------
+   * sendOne — 단건 발송
+   * 1. quiet hours 검증 (옵션)
+   * 2. URM 헤더 부착
+   * 3. nodemailer.sendMail
+   * -------------------------------------------------------- */
   async sendOne(input: SendOneInput): Promise<SendOneOutput> {
-    if (input.quietHours) {
-      const { isQuiet, nextSendAfter } = evaluateQuietHours(new Date(), input.quietHours);
-      if (isQuiet && (input.enforceQuietHours ?? true)) {
+    // [1] quiet hours
+    if (!input.bypassQuietHours && input.quietHours) {
+      const verdict = evaluateQuietHours(input.quietHours, this.nowProvider());
+      if (verdict.blocked) {
         throw new TabsMailerQuietHoursError(
-          `Quiet hours active until ${nextSendAfter.toISOString()}`,
-          nextSendAfter,
-          input.quietHours,
+          `Send blocked by quiet hours: ${verdict.reason ?? 'unknown'}`,
+          verdict.reason ?? 'unknown',
+          verdict.nextAllowedAt,
         );
       }
     }
 
-    const urmHeaderRecord = this.buildUrmHeaders(input.urmHeaders);
-
-    const text = input.text;
-    const html = input.html;
-    if (!text && !html) {
-      throw new TabsMailerError('sendOne requires at least one of text/html');
-    }
-
-    const fromAddr = input.from
-      ? formatAddress(input.from)
-      : env.TABS_MAILER_FROM_DEFAULT
-        ? env.TABS_MAILER_FROM_DEFAULT
-        : `noreply@${env.TABS_MAILER_FROM_DOMAIN}`;
-
-    const toList = Array.isArray(input.to)
-      ? input.to.map(formatAddress)
-      : [formatAddress(input.to)];
-
-    const message = {
-      from: fromAddr,
-      to: toList,
-      cc: input.cc?.map(formatAddress),
-      bcc: input.bcc?.map(formatAddress),
-      replyTo: input.replyTo ? formatAddress(input.replyTo) : undefined,
-      subject: input.subject,
-      text,
-      html,
-      messageId: input.messageId,
-      inReplyTo: input.inReplyTo,
-      references: input.references,
-      headers: urmHeaderRecord,
-      attachments: input.attachments?.map((a) => ({
-        filename: a.filename,
-        content: a.content,
-        contentType: a.contentType,
-        cid: a.cid,
-      })),
+    // [2] URM 헤더 + 보조 헤더
+    const headers: Record<string, string> = {
+      [URM_HEADER_NAMES.communicationId]: input.urmHeaders.communicationId,
+      [URM_HEADER_NAMES.autoSend]: input.urmHeaders.autoSend ? 'true' : 'false',
     };
-
-    if (this.mock || !this.transporter) {
-      const generatedMessageId =
-        input.messageId ?? `<mock-${Date.now()}-${randomSuffix()}@${env.TABS_MAILER_FROM_DOMAIN}>`;
-      // eslint-disable-next-line no-console
-      console.log(
-        `[tabs-mailer:mock] sendOne to=${toList.join(',')} subject=${input.subject} headers=${JSON.stringify(urmHeaderRecord)}`,
-      );
-      return {
-        messageId: generatedMessageId,
-        accepted: toList,
-        rejected: [],
-        response: '250 Mock OK',
-        mocked: true,
-      };
+    if (input.urmHeaders.engagementId) {
+      headers[URM_HEADER_NAMES.engagementId] = input.urmHeaders.engagementId;
+    }
+    if (input.urmHeaders.brandVoiceId) {
+      headers[URM_HEADER_NAMES.brandVoiceId] = input.urmHeaders.brandVoiceId;
+    }
+    // 헤더 통과 여부 미확인 시 invisible footer fallback (HTML body에만)
+    let bodyHtml = input.bodyHtml;
+    if (bodyHtml) {
+      const footer = `<!-- urm:c=${input.urmHeaders.communicationId};auto=${input.urmHeaders.autoSend ? '1' : '0'}${
+        input.urmHeaders.engagementId ? `;e=${input.urmHeaders.engagementId}` : ''
+      } -->`;
+      bodyHtml = `${bodyHtml}\n${footer}`;
     }
 
+    // [3] 발송
+    let info: SentMessageInfo;
     try {
-      const info = await this.transporter.sendMail(message);
-      return {
-        messageId: info.messageId,
-        accepted: (info.accepted ?? []).map(addressToString),
-        rejected: (info.rejected ?? []).map(addressToString),
-        response: info.response ?? '',
-        mocked: false,
-      };
+      info = await this.transporter.sendMail({
+        from: { name: input.fromName, address: input.fromAddress },
+        to: input.to.name
+          ? { name: input.to.name, address: input.to.address }
+          : input.to.address,
+        cc: input.cc?.map((r) =>
+          r.name ? { name: r.name, address: r.address } : r.address,
+        ),
+        bcc: input.bcc?.map((r) =>
+          r.name ? { name: r.name, address: r.address } : r.address,
+        ),
+        replyTo: input.replyTo,
+        subject: input.subject,
+        text: input.bodyText,
+        html: bodyHtml,
+        attachments: input.attachments,
+        headers,
+      });
     } catch (err) {
       throw new TabsMailerError(
-        `SMTP send failed: ${(err as Error).message}`,
+        `sendOne failed: ${(err as Error).message}`,
         err,
       );
     }
+
+    return {
+      messageId: info.messageId,
+      acceptedRecipients: (info.accepted ?? []).map((a: unknown) =>
+        typeof a === 'string' ? a : ((a as { address: string }).address ?? ''),
+      ),
+      rejectedRecipients: (info.rejected ?? []).map((a: unknown) =>
+        typeof a === 'string' ? a : ((a as { address: string }).address ?? ''),
+      ),
+      rawResponse: info.response ?? '',
+      sentAt: this.nowProvider().toISOString(),
+    };
   }
 
-  async createCampaign(input: CreateCampaignInput): Promise<CreateCampaignOutput> {
-    const tabsCampaignId = this.mock
-      ? `mock-camp-${Date.now()}-${randomSuffix()}`
-      : `merge-${input.mergeJobId}`;
+  /* --------------------------------------------------------
+   * createCampaign — TABS Mailer 4 캠페인 등록
+   * --------------------------------------------------------
+   * TABS Mailer 4의 정확한 API 명세가 수령되지 않았다.
+   * 운영 시점에 다음 항목을 확정하고 본 메서드 본문을 채운다:
+   *   - REST API endpoint와 인증 방식 (JWT? API key?)
+   *   - 페이로드 형식 (template HTML upload? template_id 참조?)
+   *   - 응답 형식 (campaign_id 반환 위치)
+   *
+   * 그 전까지는 throw — 호출자가 mock 어댑터로 fallback.
+   * -------------------------------------------------------- */
+  async createCampaign(_params: CampaignParams): Promise<CampaignCreateResult> {
+    throw new TabsMailerNotImplementedError('createCampaign');
+  }
 
-    let accepted = 0;
-    let rejected = 0;
+  /* --------------------------------------------------------
+   * getCampaignStats — MS SQL Server 통계 DB 조회
+   * --------------------------------------------------------
+   * 운영 정보 수령 후 mssql 또는 tedious 라이브러리로 직접 SQL 조회.
+   * 그 전까지는 throw.
+   * -------------------------------------------------------- */
+  async getCampaignStats(_tabsCampaignId: string): Promise<TabsCampaignStats> {
+    throw new TabsMailerNotImplementedError('getCampaignStats');
+  }
 
-    for (const recipient of input.recipients) {
-      if (input.quietHours) {
-        const { isQuiet } = evaluateQuietHours(new Date(), input.quietHours);
-        if (isQuiet) {
-          continue;
-        }
-      }
+  /* --------------------------------------------------------
+   * syncCampaignToMergeJob
+   * --------------------------------------------------------
+   * mail_merge_jobs.progress + tabs_campaign_status 갱신.
+   * getCampaignStats 결과를 표준 progress 형태로 매핑.
+   * -------------------------------------------------------- */
+  async syncCampaignToMergeJob(
+    supabase: SupabaseClient,
+    organizationId: string,
+    jobId: string,
+  ): Promise<void> {
+    const { data: job, error: jobError } = await supabase
+      .schema('app')
+      .from('mail_merge_jobs')
+      .select('id, tabs_campaign_id, status')
+      .eq('id', jobId)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
 
-      const subject = applyLiquidVariables(input.subjectTemplate, recipient.variables);
-      const text = input.bodyPlainTemplate
-        ? applyLiquidVariables(input.bodyPlainTemplate, recipient.variables)
-        : undefined;
-      const html = input.bodyHtmlTemplate
-        ? applyLiquidVariables(input.bodyHtmlTemplate, recipient.variables)
-        : undefined;
-
-      try {
-        await this.sendOne({
-          to: recipient.to,
-          from: { name: input.fromName, address: input.fromAddress },
-          replyTo: input.replyToAddress
-            ? { address: input.replyToAddress }
-            : undefined,
-          subject,
-          text,
-          html,
-          urmHeaders: {
-            ...input.urmCampaignHeaders,
-            communicationId: recipient.communicationId,
-            partyId: recipient.partyId,
-          },
-          enforceQuietHours: false,
-        });
-        accepted += 1;
-      } catch (err) {
-        rejected += 1;
-        // eslint-disable-next-line no-console
-        console.error(
-          `[tabs-mailer] campaign send failed for ${recipient.to.address}: ${(err as Error).message}`,
-        );
-      }
+    if (jobError) {
+      throw new TabsMailerError(
+        `Cannot sync: job lookup failed: ${jobError.message}`,
+        jobError,
+      );
+    }
+    if (!job) {
+      throw new TabsMailerError(
+        `Cannot sync: job ${jobId} not found in organization ${organizationId}`,
+      );
+    }
+    if (!job.tabs_campaign_id) {
+      throw new TabsMailerError(
+        `Cannot sync: job ${jobId} has no tabs_campaign_id`,
+      );
     }
 
-    await this.supabase
+    const stats = await this.getCampaignStats(job.tabs_campaign_id);
+
+    await supabase
       .schema('app')
       .from('mail_merge_jobs')
       .update({
-        tabs_campaign_id: tabsCampaignId,
         progress: {
-          totalRecipients: input.recipients.length,
-          totalSent: accepted,
-          totalDelivered: 0,
-          totalOpened: 0,
-          totalClicked: 0,
-          totalBounced: 0,
-          totalFailed: rejected,
-          upstreamStatus: rejected === input.recipients.length ? 'failed' : 'running',
-          syncedAt: new Date().toISOString(),
+          sent: stats.totalSent,
+          failed: stats.totalFailed,
+          opened: stats.totalOpened,
+          clicked: stats.totalClicked,
+          replied: stats.totalReplied,
+          bounced: stats.totalBounced,
+          unsubscribed: stats.totalUnsubscribed,
         },
+        tabs_campaign_status: 'synced',
+        tabs_campaign_synced_at: stats.lastUpdatedAt.toISOString(),
       })
-      .eq('id', input.mergeJobId);
-
-    return {
-      tabsCampaignId,
-      acceptedCount: accepted,
-      rejectedCount: rejected,
-      mocked: this.mock,
-    };
-  }
-
-  async getCampaignStats(tabsCampaignId: string): Promise<CampaignStats> {
-    if (this.mock || !env.TABS_MAILER_DB_CONN) {
-      return await this.computeStatsFromCommunications(tabsCampaignId);
-    }
-
-    // mssql은 선택적 의존성. 미설치 시 자체 집계 폴백.
-    interface MssqlLike {
-      connect(connStr: string): Promise<MssqlPool>;
-      NVarChar(length: number): unknown;
-    }
-    interface MssqlPool {
-      request(): MssqlRequest;
-      close(): Promise<void>;
-    }
-    interface MssqlRequest {
-      input(name: string, type: unknown, value: string): MssqlRequest;
-      query<T>(sql: string): Promise<{ recordset: T[] }>;
-    }
-
-    let mssql: MssqlLike;
-    try {
-      // dynamic import — 타입은 unknown으로 받아서 우리 인터페이스로 단언
-      const mod = (await import('mssql' as string).catch(() => null)) as unknown;
-      if (!mod) {
-        return await this.computeStatsFromCommunications(tabsCampaignId);
-      }
-      mssql = mod as MssqlLike;
-    } catch {
-      return await this.computeStatsFromCommunications(tabsCampaignId);
-    }
-
-    let pool: MssqlPool | null = null;
-    try {
-      pool = await mssql.connect(env.TABS_MAILER_DB_CONN);
-      const request = pool.request();
-      request.input('cid', mssql.NVarChar(64), tabsCampaignId);
-      const result = await request.query<{
-        total_recipients: number;
-        total_sent: number;
-        total_delivered: number;
-        total_opened: number;
-        total_clicked: number;
-        total_bounced: number;
-        total_failed: number;
-        upstream_status: string | null;
-        started_at: Date | null;
-        completed_at: Date | null;
-      }>(`
-        SELECT
-          total_recipients, total_sent, total_delivered,
-          total_opened, total_clicked, total_bounced, total_failed,
-          upstream_status, started_at, completed_at
-        FROM tabs_campaign_stats
-        WHERE campaign_id = @cid
-      `);
-
-      const row = result.recordset[0];
-      if (!row) {
-        throw new TabsMailerCampaignNotFoundError(tabsCampaignId);
-      }
-
-      return {
-        tabsCampaignId,
-        totalRecipients: Number(row.total_recipients ?? 0),
-        totalSent: Number(row.total_sent ?? 0),
-        totalDelivered: Number(row.total_delivered ?? 0),
-        totalOpened: Number(row.total_opened ?? 0),
-        totalClicked: Number(row.total_clicked ?? 0),
-        totalBounced: Number(row.total_bounced ?? 0),
-        totalFailed: Number(row.total_failed ?? 0),
-        upstreamStatus: normalizeUpstreamStatus(row.upstream_status),
-        startedAt: row.started_at?.toISOString(),
-        completedAt: row.completed_at?.toISOString(),
-        syncedAt: new Date().toISOString(),
-      };
-    } catch (err) {
-      if (err instanceof TabsMailerCampaignNotFoundError) throw err;
-      throw new TabsMailerError(
-        `Stats DB query failed: ${(err as Error).message}`,
-        err,
-      );
-    } finally {
-      if (pool) {
-        try {
-          await pool.close();
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
-
-  async syncCampaignToMergeJob(jobId: string): Promise<CampaignProgress> {
-    const { data: job, error: jobErr } = await this.supabase
-      .schema('app')
-      .from('mail_merge_jobs')
-      .select('id, tabs_campaign_id, organization_id')
       .eq('id', jobId)
-      .single();
-
-    if (jobErr || !job) {
-      throw new TabsMailerError(
-        `mail_merge_jobs not found: jobId=${jobId} ${jobErr?.message ?? ''}`,
-      );
-    }
-    const tabsCampaignId = (job as { tabs_campaign_id?: string }).tabs_campaign_id;
-    if (!tabsCampaignId) {
-      throw new TabsMailerError(
-        `mail_merge_jobs.tabs_campaign_id not set for job ${jobId}`,
-      );
-    }
-
-    const stats = await this.getCampaignStats(tabsCampaignId);
-
-    const progress: CampaignProgress = {
-      totalRecipients: stats.totalRecipients,
-      totalSent: stats.totalSent,
-      totalDelivered: stats.totalDelivered,
-      totalOpened: stats.totalOpened,
-      totalClicked: stats.totalClicked,
-      totalBounced: stats.totalBounced,
-      totalFailed: stats.totalFailed,
-      upstreamStatus: stats.upstreamStatus,
-      syncedAt: stats.syncedAt,
-    };
-
-    const updatePayload: Record<string, unknown> = { progress };
-    if (stats.upstreamStatus === 'completed') {
-      updatePayload.status = 'completed';
-      updatePayload.completed_at = stats.completedAt ?? stats.syncedAt;
-    } else if (stats.upstreamStatus === 'failed') {
-      updatePayload.status = 'failed';
-    }
-
-    const { error: updateErr } = await this.supabase
-      .schema('app')
-      .from('mail_merge_jobs')
-      .update(updatePayload)
-      .eq('id', jobId);
-
-    if (updateErr) {
-      throw new TabsMailerError(
-        `mail_merge_jobs progress update failed: ${updateErr.message}`,
-      );
-    }
-    return progress;
+      .eq('organization_id', organizationId);
   }
 
-  private async computeStatsFromCommunications(
-    tabsCampaignId: string,
-  ): Promise<CampaignStats> {
-    const { data, error } = await this.supabase
-      .schema('app')
-      .from('communications')
-      .select('id, status, sent_at, delivered_at, opened_at, clicked_at, bounced_at')
-      .eq('direction', 'outbound')
-      .filter('external_data->>tabs_campaign_id', 'eq', tabsCampaignId);
-
-    if (error) {
-      throw new TabsMailerError(
-        `fallback stats query failed: ${error.message}`,
-      );
+  /** transporter 풀 정리. 워커 graceful shutdown에서 호출. */
+  async close(): Promise<void> {
+    try {
+      this.transporter.close();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[tabs-mailer] close failed:', err);
     }
+  }
+}
 
-    type Row = {
-      status: string;
-      sent_at: string | null;
-      delivered_at: string | null;
-      opened_at: string | null;
-      clicked_at: string | null;
-      bounced_at: string | null;
-    };
-    const rows: Row[] = (data ?? []) as Row[];
+/* ============================================================
+ * 4. Rate limit 검증 (mail-merge-worker에서 호출)
+ * ============================================================ */
 
-    let sent = 0, delivered = 0, opened = 0, clicked = 0, bounced = 0, failed = 0;
-    let earliest: string | null = null;
-    let latest: string | null = null;
+export interface RateLimitCheckInput {
+  jobId: string;
+  perMinute: number;
+  perHour: number;
+}
 
-    for (const row of rows) {
-      if (row.sent_at) sent += 1;
-      if (row.delivered_at) delivered += 1;
-      if (row.opened_at) opened += 1;
-      if (row.clicked_at) clicked += 1;
-      if (row.bounced_at) bounced += 1;
-      if (row.status === 'failed') failed += 1;
-      if (row.sent_at && (!earliest || row.sent_at < earliest)) earliest = row.sent_at;
-      if (row.sent_at && (!latest || row.sent_at > latest)) latest = row.sent_at;
-    }
+export interface RateLimitVerdict {
+  allowed: boolean;
+  reason?: 'minute_limit' | 'hour_limit';
+  observedMinute?: number;
+  observedHour?: number;
+  /** 다음 발송 가능 시각의 ISO 문자열. */
+  nextAllowedAt?: string;
+}
 
-    const totalRecipients = rows.length;
-    const upstreamStatus: CampaignProgress['upstreamStatus'] =
-      totalRecipients === 0
-        ? 'unknown'
-        : sent === totalRecipients && bounced + failed === 0
-          ? 'completed'
-          : 'running';
+/**
+ * 최근 1분·1시간 내 communications 발송 카운트를 집계해 한도 비교.
+ *
+ * 카운트 대상:
+ *   - direction='outbound'
+ *   - channel='email'
+ *   - external_data.tabs_campaign_id == 본 잡의 ID 또는 mail_merge_job_id 매칭
+ *   - sent_at 이 최근 윈도우 내
+ */
+export async function checkRateLimit(
+  supabase: SupabaseClient,
+  organizationId: string,
+  jobId: string,
+  perMinute: number,
+  perHour: number,
+  now: Date = new Date(),
+): Promise<RateLimitVerdict> {
+  const oneMinuteAgo = new Date(now.getTime() - 60_000).toISOString();
+  const oneHourAgo = new Date(now.getTime() - 3_600_000).toISOString();
 
+  // mail_merge_job_id로 추적하는 게 가장 정확하지만, communications에는
+  // 해당 컬럼이 없으므로 external_data jsonb 조회로 대체.
+  // (jsonb_path_ops 인덱스가 external_data에 있으므로 효율적)
+  const filter = { mail_merge_job_id: jobId };
+
+  const { count: minuteCount, error: e1 } = await supabase
+    .schema('app')
+    .from('communications')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('direction', 'outbound')
+    .eq('channel', 'email')
+    .contains('external_data', filter)
+    .gte('sent_at', oneMinuteAgo);
+
+  const { count: hourCount, error: e2 } = await supabase
+    .schema('app')
+    .from('communications')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('direction', 'outbound')
+    .eq('channel', 'email')
+    .contains('external_data', filter)
+    .gte('sent_at', oneHourAgo);
+
+  if (e1 || e2) {
+    // 카운트 실패 시 보수적으로 차단
     return {
-      tabsCampaignId,
-      totalRecipients,
-      totalSent: sent,
-      totalDelivered: delivered,
-      totalOpened: opened,
-      totalClicked: clicked,
-      totalBounced: bounced,
-      totalFailed: failed,
-      upstreamStatus,
-      startedAt: earliest ?? undefined,
-      completedAt: upstreamStatus === 'completed' ? (latest ?? undefined) : undefined,
-      syncedAt: new Date().toISOString(),
+      allowed: false,
+      reason: 'minute_limit',
+      observedMinute: -1,
+      observedHour: -1,
     };
   }
 
-  private buildUrmHeaders(urm: SendOneInput['urmHeaders']): Record<string, string> {
-    const h: Record<string, string> = {
-      'X-URM-Communication-Id': urm.communicationId,
-      'X-URM-Auto-Send': urm.autoSend ? 'true' : 'false',
+  const m = minuteCount ?? 0;
+  const h = hourCount ?? 0;
+
+  if (m >= perMinute) {
+    return {
+      allowed: false,
+      reason: 'minute_limit',
+      observedMinute: m,
+      observedHour: h,
+      nextAllowedAt: new Date(now.getTime() + 60_000).toISOString(),
     };
-    if (urm.engagementId) h['X-URM-Engagement-Id'] = urm.engagementId;
-    if (urm.partyId) h['X-URM-Party-Id'] = urm.partyId;
-    if (urm.brandVoiceId) h['X-URM-Brand-Voice-Id'] = urm.brandVoiceId;
-    if (urm.threadId) h['X-URM-Thread-Id'] = urm.threadId;
-    return h;
   }
-}
-
-// ───────────────────────────────────────────────────────────────────
-// 헬퍼
-// ───────────────────────────────────────────────────────────────────
-
-function formatAddress(addr: EmailAddress): string {
-  if (!addr.address) {
-    throw new TabsMailerError('Email address is required');
+  if (h >= perHour) {
+    return {
+      allowed: false,
+      reason: 'hour_limit',
+      observedMinute: m,
+      observedHour: h,
+      nextAllowedAt: new Date(now.getTime() + 3_600_000).toISOString(),
+    };
   }
-  return addr.name ? `"${addr.name.replace(/"/g, '\\"')}" <${addr.address}>` : addr.address;
+
+  return { allowed: true, observedMinute: m, observedHour: h };
 }
 
-function addressToString(value: string | { address: string }): string {
-  return typeof value === 'string' ? value : value.address;
-}
+/* ============================================================
+ * 5. 팩토리 — env에 따라 mock vs 실제 어댑터 선택
+ * ----------------------------------------------------------
+ * 실 SMTP 정보가 없거나 TABS_MAILER_USE_MOCK=true면 mock 사용.
+ * 호출자는 항상 createTabsMailer()로 인스턴스 획득.
+ * ============================================================ */
 
-function normalizeUpstreamStatus(raw: string | null): CampaignProgress['upstreamStatus'] {
-  switch ((raw ?? '').toLowerCase()) {
-    case 'pending':
-    case 'queued':
-      return 'pending';
-    case 'running':
-    case 'in_progress':
-    case 'sending':
-      return 'running';
-    case 'completed':
-    case 'done':
-    case 'finished':
-      return 'completed';
-    case 'failed':
-    case 'error':
-      return 'failed';
-    default:
-      return 'unknown';
+let cachedClient: ITabsMailerClient | null = null;
+
+export async function createTabsMailer(): Promise<ITabsMailerClient> {
+  if (cachedClient) return cachedClient;
+
+  if (isUsingMockMailer()) {
+    const { TabsMailerMockClient } = await import('./tabs-mailer.mock');
+    cachedClient = new TabsMailerMockClient();
+  } else {
+    cachedClient = new TabsMailerClient();
   }
+  return cachedClient;
 }
 
-function randomSuffix(): string {
-  return Math.random().toString(36).slice(2, 10);
+/** 테스트·재초기화용 — 캐시 초기화. */
+export function resetTabsMailerCache(): void {
+  cachedClient = null;
 }

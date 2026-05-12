@@ -1,125 +1,124 @@
 import type { Config } from 'tailwindcss';
 
-/**
- * URM Platform 디자인 토큰.
- *
- * 색상 결정 근거:
- * - neutral 계열은 zinc (회색이 약간 따뜻함, Stripe/Linear 류와 유사)
- * - primary는 한국 SaaS 톤(차분한 indigo/slate)에 맞춰 slate-900 (거의 검정)
- * - accent (CTA)는 emerald-600 (긍정 액션 — 승인·발송)
- * - destructive는 red-600 (거절·삭제·실패)
- * - warning은 amber-500 (위험 플래그·차단)
- *
- * 향후 다크 모드를 도입할 때는 CSS 변수 기반(`hsl(var(--bg))` 등)으로 전환하면 됨.
- * 현재는 라이트 단일이라 직접 색상 사용.
- */
 const config: Config = {
+  darkMode: ['class'],
   content: [
     './src/app/**/*.{ts,tsx}',
+    './src/components/**/*.{ts,tsx}',
+    './src/hooks/**/*.{ts,tsx}',
     './src/lib/**/*.{ts,tsx}',
-    './src/types/**/*.{ts,tsx}',
   ],
   theme: {
-    extend: {
-      colors: {
-        // 의미적 alias — 컴포넌트에서 'bg-surface', 'text-muted-foreground' 사용
-        surface: {
-          DEFAULT: '#ffffff',
-          subtle: '#fafafa',
-          muted: '#f4f4f5',
-        },
-        border: {
-          DEFAULT: '#e5e5e5',
-          subtle: '#f0f0f0',
-          strong: '#d4d4d8',
-        },
-        // primary = 차분한 거의 검정 (CTA 외 텍스트·강조)
-        primary: {
-          DEFAULT: '#18181b',
-          foreground: '#fafafa',
-        },
-        // accent = CTA 긍정 액션 (승인·발송)
-        accent: {
-          DEFAULT: '#15803d',
-          hover: '#166534',
-          foreground: '#ffffff',
-          subtle: '#dcfce7',
-        },
-        // destructive = 거절·삭제
-        destructive: {
-          DEFAULT: '#b91c1c',
-          hover: '#991b1b',
-          foreground: '#ffffff',
-          subtle: '#fef2f2',
-          border: '#fecaca',
-        },
-        // warning = 위험 플래그·차단·자동발송 사유
-        warning: {
-          DEFAULT: '#b45309',
-          foreground: '#92400e',
-          subtle: '#fef3c7',
-          border: '#fde68a',
-        },
-        // info = 정보·읽지 않음·신규
-        info: {
-          DEFAULT: '#1e40af',
-          foreground: '#1e40af',
-          subtle: '#dbeafe',
-          border: '#bfdbfe',
-        },
-        // muted = 보조 텍스트
-        muted: {
-          DEFAULT: '#737373',
-          foreground: '#666666',
-        },
+    container: {
+      center: true,
+      padding: '1rem',
+      screens: {
+        '2xl': '1400px',
       },
+    },
+    extend: {
       fontFamily: {
         sans: [
-          '-apple-system',
-          'BlinkMacSystemFont',
-          '"Segoe UI"',
-          'Roboto',
-          '"Helvetica Neue"',
-          'Arial',
+          'var(--font-inter)',
+          'var(--font-noto-kr)',
+          'var(--font-noto-jp)',
+          'system-ui',
           'sans-serif',
-          // 한국어 fallback (Pretendard 도입 시 여기 prepend)
-          '"Apple SD Gothic Neo"',
-          '"Malgun Gothic"',
         ],
-        mono: [
-          'ui-monospace',
-          'SFMono-Regular',
-          '"SF Mono"',
-          'Menlo',
-          'Consolas',
-          '"Liberation Mono"',
-          'monospace',
-        ],
+        mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
       },
-      fontSize: {
-        // 기본 1rem=16px. 본 프로젝트는 13~14px 본문이 표준이라 명시.
-        xs: ['0.6875rem', { lineHeight: '1rem' }], // 11px
-        sm: ['0.75rem', { lineHeight: '1.125rem' }], // 12px
-        base: ['0.8125rem', { lineHeight: '1.375rem' }], // 13px
-        md: ['0.875rem', { lineHeight: '1.5rem' }], // 14px
-        lg: ['1rem', { lineHeight: '1.625rem' }], // 16px
-        xl: ['1.125rem', { lineHeight: '1.75rem' }], // 18px
-        '2xl': ['1.375rem', { lineHeight: '2rem' }], // 22px
-        '3xl': ['1.75rem', { lineHeight: '2.25rem' }], // 28px
+      colors: {
+        // shadcn 표준 HSL 변수 (globals.css에서 정의)
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+
+        // 7개 모듈 컬러 토큰 (마스터 §3.1 모듈 enum과 일치)
+        module: {
+          investor: { DEFAULT: '#7c3aed', foreground: '#ffffff' },
+          buyer: { DEFAULT: '#2563eb', foreground: '#ffffff' },
+          partner: { DEFAULT: '#16a34a', foreground: '#ffffff' },
+          customer: { DEFAULT: '#ea580c', foreground: '#ffffff' },
+          crowdfunding: { DEFAULT: '#db2777', foreground: '#ffffff' },
+          product_launch: { DEFAULT: '#0d9488', foreground: '#ffffff' },
+          sales: { DEFAULT: '#4f46e5', foreground: '#ffffff' },
+        },
+
+        // ai.draft_status enum 6개에 대한 상태 컬러
+        status: {
+          pending_review: 'hsl(45 95% 55%)',  // 노랑 — 검토 대기
+          approved: 'hsl(143 64% 45%)',        // 초록 — 승인
+          sent: 'hsl(217 91% 60%)',            // 파랑 — 발송 완료
+          rejected: 'hsl(0 84% 60%)',          // 빨강 — 거부
+          expired: 'hsl(0 0% 60%)',            // 회색 — 만료
+          auto_sent: 'hsl(173 80% 40%)',       // 청록 — 자동 발송
+        },
+
+        // 위험 표시
+        risk: {
+          DEFAULT: 'hsl(0 84% 60%)',
+          foreground: '#ffffff',
+        },
+
+        // 신뢰도 단계 컬러 (큐 정렬 시 시각 신호)
+        confidence: {
+          low: 'hsl(0 84% 60%)',     // < 0.7
+          medium: 'hsl(45 95% 55%)', // 0.7 ~ 0.9
+          high: 'hsl(143 64% 45%)',  // ≥ 0.9
+        },
       },
       borderRadius: {
-        sm: '4px',
-        DEFAULT: '6px',
-        md: '8px',
-        lg: '12px',
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
-      boxShadow: {
-        card: '0 1px 3px rgba(0,0,0,0.04)',
-        focus: '0 0 0 2px rgba(24,24,27,0.1)',
+      keyframes: {
+        'accordion-down': {
+          from: { height: '0' },
+          to: { height: 'var(--radix-accordion-content-height)' },
+        },
+        'accordion-up': {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: '0' },
+        },
+      },
+      animation: {
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out',
       },
     },
   },
-  plugins: [],
+  plugins: [require('tailwindcss-animate')],
 };
 
 export default config;

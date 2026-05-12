@@ -1,60 +1,75 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
-import {
-  STANDARD_CATEGORIES,
-  AUTO_SEND_CANDIDATE_CATEGORIES,
-  type ClassificationOutput,
-  type StandardCategory,
-} from '@/types/classification';
-import type { ModuleType } from '@/types/email';
+/**
+ * lib/email/auto-send-gate.ts
+ *
+ * AI가 생성한 회신 초안의 자동발송 가능 여부를 평가한다.
+ * 어느 단계든 통과하지 못하면 reasons[]에 사유를 누적하고 allowed=false.
+ *
+ * 평가 순서 (마스터 §4.4 + 가이드 §7.3):
+ *   [1] 글로벌 플래그(env.AI_AUTO_SEND_ENABLED)
+ *   [2] auto_send_rules 행 조회 (carrier×category)
+ *   [3] rule.is_blocked
+ *   [4] rule.allowed_modules에 module 포함 여부
+ *   [5] classification.confidence ≥ rule.min_confidence
+ *   [6] rule.requires_human_approval 또는 classification.requiresHuman
+ *   [7] classification.riskFlags 비어있음
+ *   [8] blocked_keywords_in_body 정규식 매칭 없음
+ *   [9] daily_limit / hourly_limit / per_party_daily_limit 미달성
+ *  [10] rule.requires_calendar_data 시 미팅 가용성 확인 (meeting_scheduling)
+ */
 
-// ───────────────────────────────────────────────────────────────────
-// 입출력
-// ───────────────────────────────────────────────────────────────────
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { env } from '../env';
+import type { AutoSendRuleRow, ModuleType } from '../../types/ai';
+import type { ClassificationOutput } from '../../types/classification';
+
+/* ============================================================
+ * 1. 입출력 타입
+ * ============================================================ */
 
 export interface GateInput {
   organizationId: string;
-  partyId?: string;
   module?: ModuleType;
+  partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
-  draftRequiresHuman: boolean;
-  draftRiskFlags: string[];
+  /** 회신가가 자체 판단한 사람 검토 필요 플래그(별도 강제). */
+  drafterRequiresHuman?: boolean;
 }
+
+export type GateBlockReason =
+  | 'global_disabled'
+  | 'rule_lookup_error'
+  | 'no_rule_defined'
+  | 'rule_blocked'
+  | 'module_not_allowed'
+  | 'confidence_below_threshold'
+  | 'requires_human_approval'
+  | 'drafter_requires_human'
+  | 'risk_flags_present'
+  | `blocked_keyword:${string}`
+  | 'daily_limit_reached'
+  | 'hourly_limit_reached'
+  | 'per_party_daily_limit_reached'
+  | 'calendar_data_required';
 
 export interface GateResult {
   allowed: boolean;
-  reasons: string[];
-  blockedRules: string[];
+  reasons: GateBlockReason[];
+  /** 차단을 트리거한 룰 ID(있으면). */
+  ruleId?: string;
+  /** 디버깅·감사용 평가 로그. */
   evaluationLog: Record<string, unknown>;
 }
 
-export interface AutoSendRule {
-  id: string;
-  organizationId: string;
-  classificationCategory: StandardCategory;
-  isBlocked: boolean;
-  blockReason?: string;
-  allowedModules: string[];
-  minConfidence: number;
-  blockedKeywordsInBody: string[];
-  dailyLimit?: number;
-  hourlyLimit?: number;
-  perPartyDailyLimit?: number;
-  requiresCalendarData: boolean;
-  requiresHumanApproval: boolean;
-}
-
-// ───────────────────────────────────────────────────────────────────
-// 메인 평가 함수
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 2. 메인 진입점
+ * ============================================================ */
 
 export async function evaluateAutoSend(
   supabase: SupabaseClient,
   input: GateInput,
 ): Promise<GateResult> {
-  const reasons: string[] = [];
-  const blockedRules: string[] = [];
+  const reasons: GateBlockReason[] = [];
   const log: Record<string, unknown> = {};
 
   // [1] 글로벌 플래그
@@ -62,87 +77,55 @@ export async function evaluateAutoSend(
     return {
       allowed: false,
       reasons: ['global_disabled'],
-      blockedRules: [],
       evaluationLog: { step: 'global_flag', value: false },
     };
   }
 
-  // [2] 카테고리 후보 화이트리스트
-  if (!STANDARD_CATEGORIES.includes(input.classification.category)) {
-    return {
-      allowed: false,
-      reasons: ['non_standard_category'],
-      blockedRules: [],
-      evaluationLog: { step: 'category_check', value: input.classification.category },
-    };
-  }
-  if (!AUTO_SEND_CANDIDATE_CATEGORIES.has(input.classification.category)) {
-    reasons.push('category_not_eligible');
-    log.category_eligibility = {
-      category: input.classification.category,
-      eligible: false,
-    };
-  }
-
-  // [3] auto_send_rules 조회
-  const rule = await loadRule(
+  // [2] 룰 조회
+  const rule = await loadAutoSendRule(
     supabase,
     input.organizationId,
     input.classification.category,
   );
-  log.rule_lookup = rule
-    ? { rule_id: rule.id, found: true }
-    : { found: false };
 
-  if (!rule) {
-    reasons.push('no_rule_defined');
+  if (rule === 'error') {
     return {
       allowed: false,
-      reasons,
-      blockedRules,
-      evaluationLog: log,
+      reasons: ['rule_lookup_error'],
+      evaluationLog: { step: 'rule_lookup', value: 'error' },
     };
   }
+  if (!rule) {
+    return {
+      allowed: false,
+      reasons: ['no_rule_defined'],
+      evaluationLog: {
+        step: 'rule_lookup',
+        category: input.classification.category,
+      },
+    };
+  }
+  log.rule_id = rule.id;
 
-  // [4-1] is_blocked
+  // [3] is_blocked
   if (rule.isBlocked) {
     reasons.push('rule_blocked');
-    blockedRules.push(rule.id);
-    log.is_blocked = { reason: rule.blockReason ?? null };
+    log.is_blocked = true;
   }
 
-  // [4-2] 룰이 사람 검토 강제
-  if (rule.requiresHumanApproval) {
-    reasons.push('rule_requires_human');
-    blockedRules.push(rule.id);
-    log.rule_requires_human = true;
+  // [4] applicable_modules
+  if (input.module) {
+    const allowed = rule.allowedModules ?? [];
+    if (allowed.length === 0 || !allowed.includes(input.module)) {
+      reasons.push('module_not_allowed');
+      log.module_check = {
+        allowedModules: allowed,
+        requestedModule: input.module,
+      };
+    }
   }
 
-  // [4-3] 분류기 self-flag
-  if (input.classification.requiresHuman) {
-    reasons.push('classifier_requires_human');
-    log.classifier_requires_human = true;
-  }
-
-  // [4-4] Reply Drafter self-flag
-  if (input.draftRequiresHuman) {
-    reasons.push('draft_requires_human');
-    log.draft_requires_human = true;
-  }
-
-  // [5-1] applicable_modules
-  if (rule.allowedModules.length === 0) {
-    reasons.push('no_module_whitelisted');
-    log.module_check = { allowedModules: [], requestedModule: input.module ?? null };
-  } else if (!input.module || !rule.allowedModules.includes(input.module)) {
-    reasons.push('module_not_allowed');
-    log.module_check = {
-      allowedModules: rule.allowedModules,
-      requestedModule: input.module ?? null,
-    };
-  }
-
-  // [5-2] min_confidence
+  // [5] min_confidence
   if (input.classification.confidence < rule.minConfidence) {
     reasons.push('confidence_below_threshold');
     log.confidence_check = {
@@ -151,265 +134,281 @@ export async function evaluateAutoSend(
     };
   }
 
-  // [5-3] blocked_keywords
-  const matchedKeywords = matchBlockedKeywords(
+  // [6] human approval
+  if (rule.requiresHumanApproval || input.classification.requiresHuman) {
+    reasons.push('requires_human_approval');
+    log.human_required = {
+      from_rule: rule.requiresHumanApproval,
+      from_classification: input.classification.requiresHuman,
+    };
+  }
+  if (input.drafterRequiresHuman) {
+    reasons.push('drafter_requires_human');
+    log.drafter_requires_human = true;
+  }
+
+  // [7] risk_flags
+  if (input.classification.riskFlags.length > 0) {
+    reasons.push('risk_flags_present');
+    log.risk_flags = input.classification.riskFlags;
+  }
+
+  // [8] blocked_keywords_in_body
+  const matchedKw = matchBlockedKeyword(
     input.draftBody,
-    rule.blockedKeywordsInBody,
+    rule.blockedKeywordsInBody ?? [],
   );
-  if (matchedKeywords.length > 0) {
-    reasons.push('blocked_keyword_in_body');
-    log.blocked_keywords = { matched: matchedKeywords };
+  if (matchedKw) {
+    reasons.push(`blocked_keyword:${matchedKw}`);
+    log.blocked_keyword_matched = matchedKw;
   }
 
-  // [5-4] risk_flags
-  const sensitiveRiskFlags = filterSensitiveRiskFlags(input.draftRiskFlags);
-  if (sensitiveRiskFlags.length > 0) {
-    reasons.push('sensitive_risk_flag');
-    log.sensitive_risk_flags = sensitiveRiskFlags;
-  }
-
-  // [6] 한도 체크
-  const limitChecks = await checkLimits(
+  // [9] limits
+  const limitVerdict = await checkSendingLimits(
     supabase,
     input.organizationId,
-    input.classification.category,
     input.partyId,
     rule,
   );
-  if (limitChecks.dailyExceeded) {
-    reasons.push('daily_limit_exceeded');
-    log.daily_limit = { used: limitChecks.dailyCount, limit: rule.dailyLimit };
-  }
-  if (limitChecks.hourlyExceeded) {
-    reasons.push('hourly_limit_exceeded');
-    log.hourly_limit = { used: limitChecks.hourlyCount, limit: rule.hourlyLimit };
-  }
-  if (limitChecks.perPartyExceeded) {
-    reasons.push('per_party_daily_limit_exceeded');
-    log.per_party_limit = {
-      used: limitChecks.perPartyCount,
-      limit: rule.perPartyDailyLimit,
-    };
+  if (limitVerdict.reasons.length > 0) {
+    reasons.push(...limitVerdict.reasons);
+    Object.assign(log, limitVerdict.log);
   }
 
-  // [7] requires_calendar_data
-  if (rule.requiresCalendarData && input.classification.category === 'meeting_scheduling') {
-    const hasCalendar = await checkCalendarAvailability(
+  // [10] calendar (meeting_scheduling 카테고리만 의미 있음)
+  if (
+    rule.requiresCalendarData &&
+    input.classification.category === 'meeting_scheduling'
+  ) {
+    const hasCalendar = await hasCalendarAvailability(
       supabase,
       input.organizationId,
-      input.partyId,
     );
-    log.calendar_check = { hasCalendar };
     if (!hasCalendar) {
-      reasons.push('calendar_data_unavailable');
+      reasons.push('calendar_data_required');
+      log.calendar_check = { available: false };
     }
   }
 
   return {
     allowed: reasons.length === 0,
     reasons,
-    blockedRules,
+    ruleId: rule.id,
     evaluationLog: log,
   };
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 내부 — 룰 조회
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 3. 룰 조회
+ * ============================================================ */
 
-async function loadRule(
+async function loadAutoSendRule(
   supabase: SupabaseClient,
   organizationId: string,
-  category: StandardCategory,
-): Promise<AutoSendRule | null> {
+  category: ClassificationOutput['category'],
+): Promise<AutoSendRuleRow | null | 'error'> {
   const { data, error } = await supabase
     .schema('ai')
     .from('auto_send_rules')
-    .select('*')
+    .select(
+      'id, organization_id, classification_category, is_blocked, block_reason, min_confidence, requires_human_approval, allowed_modules, blocked_keywords_in_body, daily_limit, hourly_limit, per_party_daily_limit, requires_calendar_data, is_active',
+    )
     .eq('organization_id', organizationId)
     .eq('classification_category', category)
+    .eq('is_active', true)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return toAutoSendRule(data as Record<string, unknown>);
-}
-
-function toAutoSendRule(r: Record<string, unknown>): AutoSendRule {
-  const cat = r.classification_category;
-  if (!STANDARD_CATEGORIES.includes(cat as StandardCategory)) {
-    throw new Error(
-      `auto_send_rules contains non-standard category: ${String(cat)} (id=${String(r.id)})`,
-    );
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[auto-send-gate] rule lookup error:', error);
+    return 'error';
   }
+  if (!data) return null;
+
   return {
-    id: String(r.id),
-    organizationId: String(r.organization_id),
-    classificationCategory: cat as StandardCategory,
-    isBlocked: r.is_blocked === true,
-    blockReason: typeof r.block_reason === 'string' ? r.block_reason : undefined,
-    allowedModules: Array.isArray(r.allowed_modules) ? (r.allowed_modules as string[]) : [],
-    minConfidence: Number(r.min_confidence ?? 0.95),
-    blockedKeywordsInBody: Array.isArray(r.blocked_keywords_in_body)
-      ? (r.blocked_keywords_in_body as string[])
-      : [],
-    dailyLimit:
-      r.daily_limit === null || r.daily_limit === undefined
-        ? undefined
-        : Number(r.daily_limit),
-    hourlyLimit:
-      r.hourly_limit === null || r.hourly_limit === undefined
-        ? undefined
-        : Number(r.hourly_limit),
-    perPartyDailyLimit:
-      r.per_party_daily_limit === null || r.per_party_daily_limit === undefined
-        ? undefined
-        : Number(r.per_party_daily_limit),
-    requiresCalendarData: r.requires_calendar_data === true,
-    requiresHumanApproval: r.requires_human_approval === true,
+    id: data.id as string,
+    organizationId: data.organization_id as string,
+    classificationCategory: data.classification_category as AutoSendRuleRow['classificationCategory'],
+    isBlocked: Boolean(data.is_blocked),
+    blockReason: (data.block_reason as string | null) ?? undefined,
+    minConfidence: Number(data.min_confidence ?? 0.95),
+    requiresHumanApproval: Boolean(data.requires_human_approval),
+    allowedModules: (data.allowed_modules as ModuleType[] | null) ?? [],
+    blockedKeywordsInBody:
+      (data.blocked_keywords_in_body as string[] | null) ?? [],
+    dailyLimit: Number(data.daily_limit ?? 0),
+    hourlyLimit: Number(data.hourly_limit ?? 0),
+    perPartyDailyLimit: Number(data.per_party_daily_limit ?? 0),
+    requiresCalendarData: Boolean(data.requires_calendar_data),
+    isActive: Boolean(data.is_active),
   };
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 내부 — 키워드 / risk_flag
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 4. 키워드 매칭
+ * ============================================================ */
 
-export function matchBlockedKeywords(body: string, keywords: string[]): string[] {
-  if (!body || keywords.length === 0) return [];
-  const lower = body.toLowerCase();
-  const matched: string[] = [];
+/**
+ * 차단 키워드 배열 중 회신 본문에 매칭되는 첫 항목을 반환.
+ * 각 키워드는 정규식으로 시도 (잘못된 정규식은 단순 substring으로 fallback).
+ */
+export function matchBlockedKeyword(
+  body: string,
+  keywords: string[],
+): string | null {
   for (const kw of keywords) {
-    const k = kw.trim();
-    if (k.length === 0) continue;
-    if (lower.includes(k.toLowerCase())) {
-      matched.push(kw);
+    if (!kw) continue;
+    let matched = false;
+    try {
+      const regex = new RegExp(kw, 'i');
+      matched = regex.test(body);
+    } catch {
+      // 잘못된 정규식 → 대소문자 무시 substring
+      matched = body.toLowerCase().includes(kw.toLowerCase());
     }
+    if (matched) return kw;
   }
-  return matched;
+  return null;
 }
 
-const SENSITIVE_RISK_FLAGS: ReadonlySet<string> = new Set([
-  'price_commitment_required',
-  'legal_terms_present',
-  'contract_amendment_requested',
-  'sensitive_personal_info',
-  'regulated_industry_topic',
-  'compliance_flag',
-  'jurisdiction_uncertainty',
-]);
+/* ============================================================
+ * 5. Sending limit 검증
+ * ============================================================ */
 
-export function filterSensitiveRiskFlags(flags: string[]): string[] {
-  return flags.filter((f) => SENSITIVE_RISK_FLAGS.has(f));
+interface LimitVerdict {
+  reasons: GateBlockReason[];
+  log: Record<string, unknown>;
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 내부 — 한도 체크
-// ───────────────────────────────────────────────────────────────────
-
-interface LimitCheckResult {
-  dailyCount: number;
-  hourlyCount: number;
-  perPartyCount: number;
-  dailyExceeded: boolean;
-  hourlyExceeded: boolean;
-  perPartyExceeded: boolean;
-}
-
-async function checkLimits(
+async function checkSendingLimits(
   supabase: SupabaseClient,
   organizationId: string,
-  category: StandardCategory,
   partyId: string | undefined,
-  rule: AutoSendRule,
-): Promise<LimitCheckResult> {
-  const now = Date.now();
+  rule: AutoSendRuleRow,
+): Promise<LimitVerdict> {
+  const reasons: GateBlockReason[] = [];
+  const log: Record<string, unknown> = {};
+
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const oneHourAgo = new Date(now - 60 * 60 * 1000);
+  const oneHourAgo = new Date(Date.now() - 3_600_000);
 
-  let dailyCount = 0;
-  if (rule.dailyLimit !== undefined) {
-    const { count } = await supabase
-      .schema('app')
-      .from('communications')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', organizationId)
-      .eq('direction', 'outbound')
-      .eq('ai_generated', true)
-      .filter('external_data->>auto_sent', 'eq', 'true')
-      .filter('ai_classification->>category', 'eq', category)
-      .gte('sent_at', startOfDay.toISOString());
-    dailyCount = count ?? 0;
+  // 일일 한도 — 자동발송된 communications 카운트
+  if (rule.dailyLimit > 0) {
+    const dailyCount = await countAutoSent(
+      supabase,
+      organizationId,
+      startOfDay.toISOString(),
+    );
+    log.daily = { observed: dailyCount, limit: rule.dailyLimit };
+    if (dailyCount >= rule.dailyLimit) {
+      reasons.push('daily_limit_reached');
+    }
   }
 
-  let hourlyCount = 0;
-  if (rule.hourlyLimit !== undefined) {
-    const { count } = await supabase
-      .schema('app')
-      .from('communications')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', organizationId)
-      .eq('direction', 'outbound')
-      .eq('ai_generated', true)
-      .filter('external_data->>auto_sent', 'eq', 'true')
-      .filter('ai_classification->>category', 'eq', category)
-      .gte('sent_at', oneHourAgo.toISOString());
-    hourlyCount = count ?? 0;
+  // 시간당 한도
+  if (rule.hourlyLimit > 0) {
+    const hourCount = await countAutoSent(
+      supabase,
+      organizationId,
+      oneHourAgo.toISOString(),
+    );
+    log.hourly = { observed: hourCount, limit: rule.hourlyLimit };
+    if (hourCount >= rule.hourlyLimit) {
+      reasons.push('hourly_limit_reached');
+    }
   }
 
-  let perPartyCount = 0;
-  if (rule.perPartyDailyLimit !== undefined && partyId) {
-    const { count } = await supabase
-      .schema('app')
-      .from('communications')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', organizationId)
-      .eq('party_id', partyId)
-      .eq('direction', 'outbound')
-      .eq('ai_generated', true)
-      .filter('external_data->>auto_sent', 'eq', 'true')
-      .gte('sent_at', startOfDay.toISOString());
-    perPartyCount = count ?? 0;
+  // 거래처별 24시간 한도
+  if (rule.perPartyDailyLimit > 0 && partyId) {
+    const partyCount = await countAutoSentForParty(
+      supabase,
+      organizationId,
+      partyId,
+      new Date(Date.now() - 24 * 3_600_000).toISOString(),
+    );
+    log.per_party_daily = {
+      observed: partyCount,
+      limit: rule.perPartyDailyLimit,
+    };
+    if (partyCount >= rule.perPartyDailyLimit) {
+      reasons.push('per_party_daily_limit_reached');
+    }
   }
 
-  return {
-    dailyCount,
-    hourlyCount,
-    perPartyCount,
-    dailyExceeded:
-      rule.dailyLimit !== undefined && dailyCount >= rule.dailyLimit,
-    hourlyExceeded:
-      rule.hourlyLimit !== undefined && hourlyCount >= rule.hourlyLimit,
-    perPartyExceeded:
-      rule.perPartyDailyLimit !== undefined
-      && partyId !== undefined
-      && perPartyCount >= rule.perPartyDailyLimit,
-  };
+  return { reasons, log };
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 내부 — 캘린더 가용성
-// ───────────────────────────────────────────────────────────────────
-
-async function checkCalendarAvailability(
+async function countAutoSent(
   supabase: SupabaseClient,
   organizationId: string,
-  _partyId: string | undefined,
-): Promise<boolean> {
-  void _partyId;
-  const now = new Date();
-  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
+  sinceIso: string,
+): Promise<number> {
+  // ai_generated=true 이고 자동발송된(external_data.auto_send=true) 메일만 카운트
   const { count, error } = await supabase
     .schema('app')
-    .from('meetings')
+    .from('communications')
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId)
-    .gte('scheduled_at', now.toISOString())
-    .lte('scheduled_at', sevenDaysLater.toISOString())
-    .in('status', ['scheduled', 'rescheduled']);
+    .eq('direction', 'outbound')
+    .eq('channel', 'email')
+    .eq('ai_generated', true)
+    .contains('external_data', { auto_send: true })
+    .gte('sent_at', sinceIso);
 
   if (error) {
-    return false;
+    // eslint-disable-next-line no-console
+    console.error('[auto-send-gate.countAutoSent]', error);
+    return Number.MAX_SAFE_INTEGER; // 보수적: 실패 시 한도 초과로 간주
   }
-  return (count ?? 0) < 20;
+  return count ?? 0;
+}
+
+async function countAutoSentForParty(
+  supabase: SupabaseClient,
+  organizationId: string,
+  partyId: string,
+  sinceIso: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .schema('app')
+    .from('communications')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('party_id', partyId)
+    .eq('direction', 'outbound')
+    .eq('channel', 'email')
+    .eq('ai_generated', true)
+    .contains('external_data', { auto_send: true })
+    .gte('sent_at', sinceIso);
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[auto-send-gate.countAutoSentForParty]', error);
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return count ?? 0;
+}
+
+/* ============================================================
+ * 6. Calendar 가용성
+ * ----------------------------------------------------------
+ * 운영 시점에 google calendar / outlook 통합 후 정확한 가용성 평가.
+ * 본 STEP 3에서는 organization_settings.calendar_connected 플래그만 확인.
+ * 미연결이면 미팅 자동 회신 차단.
+ * ============================================================ */
+async function hasCalendarAvailability(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .schema('app')
+    .from('organizations')
+    .select('settings')
+    .eq('id', organizationId)
+    .maybeSingle();
+
+  if (!data) return false;
+  const settings = (data.settings ?? {}) as Record<string, unknown>;
+  return Boolean(settings.calendar_connected);
 }

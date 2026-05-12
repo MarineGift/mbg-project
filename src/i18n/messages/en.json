@@ -1,0 +1,597 @@
+{
+  "common": {
+    "appName": "URM Platform",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "close": "Close",
+    "refresh": "Refresh",
+    "noResults": "No results",
+    "errorTitle": "An error occurred",
+    "errorRetry": "Try again",
+    "unauthorized": "Unauthorized",
+    "loginRequired": "Sign in required",
+    "language": "Language",
+    "settings": "Settings",
+    "profile": "Profile",
+    "signOut": "Sign out",
+    "search_placeholder": "Type to search..."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "drafts": "AI Drafts",
+    "parties": "Parties",
+    "engagements": "Engagements",
+    "tasks": "Tasks",
+    "settings": "Settings"
+  },
+  "modules": {
+    "investor": "Investors",
+    "buyer": "Buyers",
+    "partner": "Partners",
+    "customer": "Customers",
+    "crowdfunding": "Crowdfunding",
+    "product_launch": "Product Launch",
+    "sales": "Sales"
+  },
+  "draftStatus": {
+    "pending_review": "Pending review",
+    "approved": "Approved",
+    "sent": "Sent",
+    "rejected": "Rejected",
+    "expired": "Expired",
+    "auto_sent": "Auto-sent"
+  },
+  "classificationCategory": {
+    "information_request": "Information request",
+    "meeting_scheduling": "Meeting scheduling",
+    "simple_acknowledgment": "Acknowledgment",
+    "price_negotiation": "Price negotiation",
+    "contract_terms": "Contract terms",
+    "rejection": "Rejection",
+    "complaint": "Complaint",
+    "introduction": "Introduction",
+    "follow_up": "Follow-up",
+    "other": "Other"
+  },
+  "confidence": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInTitle": "Sign in to URM Platform",
+    "email": "Email",
+    "password": "Password",
+    "signInButton": "Sign in",
+    "signingIn": "Signing in..."
+  },
+  "drafts": {
+    "queueTitle": "AI Draft Queue",
+    "queueDescription": "AI-generated replies awaiting review",
+    "columns": {
+      "status": "Status",
+      "module": "Module",
+      "party": "Party",
+      "subject": "Subject",
+      "category": "Category",
+      "confidence": "Confidence",
+      "risk": "Risk",
+      "expires": "Expires",
+      "created": "Created"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "module": "Module",
+      "allModules": "All modules",
+      "category": "Category",
+      "allCategories": "All categories",
+      "confidence": "Min confidence",
+      "anyConfidence": "Any",
+      "onlyRisky": "Risk flags only",
+      "reset": "Reset",
+      "sort": "Sort"
+    },
+    "sort": {
+      "urgent": "Urgent (low confidence + expiring)",
+      "newest": "Newest",
+      "oldest": "Oldest",
+      "confidenceHigh": "Highest confidence",
+      "expiringSoon": "Expiring soon"
+    },
+    "bulk": {
+      "selected": "{count} selected",
+      "approveSelected": "Approve selected",
+      "rejectSelected": "Reject selected",
+      "clear": "Clear selection",
+      "approveNote": "Drafts being edited will be excluded"
+    },
+    "empty": {
+      "title": "No drafts to review",
+      "description": "When new inbound emails arrive, AI will automatically generate drafts here."
+    },
+    "emptyFiltered": {
+      "title": "No drafts match the filters",
+      "description": "Try resetting filters or adjusting your criteria."
+    },
+    "preview": {
+      "from": "From",
+      "noParty": "(no party)"
+    },
+    "expiry": {
+      "expired": "Expired",
+      "today": "Expires today",
+      "daysLeft": "{days}d left",
+      "hoursLeft": "{hours}h left"
+    },
+    "pagination": {
+      "page": "Page",
+      "of": "of",
+      "rowsPerPage": "Rows per page",
+      "total": "{count} total"
+    }
+  },
+  "draftDetail": {
+    "backToQueue": "Back to queue",
+    "noSubject": "(no subject)",
+    "classification": {
+      "title": "AI Classification",
+      "category": "Category",
+      "confidence": "Confidence",
+      "riskFlags": "Risk flags",
+      "rationale": "Rationale",
+      "humanRequired": "Human review required"
+    },
+    "autoSend": {
+      "title": "Auto-Send Evaluation",
+      "eligible": "Eligible for auto-send",
+      "held": "Held for human review",
+      "blockedReasons": "Blocked reasons",
+      "ruleApplied": "Rule applied",
+      "minConfidence": "Min confidence",
+      "active": "Active",
+      "killSwitch": "Kill switch"
+    },
+    "metadata": {
+      "title": "AI Run Metadata",
+      "totalCost": "Total cost",
+      "totalLatency": "Total latency",
+      "classifier": "Classifier",
+      "drafter": "Reply Drafter",
+      "model": "Model",
+      "tokens": "In / Out",
+      "cost": "Cost",
+      "latency": "Latency",
+      "editDistance": "Edit distance",
+      "editDistanceHint": "Human edits vs. AI original (lower = AI output retained more)"
+    },
+    "inbound": {
+      "title": "Original Email",
+      "from": "From",
+      "to": "To",
+      "cc": "Cc",
+      "when": "When",
+      "subject": "Subject",
+      "noInbound": "No inbound message linked."
+    },
+    "editor": {
+      "title": "Reply",
+      "edit": "Edit",
+      "diff": "Diff",
+      "subject": "Subject",
+      "body": "Body",
+      "save": "Save Draft",
+      "unsavedChanges": "Unsaved changes",
+      "noUnsaved": "No unsaved changes",
+      "savedEditDistance": "saved edit distance: {distance}",
+      "chars": "{count} chars",
+      "readOnlyHint": "This draft is {status}; editing is disabled."
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve this draft?",
+      "approveDescription": "The draft will be marked as approved and {action}.",
+      "approveActionSendNow": "sent immediately",
+      "approveActionQueue": "queued for later send",
+      "approveAndSend": "Approve & Send",
+      "approveOnly": "Approve",
+      "rejectTitle": "Reject this draft?",
+      "rejectDescription": "Marked rejected. The original inbound message remains in your inbox for manual reply.",
+      "rejectReason": "Reason",
+      "rejectNotes": "Notes",
+      "cancel": "Cancel",
+      "sendImmediately": "Send immediately",
+      "noInboundHint": "No inbound message linked — send will be skipped.",
+      "diffNoChange": "No changes from AI original.",
+      "rejectReasons": {
+        "outdated_request": "Outdated / no longer relevant",
+        "off_topic": "Off-topic for this contact",
+        "wrong_tone": "Wrong tone / register",
+        "incorrect_info": "Contains incorrect information",
+        "other": "Other (specify below)"
+      }
+    },
+    "diff": {
+      "noChanges": "No changes from AI original."
+    },
+    "toasts": {
+      "draftSaved": "Draft saved",
+      "saveFailed": "Failed to save draft",
+      "approvedAndSent": "Approved and sent",
+      "approvedNotSent": "Approved (not sent yet)",
+      "approveFailed": "Approval failed",
+      "rejected": "Draft rejected",
+      "rejectFailed": "Reject failed"
+    }
+  },
+  "inbox": {
+    "queueTitle": "Inbox",
+    "queueDescription": "All communications (inbound + outbound)",
+    "search": "Search",
+    "searchPlaceholder": "Search subject, body...",
+    "noSubject": "(no subject)",
+    "aiDraft": "AI draft",
+    "aiSent": "AI sent",
+    "channels": {
+      "email": "Email",
+      "slack": "Slack",
+      "sms": "SMS",
+      "phone": "Phone",
+      "other": "Other"
+    },
+    "directions": {
+      "inbound": "Inbound",
+      "outbound": "Outbound"
+    },
+    "filters": {
+      "channel": "Channel",
+      "allChannels": "All channels",
+      "direction": "Direction",
+      "allDirections": "All directions",
+      "hasDraft": "Has AI draft",
+      "reset": "Reset"
+    },
+    "empty": {
+      "title": "No messages",
+      "description": "Received emails and sent messages will appear here."
+    },
+    "emptyFiltered": {
+      "title": "No messages match the filters",
+      "description": "Try resetting filters or adjusting your search."
+    },
+    "detail": {
+      "from": "From",
+      "to": "To",
+      "cc": "Cc",
+      "when": "When",
+      "party": "Party",
+      "messageId": "Message-ID",
+      "threadId": "Thread-ID",
+      "body": "Body",
+      "noSubject": "(no subject)",
+      "noBody": "No body",
+      "failed": "Send failed",
+      "generatedDrafts": "AI drafts generated from this message",
+      "viewSourceDraft": "View source draft"
+    }
+  },
+  "partyDetail": {
+    "stats": {
+      "contacts": "Contacts",
+      "communications": "Communications",
+      "pendingDrafts": "Pending drafts",
+      "openEngagements": "Open engagements",
+      "openTasks": "Open tasks"
+    },
+    "contacts": {
+      "title": "Contacts",
+      "empty": "No contacts registered."
+    },
+    "engagements": {
+      "title": "Engagements",
+      "empty": "No engagements in progress."
+    },
+    "tasks": {
+      "title": "Tasks",
+      "empty": "No open tasks."
+    },
+    "timeline": {
+      "title": "Activity Timeline",
+      "empty": "No recent activity."
+    },
+    "notes": {
+      "title": "Notes"
+    }
+  },
+  "engagements": {
+    "queueTitle": "Kanban Board",
+    "queueDescription": "Active engagements in the {pipeline} pipeline",
+    "noPipeline": "No active pipeline for this module",
+    "totalLabel": "Total engagements",
+    "uncategorized": "Uncategorized",
+    "emptyStage": "No cards in this stage",
+    "weightedSum": "Weighted sum: {value}",
+    "card": {
+      "open": "Open"
+    },
+    "empty": {
+      "pipelineMissingTitle": "No pipeline configured",
+      "pipelineMissingDescription": "The {module} module has no active pipeline. Create one in settings.",
+      "configurePipeline": "Configure pipeline",
+      "noEngagementsTitle": "No engagements",
+      "noEngagementsDescription": "Create engagements from a party page; they will appear here."
+    },
+    "detail": {
+      "info": "Info",
+      "value": "Value",
+      "probability": "Probability",
+      "weighted": "Weighted",
+      "expectedClose": "Expected close",
+      "actualClose": "Actual close",
+      "source": "Source",
+      "description": "Description",
+      "wonLostReason": "Won/Lost reason",
+      "updatedAt": "Last updated",
+      "mover": {
+        "title": "Move stage",
+        "selectStage": "Select stage",
+        "move": "Move",
+        "moveSucceeded": "Stage updated",
+        "moveFailed": "Stage move failed"
+      },
+      "history": {
+        "title": "Stage History",
+        "empty": "No stage transitions yet",
+        "initial": "(initial)"
+      }
+    },
+    "toast": {
+      "movedToWon": "{name} — 🏆 marked as won",
+      "movedToLost": "{name} — marked as lost"
+    }
+  },
+  "tasks": {
+    "queueTitle": "Tasks",
+    "queueDescription": "Things to do — manage priorities, due dates, and completion",
+    "status": {
+      "open": "Open",
+      "all": "All",
+      "todo": "To do",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "done": "Done",
+      "cancelled": "Cancelled"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "priority": "Priority",
+      "allPriorities": "All priorities",
+      "sort": "Sort",
+      "overdueOnly": "Overdue only",
+      "reset": "Reset"
+    },
+    "sort": {
+      "due_soonest": "Due soonest",
+      "priority": "By priority",
+      "newest": "Newest",
+      "oldest": "Oldest"
+    },
+    "empty": {
+      "title": "No tasks",
+      "description": "Add tasks from party or engagement pages.",
+      "fallback": "—"
+    },
+    "emptyFiltered": {
+      "title": "No tasks match the filters",
+      "description": "Try resetting filters or adjusting your criteria."
+    }
+  },
+  "settings": {
+    "nav": {
+      "profile": "Profile",
+      "language": "Language",
+      "notifications": "Notifications",
+      "organization": "Organization"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Your information and sending email setup",
+      "emailLabel": "Email (login ID)",
+      "emailHint": "Email cannot be changed",
+      "fullName": "Full name",
+      "displayName": "Display name",
+      "displayNameHint": "Leave empty to use the full name",
+      "sendingEmail": "Sending email",
+      "sendingEmailHint": "AI replies will be sent from this address (defaults to your login email)",
+      "save": "Save",
+      "saved": "Saved"
+    },
+    "language": {
+      "title": "Language",
+      "description": "Preferred language — UI and AI reply default language",
+      "save": "Save",
+      "saved": "Language updated"
+    },
+    "notifications": {
+      "title": "Browser Notifications",
+      "description": "Desktop notifications for new AI drafts (Q9 — default off)",
+      "toggle": "Receive desktop notifications",
+      "requestPermission": "Request permission",
+      "enabled": "Notifications enabled",
+      "disabled": "Notifications disabled",
+      "permissionDenied": "Notifications were blocked in browser settings",
+      "notSupported": "This browser does not support notifications",
+      "grantedHint": "Permission granted — you can receive notifications"
+    },
+    "organization": {
+      "title": "Organization",
+      "description": "Your organization information",
+      "name": "Name",
+      "organizationId": "Organization ID",
+      "role": "Role",
+      "owner": "Owner",
+      "member": "Member",
+      "phase1Notice": "Phase 1 supports a single organization. User invitations and role changes are coming in Phase 2."
+    }
+  },
+  "realtime": {
+    "newDraft": "New AI draft arrived",
+    "newDraftTitle": "URM — New draft",
+    "newDraftBody": "AI has generated a new reply draft. Check your review queue."
+  },
+  "partyForm": {
+    "industryTags": "Industry Tags",
+    "industryTagsPlaceholder": "Venture Capital, Software, ...",
+    "industryTagsHint": "Comma-separated",
+    "interestTags": "Interest Tags",
+    "interestTagsPlaceholder": "Early Stage, AI, Growth, ...",
+    "interestTagsHint": "Comma-separated. Focus areas the party cares about.",
+    "createTitle": "New Party",
+    "editTitle": "Edit Party",
+    "createDescription": "Add a new party — investor, buyer, partner, customer, ...",
+    "editDescription": "Edit party information",
+    "name": "Name",
+    "module": "Module",
+    "partyType": "Type",
+    "tier": "Tier",
+    "tiers": {
+      "tier_1": "Tier 1 — Strategic",
+      "tier_2": "Tier 2 — Important",
+      "tier_3": "Tier 3 — Standard",
+      "cold": "Cold — Early"
+    },
+    "partyTypes": {
+      "company": "Company",
+      "individual": "Individual",
+      "organization": "Organization"
+    },
+    "legalName": "Legal name",
+    "legalNamePlaceholder": "Inc. / LLC / Co., Ltd. ...",
+    "countryCode": "Country code",
+    "region": "Region",
+    "city": "City",
+    "website": "Website",
+    "industry": "Industry",
+    "industryTags": "Tags",
+    "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
+    "industryTagsHint": "Comma-separated",
+    "source": "Source",
+    "sourcePlaceholder": "LinkedIn, referral, conference ...",
+    "notes": "Notes",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "created": "Party created",
+    "updated": "Saved",
+    "saveFailed": "Save failed",
+    "deleteFailed": "Delete failed",
+    "deleteConfirmTitle": "Delete this party?",
+    "deleteConfirmDescription": "\"{name}\" will be removed. Related contacts, engagements, and tasks remain but this party will disappear from lists.",
+    "deleteConfirm": "Delete"
+  },
+  "engagementForm": {
+    "createTitle": "New Engagement",
+    "editTitle": "Edit Engagement",
+    "createDescription": "New deal with {party}",
+    "createDescriptionGeneric": "New engagement",
+    "editDescription": "Edit engagement for {party}",
+    "name": "Name",
+    "namePlaceholder": "Q3 Series A, 50k box quote ...",
+    "description": "Description",
+    "value": "Value",
+    "currency": "Currency",
+    "probability": "Probability (%)",
+    "probabilityHint": "0–100",
+    "expectedClose": "Expected close",
+    "source": "Source",
+    "sourcePlaceholder": "Inbound, referral, conference ...",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "created": "Engagement created",
+    "updated": "Saved",
+    "deleted": "Deleted",
+    "saveFailed": "Save failed",
+    "deleteFailed": "Delete failed",
+    "partyRequired": "Party is required",
+    "deleteConfirmTitle": "Delete this engagement?",
+    "deleteConfirmDescription": "\"{name}\" will be removed. Stage history is preserved.",
+    "deleteConfirm": "Delete"
+  },
+  "contactForm": {
+    "createTitle": "Add Contact",
+    "editTitle": "Edit Contact",
+    "createDescription": "New point of contact for this party",
+    "editDescription": "Edit contact information",
+    "fullName": "Full name",
+    "title": "Title",
+    "email": "Email",
+    "phone": "Phone",
+    "isPrimary": "Set as primary contact",
+    "notes": "Notes",
+    "create": "Add",
+    "save": "Save",
+    "cancel": "Cancel",
+    "created": "Contact added",
+    "updated": "Saved",
+    "saveFailed": "Save failed"
+  },
+  "taskForm": {
+    "createTitle": "New Task",
+    "editTitle": "Edit Task",
+    "createDescription": "Add a task",
+    "editDescription": "Edit task details",
+    "title": "Title",
+    "titlePlaceholder": "Send samples, review quote ...",
+    "description": "Description",
+    "priority": "Priority",
+    "dueAt": "Due",
+    "create": "Add",
+    "save": "Save",
+    "cancel": "Cancel",
+    "created": "Task added",
+    "updated": "Saved",
+    "saveFailed": "Save failed"
+  },
+  "compose": {
+    "title": "Compose",
+    "description": "Send manually via the configured SMTP",
+    "to": "To",
+    "cc": "Cc",
+    "ccPlaceholder": "Additional recipients (comma-separated)",
+    "ccHint": "Separate by comma or semicolon",
+    "subject": "Subject",
+    "body": "Body",
+    "send": "Send",
+    "cancel": "Cancel",
+    "sent": "Sent",
+    "sendFailed": "Send failed"
+  }
+}

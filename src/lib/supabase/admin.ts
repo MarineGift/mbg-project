@@ -1,29 +1,41 @@
-import 'server-only';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+/**
+ * lib/supabase/admin.ts
+ *
+ * service_role 키를 사용하는 Supabase 클라이언트 (RLS 우회).
+ *
+ * 사용 제한:
+ *   - STEP 3 워커 (consultation-worker, draft-expiry-worker, mail-merge-worker)
+ *   - 인증 콜백 (사용자 생성 직후 app.users 행 INSERT 등)
+ *   - 웹훅 핸들러 (외부 시스템 → 우리 DB)
+ *   - 절대 일반 Server Action에서 사용 금지 (사용자 권한 우회 위험)
+ *
+ * 호출자 책임:
+ *   - 외부 입력을 신뢰하지 않고 명시적으로 organization_id를 WHERE에 포함
+ *   - 본 클라이언트로 쓴 모든 변경은 audit.change_log에 기록되지만
+ *     changed_by가 NULL이 되므로 트레이싱 어려움 → trace_label 등으로 보완
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/database';
 import { env } from '@/lib/env';
 
-/**
- * Service-role Supabase 클라이언트. RLS를 우회하므로 다음 경로에서만 사용:
- *  - 인증된 사용자가 아닌 시스템 작업 (cron, webhook receiver, worker)
- *  - 멀티테넌트 경계를 코드 레벨에서 명시적으로 강제하는 곳 (organization_id 항상 명시)
- *
- * 절대 클라이언트 컴포넌트나 미들웨어에서 import하지 말 것.
- */
-let cached: SupabaseClient | null = null;
+type SupabaseAdminDb = ReturnType<typeof createClient<Database, 'public'>>;
 
-export function getAdminSupabase(): SupabaseClient {
-  if (cached) return cached;
-  cached = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'urm-platform-admin',
+let adminClient: SupabaseAdminDb | null = null;
+
+export function createSupabaseAdminClient(): SupabaseAdminDb {
+  if (adminClient) return adminClient;
+
+  adminClient = createClient<Database, 'public'>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
       },
     },
-  });
-  return cached;
+  );
+  return adminClient;
 }

@@ -1,0 +1,591 @@
+{
+  "common": {
+    "appName": "URM Platform",
+    "loading": "読み込み中...",
+    "saving": "保存中...",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "delete": "削除",
+    "edit": "編集",
+    "create": "作成",
+    "search": "検索",
+    "filter": "フィルター",
+    "all": "すべて",
+    "yes": "はい",
+    "no": "いいえ",
+    "back": "戻る",
+    "next": "次へ",
+    "previous": "前へ",
+    "submit": "送信",
+    "close": "閉じる",
+    "refresh": "再読み込み",
+    "noResults": "結果がありません",
+    "errorTitle": "エラーが発生しました",
+    "errorRetry": "再試行",
+    "unauthorized": "権限がありません",
+    "loginRequired": "ログインが必要です",
+    "language": "言語",
+    "settings": "設定",
+    "profile": "プロフィール",
+    "signOut": "ログアウト",
+    "search_placeholder": "検索ワードを入力..."
+  },
+  "nav": {
+    "dashboard": "ダッシュボード",
+    "inbox": "受信箱",
+    "drafts": "AIドラフト",
+    "parties": "取引先",
+    "engagements": "案件",
+    "tasks": "タスク",
+    "settings": "設定"
+  },
+  "modules": {
+    "investor": "投資家",
+    "buyer": "バイヤー",
+    "partner": "パートナー",
+    "customer": "顧客",
+    "crowdfunding": "クラウドファンディング",
+    "product_launch": "製品ローンチ",
+    "sales": "販売"
+  },
+  "draftStatus": {
+    "pending_review": "レビュー待ち",
+    "approved": "承認済み",
+    "sent": "送信済み",
+    "rejected": "却下",
+    "expired": "期限切れ",
+    "auto_sent": "自動送信"
+  },
+  "classificationCategory": {
+    "information_request": "情報リクエスト",
+    "meeting_scheduling": "ミーティング調整",
+    "simple_acknowledgment": "確認",
+    "price_negotiation": "価格交渉",
+    "contract_terms": "契約条件",
+    "rejection": "却下",
+    "complaint": "クレーム",
+    "introduction": "紹介",
+    "follow_up": "フォローアップ",
+    "other": "その他"
+  },
+  "confidence": {
+    "low": "低",
+    "medium": "中",
+    "high": "高"
+  },
+  "auth": {
+    "signIn": "ログイン",
+    "signInTitle": "URM Platformへログイン",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "signInButton": "ログイン",
+    "signingIn": "ログイン中..."
+  },
+  "drafts": {
+    "queueTitle": "AIドラフトキュー",
+    "queueDescription": "レビュー待ちのAI生成返信",
+    "columns": {
+      "status": "ステータス",
+      "module": "モジュール",
+      "party": "取引先",
+      "subject": "件名",
+      "category": "カテゴリ",
+      "confidence": "信頼度",
+      "risk": "リスク",
+      "expires": "期限",
+      "created": "作成"
+    },
+    "filters": {
+      "status": "ステータス",
+      "allStatuses": "すべて",
+      "module": "モジュール",
+      "allModules": "すべて",
+      "category": "カテゴリ",
+      "allCategories": "すべて",
+      "confidence": "信頼度 (最小)",
+      "anyConfidence": "すべて",
+      "onlyRisky": "リスクフラグのみ",
+      "reset": "リセット",
+      "sort": "並べ替え"
+    },
+    "sort": {
+      "urgent": "緊急優先 (信頼度低 + 期限近い)",
+      "newest": "新しい順",
+      "oldest": "古い順",
+      "confidenceHigh": "信頼度高い順",
+      "expiringSoon": "期限近い順"
+    },
+    "bulk": {
+      "selected": "{count}件選択中",
+      "approveSelected": "一括承認",
+      "rejectSelected": "一括却下",
+      "clear": "選択解除",
+      "approveNote": "編集中のドラフトは除外されます"
+    },
+    "empty": {
+      "title": "レビュー待ちのドラフトはありません",
+      "description": "新規受信メールが届くと、AIが自動でドラフトを生成します。"
+    },
+    "emptyFiltered": {
+      "title": "条件に一致するドラフトがありません",
+      "description": "フィルターをリセットするか、条件を変更してください。"
+    },
+    "preview": {
+      "from": "送信者",
+      "noParty": "(取引先未指定)"
+    },
+    "expiry": {
+      "expired": "期限切れ",
+      "today": "本日期限",
+      "daysLeft": "あと{days}日",
+      "hoursLeft": "あと{hours}時間"
+    },
+    "pagination": {
+      "page": "ページ",
+      "of": "/",
+      "rowsPerPage": "ページあたりの行数",
+      "total": "合計{count}件"
+    }
+  },
+  "draftDetail": {
+    "backToQueue": "キューに戻る",
+    "noSubject": "(件名なし)",
+    "classification": {
+      "title": "AI分類",
+      "category": "カテゴリ",
+      "confidence": "信頼度",
+      "riskFlags": "リスクフラグ",
+      "rationale": "根拠",
+      "humanRequired": "人手レビュー必要"
+    },
+    "autoSend": {
+      "title": "自動送信評価",
+      "eligible": "自動送信可能",
+      "held": "人手レビュー待ち",
+      "blockedReasons": "ブロック理由",
+      "ruleApplied": "適用ルール",
+      "minConfidence": "最小信頼度",
+      "active": "有効",
+      "killSwitch": "Kill switch"
+    },
+    "metadata": {
+      "title": "AIランメタデータ",
+      "totalCost": "総コスト",
+      "totalLatency": "総遅延",
+      "classifier": "分類器",
+      "drafter": "返信ドラフター",
+      "model": "モデル",
+      "tokens": "入力 / 出力",
+      "cost": "コスト",
+      "latency": "遅延",
+      "editDistance": "編集距離",
+      "editDistanceHint": "人手編集 vs AI原本(低いほどAI出力を保持)"
+    },
+    "inbound": {
+      "title": "元のメール",
+      "from": "送信者",
+      "to": "受信者",
+      "cc": "Cc",
+      "when": "時刻",
+      "subject": "件名",
+      "noInbound": "連携された受信メッセージなし。"
+    },
+    "editor": {
+      "title": "返信",
+      "edit": "編集",
+      "diff": "差分",
+      "subject": "件名",
+      "body": "本文",
+      "save": "ドラフト保存",
+      "unsavedChanges": "未保存の変更",
+      "noUnsaved": "変更なし",
+      "savedEditDistance": "保存編集距離: {distance}",
+      "chars": "{count}文字",
+      "readOnlyHint": "ステータス{status}のドラフトは編集できません。"
+    },
+    "actions": {
+      "approve": "承認",
+      "reject": "却下",
+      "approveTitle": "このドラフトを承認しますか?",
+      "approveDescription": "ドラフトは承認済みとしてマークされ、{action}されます。",
+      "approveActionSendNow": "即時送信",
+      "approveActionQueue": "後で送信待ち",
+      "approveAndSend": "承認して送信",
+      "approveOnly": "承認のみ",
+      "rejectTitle": "このドラフトを却下しますか?",
+      "rejectDescription": "却下としてマークされ、元の受信メッセージは手動返信用に受信トレイに残ります。",
+      "rejectReason": "理由",
+      "rejectNotes": "メモ",
+      "cancel": "キャンセル",
+      "sendImmediately": "即時送信",
+      "noInboundHint": "連携された受信メッセージなし — 送信スキップ。",
+      "diffNoChange": "AI原本から変更なし。",
+      "rejectReasons": {
+        "outdated_request": "古い / もはや有効でない",
+        "off_topic": "この連絡先に不適合",
+        "wrong_tone": "トーン / 言葉遣い不適合",
+        "incorrect_info": "誤った情報を含む",
+        "other": "その他 (下に明記)"
+      }
+    },
+    "diff": {
+      "noChanges": "AI原本から変更なし。"
+    },
+    "toasts": {
+      "draftSaved": "ドラフトを保存しました",
+      "saveFailed": "ドラフト保存に失敗",
+      "approvedAndSent": "承認して送信完了",
+      "approvedNotSent": "承認済み (未送信)",
+      "approveFailed": "承認失敗",
+      "rejected": "ドラフトを却下しました",
+      "rejectFailed": "却下失敗"
+    }
+  },
+  "inbox": {
+    "queueTitle": "受信トレイ",
+    "queueDescription": "すべての通信 (受信 + 送信)",
+    "search": "検索",
+    "searchPlaceholder": "件名、本文を検索...",
+    "noSubject": "(件名なし)",
+    "aiDraft": "AIドラフト",
+    "aiSent": "AI送信",
+    "channels": {
+      "email": "メール",
+      "slack": "Slack",
+      "sms": "SMS",
+      "phone": "電話",
+      "other": "その他"
+    },
+    "directions": {
+      "inbound": "受信",
+      "outbound": "送信"
+    },
+    "filters": {
+      "channel": "チャネル",
+      "allChannels": "すべて",
+      "direction": "方向",
+      "allDirections": "すべて",
+      "hasDraft": "AIドラフトあり",
+      "reset": "リセット"
+    },
+    "empty": {
+      "title": "メッセージがありません",
+      "description": "受信メールや送信メッセージがここに表示されます。"
+    },
+    "emptyFiltered": {
+      "title": "条件に一致するメッセージがありません",
+      "description": "フィルターをリセットするか、検索語を変更してください。"
+    },
+    "detail": {
+      "from": "送信者",
+      "to": "受信者",
+      "cc": "Cc",
+      "when": "時刻",
+      "party": "取引先",
+      "messageId": "Message-ID",
+      "threadId": "Thread-ID",
+      "body": "本文",
+      "noSubject": "(件名なし)",
+      "noBody": "本文なし",
+      "failed": "送信失敗",
+      "generatedDrafts": "このメッセージから生成されたAIドラフト",
+      "viewSourceDraft": "元のドラフトを表示"
+    }
+  },
+  "partyDetail": {
+    "stats": {
+      "contacts": "コンタクト",
+      "communications": "通信",
+      "pendingDrafts": "待機ドラフト",
+      "openEngagements": "進行中エンゲージメント",
+      "openTasks": "オープンタスク"
+    },
+    "contacts": {
+      "title": "コンタクト",
+      "empty": "登録されたコンタクトがありません。"
+    },
+    "engagements": {
+      "title": "エンゲージメント",
+      "empty": "進行中のエンゲージメントがありません。"
+    },
+    "tasks": {
+      "title": "タスク",
+      "empty": "オープンタスクがありません。"
+    },
+    "timeline": {
+      "title": "活動タイムライン",
+      "empty": "最近の活動がありません。"
+    },
+    "notes": {
+      "title": "メモ"
+    }
+  },
+  "engagements": {
+    "queueTitle": "Kanbanボード",
+    "queueDescription": "{pipeline}パイプラインの進行中エンゲージメント",
+    "noPipeline": "このモジュールにアクティブなパイプラインがありません",
+    "totalLabel": "総エンゲージメント数",
+    "uncategorized": "未分類",
+    "emptyStage": "このステージにカードなし",
+    "weightedSum": "加重合計: {value}",
+    "card": {
+      "open": "開く"
+    },
+    "empty": {
+      "pipelineMissingTitle": "パイプライン未設定",
+      "pipelineMissingDescription": "{module}モジュールにアクティブなパイプラインがありません。設定で作成してください。",
+      "configurePipeline": "パイプラインを設定",
+      "noEngagementsTitle": "エンゲージメントがありません",
+      "noEngagementsDescription": "取引先ページから新規エンゲージメントを作成すると、ここに表示されます。"
+    },
+    "detail": {
+      "info": "情報",
+      "value": "金額",
+      "probability": "確度",
+      "weighted": "加重",
+      "expectedClose": "見込み完了",
+      "actualClose": "実際完了",
+      "source": "ソース",
+      "description": "説明",
+      "wonLostReason": "Won/Lost理由",
+      "updatedAt": "最終更新",
+      "mover": {
+        "title": "ステージ移動",
+        "selectStage": "ステージ選択",
+        "move": "移動",
+        "moveSucceeded": "ステージを更新しました",
+        "moveFailed": "ステージ移動に失敗"
+      },
+      "history": {
+        "title": "ステージ履歴",
+        "empty": "移動履歴がありません",
+        "initial": "(初期)"
+      }
+    },
+    "toast": {
+      "movedToWon": "{name} — 🏆 成功でクローズ",
+      "movedToLost": "{name} — 失敗でクローズ"
+    }
+  },
+  "tasks": {
+    "queueTitle": "タスク",
+    "queueDescription": "ToDoリスト — 優先度・期限・完了の管理",
+    "status": {
+      "open": "オープン",
+      "all": "すべて",
+      "todo": "To do",
+      "in_progress": "進行中",
+      "blocked": "ブロック中",
+      "done": "完了",
+      "cancelled": "キャンセル"
+    },
+    "priority": {
+      "urgent": "緊急",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "filters": {
+      "status": "ステータス",
+      "allStatuses": "すべて",
+      "priority": "優先度",
+      "allPriorities": "すべて",
+      "sort": "並べ替え",
+      "overdueOnly": "期限切れのみ",
+      "reset": "リセット"
+    },
+    "sort": {
+      "due_soonest": "期限近い順",
+      "priority": "優先度順",
+      "newest": "新しい順",
+      "oldest": "古い順"
+    },
+    "empty": {
+      "title": "タスクがありません",
+      "description": "取引先またはエンゲージメントページからタスクを追加できます。",
+      "fallback": "—"
+    },
+    "emptyFiltered": {
+      "title": "条件に一致するタスクがありません",
+      "description": "フィルターをリセットするか、条件を変更してください。"
+    }
+  },
+  "settings": {
+    "nav": {
+      "profile": "プロフィール",
+      "language": "言語",
+      "notifications": "通知",
+      "organization": "組織"
+    },
+    "profile": {
+      "title": "プロフィール",
+      "description": "あなたの情報と送信メール設定",
+      "emailLabel": "メール (ログインID)",
+      "emailHint": "メールアドレスは変更できません",
+      "fullName": "氏名",
+      "displayName": "表示名",
+      "displayNameHint": "空欄の場合は氏名を使用します",
+      "sendingEmail": "送信用メール",
+      "sendingEmailHint": "AI返信はこのアドレスから送信されます (空欄の場合はログイン用メール)",
+      "save": "保存",
+      "saved": "保存しました"
+    },
+    "language": {
+      "title": "言語",
+      "description": "優先言語 — UIおよびAI返信のデフォルト言語",
+      "save": "保存",
+      "saved": "言語を変更しました"
+    },
+    "notifications": {
+      "title": "ブラウザ通知",
+      "description": "新規AIドラフト到着時のデスクトップ通知 (Q9 — デフォルトOFF)",
+      "toggle": "デスクトップ通知を受け取る",
+      "requestPermission": "権限をリクエスト",
+      "enabled": "通知を有効にしました",
+      "disabled": "通知を無効にしました",
+      "permissionDenied": "ブラウザ設定で通知がブロックされています",
+      "notSupported": "このブラウザは通知をサポートしていません",
+      "grantedHint": "権限が許可されています"
+    },
+    "organization": {
+      "title": "組織",
+      "description": "現在の所属組織情報",
+      "name": "組織名",
+      "organizationId": "組織ID",
+      "role": "ロール",
+      "owner": "オーナー",
+      "member": "メンバー",
+      "phase1Notice": "Phase 1は単一組織のみサポートします。ユーザー招待・ロール変更はPhase 2で提供されます。"
+    }
+  },
+  "realtime": {
+    "newDraft": "新規AIドラフトが到着しました",
+    "newDraftTitle": "URM — 新規ドラフト",
+    "newDraftBody": "AIが新しい返信ドラフトを生成しました。レビューキューを確認してください。"
+  },
+  "partyForm": {
+    "createTitle": "新規取引先",
+    "editTitle": "取引先を編集",
+    "createDescription": "新しい取引先を追加 — 投資家、バイヤー、パートナー、顧客など",
+    "editDescription": "取引先情報を編集",
+    "name": "名前",
+    "module": "モジュール",
+    "partyType": "種別",
+    "tier": "Tier",
+    "tiers": {
+      "tier_1": "Tier 1 — 戦略",
+      "tier_2": "Tier 2 — 重要",
+      "tier_3": "Tier 3 — 通常",
+      "cold": "Cold — 初期"
+    },
+    "partyTypes": {
+      "company": "会社",
+      "individual": "個人",
+      "organization": "団体"
+    },
+    "legalName": "法人名",
+    "legalNamePlaceholder": "Inc. / LLC / 株式会社 ...",
+    "countryCode": "国コード",
+    "region": "地域",
+    "city": "都市",
+    "website": "ウェブサイト",
+    "industry": "業界",
+    "industryTags": "タグ",
+    "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
+    "industryTagsHint": "カンマ区切り",
+    "source": "ソース",
+    "sourcePlaceholder": "LinkedIn、紹介、カンファレンス ...",
+    "notes": "メモ",
+    "create": "作成",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "created": "取引先を作成しました",
+    "updated": "保存しました",
+    "saveFailed": "保存失敗",
+    "deleteFailed": "削除失敗",
+    "deleteConfirmTitle": "この取引先を削除しますか?",
+    "deleteConfirmDescription": "\"{name}\" を削除します。関連するコンタクト・エンゲージメント・タスクは保持されますが、この取引先は一覧から消えます。",
+    "deleteConfirm": "削除"
+  },
+  "engagementForm": {
+    "createTitle": "新規エンゲージメント",
+    "editTitle": "エンゲージメントを編集",
+    "createDescription": "{party} との新しいディール",
+    "createDescriptionGeneric": "新規エンゲージメント",
+    "editDescription": "{party} のエンゲージメントを編集",
+    "name": "名前",
+    "namePlaceholder": "Q3シリーズA、5万箱見積もり ...",
+    "description": "説明",
+    "value": "金額",
+    "currency": "通貨",
+    "probability": "確度 (%)",
+    "probabilityHint": "0〜100",
+    "expectedClose": "見込み完了日",
+    "source": "ソース",
+    "sourcePlaceholder": "Inbound、紹介、カンファレンス ...",
+    "create": "作成",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "created": "エンゲージメントを作成しました",
+    "updated": "保存しました",
+    "deleted": "削除しました",
+    "saveFailed": "保存失敗",
+    "deleteFailed": "削除失敗",
+    "partyRequired": "取引先が必要です",
+    "deleteConfirmTitle": "このエンゲージメントを削除しますか?",
+    "deleteConfirmDescription": "\"{name}\" を削除します。ステージ履歴は保持されます。",
+    "deleteConfirm": "削除"
+  },
+  "contactForm": {
+    "createTitle": "コンタクト追加",
+    "editTitle": "コンタクト編集",
+    "createDescription": "この取引先の新しい担当者",
+    "editDescription": "担当者情報を編集",
+    "fullName": "氏名",
+    "title": "役職",
+    "email": "メール",
+    "phone": "電話",
+    "isPrimary": "主担当者に設定",
+    "notes": "メモ",
+    "create": "追加",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "created": "コンタクトを追加しました",
+    "updated": "保存しました",
+    "saveFailed": "保存失敗"
+  },
+  "taskForm": {
+    "createTitle": "新規タスク",
+    "editTitle": "タスク編集",
+    "createDescription": "タスクを追加",
+    "editDescription": "タスク情報を編集",
+    "title": "タイトル",
+    "titlePlaceholder": "サンプル発送、見積もり確認 ...",
+    "description": "説明",
+    "priority": "優先度",
+    "dueAt": "期限",
+    "create": "追加",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "created": "タスクを追加しました",
+    "updated": "保存しました",
+    "saveFailed": "保存失敗"
+  },
+  "compose": {
+    "title": "新規メール",
+    "description": "登録済みSMTPで直接送信",
+    "to": "宛先",
+    "cc": "Cc",
+    "ccPlaceholder": "追加の宛先 (カンマ区切り)",
+    "ccHint": "カンマまたはセミコロンで区切る",
+    "subject": "件名",
+    "body": "本文",
+    "send": "送信",
+    "cancel": "キャンセル",
+    "sent": "送信完了",
+    "sendFailed": "送信失敗"
+  }
+}

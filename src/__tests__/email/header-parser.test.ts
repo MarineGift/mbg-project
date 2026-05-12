@@ -1,317 +1,376 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * __tests__/email/header-parser.test.ts
+ *
+ * 순수 함수 위주 테스트:
+ *   - parseInboundMessage: 헤더 추출, URM 헤더, fallback footer
+ *   - findThreadId: 3단계 우선순위 (urm_header → in_reply_to → references)
+ *   - matchSenderToContactAndParty: 정확 매칭, 도메인 매칭, generic 도메인 제외
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ParsedMail } from 'mailparser';
 import {
   parseInboundMessage,
-  normalizeMessageId,
-  parseReferences,
+  extractUrmHeadersFromHtmlFooter,
+  hasAnyUrmHeader,
   findThreadId,
-  findContactByEmail,
-  type ParsedHeaders,
-} from '@/lib/email/header-parser';
+  matchSenderToContactAndParty,
+} from '../../lib/email/header-parser';
+import { URM_HEADER_NAMES } from '../../types/email';
+import { buildSupabaseMock } from '../setup/supabase-mock';
 
-type HeaderMap = Map<string, string | string[]>;
-
-function makeParsedMail(overrides: Partial<ParsedMail> & {
-  customHeaders?: Record<string, string>;
-}): ParsedMail {
-  const headers: HeaderMap = new Map();
-  if (overrides.customHeaders) {
-    for (const [k, v] of Object.entries(overrides.customHeaders)) {
-      headers.set(k.toLowerCase(), v);
-    }
-  }
-
+// ParsedMail 헬퍼 — mailparser는 내부적으로 Map 기반 headers + value 배열 사용
+function makeParsedMail(
+  overrides: Partial<ParsedMail> & { headerEntries?: Array<[string, unknown]> } = {},
+): ParsedMail {
+  const headers = new Map<string, unknown>(overrides.headerEntries ?? []);
   return {
-    headers: headers as unknown as ParsedMail['headers'],
+    headers,
     headerLines: [],
-    text: '',
-    html: false,
-    textAsHtml: '',
-    subject: '(no subject)',
-    date: new Date('2026-05-09T00:00:00Z'),
-    to: undefined,
-    cc: undefined,
-    bcc: undefined,
-    from: undefined,
-    replyTo: undefined,
-    messageId: undefined,
-    inReplyTo: undefined,
-    references: undefined,
     attachments: [],
-    ...overrides,
-  } as unknown as ParsedMail;
+    text: overrides.text ?? '',
+    html: overrides.html ?? false,
+    subject: overrides.subject,
+    messageId: overrides.messageId,
+    inReplyTo: overrides.inReplyTo,
+    references: overrides.references,
+    from: overrides.from,
+    to: overrides.to,
+    cc: overrides.cc,
+    replyTo: overrides.replyTo,
+    date: overrides.date,
+  } as ParsedMail;
 }
 
 describe('parseInboundMessage', () => {
-  it('extracts basic fields from a minimal ParsedMail', () => {
-    const pm = makeParsedMail({
-      messageId: '<abc-123@sender.example.com>',
+  it('extracts message-id, subject, from, to, references', () => {
+    const parsed = makeParsedMail({
+      messageId: '<abc@ex.com>',
       subject: 'Hello',
       from: {
-        value: [{ name: 'Alice', address: 'alice@example.com' }],
-        text: 'Alice <alice@example.com>',
+        text: 'A B <a@b.com>',
         html: '',
+        value: [{ name: 'A B', address: 'a@b.com' }],
       },
       to: {
-        value: [{ name: 'Bob', address: 'bob@example.com' }],
-        text: 'Bob <bob@example.com>',
+        text: 'c@d.com',
         html: '',
+        value: [{ name: '', address: 'c@d.com' }],
       },
-      date: new Date('2026-05-08T12:00:00Z'),
+      inReplyTo: '<prev@ex.com>',
+      references: ['<r1@ex.com>', '<r2@ex.com>'],
+      date: new Date('2026-01-15T10:00:00Z'),
     });
-    const headers = parseInboundMessage(pm);
 
-    expect(headers.messageId).toBe('<abc-123@sender.example.com>');
-    expect(headers.subject).toBe('Hello');
-    expect(headers.from).toEqual({ name: 'Alice', address: 'alice@example.com' });
-    expect(headers.to).toEqual([{ name: 'Bob', address: 'bob@example.com' }]);
-    expect(headers.cc).toEqual([]);
-    expect(headers.references).toEqual([]);
-    expect(headers.urmHeaders).toEqual({});
+    const result = parseInboundMessage(parsed);
+
+    expect(result.messageId).toBe('<abc@ex.com>');
+    expect(result.subject).toBe('Hello');
+    expect(result.from).toEqual({ name: 'A B', address: 'a@b.com' });
+    expect(result.to).toEqual([{ name: '', address: 'c@d.com' }]);
+    expect(result.inReplyTo).toBe('<prev@ex.com>');
+    expect(result.references).toEqual(['<r1@ex.com>', '<r2@ex.com>']);
+    expect(result.date.toISOString()).toBe('2026-01-15T10:00:00.000Z');
   });
 
-  it('extracts X-URM-* custom headers', () => {
-    const pm = makeParsedMail({
-      messageId: '<m1@x.com>',
-      from: {
-        value: [{ address: 'a@b.com', name: '' }],
-        text: 'a@b.com',
-        html: '',
-      },
-      customHeaders: {
-        'X-URM-Communication-Id': 'comm-123',
-        'X-URM-Engagement-Id': 'eng-456',
-        'X-URM-Auto-Send': 'true',
-        'X-URM-Brand-Voice-Id': 'bv-7',
-        'X-URM-Thread-Id': 'thread-9',
-        'X-URM-Party-Id': 'party-77',
-      },
-    });
-    const headers = parseInboundMessage(pm);
+  it('parses references string format ("<r1> <r2>")', () => {
+    const parsed = makeParsedMail({
+      messageId: '<x@x>',
+      references: '<r1@a> <r2@a>  <r3@a>',
+    } as Partial<ParsedMail>);
+    const result = parseInboundMessage(parsed);
+    expect(result.references).toEqual(['<r1@a>', '<r2@a>', '<r3@a>']);
+  });
 
-    expect(headers.urmHeaders).toEqual({
-      communicationId: 'comm-123',
-      engagementId: 'eng-456',
+  it('falls back gracefully when fields are missing', () => {
+    const parsed = makeParsedMail({});
+    const result = parseInboundMessage(parsed);
+
+    expect(result.messageId).toMatch(/^<unknown-\d+@local>$/);
+    expect(result.subject).toBe('(no subject)');
+    expect(result.from.address).toBe('unknown@unknown');
+    expect(result.to).toEqual([]);
+    expect(result.references).toEqual([]);
+    expect(result.date).toBeInstanceOf(Date);
+  });
+
+  it('extracts X-URM-* headers from headers Map', () => {
+    const parsed = makeParsedMail({
+      messageId: '<x>',
+      headerEntries: [
+        [URM_HEADER_NAMES.engagementId, 'eng-123'],
+        [URM_HEADER_NAMES.communicationId, 'comm-456'],
+        [URM_HEADER_NAMES.autoSend, 'true'],
+        [URM_HEADER_NAMES.brandVoiceId, 'bv-789'],
+      ],
+    });
+    const result = parseInboundMessage(parsed);
+    expect(result.urmHeaders).toEqual({
+      engagementId: 'eng-123',
+      communicationId: 'comm-456',
       autoSend: true,
-      brandVoiceId: 'bv-7',
-      threadId: 'thread-9',
-      partyId: 'party-77',
+      brandVoiceId: 'bv-789',
     });
   });
 
-  it('treats X-URM-Auto-Send as case-insensitive boolean', () => {
-    const pm = makeParsedMail({
-      messageId: '<m@x>',
-      from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      customHeaders: { 'X-URM-Auto-Send': 'TRUE' },
+  it('parses X-URM-Auto-Send=false correctly', () => {
+    const parsed = makeParsedMail({
+      messageId: '<x>',
+      headerEntries: [[URM_HEADER_NAMES.autoSend, 'false']],
     });
-    expect(parseInboundMessage(pm).urmHeaders.autoSend).toBe(true);
-
-    const pm2 = makeParsedMail({
-      messageId: '<m2@x>',
-      from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      customHeaders: { 'X-URM-Auto-Send': 'false' },
-    });
-    expect(parseInboundMessage(pm2).urmHeaders.autoSend).toBe(false);
+    const result = parseInboundMessage(parsed);
+    expect(result.urmHeaders.autoSend).toBe(false);
   });
 
-  it('falls back to (no subject) and unknown@unknown for missing fields', () => {
-    const pm = makeParsedMail({ messageId: undefined, subject: undefined, from: undefined });
-    const headers = parseInboundMessage(pm);
-
-    expect(headers.messageId).toMatch(/^<missing-/);
-    expect(headers.subject).toBe('(no subject)');
-    expect(headers.from.address).toBe('unknown@unknown');
+  it('falls back to invisible HTML footer when headers are absent', () => {
+    const parsed = makeParsedMail({
+      messageId: '<x>',
+      html: '<div>body</div><!-- urm:c=comm-aaa;auto=1;e=eng-bbb;bv=bv-ccc -->',
+    });
+    const result = parseInboundMessage(parsed);
+    expect(result.urmHeaders).toEqual({
+      communicationId: 'comm-aaa',
+      autoSend: true,
+      engagementId: 'eng-bbb',
+      brandVoiceId: 'bv-ccc',
+    });
   });
 
-  it('parses content-language header', () => {
-    const pm = makeParsedMail({
-      messageId: '<m@x>',
-      from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      customHeaders: { 'Content-Language': 'ja-JP' },
+  it('header takes precedence over HTML footer', () => {
+    const parsed = makeParsedMail({
+      messageId: '<x>',
+      headerEntries: [[URM_HEADER_NAMES.communicationId, 'comm-from-header']],
+      html: '<!-- urm:c=comm-from-footer -->',
     });
-    expect(parseInboundMessage(pm).contentLanguage).toBe('ja-JP');
+    const result = parseInboundMessage(parsed);
+    expect(result.urmHeaders.communicationId).toBe('comm-from-header');
   });
 });
 
-describe('normalizeMessageId', () => {
-  it('returns the trimmed value when present', () => {
-    expect(normalizeMessageId('  <abc@x>  ')).toBe('<abc@x>');
+describe('extractUrmHeadersFromHtmlFooter', () => {
+  it('parses footer with all fields', () => {
+    const r = extractUrmHeadersFromHtmlFooter(
+      '<!-- urm:c=cc;auto=1;e=ee;bv=bb -->',
+    );
+    expect(r).toEqual({
+      communicationId: 'cc',
+      autoSend: true,
+      engagementId: 'ee',
+      brandVoiceId: 'bb',
+    });
   });
-  it('generates a fallback when undefined', () => {
-    const v = normalizeMessageId(undefined);
-    expect(v).toMatch(/^<missing-\d+-[a-z0-9]+@local\.urm>$/);
+
+  it('handles auto=0 as false', () => {
+    const r = extractUrmHeadersFromHtmlFooter('<!-- urm:c=x;auto=0 -->');
+    expect(r.autoSend).toBe(false);
   });
-  it('generates a fallback when empty', () => {
-    expect(normalizeMessageId('')).toMatch(/^<missing-/);
-    expect(normalizeMessageId('   ')).toMatch(/^<missing-/);
+
+  it('returns empty object when footer is absent', () => {
+    expect(extractUrmHeadersFromHtmlFooter('<div>no footer</div>')).toEqual({});
   });
 });
 
-describe('parseReferences', () => {
-  it('returns empty for undefined', () => {
-    expect(parseReferences(undefined)).toEqual([]);
+describe('hasAnyUrmHeader', () => {
+  it('returns true if any field is set', () => {
+    expect(hasAnyUrmHeader({ communicationId: 'x' })).toBe(true);
+    expect(hasAnyUrmHeader({ autoSend: false })).toBe(true);
   });
-  it('handles array input', () => {
-    expect(parseReferences(['<a@x>', '<b@x>'])).toEqual(['<a@x>', '<b@x>']);
-  });
-  it('splits whitespace-separated string', () => {
-    expect(parseReferences('<a@x> <b@x>\n<c@x>')).toEqual(['<a@x>', '<b@x>', '<c@x>']);
-  });
-  it('trims and drops empty tokens', () => {
-    expect(parseReferences('  <a@x>   <b@x>  ')).toEqual(['<a@x>', '<b@x>']);
+  it('returns false for empty object', () => {
+    expect(hasAnyUrmHeader({})).toBe(false);
   });
 });
 
-interface MaybeSingleResult<T> { data: T | null; error: null | { message: string } }
+describe('findThreadId — priority order', () => {
+  const orgId = 'org-1';
 
-function makeSupabaseMock(
-  responses: ReadonlyArray<MaybeSingleResult<{ thread_id?: string }>>,
-) {
-  let callIdx = 0;
-  const maybeSingle = vi.fn(async () => {
-    const res = responses[callIdx];
-    callIdx += 1;
-    return res ?? { data: null, error: null };
-  });
-  const chain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    maybeSingle,
-  };
-  const from = vi.fn(() => chain);
-  return {
-    schema: vi.fn(() => ({ from })),
-    from,
-    _chain: chain,
-    _maybeSingle: maybeSingle,
-  } as unknown as {
-    schema: ReturnType<typeof vi.fn>;
-    from: ReturnType<typeof vi.fn>;
-    _maybeSingle: typeof maybeSingle;
-  };
-}
-
-const baseHeaders: ParsedHeaders = {
-  messageId: '<incoming@x>',
-  references: [],
-  from: { address: 'sender@x' },
-  to: [],
-  cc: [],
-  bcc: [],
-  subject: 's',
-  date: new Date(),
-  urmHeaders: {},
-};
-
-describe('findThreadId', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('priority 1: returns urmHeaders.threadId without DB hit', async () => {
-    const supa = makeSupabaseMock([]);
-    const tid = await findThreadId(supa as never, 'org-1', {
-      ...baseHeaders,
-      urmHeaders: { threadId: 'thread-aaa' },
+  it('[1] matches by X-URM-Communication-Id first', async () => {
+    const sb = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: { data: { thread_id: 'thread-from-urm', engagement_id: 'eng-1' } },
+      },
     });
-    expect(tid).toBe('thread-aaa');
-    expect(supa._maybeSingle).not.toHaveBeenCalled();
+    const result = await findThreadId(sb as never, orgId, {
+      messageId: '<x>',
+      references: [],
+      from: { address: 'a@b' },
+      to: [],
+      subject: '',
+      date: new Date(),
+      urmHeaders: { communicationId: 'comm-99' },
+    });
+    expect(result.threadId).toBe('thread-from-urm');
+    expect(result.matchedBy).toBe('urm_header');
+    expect(result.matchedEngagementId).toBe('eng-1');
   });
 
-  it('priority 2: looks up thread by communicationId', async () => {
-    const supa = makeSupabaseMock([
-      { data: { thread_id: 'thread-from-comm' }, error: null },
-    ]);
-    const tid = await findThreadId(supa as never, 'org-1', {
-      ...baseHeaders,
-      urmHeaders: { communicationId: 'comm-1' },
+  it('[2] falls back to In-Reply-To when URM header is missing', async () => {
+    const sb = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: { data: { id: 'c-1', thread_id: 'thread-irt', engagement_id: null } },
+      },
     });
-    expect(tid).toBe('thread-from-comm');
-    expect(supa._maybeSingle).toHaveBeenCalledTimes(1);
+    const result = await findThreadId(sb as never, orgId, {
+      messageId: '<x>',
+      inReplyTo: '<prev@ex>',
+      references: [],
+      from: { address: 'a@b' },
+      to: [],
+      subject: '',
+      date: new Date(),
+      urmHeaders: {},
+    });
+    expect(result.threadId).toBe('thread-irt');
+    expect(result.matchedBy).toBe('in_reply_to');
   });
 
-  it('priority 3: looks up thread by inReplyTo when comm-id missing', async () => {
-    const supa = makeSupabaseMock([
-      { data: { thread_id: 'thread-from-irt' }, error: null },
-    ]);
-    const tid = await findThreadId(supa as never, 'org-1', {
-      ...baseHeaders,
-      inReplyTo: '<earlier@x>',
+  it('[3] falls back to References (reverse) when In-Reply-To misses', async () => {
+    let calls = 0;
+    const sb = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: { data: null },
+      },
     });
-    expect(tid).toBe('thread-from-irt');
-  });
+    // overwrite maybeSingle to return null first, then matched
+    const originalSchema = sb.schema;
+    sb.schema = vi.fn((schemaName: string) => ({
+      from: (table: string) => {
+        const orig = originalSchema(schemaName).from(table) as Record<string, unknown>;
+        const builder: Record<string, unknown> = { ...orig };
+        builder.maybeSingle = vi.fn(() => {
+          calls += 1;
+          // 첫 두 번(In-Reply-To는 미리 매칭 시도되지만 본 케이스는 없음;
+          // references 역순 r2 → 매칭 성공 가정)
+          if (calls === 1) {
+            return Promise.resolve({
+              data: { id: 'c-2', thread_id: 'thread-ref', engagement_id: 'eng-2' },
+              error: null,
+            });
+          }
+          return Promise.resolve({ data: null, error: null });
+        });
+        // chain 메서드들도 모두 builder 반환
+        for (const m of ['select', 'eq', 'is', 'order', 'limit']) {
+          builder[m] = vi.fn(() => builder);
+        }
+        return builder;
+      },
+    })) as unknown as typeof sb.schema;
 
-  it('priority 4: looks up references in reverse order', async () => {
-    const supa = makeSupabaseMock([
-      { data: null, error: null },
-      { data: { thread_id: 'thread-from-ref-2' }, error: null },
-    ]);
-    const tid = await findThreadId(supa as never, 'org-1', {
-      ...baseHeaders,
-      references: ['<ref-2@x>', '<ref-1@x>'],
+    const result = await findThreadId(sb as never, orgId, {
+      messageId: '<x>',
+      references: ['<r1@a>', '<r2@a>'],
+      from: { address: 'a@b' },
+      to: [],
+      subject: '',
+      date: new Date(),
+      urmHeaders: {},
     });
-    expect(tid).toBe('thread-from-ref-2');
-    expect(supa._maybeSingle).toHaveBeenCalledTimes(2);
+    expect(result.threadId).toBe('thread-ref');
+    expect(result.matchedBy).toBe('references');
   });
 
   it('returns null when nothing matches', async () => {
-    const supa = makeSupabaseMock([
-      { data: null, error: null },
-      { data: null, error: null },
-    ]);
-    const tid = await findThreadId(supa as never, 'org-1', {
-      ...baseHeaders,
-      inReplyTo: '<missing@x>',
-      references: ['<also-missing@x>'],
+    const sb = buildSupabaseMock({
+      'app.communications': { selectMaybeSingle: { data: null } },
     });
-    expect(tid).toBeNull();
+    const result = await findThreadId(sb as never, orgId, {
+      messageId: '<x>',
+      references: [],
+      from: { address: 'a@b' },
+      to: [],
+      subject: '',
+      date: new Date(),
+      urmHeaders: {},
+    });
+    expect(result.threadId).toBeNull();
+    expect(result.matchedBy).toBe('none');
   });
 });
 
-describe('findContactByEmail', () => {
+describe('matchSenderToContactAndParty', () => {
+  const orgId = 'org-1';
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns null for empty email', async () => {
-    const supa = makeSupabaseMock([]);
-    const r = await findContactByEmail(supa as never, 'org-1', '');
-    expect(r).toBeNull();
+  it('returns "none" for empty/unknown address', async () => {
+    const sb = buildSupabaseMock();
+    const r1 = await matchSenderToContactAndParty(sb as never, orgId, '');
+    expect(r1.matchedBy).toBe('none');
+    const r2 = await matchSenderToContactAndParty(
+      sb as never,
+      orgId,
+      'unknown@unknown',
+    );
+    expect(r2.matchedBy).toBe('none');
   });
 
-  it('returns contact and party when matched', async () => {
-    const maybeSingle = vi
-      .fn()
-      .mockResolvedValueOnce({ data: { id: 'c-1', party_id: 'p-1' }, error: null });
-    const chain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      maybeSingle,
-    };
-    const supa = {
-      schema: vi.fn(() => ({ from: vi.fn(() => chain) })),
-    };
-
-    const r = await findContactByEmail(supa as never, 'org-1', 'a@b.com');
-    expect(r).toEqual({ contactId: 'c-1', partyId: 'p-1' });
+  it('matches by exact contact email', async () => {
+    const sb = buildSupabaseMock({
+      'app.contacts': {
+        selectMaybeSingle: { data: { id: 'contact-1', party_id: 'party-1' } },
+      },
+    });
+    const r = await matchSenderToContactAndParty(
+      sb as never,
+      orgId,
+      'CEO@AcmeCorp.com',
+    );
+    expect(r.matchedBy).toBe('contact_email');
+    expect(r.contactId).toBe('contact-1');
+    expect(r.partyId).toBe('party-1');
   });
 
-  it('returns null when no contact found', async () => {
-    const maybeSingle = vi.fn().mockResolvedValueOnce({ data: null, error: null });
-    const chain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      maybeSingle,
-    };
-    const supa = { schema: vi.fn(() => ({ from: vi.fn(() => chain) })) };
-    const r = await findContactByEmail(supa as never, 'org-1', 'a@b.com');
-    expect(r).toBeNull();
+  it('returns "none" for generic email domains (gmail, naver)', async () => {
+    const sb = buildSupabaseMock({
+      'app.contacts': { selectMaybeSingle: { data: null } },
+    });
+    const r1 = await matchSenderToContactAndParty(
+      sb as never,
+      orgId,
+      'random@gmail.com',
+    );
+    expect(r1.matchedBy).toBe('none');
+    const r2 = await matchSenderToContactAndParty(
+      sb as never,
+      orgId,
+      'random@naver.com',
+    );
+    expect(r2.matchedBy).toBe('none');
+  });
+
+  it('falls back to party email domain match for non-generic domains', async () => {
+    let callCount = 0;
+    const sb = buildSupabaseMock();
+    sb.schema = vi.fn((schemaName: string) => ({
+      from: (_table: string) => {
+        const builder: Record<string, unknown> = {};
+        for (const m of ['select', 'eq', 'is', 'like', 'order', 'limit']) {
+          builder[m] = vi.fn(() => builder);
+        }
+        builder.maybeSingle = vi.fn(() => {
+          callCount += 1;
+          if (callCount === 1) {
+            // 첫 호출 (정확 매칭) — null
+            return Promise.resolve({ data: null, error: null });
+          }
+          // 두 번째 호출 (도메인 매칭) — 매칭됨
+          return Promise.resolve({
+            data: { id: 'contact-x', party_id: 'party-x' },
+            error: null,
+          });
+        });
+        return builder;
+      },
+    })) as unknown as typeof sb.schema;
+
+    const r = await matchSenderToContactAndParty(
+      sb as never,
+      orgId,
+      'someone@acmecorp.com',
+    );
+    expect(r.matchedBy).toBe('party_email_domain');
+    expect(r.partyId).toBe('party-x');
   });
 });

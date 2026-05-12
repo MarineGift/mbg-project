@@ -1,35 +1,49 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { getServerSupabase } from '@/lib/supabase/server';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 /**
- * GET /auth/callback?code=...&next=...
+ * app/auth/callback/route.ts
  *
- * 매직 링크 또는 OAuth 콜백에서 사용. Supabase가 이메일에 포함시키는
- * `code` 파라미터를 세션 쿠키로 교환한다.
+ * Supabase Auth callback — magic link, OAuth provider 응답 처리.
+ * Phase 1은 이메일/비밀번호만 사용하지만 향후 확장 대비 endpoint 준비.
+ *
+ * 흐름:
+ *   1. Supabase 로그인 화면 또는 OAuth provider → /auth/callback?code=...
+ *   2. 본 핸들러가 code → session 교환
+ *   3. 성공 시 next param의 경로(또는 /)로 redirect
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  const { searchParams, origin } = request.nextUrl;
+
+import { NextResponse, type NextRequest } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const nextRaw = searchParams.get('next') ?? '/drafts';
-  const next = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/drafts';
+  const next = sanitizeNextPath(searchParams.get('next'));
 
   if (!code) {
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent('인증 코드가 없습니다')}`,
-    );
+    return NextResponse.redirect(new URL('/auth/error?reason=missing_code', request.url));
   }
 
-  const supabase = await getServerSupabase();
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message)}`,
+      new URL(`/auth/error?reason=exchange_failed&message=${encodeURIComponent(error.message)}`, request.url),
     );
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return NextResponse.redirect(new URL(next, request.url));
+}
+
+function sanitizeNextPath(next: string | null): string {
+  if (!next) return '/';
+  if (
+    next.startsWith('http://') ||
+    next.startsWith('https://') ||
+    next.startsWith('//') ||
+    next.includes('\\')
+  ) {
+    return '/';
+  }
+  if (!next.startsWith('/')) return '/';
+  return next;
 }

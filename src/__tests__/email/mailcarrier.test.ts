@@ -1,374 +1,402 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+/**
+ * __tests__/email/mailcarrier.test.ts
+ *
+ * 단위 테스트 — IMAP I/O는 IImapClient·ParserFn 인터페이스로 추상화되어 있어
+ * 모두 fake로 교체. Supabase는 buildSupabaseMock으로 응답 주입.
+ *
+ * 테스트 시나리오:
+ *   1. persistInbound — 신규 메시지 정상 INSERT
+ *   2. persistInbound — Message-ID 중복 시 null 반환 (멱등성)
+ *   3. persistInbound — 첨부파일 Storage 업로드 + attachments INSERT
+ *   4. persistInbound — PII 마스킹된 body로 저장
+ *   5. sanitizeFilename — 경로 구분자·제어문자 제거
+ *   6. fetchAndProcessNew — onMessage 호출 + Seen 플래그
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Buffer } from 'node:buffer';
 import type { ParsedMail } from 'mailparser';
 import {
   MailCarrierClient,
-  MailCarrierError,
-  MailCarrierConnectionError,
-} from '@/lib/email/mailcarrier';
+  sanitizeFilename,
+  type IImapClient,
+  type ParserFn,
+} from '../../lib/email/mailcarrier';
+import type { InboundMessageEvent } from '../../types/email';
+import { buildSupabaseMock, type MockSupabase } from '../setup/supabase-mock';
 
-vi.mock('@/lib/env', () => ({
-  env: {
-    MAILCARRIER_HOST: 'imap.example.com',
-    MAILCARRIER_PORT: 993,
-    MAILCARRIER_USERNAME: 'user@example.com',
-    MAILCARRIER_PASSWORD: 'pass',
-    MAILCARRIER_USE_IDLE: false,
-    MAILCARRIER_INBOX_FOLDER: 'INBOX',
-    MAILCARRIER_POLL_INTERVAL_SECONDS: 30,
-    SUPABASE_STORAGE_BUCKET_ATTACHMENTS: 'communications-attachments',
-  },
-}));
-
-const simpleParserMock = vi.fn();
-vi.mock('mailparser', () => ({
-  simpleParser: (src: unknown) => simpleParserMock(src),
-}));
-
-function makeParsedMail(p: Partial<ParsedMail>): ParsedMail {
+// ParsedMail 헬퍼
+function makeParsedMail(
+  overrides: Partial<ParsedMail> & { headerEntries?: Array<[string, unknown]> } = {},
+): ParsedMail {
   return {
-    headers: new Map(),
+    headers: new Map<string, unknown>(overrides.headerEntries ?? []),
     headerLines: [],
-    text: '',
-    html: false,
-    textAsHtml: '',
-    subject: '(no subject)',
-    date: new Date('2026-05-09T00:00:00Z'),
-    attachments: [],
-    ...p,
-  } as unknown as ParsedMail;
+    attachments: overrides.attachments ?? [],
+    text: overrides.text ?? '',
+    html: overrides.html ?? false,
+    subject: overrides.subject,
+    messageId: overrides.messageId,
+    inReplyTo: overrides.inReplyTo,
+    references: overrides.references,
+    from: overrides.from,
+    to: overrides.to,
+    cc: overrides.cc,
+    replyTo: overrides.replyTo,
+    date: overrides.date,
+  } as ParsedMail;
 }
 
-interface SupabaseStubOptions {
-  existing?: { id: string } | null;
-  threadResults?: Array<{ thread_id?: string } | null>;
-  contactResult?: { id: string; party_id?: string | null } | null;
-  insertResult?: { id: string } | null;
-  insertError?: { code?: string; message: string } | null;
+function makeFakeImap(): IImapClient {
+  return {
+    connect: vi.fn(() => Promise.resolve()),
+    logout: vi.fn(() => Promise.resolve()),
+    mailboxOpen: vi.fn(() => Promise.resolve(null)),
+    getMailboxLock: vi.fn(() =>
+      Promise.resolve({ release: () => undefined }),
+    ),
+    fetch: vi.fn(() => emptyAsyncIterable()),
+    messageFlagsAdd: vi.fn(() => Promise.resolve(null)),
+    idle: vi.fn(() => Promise.resolve(null)),
+  } as IImapClient;
 }
 
-function makeSupabaseStub(opts: SupabaseStubOptions) {
-  const calls = {
-    selects: [] as Array<{ table: string; filters: Array<[string, unknown]> }>,
-    inserts: [] as Array<{ table: string; payload: Record<string, unknown> }>,
-    storageUploads: [] as Array<{ bucket: string; path: string }>,
-  };
-
-  let threadIdx = 0;
-
-  const buildSelectChain = (table: string) => {
-    const filters: Array<[string, unknown]> = [];
-    const chain: Record<string, unknown> = {};
-    chain.select = vi.fn(() => chain);
-    chain.eq = vi.fn((col: string, val: unknown) => {
-      filters.push([col, val]);
-      return chain;
-    });
-    chain.is = vi.fn(() => chain);
-    chain.limit = vi.fn(() => chain);
-    chain.maybeSingle = vi.fn(async () => {
-      calls.selects.push({ table, filters: [...filters] });
-      const isMessageIdCheck = filters.some(([k]) => k === 'message_id');
-      const isContactCheck = table === 'contacts';
-      if (isMessageIdCheck && filters.length === 2) {
-        return { data: opts.existing ?? null, error: null };
-      }
-      if (isContactCheck) {
-        return { data: opts.contactResult ?? null, error: null };
-      }
-      const next = (opts.threadResults ?? [])[threadIdx];
-      threadIdx += 1;
-      return { data: next ?? null, error: null };
-    });
-    return chain;
-  };
-
-  const buildInsertChain = (table: string) => {
-    return {
-      insert: vi.fn((p: Record<string, unknown>) => {
-        // 동기적으로 calls.inserts에 push (bare await 경로 포함 모든 호출 추적)
-        calls.inserts.push({ table, payload: p });
-        const result = opts.insertError
-          ? { data: null, error: opts.insertError }
-          : { data: opts.insertResult ?? { id: 'comm-new' }, error: null };
-        // 반환 객체는 select/single 체이닝과 bare await 모두 지원해야 함
-        const chained: {
-          select: ReturnType<typeof vi.fn>;
-          single: ReturnType<typeof vi.fn>;
-          then: (
-            resolve: (v: typeof result) => unknown,
-            reject?: (e: unknown) => unknown,
-          ) => unknown;
-        } = {
-          select: vi.fn(() => ({
-            single: vi.fn(async () => result),
-          })),
-          single: vi.fn(async () => result),
-          // thenable: bare `await supabase.from('x').insert(...)` 경로 처리
-          then: (resolve) => Promise.resolve(result).then(resolve),
-        };
-        return chained;
-      }),
-    };
-  };
-
-  const fromBuilder = (table: string) => {
-    const chain = buildSelectChain(table);
-    const insert = buildInsertChain(table).insert;
-    return Object.assign(chain, { insert });
-  };
-
-  const supa = {
-    schema: vi.fn(() => ({
-      from: vi.fn((table: string) => fromBuilder(table)),
-    })),
-    storage: {
-      from: vi.fn((bucket: string) => ({
-        upload: vi.fn(async (path: string) => {
-          calls.storageUploads.push({ bucket, path });
-          return { error: null };
-        }),
-      })),
+function emptyAsyncIterable(): AsyncIterable<never> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => Promise.resolve({ done: true, value: undefined } as IteratorResult<never>),
+      };
     },
   };
-
-  return { supa, calls };
 }
 
-type FakeImapClient = {
-  connect: ReturnType<typeof vi.fn>;
-  logout: ReturnType<typeof vi.fn>;
-  idle: ReturnType<typeof vi.fn>;
-  mailboxOpen: ReturnType<typeof vi.fn>;
-  getMailboxLock: ReturnType<typeof vi.fn>;
-  messageFlagsAdd: ReturnType<typeof vi.fn>;
-  fetch: ReturnType<typeof vi.fn>;
-};
-
-function makeFakeImap(messages: Array<{ uid: number; source: Buffer }>): {
-  client: FakeImapClient;
-  calls: {
-    connect: number;
-    logout: number;
-    flagsAdded: Array<{ uid: number; flags: string[] }>;
+function asyncIterableFrom<T>(items: T[]): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator]() {
+      let i = 0;
+      return {
+        next: (): Promise<IteratorResult<T>> => {
+          if (i >= items.length) return Promise.resolve({ done: true, value: undefined as never });
+          const value = items[i++] as T;
+          return Promise.resolve({ done: false, value });
+        },
+      };
+    },
   };
-} {
-  const calls = {
-    connect: 0,
-    logout: 0,
-    flagsAdded: [] as Array<{ uid: number; flags: string[] }>,
-  };
-  const lock = { release: vi.fn() };
-
-  const client: FakeImapClient = {
-    connect: vi.fn(async () => {
-      calls.connect += 1;
-    }),
-    logout: vi.fn(async () => {
-      calls.logout += 1;
-    }),
-    idle: vi.fn(async () => {}),
-    mailboxOpen: vi.fn(async () => {}),
-    getMailboxLock: vi.fn(async () => lock),
-    messageFlagsAdd: vi.fn(async (uid: number, flags: string[]) => {
-      calls.flagsAdded.push({ uid, flags });
-    }),
-    fetch: vi.fn(() => {
-      return (async function* () {
-        for (const m of messages) {
-          yield { uid: m.uid, source: m.source };
-        }
-      })();
-    }),
-  };
-
-  return { client, calls };
 }
 
-describe('MailCarrierClient', () => {
+const orgId = 'org-1';
+
+describe('MailCarrierClient.persistInbound', () => {
+  let supabase: MockSupabase;
+  let client: MailCarrierClient;
+  let parser: ParserFn;
+
   beforeEach(() => {
-    vi.clearAllMocks();
-    simpleParserMock.mockReset();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('connect() succeeds', async () => {
-    const { supa } = makeSupabaseStub({});
-    const fake = makeFakeImap([]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
-    await expect(mc.connect()).resolves.not.toThrow();
-    expect(fake.calls.connect).toBe(1);
-  });
-
-  it('connect() wraps errors in MailCarrierConnectionError', async () => {
-    const { supa } = makeSupabaseStub({});
-    const fake = makeFakeImap([]);
-    fake.client.connect = vi.fn(async () => {
-      throw new Error('ECONNREFUSED');
+    parser = vi.fn();
+    supabase = buildSupabaseMock({
+      // 1차: communications duplicate check → null (신규)
+      'app.communications': {
+        selectMaybeSingle: { data: null },
+        insertSingle: { data: { id: 'comm-new-1' } },
+      },
+      'app.contacts': {
+        selectMaybeSingle: { data: null },
+      },
+      'app.attachments': {
+        insertSingle: { data: { id: 'att-1' } },
+      },
     });
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
-    await expect(mc.connect()).rejects.toBeInstanceOf(MailCarrierConnectionError);
+    client = new MailCarrierClient(supabase as never, orgId, {
+      imapClient: makeFakeImap(),
+      parser,
+    });
   });
 
-  it('persists a fresh inbound message and inserts communications + attachment', async () => {
+  it('inserts a new communication with masked body', async () => {
     const parsed = makeParsedMail({
-      messageId: '<new@x.com>',
-      subject: 'Hi',
-      from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      to: { value: [{ address: 'us@us.com', name: '' }], text: '', html: '' },
-      text: 'Hello world. My phone: 010-1234-5678',
+      messageId: '<new@ex.com>',
+      subject: 'My phone is 010-1234-5678',
+      from: {
+        text: '',
+        html: '',
+        value: [{ name: 'Alice', address: 'alice@acmecorp.com' }],
+      },
+      to: { text: '', html: '', value: [{ name: '', address: 'me@org.com' }] },
+      text: '내 번호는 010-1234-5678 입니다.',
+      date: new Date('2026-02-01T09:00:00Z'),
+    });
+
+    const event = await client.persistInbound(parsed);
+
+    expect(event).not.toBeNull();
+    expect(event?.communicationId).toBe('comm-new-1');
+    expect(event?.messageId).toBe('<new@ex.com>');
+    expect(event?.bodyText).toContain('{{PII_001}}'); // 전화번호 마스킹됨
+    expect(event?.bodyText).not.toContain('010-1234-5678');
+    expect(event?.piiCategories).toContain('phone_kr');
+
+    // INSERT 호출 검증
+    const insertCalls = supabase.__calls.insert.filter(
+      (c) => c.schema === 'app' && c.table === 'communications',
+    );
+    expect(insertCalls).toHaveLength(1);
+    const payload = insertCalls[0]?.payload as Record<string, unknown>;
+    expect(payload.message_id).toBe('<new@ex.com>');
+    expect(payload.direction).toBe('inbound');
+    expect(payload.channel).toBe('email');
+    expect(payload.from_address).toBe('alice@acmecorp.com');
+    expect((payload.body_plain as string)).not.toContain('010-1234-5678');
+    expect((payload.external_data as Record<string, unknown>).pii_masked).toBe(true);
+  });
+
+  it('returns null when Message-ID already exists (idempotency)', async () => {
+    const sbDup = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: {
+          data: { id: 'existing-comm', organization_id: orgId, thread_id: 'thread-1' },
+        },
+      },
+    });
+    const dupClient = new MailCarrierClient(sbDup as never, orgId, {
+      imapClient: makeFakeImap(),
+      parser: vi.fn(),
+    });
+    const parsed = makeParsedMail({
+      messageId: '<dup@ex.com>',
+      from: { text: '', html: '', value: [{ name: '', address: 'a@b.com' }] },
+      to: { text: '', html: '', value: [{ name: '', address: 'me@org.com' }] },
+    });
+
+    const event = await dupClient.persistInbound(parsed);
+
+    expect(event).toBeNull();
+    // INSERT는 호출되지 않았어야 함
+    const inserts = sbDup.__calls.insert.filter(
+      (c) => c.table === 'communications',
+    );
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('uses thread match engagement_id when found', async () => {
+    const sb = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: {
+          data: { thread_id: 'matched-thread', engagement_id: 'matched-eng' },
+        },
+        insertSingle: { data: { id: 'comm-thread-1' } },
+      },
+    });
+    // duplicate check가 첫 호출로 null을 반환해야 하므로,
+    // chain을 단순하게 만들어 첫 maybeSingle은 null, 다음은 thread match.
+    let mbCalls = 0;
+    const origSchema = sb.schema;
+    sb.schema = vi.fn((schemaName: string) => ({
+      from: (table: string) => {
+        const orig = origSchema(schemaName).from(table) as Record<string, unknown>;
+        const b: Record<string, unknown> = { ...orig };
+        b.maybeSingle = vi.fn(() => {
+          mbCalls += 1;
+          if (table === 'communications' && mbCalls === 1) {
+            return Promise.resolve({ data: null, error: null });
+          }
+          if (table === 'communications' && mbCalls === 2) {
+            return Promise.resolve({
+              data: { thread_id: 'matched-thread', engagement_id: 'matched-eng' },
+              error: null,
+            });
+          }
+          // contacts 매칭 — null
+          return Promise.resolve({ data: null, error: null });
+        });
+        b.single = vi.fn(() => Promise.resolve({ data: { id: 'comm-thread-1' }, error: null }));
+        for (const m of ['select', 'eq', 'is', 'like', 'order', 'limit', 'insert']) {
+          b[m] = vi.fn(() => b);
+        }
+        b.update = vi.fn(() => Promise.resolve({ error: null }));
+        return b;
+      },
+    })) as unknown as typeof sb.schema;
+
+    const c = new MailCarrierClient(sb as never, orgId, {
+      imapClient: makeFakeImap(),
+      parser: vi.fn(),
+    });
+    const parsed = makeParsedMail({
+      messageId: '<reply-to-thread@ex.com>',
+      from: { text: '', html: '', value: [{ name: '', address: 'x@x.com' }] },
+      to: { text: '', html: '', value: [] },
+      headerEntries: [['x-urm-communication-id', 'prev-comm']],
+    });
+
+    const event = await c.persistInbound(parsed);
+    expect(event?.threadId).toBe('matched-thread');
+  });
+
+  it('persists attachments to Storage and attachments table', async () => {
+    const parsed = makeParsedMail({
+      messageId: '<att@ex.com>',
+      from: { text: '', html: '', value: [{ name: '', address: 'a@b.com' }] },
+      to: { text: '', html: '', value: [] },
       attachments: [
         {
-          filename: 'order.pdf',
+          filename: 'invoice.pdf',
           contentType: 'application/pdf',
-          content: Buffer.from('PDF-fake-content'),
-          size: 16,
+          content: Buffer.from('fake pdf bytes'),
+          contentDisposition: 'attachment',
+          size: 14,
         } as never,
       ],
     });
-    simpleParserMock.mockResolvedValueOnce(parsed);
 
-    const { supa, calls } = makeSupabaseStub({
-      existing: null,
-      threadResults: [],
-      contactResult: null,
-      insertResult: { id: 'comm-1' },
-    });
+    await client.persistInbound(parsed);
 
-    const fake = makeFakeImap([{ uid: 1, source: Buffer.from('raw') }]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
+    // Storage upload 호출 검증
+    const storageFromCalls = (supabase.storage.from as ReturnType<typeof vi.fn>).mock.calls;
+    expect(storageFromCalls.length).toBeGreaterThan(0);
 
-    const handler = vi.fn<(m: import('@/lib/email/mailcarrier').InboundMessageNotification) => Promise<void>>(
-      async () => {},
+    // attachments INSERT 검증
+    const attInserts = supabase.__calls.insert.filter(
+      (c) => c.schema === 'app' && c.table === 'attachments',
     );
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-    await (mc as unknown as {
-      fetchAndProcessNew: (h: typeof handler) => Promise<void>;
-    }).fetchAndProcessNew(handler);
-
-    expect(calls.inserts.find((i) => i.table === 'communications')).toBeTruthy();
-    const commInsert = calls.inserts.find((i) => i.table === 'communications')!;
-    expect(commInsert.payload.organization_id).toBe('org-1');
-    expect(commInsert.payload.direction).toBe('inbound');
-    expect(commInsert.payload.channel).toBe('email');
-    expect(commInsert.payload.message_id).toBe('<new@x.com>');
-    expect(commInsert.payload.pii_masked).toBe(true);
-    expect(String(commInsert.payload.body_plain)).not.toContain('010-1234-5678');
-    expect(String(commInsert.payload.body_plain)).toContain('{{PII_');
-
-    const attInsert = calls.inserts.find((i) => i.table === 'attachments');
-    expect(attInsert).toBeTruthy();
-    expect(attInsert!.payload.file_name).toBe('order.pdf');
-
-    expect(calls.storageUploads).toHaveLength(1);
-    expect(calls.storageUploads[0]?.path).toMatch(/^org-1\/comm-1\/order\.pdf$/);
-
-    expect(fake.calls.flagsAdded).toEqual([{ uid: 1, flags: ['\\Seen'] }]);
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0]?.[0]).toMatchObject({
-      communicationId: 'comm-1',
-      messageId: '<new@x.com>',
-      organizationId: 'org-1',
-    });
+    expect(attInserts).toHaveLength(1);
+    const payload = attInserts[0]?.payload as Record<string, unknown>;
+    expect(payload.entity_type).toBe('communication');
+    expect(payload.entity_id).toBe('comm-new-1');
+    expect(payload.file_name).toBe('invoice.pdf');
+    expect(payload.mime_type).toBe('application/pdf');
+    expect(payload.file_size_bytes).toBe(14);
+    expect(payload.content_hash_sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('skips duplicate message-id (idempotency)', async () => {
+  it('skips attachments larger than 25MB', async () => {
+    const huge = Buffer.alloc(30 * 1024 * 1024);
     const parsed = makeParsedMail({
-      messageId: '<dup@x>',
-      from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
+      messageId: '<huge@ex.com>',
+      from: { text: '', html: '', value: [{ name: '', address: 'a@b.com' }] },
+      to: { text: '', html: '', value: [] },
+      attachments: [
+        {
+          filename: 'huge.bin',
+          contentType: 'application/octet-stream',
+          content: huge,
+          size: huge.length,
+        } as never,
+      ],
     });
-    simpleParserMock.mockResolvedValueOnce(parsed);
-
-    const { supa, calls } = makeSupabaseStub({
-      existing: { id: 'already-inserted' },
-    });
-
-    const fake = makeFakeImap([{ uid: 7, source: Buffer.from('raw') }]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
-
-    const handler = vi.fn();
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-    await (mc as unknown as {
-      fetchAndProcessNew: (h: typeof handler) => Promise<void>;
-    }).fetchAndProcessNew(handler);
-
-    expect(calls.inserts).toHaveLength(0);
-    expect(fake.calls.flagsAdded).toEqual([{ uid: 7, flags: ['\\Seen'] }]);
-    expect(handler).not.toHaveBeenCalled();
+    await client.persistInbound(parsed);
+    // attachments INSERT는 일어나지 않아야 함
+    const attInserts = supabase.__calls.insert.filter(
+      (c) => c.table === 'attachments',
+    );
+    expect(attInserts).toHaveLength(0);
   });
+});
 
-  it('does not mark Seen when INSERT fails (non-23505)', async () => {
-    simpleParserMock.mockResolvedValueOnce(
-      makeParsedMail({
-        messageId: '<err@x>',
-        from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      }),
+describe('MailCarrierClient.fetchAndProcessNew', () => {
+  it('invokes onMessage callback and marks Seen', async () => {
+    const supabase = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: { data: null },
+        insertSingle: { data: { id: 'comm-fetch-1' } },
+      },
+      'app.contacts': { selectMaybeSingle: { data: null } },
+    });
+
+    const fakeRaw = Buffer.from('raw rfc822');
+    const parsed = makeParsedMail({
+      messageId: '<fetch@ex.com>',
+      from: { text: '', html: '', value: [{ name: '', address: 'a@b.com' }] },
+      to: { text: '', html: '', value: [] },
+      text: 'hello',
+    });
+
+    const imap = makeFakeImap();
+    (imap.fetch as ReturnType<typeof vi.fn>).mockReturnValue(
+      asyncIterableFrom([
+        { source: fakeRaw, uid: 42, envelope: {} } as never,
+      ]),
     );
 
-    const { supa } = makeSupabaseStub({
-      existing: null,
-      insertError: { message: 'connection lost', code: 'XX000' },
+    const parser: ParserFn = vi.fn(() => Promise.resolve(parsed));
+    const onMessage = vi.fn<(event: InboundMessageEvent) => Promise<void>>(() => Promise.resolve());
+
+    const client = new MailCarrierClient(supabase as never, orgId, {
+      imapClient: imap,
+      parser,
     });
 
-    const fake = makeFakeImap([{ uid: 9, source: Buffer.from('raw') }]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
+    await client.fetchAndProcessNew(onMessage);
 
-    const handler = vi.fn();
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-    await (mc as unknown as {
-      fetchAndProcessNew: (h: typeof handler) => Promise<void>;
-    }).fetchAndProcessNew(handler);
-
-    expect(fake.calls.flagsAdded).toEqual([]);
-    expect(handler).not.toHaveBeenCalled();
+    expect(parser).toHaveBeenCalledWith(fakeRaw);
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    const passed = onMessage.mock.calls[0]?.[0] as unknown as { messageId: string };
+    expect(passed?.messageId).toBe('<fetch@ex.com>');
+    expect(imap.messageFlagsAdd).toHaveBeenCalledWith(42, ['\\Seen']);
   });
 
-  it('treats UNIQUE violation (23505) as duplicate', async () => {
-    simpleParserMock.mockResolvedValueOnce(
-      makeParsedMail({
-        messageId: '<race@x>',
-        from: { value: [{ address: 'a@b.com', name: '' }], text: '', html: '' },
-      }),
+  it('continues processing remaining messages when one fails', async () => {
+    const supabase = buildSupabaseMock({
+      'app.communications': {
+        selectMaybeSingle: { data: null },
+        insertSingle: { data: { id: 'comm-second' } },
+      },
+      'app.contacts': { selectMaybeSingle: { data: null } },
+    });
+
+    const imap = makeFakeImap();
+    (imap.fetch as ReturnType<typeof vi.fn>).mockReturnValue(
+      asyncIterableFrom([
+        { source: Buffer.from('msg1'), uid: 1 } as never,
+        { source: Buffer.from('msg2'), uid: 2 } as never,
+      ]),
     );
+    const parser: ParserFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('parse fail'))
+      .mockResolvedValueOnce(
+        makeParsedMail({
+          messageId: '<ok@x>',
+          from: { text: '', html: '', value: [{ name: '', address: 'a@b' }] },
+          to: { text: '', html: '', value: [] },
+        }),
+      );
+    const onMessage = vi.fn<(event: InboundMessageEvent) => Promise<void>>(() => Promise.resolve());
 
-    const { supa } = makeSupabaseStub({
-      existing: null,
-      insertError: { message: 'duplicate key', code: '23505' },
+    const client = new MailCarrierClient(supabase as never, orgId, {
+      imapClient: imap,
+      parser,
     });
 
-    const fake = makeFakeImap([{ uid: 11, source: Buffer.from('raw') }]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
+    await client.fetchAndProcessNew(onMessage);
 
-    const handler = vi.fn();
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-    await (mc as unknown as {
-      fetchAndProcessNew: (h: typeof handler) => Promise<void>;
-    }).fetchAndProcessNew(handler);
-
-    expect(fake.calls.flagsAdded).toEqual([{ uid: 11, flags: ['\\Seen'] }]);
-    expect(handler).not.toHaveBeenCalled();
+    // 두 번째 메시지는 정상 처리됨
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    expect(imap.messageFlagsAdd).toHaveBeenCalledWith(2, ['\\Seen']);
   });
+});
 
-  it('startListening throws if already running', async () => {
-    const { supa } = makeSupabaseStub({});
-    const fake = makeFakeImap([]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
-
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-    await expect(mc.startListening(async () => {})).rejects.toBeInstanceOf(MailCarrierError);
+describe('sanitizeFilename', () => {
+  it('replaces path separators with underscore', () => {
+    expect(sanitizeFilename('a/b/c.pdf')).toBe('a_b_c.pdf');
+    expect(sanitizeFilename('a\\b\\c.pdf')).toBe('a_b_c.pdf');
   });
-
-  it('stop() clears running state and calls logout', async () => {
-    const { supa } = makeSupabaseStub({});
-    const fake = makeFakeImap([]);
-    const mc = new MailCarrierClient(supa as never, 'org-1', fake.client as unknown as import('imapflow').ImapFlow);
-    (mc as unknown as { isRunning: boolean }).isRunning = true;
-
-    await mc.stop();
-    expect((mc as unknown as { isRunning: boolean }).isRunning).toBe(false);
-    expect(fake.calls.logout).toBe(1);
+  it('strips leading/trailing whitespace and dots', () => {
+    expect(sanitizeFilename('  ..invoice.pdf..  ')).toBe('invoice.pdf');
+  });
+  it('preserves Korean and Japanese characters', () => {
+    expect(sanitizeFilename('계약서.pdf')).toBe('계약서.pdf');
+    expect(sanitizeFilename('請求書.pdf')).toBe('請求書.pdf');
+  });
+  it('truncates very long names while preserving extension', () => {
+    const long = 'x'.repeat(300) + '.pdf';
+    const out = sanitizeFilename(long);
+    expect(out.length).toBeLessThanOrEqual(180);
+    expect(out.endsWith('.pdf')).toBe(true);
+  });
+  it('falls back when name is empty after sanitization', () => {
+    const out = sanitizeFilename('   ...   ');
+    expect(out).toMatch(/^attachment-\d+$/);
   });
 });

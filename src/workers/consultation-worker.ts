@@ -1,12 +1,33 @@
-import pg from 'pg';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
-import { ClaudeClient } from '@/lib/ai/claude-client';
-import type { StrategyAdvisorOutput } from '@/types/ai';
+/**
+ * workers/consultation-worker.ts
+ *
+ * Postgres LISTEN consultation_created 채널을 구독해 새 consultation에 대해
+ * strategy_advisor 에이전트를 호출하고 다음을 생성:
+ *   - response_strategies 1행
+ *   - strategy_actions N행 (immediate / short_term / long_term)
+ *   - immediate 액션은 tasks 자동 생성 + linked_task_id back-link
+ *
+ * 구조:
+ *   - processConsultation(): 단위 테스트 가능한 핵심 로직
+ *   - main(): pg LISTEN 루프 + graceful shutdown
+ *
+ * pg.Client를 직접 사용하는 이유:
+ *   Supabase JS는 LISTEN/NOTIFY를 지원하지 않음. SUPABASE_DB_URL로 직접 연결.
+ */
 
-// ───────────────────────────────────────────────────────────────────
-// 페이로드
-// ───────────────────────────────────────────────────────────────────
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import pg from 'pg';
+import { env } from '../lib/env';
+import {
+  ClaudeClient,
+  ClaudeApiError,
+  ClaudeBudgetExceededError,
+} from '../lib/ai/claude-client';
+import { createShutdownController, isMainEntry } from './runtime';
+
+/* ============================================================
+ * 1. 타입
+ * ============================================================ */
 
 export interface ConsultationNotification {
   consultation_id: string;
@@ -16,254 +37,282 @@ export interface ConsultationNotification {
   urgency?: string;
 }
 
-export class ConsultationWorkerError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
-    super(message);
-    this.name = 'ConsultationWorkerError';
-  }
+export interface ProcessConsultationResult {
+  consultationId: string;
+  strategyId?: string;
+  actionsCreated: number;
+  tasksCreated: number;
+  status: 'completed' | 'failed';
+  errorMessage?: string;
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 핵심 비즈니스 로직
-// ───────────────────────────────────────────────────────────────────
+export interface ProcessConsultationOptions {
+  /** 단위 테스트에서 ClaudeClient를 주입. */
+  claudeClient?: ClaudeClient;
+  /** 단위 테스트에서 시각 고정. */
+  nowProvider?: () => Date;
+}
+
+interface StrategyData {
+  situation_analysis: string;
+  key_signals?: string[];
+  recommended_approach: string;
+  key_messages?: string[];
+  risks_to_avoid?: string[];
+  questions_to_ask_internally?: string[];
+  confidence_score: number;
+  requires_human_review?: boolean;
+  requires_legal_review?: boolean;
+  requires_finance_review?: boolean;
+  actions?: Array<{
+    title: string;
+    description: string;
+    action_type: 'immediate' | 'short_term' | 'long_term';
+    priority?: string;
+    suggested_due_in_hours?: number;
+    suggested_due_in_days?: number;
+    rationale?: string;
+    sort_order?: number;
+  }>;
+}
+
+/* ============================================================
+ * 2. processConsultation — 핵심 로직 (테스트 표면)
+ * ============================================================ */
 
 export async function processConsultation(
   supabase: SupabaseClient,
   notification: ConsultationNotification,
-  claudeClientFactory: (orgId: string) => ClaudeClient = (orgId) =>
-    new ClaudeClient(supabase, orgId),
-): Promise<{ status: 'processed' | 'failed' | 'skipped'; reason?: string }> {
-  const { consultation_id, organization_id } = notification;
+  options: ProcessConsultationOptions = {},
+): Promise<ProcessConsultationResult> {
+  const { consultation_id: consultationId, organization_id: orgId } = notification;
+  const now = options.nowProvider ?? (() => new Date());
 
   // [1] consultation 조회
-  const { data: consultation, error: loadErr } = await supabase
+  const { data: consultation, error: consultError } = await supabase
     .schema('app')
     .from('consultations')
-    .select('*')
-    .eq('id', consultation_id)
-    .eq('organization_id', organization_id)
+    .select(
+      'id, organization_id, party_id, engagement_id, module, content_raw, content_processed, language, priority, urgency, ai_processing_status',
+    )
+    .eq('id', consultationId)
+    .eq('organization_id', orgId)
     .maybeSingle();
 
-  if (loadErr || !consultation) {
-    return { status: 'skipped', reason: 'consultation_not_found' };
+  if (consultError || !consultation) {
+    return {
+      consultationId,
+      actionsCreated: 0,
+      tasksCreated: 0,
+      status: 'failed',
+      errorMessage: consultError?.message ?? 'consultation not found',
+    };
   }
 
-  const c = consultation as Record<string, unknown>;
-  const currentStatus = String(c.ai_processing_status ?? 'pending');
-  if (currentStatus === 'processed') {
-    return { status: 'skipped', reason: 'already_processed' };
+  // 멱등성: 이미 처리되었으면 skip
+  if (consultation.ai_processing_status === 'completed') {
+    return {
+      consultationId,
+      actionsCreated: 0,
+      tasksCreated: 0,
+      status: 'completed',
+      errorMessage: 'already_completed',
+    };
   }
 
-  // [2] processing 락
+  // [2] processing 마킹
   await supabase
     .schema('app')
     .from('consultations')
     .update({
       ai_processing_status: 'processing',
-      ai_processing_started_at: new Date().toISOString(),
+      ai_processing_started_at: now().toISOString(),
     })
-    .eq('id', consultation_id);
+    .eq('id', consultationId)
+    .eq('organization_id', orgId);
 
-  // [3] Strategy Advisor 호출
-  let advisorOutput: StrategyAdvisorOutput;
   try {
-    const claudeClient = claudeClientFactory(organization_id);
-    const result = await claudeClient.complete({
+    // [3] strategy_advisor 호출
+    const claude = options.claudeClient ?? new ClaudeClient(supabase, orgId);
+    const inboundMessage =
+      (consultation.content_processed as string | null) ??
+      (consultation.content_raw as string | null) ??
+      '';
+    const language = ((consultation.language as string | null) ?? 'ko') as 'ko' | 'en' | 'ja';
+
+    const result = await claude.complete({
       agentRole: 'strategy_advisor',
-      module: typeof c.module === 'string' ? c.module : undefined,
-      partyId: typeof c.party_id === 'string' ? c.party_id : undefined,
-      engagementId:
-        typeof c.engagement_id === 'string' ? c.engagement_id : undefined,
-      inboundMessage: buildAdvisorContext(c),
+      inboundMessage,
+      partyId: (consultation.party_id as string | null) ?? undefined,
+      engagementId: (consultation.engagement_id as string | null) ?? undefined,
+      language,
       outputFormat: 'json',
-      caller: 'consultation-worker',
+      traceLabel: `consultation:${consultationId}`,
     });
-    advisorOutput = parseAdvisorOutput(result.parsedJson);
-  } catch (err) {
-    await supabase
-      .schema('app')
-      .from('consultations')
-      .update({
-        ai_processing_status: 'failed',
-        ai_processing_error: (err as Error).message,
-      })
-      .eq('id', consultation_id);
-    // eslint-disable-next-line no-console
-    console.error(
-      `[consultation-worker] advisor failed for ${consultation_id}:`,
-      (err as Error).message,
-    );
-    return { status: 'failed', reason: 'advisor_failed' };
-  }
 
-  // [4] response_strategies + strategy_actions INSERT
-  try {
-    await persistAdvisorOutput(
-      supabase,
-      organization_id,
-      consultation_id,
-      advisorOutput,
-    );
-  } catch (err) {
-    await supabase
-      .schema('app')
-      .from('consultations')
-      .update({
-        ai_processing_status: 'failed',
-        ai_processing_error: (err as Error).message,
-      })
-      .eq('id', consultation_id);
-    return { status: 'failed', reason: 'persist_failed' };
-  }
+    const strategyData = result.parsedJson as StrategyData | undefined;
+    if (!strategyData || typeof strategyData.recommended_approach !== 'string') {
+      throw new Error('strategy_advisor returned invalid JSON structure');
+    }
 
-  // [5] processed
-  await supabase
-    .schema('app')
-    .from('consultations')
-    .update({
-      ai_processing_status: 'processed',
-      ai_processing_completed_at: new Date().toISOString(),
-      ai_summary: advisorOutput.summary,
-    })
-    .eq('id', consultation_id);
-
-  return { status: 'processed' };
-}
-
-function buildAdvisorContext(c: Record<string, unknown>): string {
-  const lines: string[] = [];
-  lines.push(`Consultation ID: ${String(c.id)}`);
-  if (c.module) lines.push(`Module: ${String(c.module)}`);
-  if (c.priority) lines.push(`Priority: ${String(c.priority)}`);
-  if (c.urgency) lines.push(`Urgency: ${String(c.urgency)}`);
-  if (c.title) lines.push(`Title: ${String(c.title)}`);
-  if (c.description) {
-    lines.push('');
-    lines.push('Description:');
-    lines.push(String(c.description));
-  }
-  if (c.context && typeof c.context === 'object') {
-    lines.push('');
-    lines.push('Additional Context:');
-    lines.push(JSON.stringify(c.context, null, 2));
-  }
-  return lines.join('\n');
-}
-
-function parseAdvisorOutput(parsed: object | undefined): StrategyAdvisorOutput {
-  if (!parsed || typeof parsed !== 'object') {
-    throw new ConsultationWorkerError(
-      'Strategy advisor returned non-JSON response',
-    );
-  }
-  const r = parsed as Record<string, unknown>;
-  const summary = typeof r.summary === 'string' ? r.summary : '';
-  const strategiesRaw = Array.isArray(r.responseStrategies)
-    ? r.responseStrategies
-    : Array.isArray(r.response_strategies)
-      ? r.response_strategies
-      : [];
-
-  const strategies: StrategyAdvisorOutput['responseStrategies'] = [];
-  for (const s of strategiesRaw) {
-    if (!s || typeof s !== 'object') continue;
-    const sr = s as Record<string, unknown>;
-    const actionsRaw = Array.isArray(sr.actions) ? sr.actions : [];
-    const actions = actionsRaw
-      .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
-      .map((a) => ({
-        title: String(a.title ?? ''),
-        description: String(a.description ?? ''),
-        due_in_days:
-          typeof a.due_in_days === 'number' ? a.due_in_days : undefined,
-        assigned_role:
-          typeof a.assigned_role === 'string' ? a.assigned_role : undefined,
-        priority: pickPriority(a.priority),
-      }))
-      .filter((a) => a.title.length > 0);
-
-    strategies.push({
-      title: String(sr.title ?? ''),
-      rationale: String(sr.rationale ?? ''),
-      confidence: typeof sr.confidence === 'number' ? sr.confidence : 0.5,
-      actions,
-    });
-  }
-
-  const riskNotesRaw = Array.isArray(r.riskNotes)
-    ? r.riskNotes
-    : Array.isArray(r.risk_notes)
-      ? r.risk_notes
-      : [];
-  const riskNotes = riskNotesRaw.filter((x): x is string => typeof x === 'string');
-
-  return { summary, responseStrategies: strategies, riskNotes };
-}
-
-function pickPriority(
-  v: unknown,
-): 'low' | 'medium' | 'high' | 'urgent' | undefined {
-  if (v === 'low' || v === 'medium' || v === 'high' || v === 'urgent') return v;
-  return undefined;
-}
-
-async function persistAdvisorOutput(
-  supabase: SupabaseClient,
-  organizationId: string,
-  consultationId: string,
-  output: StrategyAdvisorOutput,
-): Promise<void> {
-  for (const strategy of output.responseStrategies) {
-    const { data: stratRow, error: stratErr } = await supabase
+    // [4] response_strategies INSERT
+    const { data: strategyRow, error: strategyError } = await supabase
       .schema('app')
       .from('response_strategies')
       .insert({
-        organization_id: organizationId,
+        organization_id: orgId,
         consultation_id: consultationId,
-        title: strategy.title,
-        rationale: strategy.rationale,
-        confidence: strategy.confidence,
+        engagement_id: consultation.engagement_id ?? null,
+        party_id: consultation.party_id ?? null,
+        module: consultation.module ?? null,
+        run_id: result.runId,
         ai_generated: true,
+        situation_analysis: strategyData.situation_analysis,
+        key_signals: strategyData.key_signals ?? [],
+        recommended_approach: strategyData.recommended_approach,
+        key_messages: strategyData.key_messages ?? [],
+        risks_to_avoid: strategyData.risks_to_avoid ?? [],
+        questions_to_ask_internally:
+          strategyData.questions_to_ask_internally ?? [],
+        confidence_score: strategyData.confidence_score,
+        requires_human_review: strategyData.requires_human_review ?? true,
+        requires_legal_review: strategyData.requires_legal_review ?? false,
+        requires_finance_review: strategyData.requires_finance_review ?? false,
+        raw_ai_output: strategyData,
+        status: 'draft',
       })
       .select('id')
       .single();
 
-    if (stratErr || !stratRow) {
-      throw new ConsultationWorkerError(
-        `response_strategies INSERT failed: ${stratErr?.message ?? 'no data'}`,
+    if (strategyError || !strategyRow) {
+      throw new Error(
+        `response_strategies INSERT failed: ${strategyError?.message ?? 'unknown'}`,
       );
     }
-    const strategyId = String((stratRow as { id: string }).id);
 
-    if (strategy.actions.length === 0) continue;
+    const strategyId = strategyRow.id as string;
 
-    const actionRows = strategy.actions.map((a) => ({
-      organization_id: organizationId,
-      response_strategy_id: strategyId,
-      title: a.title,
-      description: a.description,
-      due_in_days: a.due_in_days ?? null,
-      assigned_role: a.assigned_role ?? null,
-      priority: a.priority ?? 'medium',
-      status: 'todo',
-    }));
+    // [5] strategy_actions + tasks (immediate)
+    let actionsCreated = 0;
+    let tasksCreated = 0;
+    for (const action of strategyData.actions ?? []) {
+      const { data: actionRow, error: actionError } = await supabase
+        .schema('app')
+        .from('strategy_actions')
+        .insert({
+          organization_id: orgId,
+          strategy_id: strategyId,
+          title: action.title,
+          description: action.description,
+          action_type: action.action_type,
+          priority: action.priority ?? 'medium',
+          suggested_due_in_hours: action.suggested_due_in_hours ?? null,
+          suggested_due_in_days: action.suggested_due_in_days ?? null,
+          rationale: action.rationale ?? null,
+          sort_order: action.sort_order ?? 0,
+        })
+        .select('id')
+        .single();
 
-    const { error: actionsErr } = await supabase
+      if (actionError || !actionRow) {
+        // 단건 액션 실패는 다음 액션에 영향 없음
+        // eslint-disable-next-line no-console
+        console.error(
+          `[consultation-worker] strategy_action INSERT failed:`,
+          actionError,
+        );
+        continue;
+      }
+      actionsCreated += 1;
+
+      if (action.action_type === 'immediate') {
+        const dueAt =
+          action.suggested_due_in_hours !== undefined &&
+          action.suggested_due_in_hours !== null
+            ? new Date(
+                now().getTime() + action.suggested_due_in_hours * 3_600_000,
+              ).toISOString()
+            : null;
+
+        const { data: taskRow } = await supabase
+          .schema('app')
+          .from('tasks')
+          .insert({
+            organization_id: orgId,
+            party_id: consultation.party_id ?? null,
+            engagement_id: consultation.engagement_id ?? null,
+            module: consultation.module ?? null,
+            title: action.title,
+            description: action.description,
+            priority: action.priority ?? 'high',
+            status: 'todo',
+            due_at: dueAt,
+            linked_strategy_action_id: actionRow.id,
+          })
+          .select('id')
+          .single();
+
+        if (taskRow) {
+          tasksCreated += 1;
+          await supabase
+            .schema('app')
+            .from('strategy_actions')
+            .update({ linked_task_id: taskRow.id })
+            .eq('id', actionRow.id);
+        }
+      }
+    }
+
+    // [6] consultation 완료 마킹
+    await supabase
       .schema('app')
-      .from('strategy_actions')
-      .insert(actionRows);
+      .from('consultations')
+      .update({
+        ai_processing_status: 'completed',
+        ai_processing_completed_at: now().toISOString(),
+      })
+      .eq('id', consultationId)
+      .eq('organization_id', orgId);
 
-    if (actionsErr) {
-      throw new ConsultationWorkerError(
-        `strategy_actions INSERT failed: ${actionsErr.message}`,
-      );
-    }
+    return {
+      consultationId,
+      strategyId,
+      actionsCreated,
+      tasksCreated,
+      status: 'completed',
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const isBudget = err instanceof ClaudeBudgetExceededError;
+    const isApiTransient =
+      err instanceof ClaudeApiError &&
+      (err.status === undefined || err.status >= 500 || err.status === 429);
+
+    await supabase
+      .schema('app')
+      .from('consultations')
+      .update({
+        ai_processing_status: 'failed',
+        ai_processing_error_message: errorMessage,
+        ai_processing_failed_at: now().toISOString(),
+        ai_processing_retryable: isApiTransient && !isBudget,
+      })
+      .eq('id', consultationId)
+      .eq('organization_id', orgId);
+
+    return {
+      consultationId,
+      actionsCreated: 0,
+      tasksCreated: 0,
+      status: 'failed',
+      errorMessage,
+    };
   }
 }
 
-// ───────────────────────────────────────────────────────────────────
-// LISTEN/NOTIFY 메인 루프
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 3. main — pg LISTEN 루프 + graceful shutdown
+ * ============================================================ */
 
 async function main(): Promise<void> {
   const supabase = createClient(
@@ -275,78 +324,61 @@ async function main(): Promise<void> {
   await pgClient.connect();
   await pgClient.query('LISTEN consultation_created');
 
-  let isShuttingDown = false;
-  const inflight = new Set<Promise<void>>();
+  const ctl = createShutdownController('consultation-worker');
 
   pgClient.on('notification', (msg) => {
-    if (isShuttingDown) return;
-    if (msg.channel !== 'consultation_created') return;
-    if (!msg.payload) return;
-
-    let notification: ConsultationNotification;
+    if (ctl.isShuttingDown()) return;
+    if (msg.channel !== 'consultation_created' || !msg.payload) return;
+    let parsed: ConsultationNotification;
     try {
-      notification = JSON.parse(msg.payload) as ConsultationNotification;
+      parsed = JSON.parse(msg.payload) as ConsultationNotification;
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[consultation-worker] payload parse failed:', err);
       return;
     }
+    if (!parsed.consultation_id || !parsed.organization_id) return;
 
-    const promise = processConsultation(supabase, notification)
-      .then((result) => {
-        if (result.status === 'failed') {
+    void ctl.track(
+      processConsultation(supabase, parsed)
+        .then((result) => {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[consultation-worker] processed consultation=${result.consultationId} status=${result.status} actions=${result.actionsCreated} tasks=${result.tasksCreated}`,
+          );
+        })
+        .catch((err) => {
           // eslint-disable-next-line no-console
           console.error(
-            `[consultation-worker] processConsultation failed: ${notification.consultation_id} reason=${result.reason}`,
+            `[consultation-worker] processConsultation threw:`,
+            err,
           );
-        }
-      })
-      .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error(
-          `[consultation-worker] unhandled error: ${notification.consultation_id}:`,
-          err,
-        );
-      })
-      .finally(() => {
-        inflight.delete(promise);
-      });
-    inflight.add(promise);
-  });
-
-  pgClient.on('error', (err) => {
-    // eslint-disable-next-line no-console
-    console.error('[consultation-worker] pg error:', err.message);
-  });
-
-  const shutdown = async (signal: string): Promise<void> => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    // eslint-disable-next-line no-console
-    console.log(
-      `[consultation-worker] received ${signal}, draining ${inflight.size} inflight tasks...`,
+        }),
     );
-    await Promise.allSettled(Array.from(inflight));
-    try {
-      await pgClient.end();
-    } catch {
-      // ignore
-    }
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', () => {
-    void shutdown('SIGTERM');
-  });
-  process.on('SIGINT', () => {
-    void shutdown('SIGINT');
   });
 
   // eslint-disable-next-line no-console
   console.log('[consultation-worker] listening on consultation_created');
+
+  // 셧다운 시그널이 올 때까지 대기 — sleep(Infinity) 대신 짧은 대기 반복
+  while (!ctl.isShuttingDown()) {
+    await ctl.sleep(60_000);
+  }
+
+  // graceful shutdown
+  await ctl.waitForInflight(30_000);
+  try {
+    await pgClient.query('UNLISTEN consultation_created');
+    await pgClient.end();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[consultation-worker] pg client cleanup error:', err);
+  }
+  // eslint-disable-next-line no-console
+  console.log('[consultation-worker] shutdown complete');
 }
 
-if (require.main === module) {
+if (isMainEntry(import.meta.url)) {
   main().catch((err) => {
     // eslint-disable-next-line no-console
     console.error('[consultation-worker] fatal:', err);

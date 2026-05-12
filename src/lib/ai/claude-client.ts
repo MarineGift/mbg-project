@@ -1,38 +1,65 @@
+/**
+ * lib/ai/claude-client.ts
+ *
+ * Anthropic API의 단일 진입점.
+ * 모든 AI 호출은 본 클래스를 거쳐야 ai.runs 기록·PII 마스킹·비용 추적이
+ * 일관되게 적용된다.
+ *
+ * 외부에서 anthropic.messages.create() 직접 호출 금지.
+ *
+ * 주요 책임:
+ *   1. 모델 ID 화이트리스트 검증
+ *   2. 일일 예산 사전 체크
+ *   3. PII 마스킹·복원
+ *   4. prompt-renderer 호출 (brand_voice + RAG + thread)
+ *   5. 재시도 (429/5xx exponential backoff, fallback 모델)
+ *   6. 비용 계산 + ai.runs INSERT (성공/실패 모두)
+ *   7. JSON 파싱 (output_format='json' 또는 agent.outputFormat='structured')
+ */
+
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
-import {
-  type AgentRow,
-  type AgentRole,
-  type ClaudeCompleteInput,
-  type ClaudeCompleteOutput,
-  type ClaudeModel,
-  type RunStatus,
-  isSupportedClaudeModel,
-  toAgentRow,
-} from '@/types/ai';
+import { env } from '../env';
+import type {
+  AgentRole,
+  AgentRow,
+  ClaudeCompleteInput,
+  ClaudeCompleteOutput,
+  ClaudeModel,
+  Language,
+  ModuleType,
+} from '../../types/ai';
 import { maskPii, restorePii, type PiiTokenMap } from './pii-masker';
 import { renderPrompt } from './prompt-renderer';
 import {
   calculateCost,
   checkDailyBudget,
   checkMonthlyBudget,
+  evaluateMonthlyCostThreshold,
+  applyDowngrade,
   recordRun,
 } from './cost-tracker';
 
-// ───────────────────────────────────────────────────────────────────
-// 에러
-// ───────────────────────────────────────────────────────────────────
+/* ============================================================
+ * 1. 에러 클래스
+ * ============================================================ */
 
 export class ClaudeApiError extends Error {
+  public readonly status?: number;
+  public readonly retryAfter?: number;
+  public override readonly cause?: unknown;
+
   constructor(
     message: string,
-    public readonly status?: number,
-    public readonly retryAfter?: number,
-    public readonly cause?: unknown,
+    status?: number,
+    retryAfter?: number,
+    cause?: unknown,
   ) {
     super(message);
     this.name = 'ClaudeApiError';
+    this.status = status;
+    this.retryAfter = retryAfter;
+    this.cause = cause;
   }
 }
 
@@ -43,7 +70,7 @@ export class ClaudeBudgetExceededError extends Error {
     public readonly period: 'daily' | 'monthly',
   ) {
     super(
-      `Budget exceeded for ${period}: ${used.toFixed(2)} / ${limit.toFixed(2)} USD`,
+      `Budget exceeded for ${period}: $${used.toFixed(2)} / $${limit.toFixed(2)}`,
     );
     this.name = 'ClaudeBudgetExceededError';
   }
@@ -51,118 +78,203 @@ export class ClaudeBudgetExceededError extends Error {
 
 export class ClaudeInvalidModelError extends Error {
   constructor(public readonly model: string) {
-    super(`Unsupported Claude model: ${model} (allowed: claude-opus-4-7 / claude-sonnet-4-6 / claude-haiku-4-5-20251001)`);
+    super(`Unsupported Claude model: ${model}`);
     this.name = 'ClaudeInvalidModelError';
   }
 }
 
 export class ClaudeAgentNotFoundError extends Error {
-  constructor(public readonly role: AgentRole, public readonly organizationId: string) {
-    super(`Agent not found: role=${role} organization=${organizationId}`);
+  constructor(role: string, organizationId: string) {
+    super(
+      `Agent not found: role=${role} organization=${organizationId} (no active version)`,
+    );
     this.name = 'ClaudeAgentNotFoundError';
   }
 }
 
-// ───────────────────────────────────────────────────────────────────
-// ClaudeClient
-// ───────────────────────────────────────────────────────────────────
+export class ClaudeTimeoutError extends ClaudeApiError {
+  constructor(timeoutMs: number) {
+    super(`Claude API timed out after ${timeoutMs}ms`, undefined, undefined);
+    this.name = 'ClaudeTimeoutError';
+  }
+}
+
+/* ============================================================
+ * 2. 상수
+ * ============================================================ */
+
+const SUPPORTED_MODELS: ReadonlySet<ClaudeModel> = new Set<ClaudeModel>([
+  'claude-opus-4-7',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
+]);
+
+const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_TEMPERATURE = 0.3;
+const HARD_TIMEOUT_MS = 60_000;
+const MAX_RETRY_ATTEMPTS = 3;
+
+/* ============================================================
+ * 3. 보조 함수
+ * ============================================================ */
+
+function isRetryableStatus(status: number | undefined): boolean {
+  if (status === undefined) return false;
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+function backoffMs(attempt: number, retryAfter?: number): number {
+  if (retryAfter !== undefined && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, 30_000);
+  }
+  // 1s, 2s, 4s
+  return Math.pow(2, attempt) * 1000;
+}
+
+function dbRowToAgent(row: Record<string, unknown>): AgentRow {
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    role: row.role as AgentRole,
+    name: (row.name as string) ?? '',
+    model: row.model as ClaudeModel,
+    fallbackModel: (row.fallback_model as ClaudeModel | null) ?? undefined,
+    temperature: Number(row.temperature ?? DEFAULT_TEMPERATURE),
+    maxTokens: Number(row.max_tokens ?? DEFAULT_MAX_TOKENS),
+    outputFormat: (row.output_format as 'text' | 'structured') ?? 'text',
+    systemPrompt: (row.system_prompt as string) ?? '',
+    applicableModules:
+      (row.applicable_modules as ModuleType[] | null) ?? undefined,
+    applicableLanguages:
+      (row.applicable_languages as Language[] | null) ?? undefined,
+    requirePiiMasking: (row.require_pii_masking as boolean | null) ?? true,
+    knowledgeCollection:
+      (row.knowledge_collection as string | null) ?? undefined,
+    isActive: Boolean(row.is_active),
+    version: Number(row.version ?? 1),
+  };
+}
+
+function extractTextContent(message: Anthropic.Messages.Message): string {
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+}
+
+function tryParseJson(content: string): object | undefined {
+  // ```json fence 또는 일반 ``` fence 제거
+  let cleaned = content.trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as object;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/* ============================================================
+ * 4. ClaudeClient 클래스
+ * ============================================================ */
+
+export interface ClaudeClientOptions {
+  /** 단위 테스트에서 SDK를 주입할 때 사용. */
+  anthropicClient?: Anthropic;
+  /**
+   * 월간 비용이 임계값을 초과한 경우 자동 다운그레이드 적용 여부.
+   * 기본 true. 테스트에서 false로 설정해 결정론적 동작 확보.
+   */
+  enableMonthlyDowngrade?: boolean;
+}
 
 export class ClaudeClient {
   private readonly anthropic: Anthropic;
+  private readonly enableMonthlyDowngrade: boolean;
 
   constructor(
     private readonly supabase: SupabaseClient,
     private readonly organizationId: string,
-    private readonly generateEmbedding?: (text: string) => Promise<number[]>,
-    anthropicClient?: Anthropic,
+    options: ClaudeClientOptions = {},
   ) {
     this.anthropic =
-      anthropicClient ??
+      options.anthropicClient ??
       new Anthropic({
         apiKey: env.ANTHROPIC_API_KEY,
-        maxRetries: 0,
-        timeout: env.CLAUDE_HARD_TIMEOUT_MS,
+        maxRetries: 0, // SDK 재시도 비활성화 — 본 클래스에서 직접 제어
+        timeout: HARD_TIMEOUT_MS,
       });
+    this.enableMonthlyDowngrade = options.enableMonthlyDowngrade ?? true;
   }
 
+  /**
+   * 메인 호출 진입점.
+   *
+   * 단계:
+   *   1. 일일 예산 체크
+   *   2. 월간 예산 평가 → 다운그레이드 여부
+   *   3. agent 조회
+   *   4. 모델 ID 검증
+   *   5. PII 마스킹
+   *   6. prompt-renderer 호출
+   *   7. API 호출 + 재시도
+   *   8. PII 복원 + JSON 파싱
+   *   9. 비용 계산 + ai.runs INSERT
+   *  10. 출력 반환
+   */
   async complete(input: ClaudeCompleteInput): Promise<ClaudeCompleteOutput> {
-    // 1. 예산 체크
-    const daily = await checkDailyBudget(this.supabase, this.organizationId);
-    if (!daily.allowed) {
-      await this.recordPreflightBlock({
-        agentId: null,
-        status: 'budget_exceeded',
-        model: 'unknown',
-        errorMessage: `daily budget exceeded: ${daily.used.toFixed(2)} / ${daily.limit.toFixed(2)} USD`,
-        caller: input.caller,
-        partyId: input.partyId,
-        engagementId: input.engagementId,
-      });
-      throw new ClaudeBudgetExceededError(daily.used, daily.limit, 'daily');
-    }
-    const monthly = await checkMonthlyBudget(this.supabase, this.organizationId);
-    if (!monthly.allowed) {
-      await this.recordPreflightBlock({
-        agentId: null,
-        status: 'budget_exceeded',
-        model: 'unknown',
-        errorMessage: `monthly budget exceeded: ${monthly.used.toFixed(2)} / ${monthly.limit.toFixed(2)} USD`,
-        caller: input.caller,
-        partyId: input.partyId,
-        engagementId: input.engagementId,
-      });
-      throw new ClaudeBudgetExceededError(monthly.used, monthly.limit, 'monthly');
+    // ── [1] 일일 예산 ─────────────────────────────────
+    const dailyBudget = await checkDailyBudget(
+      this.supabase,
+      this.organizationId,
+    );
+    if (!dailyBudget.allowed) {
+      throw new ClaudeBudgetExceededError(
+        dailyBudget.used,
+        dailyBudget.limit,
+        'daily',
+      );
     }
 
-    // 2. agent 조회
-    let agent: AgentRow;
-    try {
-      agent = await this.loadAgent(input.agentRole, input.language, input.module);
-    } catch (err) {
-      // loadAgent는 두 가지 사유로 throw할 수 있음:
-      //   (a) ClaudeAgentNotFoundError — DB에 row가 없음
-      //   (b) toAgentRow의 일반 Error — DB에 row는 있으나 model 컬럼이 비표준 ID
-      // 두 경우 모두 ai.runs(status=failed)에 best-effort로 기록한 뒤 re-throw.
-      const errorMessage = err instanceof ClaudeAgentNotFoundError
-        ? `agent_not_found: role=${input.agentRole}`
-        : `agent_load_failed: ${(err as Error).message}`;
-      await this.recordPreflightBlock({
-        agentId: null,
-        status: 'failed',
-        model: 'unknown',
-        errorMessage,
-        caller: input.caller,
-        partyId: input.partyId,
-        engagementId: input.engagementId,
-      });
-      throw err;
+    // ── [2] 월간 예산 평가 → 다운그레이드 결정 ────────
+    let costThreshold: 'normal' | 'alert_only' | 'force_downgrade' | 'block_auto_send' =
+      'normal';
+    if (this.enableMonthlyDowngrade) {
+      const monthlyBudget = await checkMonthlyBudget(
+        this.supabase,
+        this.organizationId,
+      );
+      if (!monthlyBudget.allowed) {
+        throw new ClaudeBudgetExceededError(
+          monthlyBudget.used,
+          monthlyBudget.limit,
+          'monthly',
+        );
+      }
+      costThreshold = evaluateMonthlyCostThreshold(monthlyBudget.used);
     }
-    if (!isSupportedClaudeModel(agent.model)) {
-      await this.recordPreflightBlock({
-        agentId: agent.id,
-        status: 'failed',
-        model: agent.model,
-        errorMessage: `Unsupported model on agent: ${agent.model}`,
-        caller: input.caller,
-        partyId: input.partyId,
-        engagementId: input.engagementId,
-      });
+
+    // ── [3] agent 조회 ─────────────────────────────────
+    const agent = await this.loadAgent(input.agentRole);
+
+    // ── [4] 모델 검증 ─────────────────────────────────
+    if (!SUPPORTED_MODELS.has(agent.model)) {
       throw new ClaudeInvalidModelError(agent.model);
     }
-    if (agent.fallbackModel && !isSupportedClaudeModel(agent.fallbackModel)) {
-      await this.recordPreflightBlock({
-        agentId: agent.id,
-        status: 'failed',
-        model: agent.fallbackModel,
-        errorMessage: `Unsupported fallback_model on agent: ${agent.fallbackModel}`,
-        caller: input.caller,
-        partyId: input.partyId,
-        engagementId: input.engagementId,
-      });
+    if (
+      agent.fallbackModel &&
+      !SUPPORTED_MODELS.has(agent.fallbackModel)
+    ) {
       throw new ClaudeInvalidModelError(agent.fallbackModel);
     }
 
-    // 3. PII 마스킹
+    // 다운그레이드 적용
+    let modelUsed: ClaudeModel = applyDowngrade(agent.model, costThreshold);
+
+    // ── [5] PII 마스킹 ─────────────────────────────────
     const maskPiiEnabled = input.maskPii ?? agent.requirePiiMasking ?? true;
     const maskResult = maskPiiEnabled
       ? maskPii(input.inboundMessage)
@@ -170,9 +282,10 @@ export class ClaudeClient {
           masked: input.inboundMessage,
           tokens: new Map() as PiiTokenMap,
           categories: [] as string[],
+          tokenCount: 0,
         };
 
-    // 4. 프롬프트 렌더
+    // ── [6] prompt 렌더 ───────────────────────────────
     const rendered = await renderPrompt({
       supabase: this.supabase,
       organizationId: this.organizationId,
@@ -181,287 +294,202 @@ export class ClaudeClient {
       engagementId: input.engagementId,
       inboundMessage: maskResult.masked,
       language: input.language,
-      module: input.module,
-      generateEmbedding: this.generateEmbedding,
+      extraContext: input.extraContext,
     });
 
-    // 5. API 호출
+    // ── [7] API 호출 + 재시도 ─────────────────────────
     const startedAt = Date.now();
-    const callResult = await this.callWithRetries(agent, rendered);
+    let attempt = 0;
+    let lastError: unknown;
+    let response: Anthropic.Messages.Message | null = null;
+
+    while (attempt < MAX_RETRY_ATTEMPTS && response === null) {
+      try {
+        response = await this.anthropic.messages.create({
+          model: modelUsed,
+          max_tokens: agent.maxTokens || DEFAULT_MAX_TOKENS,
+          temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
+          system: rendered.system,
+          messages: rendered.messages,
+        });
+      } catch (err) {
+        lastError = err;
+        const apiError = this.normalizeError(err);
+
+        // 재시도 가능 여부
+        if (!isRetryableStatus(apiError.status)) {
+          break; // 즉시 실패
+        }
+
+        // 두 번째 재시도부터 fallback 모델
+        if (
+          attempt === 1 &&
+          agent.fallbackModel &&
+          SUPPORTED_MODELS.has(agent.fallbackModel) &&
+          modelUsed !== agent.fallbackModel
+        ) {
+          modelUsed = agent.fallbackModel;
+        }
+
+        const delay = backoffMs(attempt, apiError.retryAfter);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt += 1;
+      }
+    }
+
     const latencyMs = Date.now() - startedAt;
 
-    // 6. 실패 경로
-    if (callResult.kind === 'failed') {
+    // ── [8] 실패 경로: 기록 후 throw ─────────────────
+    if (response === null) {
+      const apiError = this.normalizeError(lastError);
       await recordRun(this.supabase, this.organizationId, {
         agentId: agent.id,
-        status: callResult.timedOut ? 'timeout' : 'failed',
-        model: callResult.lastModelTried,
+        status:
+          apiError instanceof ClaudeTimeoutError ? 'timeout' : 'failed',
+        model: modelUsed,
         tokensIn: 0,
         tokensOut: 0,
         costUsd: 0,
         latencyMs,
         piiMasked: maskPiiEnabled,
         piiCategories: maskResult.categories,
-        retryCount: callResult.retryCount,
+        retryCount: attempt,
         partyId: input.partyId,
         engagementId: input.engagementId,
         brandVoiceId: rendered.metadata.brandVoiceId,
         knowledgeChunkIds: rendered.metadata.knowledgeChunkIds,
-        errorMessage: callResult.error.message,
-        errorStatus: callResult.error.status,
-        caller: input.caller,
+        errorMessage: apiError.message,
+        errorStatus: apiError.status,
+        traceLabel: input.traceLabel,
       });
-      throw callResult.error;
+      throw apiError;
     }
 
-    // 7. 응답 추출 + PII 복원
-    const rawContent = callResult.response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n');
-    const content = maskPiiEnabled ? restorePii(rawContent, maskResult.tokens) : rawContent;
+    // ── [9] 성공 경로: 추출 + 복원 + 파싱 ────────────
+    const rawContent = extractTextContent(response);
+    const content = maskPiiEnabled
+      ? restorePii(rawContent, maskResult.tokens)
+      : rawContent;
 
-    // 8. JSON 파싱
     let parsedJson: object | undefined;
     if (input.outputFormat === 'json' || agent.outputFormat === 'structured') {
       parsedJson = tryParseJson(content);
+      // JSON 파싱 실패는 throw하지 않음 — 호출자가 parsedJson 부재로 검증
     }
 
-    // 9. 비용 + ai.runs INSERT
-    const tokensIn = callResult.response.usage.input_tokens;
-    const tokensOut = callResult.response.usage.output_tokens;
-    const costUsd = calculateCost(callResult.modelUsed, tokensIn, tokensOut);
+    // ── [10] 비용 계산 + ai.runs INSERT ──────────────
+    const tokensIn = response.usage?.input_tokens ?? 0;
+    const tokensOut = response.usage?.output_tokens ?? 0;
+    let costUsd = 0;
+    try {
+      costUsd = calculateCost(modelUsed, tokensIn, tokensOut);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[claude-client] calculateCost failed:', err);
+    }
 
     const runId = await recordRun(this.supabase, this.organizationId, {
       agentId: agent.id,
       status: 'success',
-      model: callResult.modelUsed,
+      model: modelUsed,
       tokensIn,
       tokensOut,
       costUsd,
       latencyMs,
       piiMasked: maskPiiEnabled,
       piiCategories: maskResult.categories,
-      retryCount: callResult.retryCount,
+      retryCount: attempt,
       partyId: input.partyId,
       engagementId: input.engagementId,
       brandVoiceId: rendered.metadata.brandVoiceId,
       knowledgeChunkIds: rendered.metadata.knowledgeChunkIds,
-      caller: input.caller,
-      metadata: {
-        thread_communication_ids: rendered.metadata.threadCommunicationIds,
-        fallback_used: callResult.modelUsed !== agent.model,
-      },
+      traceLabel: input.traceLabel,
     });
 
     return {
       content,
       parsedJson,
       runId,
-      model: callResult.modelUsed,
+      agentId: agent.id,
+      model: modelUsed,
       latencyMs,
       tokensIn,
       tokensOut,
       costUsd,
-      retryCount: callResult.retryCount,
     };
   }
 
-  /**
-   * 사전 차단 이벤트(예산 초과·invalid model·agent_not_found)를 ai.runs에 기록.
-   * tokensIn/Out·costUsd·latencyMs는 모두 0 (실제 API 호출 없음).
-   * recordRun 자체의 실패는 swallow되며 throw하지 않음 — 차단 이벤트의 추적성을
-   * 위해 best-effort로만 기록한다.
-   */
-  private async recordPreflightBlock(args: {
-    agentId: string | null;
-    status: RunStatus;
-    model: string;
-    errorMessage: string;
-    caller?: string;
-    partyId?: string;
-    engagementId?: string;
-  }): Promise<void> {
-    await recordRun(this.supabase, this.organizationId, {
-      agentId: args.agentId,
-      status: args.status,
-      model: args.model,
-      tokensIn: 0,
-      tokensOut: 0,
-      costUsd: 0,
-      latencyMs: 0,
-      piiMasked: false,
-      piiCategories: [],
-      retryCount: 0,
-      partyId: args.partyId,
-      engagementId: args.engagementId,
-      errorMessage: args.errorMessage,
-      caller: args.caller,
-      metadata: { preflight_block: true },
-    });
-  }
-
-  private async loadAgent(
-    role: AgentRole,
-    language: 'ko' | 'en' | 'ja' | undefined,
-    module: string | undefined,
-  ): Promise<AgentRow> {
-    let query = this.supabase
+  /* --------------------------------------------------------
+   * agent 조회 — role + organization_id + is_active=true,
+   * 가장 높은 version 1건.
+   * -------------------------------------------------------- */
+  private async loadAgent(role: AgentRole): Promise<AgentRow> {
+    const { data, error } = await this.supabase
       .schema('ai')
       .from('agents')
-      .select('*')
+      .select(
+        'id, organization_id, role, name, model, fallback_model, temperature, max_tokens, output_format, system_prompt, applicable_modules, applicable_languages, require_pii_masking, knowledge_collection, is_active, version',
+      )
       .eq('organization_id', this.organizationId)
       .eq('role', role)
       .eq('is_active', true)
       .order('version', { ascending: false })
-      .limit(1);
+      .limit(1)
+      .maybeSingle();
 
-    if (language) {
-      query = query.or(
-        `applicable_languages.cs.{${language}},applicable_languages.eq.{}`,
+    if (error) {
+      throw new ClaudeApiError(
+        `Agent lookup failed: role=${role}: ${error.message}`,
+        undefined,
+        undefined,
+        error,
       );
     }
-    if (module) {
-      query = query.or(
-        `applicable_modules.cs.{${module}},applicable_modules.eq.{}`,
-      );
-    }
-
-    const { data, error } = await query.maybeSingle();
-    if (error || !data) {
+    if (!data) {
       throw new ClaudeAgentNotFoundError(role, this.organizationId);
     }
-    return toAgentRow(data as Record<string, unknown>);
+    return dbRowToAgent(data as Record<string, unknown>);
   }
 
-  private async callWithRetries(
-    agent: AgentRow,
-    rendered: { system: string; messages: Anthropic.Messages.MessageParam[] },
-  ): Promise<CallResult> {
-    const maxRetries = env.CLAUDE_MAX_RETRIES;
-    let modelUsed: ClaudeModel = agent.model;
-    let attempt = 0;
-    let lastError: ClaudeApiError | null = null;
-    let fallbackTried = false;
-    let timedOut = false;
-
-    while (attempt < maxRetries) {
-      try {
-        const response = await this.anthropic.messages.create({
-          model: modelUsed,
-          max_tokens: agent.maxTokens,
-          temperature: agent.temperature,
-          system: rendered.system,
-          messages: rendered.messages,
-        });
-        return {
-          kind: 'success',
-          response,
-          modelUsed,
-          retryCount: attempt,
-        };
-      } catch (err) {
-        lastError = this.normalizeError(err);
-        timedOut = isTimeoutError(err);
-
-        const isRetryable =
-          lastError.status === 429
-          || (lastError.status !== undefined && lastError.status >= 500)
-          || timedOut;
-
-        if (!isRetryable) {
-          if (!fallbackTried && agent.fallbackModel && agent.fallbackModel !== modelUsed) {
-            fallbackTried = true;
-            modelUsed = agent.fallbackModel;
-            attempt += 1;
-            continue;
-          }
-          break;
-        }
-
-        attempt += 1;
-        if (attempt < maxRetries) {
-          const delayMs = lastError.retryAfter
-            ? Math.min(lastError.retryAfter * 1000, 30_000)
-            : 1000 * Math.pow(2, attempt - 1);
-          await sleep(delayMs);
-        } else if (!fallbackTried && agent.fallbackModel && agent.fallbackModel !== modelUsed) {
-          fallbackTried = true;
-          modelUsed = agent.fallbackModel;
-          attempt = 0;
-          continue;
-        }
-      }
-    }
-
-    return {
-      kind: 'failed',
-      error: lastError ?? new ClaudeApiError('Unknown failure', undefined, undefined),
-      lastModelTried: modelUsed,
-      retryCount: attempt,
-      timedOut,
-    };
-  }
-
+  /* --------------------------------------------------------
+   * Anthropic SDK 에러 → ClaudeApiError 정규화
+   * -------------------------------------------------------- */
   private normalizeError(err: unknown): ClaudeApiError {
     if (err instanceof ClaudeApiError) return err;
 
-    if (typeof err === 'object' && err !== null) {
-      const e = err as { status?: number; message?: string; headers?: Record<string, string> };
-      const status = typeof e.status === 'number' ? e.status : undefined;
-      const retryAfterRaw = e.headers?.['retry-after'];
-      const retryAfter = retryAfterRaw ? parseInt(retryAfterRaw, 10) : undefined;
-      return new ClaudeApiError(
-        e.message ?? 'Anthropic API error',
-        status,
-        Number.isFinite(retryAfter) ? retryAfter : undefined,
-        err,
-      );
+    if (err instanceof Anthropic.APIError) {
+      // retry-after 헤더 추출 (Headers 객체 또는 plain object 모두 지원)
+      let retryAfter: number | undefined;
+      const headers = (err as { headers?: unknown }).headers;
+      if (headers) {
+        let raw: string | null | undefined;
+        if (typeof (headers as { get?: unknown }).get === 'function') {
+          // Fetch Headers 객체
+          const h = headers as Headers;
+          raw = h.get('retry-after') ?? h.get('Retry-After') ?? h.get('x-retry-after');
+        } else if (typeof headers === 'object') {
+          // plain object
+          const h = headers as Record<string, string | undefined>;
+          raw = h['retry-after'] ?? h['Retry-After'] ?? h['x-retry-after'];
+        }
+        if (raw) {
+          const n = Number(raw);
+          if (!Number.isNaN(n)) retryAfter = n;
+        }
+      }
+      return new ClaudeApiError(err.message, err.status, retryAfter, err);
     }
-    return new ClaudeApiError(String(err), undefined, undefined, err);
-  }
-}
 
-// ───────────────────────────────────────────────────────────────────
-// 헬퍼
-// ───────────────────────────────────────────────────────────────────
-
-type CallResult =
-  | {
-      kind: 'success';
-      response: Anthropic.Messages.Message;
-      modelUsed: ClaudeModel;
-      retryCount: number;
+    // SDK가 timeout을 별도 클래스로 던지지 않는 환경 대응
+    if (err instanceof Error) {
+      if (
+        /timeout|timed out|aborted/i.test(err.message) ||
+        err.name === 'AbortError'
+      ) {
+        return new ClaudeTimeoutError(HARD_TIMEOUT_MS);
+      }
+      return new ClaudeApiError(err.message, undefined, undefined, err);
     }
-  | {
-      kind: 'failed';
-      error: ClaudeApiError;
-      lastModelTried: ClaudeModel;
-      retryCount: number;
-      timedOut: boolean;
-    };
-
-function tryParseJson(text: string): object | undefined {
-  const cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
-  try {
-    const parsed = JSON.parse(cleaned);
-    return typeof parsed === 'object' && parsed !== null ? (parsed as object) : undefined;
-  } catch {
-    return undefined;
+    return new ClaudeApiError(String(err));
   }
-}
-
-function isTimeoutError(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false;
-  const e = err as { name?: string; message?: string; code?: string };
-  return (
-    e.code === 'ETIMEDOUT'
-    || e.code === 'ESOCKETTIMEDOUT'
-    || e.name === 'AbortError'
-    || (typeof e.message === 'string' && /timeout/i.test(e.message))
-  );
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -1,0 +1,584 @@
+﻿
+Path                                                                                LineNumber Line    
+----                                                                                ---------- ----    
+C:\dev\mbg-project\.next\types\app\(app)\[module]\parties\page.ts                            1 // File:
+                                                                                                C:\dev\
+                                                                                               mbg-proj
+                                                                                               ect\src\
+                                                                                               app\(app
+                                                                                               )\[modul
+                                                                                               e]\parti
+                                                                                               es\page.
+                                                                                               tsx     
+C:\dev\mbg-project\.next\types\app\(app)\[module]\parties\page.ts                            2 import *
+                                                                                                as entr
+                                                                                               y from '
+                                                                                               ../../..
+                                                                                               /../../.
+                                                                                               ./src/ap
+                                                                                               p/(app)/
+                                                                                               [module]
+                                                                                               /parties
+                                                                                               /page.js
+                                                                                               '       
+C:\dev\mbg-project\.next\types\app\(app)\[module]\parties\page.ts                            5 type TEn
+                                                                                               try = ty
+                                                                                               peof imp
+                                                                                               ort('../
+                                                                                               ../../..
+                                                                                               /../../s
+                                                                                               rc/app/(
+                                                                                               app)/[mo
+                                                                                               dule]/pa
+                                                                                               rties/pa
+                                                                                               ge.js') 
+C:\dev\mbg-project\node_modules\@supabase\auth-js\dist\main\lib\webauthn.dom.d.ts          537  * Categ
+                                                                                               ories of
+                                                                                                authent
+                                                                                               icators 
+                                                                                               that Rel
+                                                                                               ying Par
+                                                                                               ties can
+                                                                                                pass al
+                                                                                               ong to b
+                                                                                               rowsers 
+                                                                                               during  
+C:\dev\mbg-project\node_modules\@supabase\auth-js\dist\module\lib\webauthn.dom.d.ts        537  * Categ
+                                                                                               ories of
+                                                                                                authent
+                                                                                               icators 
+                                                                                               that Rel
+                                                                                               ying Par
+                                                                                               ties can
+                                                                                                pass al
+                                                                                               ong to b
+                                                                                               rowsers 
+                                                                                               during  
+C:\dev\mbg-project\node_modules\@supabase\auth-js\src\lib\webauthn.dom.ts                  581  * Categ
+                                                                                               ories of
+                                                                                                authent
+                                                                                               icators 
+                                                                                               that Rel
+                                                                                               ying Par
+                                                                                               ties can
+                                                                                                pass al
+                                                                                               ong to b
+                                                                                               rowsers 
+                                                                                               during  
+C:\dev\mbg-project\node_modules\@types\node\crypto.d.ts                                   1735      * a
+                                                                                               dvantage
+                                                                                                of usin
+                                                                                               g this m
+                                                                                               ethod is
+                                                                                                that th
+                                                                                               e partie
+                                                                                               s do not
+                                                                                                have to
+C:\dev\mbg-project\node_modules\@types\node\v8.d.ts                                        272      * a
+                                                                                               void usi
+                                                                                               ng this 
+                                                                                               API on c
+                                                                                               onstruct
+                                                                                               ors whos
+                                                                                               e implem
+                                                                                               entation
+                                                                                                they do
+                                                                                               n't cont
+                                                                                               rol, or 
+                                                                                               on const
+                                                                                               ructors 
+                                                                                               that can
+                                                                                                be invo
+                                                                                               ked by o
+                                                                                               ther par
+                                                                                               ties in 
+                                                                                               the     
+C:\dev\mbg-project\node_modules\openai\node_modules\@types\node\crypto.d.ts               1779      * a
+                                                                                               dvantage
+                                                                                                of usin
+                                                                                               g this m
+                                                                                               ethod is
+                                                                                                that th
+                                                                                               e partie
+                                                                                               s do not
+                                                                                                have to
+C:\dev\mbg-project\src\app\(app)\[module]\engagements\new\page.tsx                          32         
+                                                                                                 Create
+                                                                                                an enga
+                                                                                               gement f
+                                                                                               rom a pa
+                                                                                               rty page
+                                                                                                (e.g. <
+                                                                                               code>/{m
+                                                                                               odule}/p
+                                                                                               arties/[
+                                                                                               id]</cod
+                                                                                               e>).    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\new\page.tsx                               2 import {
+                                                                                                PartyFo
+                                                                                               rm } fro
+                                                                                               m '@/com
+                                                                                               ponents/
+                                                                                               parties/
+                                                                                               party-fo
+                                                                                               rm';    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\edit\page.tsx                         2 import {
+                                                                                                PartyFo
+                                                                                               rm } fro
+                                                                                               m '@/com
+                                                                                               ponents/
+                                                                                               parties/
+                                                                                               party-fo
+                                                                                               rm';    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                              2  * app/(
+                                                                                               app)/[mo
+                                                                                               dule]/pa
+                                                                                               rties/[i
+                                                                                               d]/page.
+                                                                                               tsx     
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             12 import {
+                                                                                                PartyHe
+                                                                                               ader } f
+                                                                                               rom '@/c
+                                                                                               omponent
+                                                                                               s/partie
+                                                                                               s/party-
+                                                                                               header';
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             13 import {
+                                                                                                PartySt
+                                                                                               atsGrid 
+                                                                                               } from '
+                                                                                               @/compon
+                                                                                               ents/par
+                                                                                               ties/par
+                                                                                               ty-stats
+                                                                                               -grid'; 
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             14 import {
+                                                                                                PartyCo
+                                                                                               ntactsLi
+                                                                                               st } fro
+                                                                                               m '@/com
+                                                                                               ponents/
+                                                                                               parties/
+                                                                                               party-co
+                                                                                               ntacts-l
+                                                                                               ist';   
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             15 import {
+                                                                                                PartyEn
+                                                                                               gagement
+                                                                                               sList } 
+                                                                                               from '@/
+                                                                                               componen
+                                                                                               ts/parti
+                                                                                               es/party
+                                                                                               -engagem
+                                                                                               ents-lis
+                                                                                               t';     
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             16 import {
+                                                                                                PartyTa
+                                                                                               sksList 
+                                                                                               } from '
+                                                                                               @/compon
+                                                                                               ents/par
+                                                                                               ties/par
+                                                                                               ty-tasks
+                                                                                               -list'; 
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             17 import {
+                                                                                                PartyNo
+                                                                                               tesCard 
+                                                                                               } from '
+                                                                                               @/compon
+                                                                                               ents/par
+                                                                                               ties/par
+                                                                                               ty-notes
+                                                                                               -card'; 
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             18 import {
+                                                                                                Activit
+                                                                                               yTimelin
+                                                                                               e } from
+                                                                                                '@/comp
+                                                                                               onents/p
+                                                                                               arties/a
+                                                                                               ctivity-
+                                                                                               timeline
+                                                                                               ';      
+C:\dev\mbg-project\src\app\(app)\[module]\parties\[id]\page.tsx                             47     redi
+                                                                                               rect(`/$
+                                                                                               {full.pa
+                                                                                               rty.modu
+                                                                                               le}/part
+                                                                                               ies/${id
+                                                                                               }`);    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                  66 export d
+                                                                                               efault a
+                                                                                               sync fun
+                                                                                               ction Pa
+                                                                                               rtiesLis
+                                                                                               tPage({ 
+                                                                                               params }
+                                                                                               : PagePr
+                                                                                               ops) {  
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                  79     .fro
+                                                                                               m('parti
+                                                                                               es' as n
+                                                                                               ever)   
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                  87   const 
+                                                                                               parties 
+                                                                                               = (error
+                                                                                                ? [] : 
+                                                                                               (data ??
+                                                                                                [])) as
+                                                                                                unknown
+                                                                                                as Part
+                                                                                               yRow[]; 
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                  95         
+                                                                                                   총 {p
+                                                                                               arties.l
+                                                                                               ength}개의
+                                                                                                거래처    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                  99         
+                                                                                                 <Link 
+                                                                                               href={`/
+                                                                                               ${module
+                                                                                               }/partie
+                                                                                               s/new`}>
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                 105       {p
+                                                                                               arties.l
+                                                                                               ength ==
+                                                                                               = 0 ? ( 
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                 112         
+                                                                                                     <L
+                                                                                               ink href
+                                                                                               ={`/${mo
+                                                                                               dule}/pa
+                                                                                               rties/ne
+                                                                                               w`}>    
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                 132         
+                                                                                                       
+                                                                                               {parties
+                                                                                               .map((p)
+                                                                                                => {   
+C:\dev\mbg-project\src\app\(app)\[module]\parties\page.tsx                                 144         
+                                                                                                       
+                                                                                                       
+                                                                                                 href={
+                                                                                               `/${modu
+                                                                                               le}/part
+                                                                                               ies/${p.
+                                                                                               id}`}   
+C:\dev\mbg-project\src\components\engagements\engagement-detail-header.tsx                  62         
+                                                                                                   href
+                                                                                               ={`/${en
+                                                                                               gagement
+                                                                                               .partyMo
+                                                                                               dule}/pa
+                                                                                               rties/${
+                                                                                               engageme
+                                                                                               nt.party
+                                                                                               Id}`}   
+C:\dev\mbg-project\src\components\engagements\kanban-card.tsx                               66         
+                                                                                                     hr
+                                                                                               ef={`/${
+                                                                                               card.mod
+                                                                                               ule}/par
+                                                                                               ties/${c
+                                                                                               ard.part
+                                                                                               yId}`}  
+C:\dev\mbg-project\src\components\inbox\communication-detail-view.tsx                       66         
+                                                                                                       
+                                                                                                 href={
+                                                                                               `/${comm
+                                                                                               .party.m
+                                                                                               odule}/p
+                                                                                               arties/$
+                                                                                               {comm.pa
+                                                                                               rty.id}`
+                                                                                               }       
+C:\dev\mbg-project\src\components\layout\sidebar.tsx                                       111         
+                                                                                                   {tNa
+                                                                                               v('parti
+                                                                                               es')}   
+C:\dev\mbg-project\src\components\layout\sidebar.tsx                                       118         
+                                                                                                     hr
+                                                                                               ef={`/${
+                                                                                               mod}/par
+                                                                                               ties`}  
+C:\dev\mbg-project\src\components\parties\party-form.tsx                                    38 import {
+                                                                                                createP
+                                                                                               arty, up
+                                                                                               datePart
+                                                                                               y, delet
+                                                                                               eParty }
+                                                                                                from '@
+                                                                                               /lib/act
+                                                                                               ions/par
+                                                                                               ties';  
+C:\dev\mbg-project\src\components\parties\party-form.tsx                                   178         
+                                                                                                 router
+                                                                                               .push(`/
+                                                                                               ${values
+                                                                                               .module}
+                                                                                               /parties
+                                                                                               /${resul
+                                                                                               t.partyI
+                                                                                               d}`);   
+C:\dev\mbg-project\src\components\parties\party-form.tsx                                   186         
+                                                                                                 router
+                                                                                               .push(`/
+                                                                                               ${values
+                                                                                               .module}
+                                                                                               /parties
+                                                                                               /${exist
+                                                                                               ing.id}`
+                                                                                               );      
+C:\dev\mbg-project\src\components\parties\party-header.tsx                                  41         
+                                                                                                 <Link 
+                                                                                               href={`/
+                                                                                               ${party.
+                                                                                               module}/
+                                                                                               parties`
+                                                                                               } aria-l
+                                                                                               abel="Ba
+                                                                                               ck">    
+C:\dev\mbg-project\src\components\parties\party-header.tsx                                  65         
+                                                                                                 <Link 
+                                                                                               href={`/
+                                                                                               ${party.
+                                                                                               module}/
+                                                                                               parties/
+                                                                                               ${party.
+                                                                                               id}/edit
+                                                                                               `}>     
+C:\dev\mbg-project\src\components\tasks\tasks-table.tsx                                     94         
+                                                                                                       
+                                                                                                     hr
+                                                                                               ef={`/${
+                                                                                               row.part
+                                                                                               yModule}
+                                                                                               /parties
+                                                                                               /${row.p
+                                                                                               artyId}`
+                                                                                               }       
+C:\dev\mbg-project\src\lib\actions\parties.ts                                                2  * lib/a
+                                                                                               ctions/p
+                                                                                               arties.t
+                                                                                               s       
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              100     .fro
+                                                                                               m('parti
+                                                                                               es' as n
+                                                                                               ever)   
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              114   revali
+                                                                                               datePath
+                                                                                               (`/${par
+                                                                                               sed.data
+                                                                                               .module}
+                                                                                               /parties
+                                                                                               `);     
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              161     .fro
+                                                                                               m('parti
+                                                                                               es' as n
+                                                                                               ever)   
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              177   revali
+                                                                                               datePath
+                                                                                               (`/${upd
+                                                                                               ated.mod
+                                                                                               ule}/par
+                                                                                               ties/${p
+                                                                                               arsed.da
+                                                                                               ta.party
+                                                                                               Id}`);  
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              178   revali
+                                                                                               datePath
+                                                                                               (`/${upd
+                                                                                               ated.mod
+                                                                                               ule}/par
+                                                                                               ties`); 
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              202     .fro
+                                                                                               m('parti
+                                                                                               es' as n
+                                                                                               ever)   
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              217   revali
+                                                                                               datePath
+                                                                                               (`/${mod
+                                                                                               ule}/par
+                                                                                               ties`); 
+C:\dev\mbg-project\src\lib\actions\parties.ts                                              218   redire
+                                                                                               ct(`/${m
+                                                                                               odule}/p
+                                                                                               arties`)
+                                                                                               ;       
+C:\dev\mbg-project\src\lib\actions\tasks.ts                                                 64     reva
+                                                                                               lidatePa
+                                                                                               th(`/${'
+                                                                                               investor
+                                                                                               '}/parti
+                                                                                               es/${upd
+                                                                                               ated.par
+                                                                                               ty_id}`)
+                                                                                               ; // 임시 
+                                                                                               — 모듈 모름 
+C:\dev\mbg-project\src\lib\ai\prompt-renderer.ts                                           185     .fro
+                                                                                               m('parti
+                                                                                               es')    
+C:\dev\mbg-project\src\lib\email\header-parser.ts                                          335   // con
+                                                                                               tacts.em
+                                                                                               ail 또는 p
+                                                                                               arties.w
+                                                                                               ebsite에서
+                                                                                                도메인 매칭 
+C:\dev\mbg-project\src\lib\email\processor.ts                                              242       .f
+                                                                                               rom('par
+                                                                                               ties')  
+C:\dev\mbg-project\src\lib\queries\communications.ts                                        68         
+                                                                                                 .from(
+                                                                                               'parties
+                                                                                               ' as nev
+                                                                                               er)     
+C:\dev\mbg-project\src\lib\queries\draft-detail.ts                                           8  *   - p
+                                                                                               arties /
+                                                                                                engagem
+                                                                                               ents    
+C:\dev\mbg-project\src\lib\queries\draft-detail.ts                                         111         
+                                                                                                 .from(
+                                                                                               'parties
+                                                                                               ' as nev
+                                                                                               er)     
+C:\dev\mbg-project\src\lib\queries\drafts.ts                                               154   partie
+                                                                                               s: { nam
+                                                                                               e: strin
+                                                                                               g } | nu
+                                                                                               ll;     
+C:\dev\mbg-project\src\lib\queries\drafts.ts                                               203        p
+                                                                                               arties:p
+                                                                                               arty_id 
+                                                                                               ( name )
+                                                                                               ,       
+C:\dev\mbg-project\src\lib\queries\drafts.ts                                               275   const 
+                                                                                               party = 
+                                                                                               extractF
+                                                                                               irst(raw
+                                                                                               .parties
+                                                                                               );      
+C:\dev\mbg-project\src\lib\queries\engagements.ts                                           10  *   4. 
+                                                                                               parties 
+                                                                                               조인 (이름 표
+                                                                                               시용)     
+C:\dev\mbg-project\src\lib\queries\engagements.ts                                           64   partie
+                                                                                               s: { nam
+                                                                                               e: strin
+                                                                                               g } | nu
+                                                                                               ll;     
+C:\dev\mbg-project\src\lib\queries\engagements.ts                                          119         
+                                                                                                parties
+                                                                                               :party_i
+                                                                                               d ( name
+                                                                                                )`,    
+C:\dev\mbg-project\src\lib\queries\engagements.ts                                          180   const 
+                                                                                               party = 
+                                                                                               Array.is
+                                                                                               Array(r.
+                                                                                               parties)
+                                                                                                ? r.par
+                                                                                               ties[0] 
+                                                                                               : r.part
+                                                                                               ies;    
+C:\dev\mbg-project\src\lib\queries\engagements.ts                                          273       .f
+                                                                                               rom('par
+                                                                                               ties' as
+                                                                                                never) 
+C:\dev\mbg-project\src\lib\queries\inbox.ts                                                116   partie
+                                                                                               s: { nam
+                                                                                               e: strin
+                                                                                               g; modul
+                                                                                               e: Modul
+                                                                                               eType } 
+                                                                                               | null; 
+C:\dev\mbg-project\src\lib\queries\inbox.ts                                                132        p
+                                                                                               arties:p
+                                                                                               arty_id 
+                                                                                               ( name, 
+                                                                                               module )
+                                                                                               `,      
+C:\dev\mbg-project\src\lib\queries\inbox.ts                                                209   const 
+                                                                                               partyArr
+                                                                                                = Array
+                                                                                               .isArray
+                                                                                               (raw.par
+                                                                                               ties) ? 
+                                                                                               raw.part
+                                                                                               ies[0] :
+                                                                                                raw.par
+                                                                                               ties;   
+C:\dev\mbg-project\src\lib\queries\party-detail.ts                                           4  * 거래처(p
+                                                                                               arties) 
+                                                                                               상세 화면 데이
+                                                                                               터 fetch.
+C:\dev\mbg-project\src\lib\queries\party-detail.ts                                           5  *   - p
+                                                                                               arties 행
+                                                                                                본체     
+C:\dev\mbg-project\src\lib\queries\party-detail.ts                                          62     .fro
+                                                                                               m('parti
+                                                                                               es' as n
+                                                                                               ever)   
+C:\dev\mbg-project\src\lib\queries\tasks.ts                                                134   partie
+                                                                                               s: { nam
+                                                                                               e: strin
+                                                                                               g; modul
+                                                                                               e: Modul
+                                                                                               eType } 
+                                                                                               | null; 
+C:\dev\mbg-project\src\lib\queries\tasks.ts                                                152        p
+                                                                                               arties:p
+                                                                                               arty_id 
+                                                                                               ( name, 
+                                                                                               module )
+                                                                                               ,       
+C:\dev\mbg-project\src\lib\queries\tasks.ts                                                223   const 
+                                                                                               party = 
+                                                                                               Array.is
+                                                                                               Array(r.
+                                                                                               parties)
+                                                                                                ? r.par
+                                                                                               ties[0] 
+                                                                                               : r.part
+                                                                                               ies;    
+C:\dev\mbg-project\src\lib\permissions.ts                                                   29   | 'par
+                                                                                               ties'   
+C:\dev\mbg-project\src\types\draft-queue.ts                                                  6  * Draft
+                                                                                               QueueRow
+                                                                                               는 ai.dra
+                                                                                               fts + pa
+                                                                                               rties(na
+                                                                                               me) + co
+                                                                                               ntacts(f
+                                                                                               ull_name
+                                                                                               ) +     
+C:\dev\mbg-project\src\types\email.ts                                                      413  *   3. 
+                                                                                               parties.
+                                                                                               country 
+                                                                                               기본 언어   
+C:\dev\mbg-project\src\types\party-detail.ts                                                 4  * 거래처(p
+                                                                                               arties) 
+                                                                                               상세 화면의 데
+                                                                                               이터 모델.  
+C:\dev\mbg-project\src\types\party-detail.ts                                                15 /** part
+                                                                                               ies.tier
+                                                                                                CHECK 제
+                                                                                               약과 일치. *
+                                                                                               /       
+C:\dev\mbg-project\src\types\party-detail.ts                                                18 /** part
+                                                                                               ies.stat
+                                                                                               us CHECK
+                                                                                                제약과 일치.
+                                                                                                */     
+C:\dev\mbg-project\src\__tests__\email\processor.test.ts                                   111     'app
+                                                                                               .parties
+                                                                                               ': {    
+C:\dev\mbg-project\src\__tests__\step4\action-schemas.test.ts                               16   // src
+                                                                                               /lib/act
+                                                                                               ions/par
+                                                                                               ties.ts와
+                                                                                                동일한 규칙 
+                                                                                               재정의     
+
+

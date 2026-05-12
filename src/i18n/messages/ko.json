@@ -1,0 +1,597 @@
+{
+  "common": {
+    "appName": "URM Platform",
+    "loading": "로딩 중...",
+    "saving": "저장 중...",
+    "save": "저장",
+    "cancel": "취소",
+    "confirm": "확인",
+    "delete": "삭제",
+    "edit": "편집",
+    "create": "생성",
+    "search": "검색",
+    "filter": "필터",
+    "all": "전체",
+    "yes": "예",
+    "no": "아니오",
+    "back": "뒤로",
+    "next": "다음",
+    "previous": "이전",
+    "submit": "제출",
+    "close": "닫기",
+    "refresh": "새로고침",
+    "noResults": "결과가 없습니다",
+    "errorTitle": "오류가 발생했습니다",
+    "errorRetry": "다시 시도",
+    "unauthorized": "권한이 없습니다",
+    "loginRequired": "로그인이 필요합니다",
+    "language": "언어",
+    "settings": "설정",
+    "profile": "프로필",
+    "signOut": "로그아웃",
+    "search_placeholder": "검색어를 입력하세요..."
+  },
+  "nav": {
+    "dashboard": "대시보드",
+    "inbox": "수신함",
+    "drafts": "AI 초안",
+    "parties": "거래처",
+    "engagements": "딜",
+    "tasks": "할 일",
+    "settings": "설정"
+  },
+  "modules": {
+    "investor": "투자자",
+    "buyer": "구매처",
+    "partner": "파트너",
+    "customer": "고객",
+    "crowdfunding": "크라우드펀딩",
+    "product_launch": "제품 출시",
+    "sales": "판매"
+  },
+  "draftStatus": {
+    "pending_review": "검토 대기",
+    "approved": "승인됨",
+    "sent": "발송됨",
+    "rejected": "거부됨",
+    "expired": "만료됨",
+    "auto_sent": "자동 발송"
+  },
+  "classificationCategory": {
+    "information_request": "정보 요청",
+    "meeting_scheduling": "미팅 일정",
+    "simple_acknowledgment": "단순 확인",
+    "price_negotiation": "가격 협상",
+    "contract_terms": "계약 조건",
+    "rejection": "거절",
+    "complaint": "항의",
+    "introduction": "소개",
+    "follow_up": "후속",
+    "other": "기타"
+  },
+  "confidence": {
+    "low": "낮음",
+    "medium": "보통",
+    "high": "높음"
+  },
+  "auth": {
+    "signIn": "로그인",
+    "signInTitle": "URM Platform에 로그인",
+    "email": "이메일",
+    "password": "비밀번호",
+    "signInButton": "로그인",
+    "signingIn": "로그인 중..."
+  },
+  "drafts": {
+    "queueTitle": "AI 초안 큐",
+    "queueDescription": "검토 대기 중인 AI 생성 회신",
+    "columns": {
+      "status": "상태",
+      "module": "모듈",
+      "party": "거래처",
+      "subject": "제목",
+      "category": "분류",
+      "confidence": "신뢰도",
+      "risk": "위험",
+      "expires": "만료",
+      "created": "생성"
+    },
+    "filters": {
+      "status": "상태",
+      "allStatuses": "전체 상태",
+      "module": "모듈",
+      "allModules": "전체 모듈",
+      "category": "분류",
+      "allCategories": "전체 분류",
+      "confidence": "신뢰도 (최소)",
+      "anyConfidence": "전체",
+      "onlyRisky": "위험 표시만",
+      "reset": "초기화",
+      "sort": "정렬"
+    },
+    "sort": {
+      "urgent": "긴급 우선 (신뢰도 낮음 + 만료 임박)",
+      "newest": "최신순",
+      "oldest": "오래된 순",
+      "confidenceHigh": "신뢰도 높은 순",
+      "expiringSoon": "만료 임박 순"
+    },
+    "bulk": {
+      "selected": "{count}개 선택됨",
+      "approveSelected": "일괄 승인",
+      "rejectSelected": "일괄 거부",
+      "clear": "선택 해제",
+      "approveNote": "편집 중인 초안은 제외됩니다"
+    },
+    "empty": {
+      "title": "검토할 초안이 없습니다",
+      "description": "수신함에 새 메일이 도착하면 AI가 자동으로 초안을 생성합니다."
+    },
+    "emptyFiltered": {
+      "title": "조건에 맞는 초안이 없습니다",
+      "description": "필터를 초기화하거나 다른 조건을 시도해 보세요."
+    },
+    "preview": {
+      "from": "발신자",
+      "noParty": "(거래처 미지정)"
+    },
+    "expiry": {
+      "expired": "만료됨",
+      "today": "오늘 만료",
+      "daysLeft": "{days}일 남음",
+      "hoursLeft": "{hours}시간 남음"
+    },
+    "pagination": {
+      "page": "페이지",
+      "of": "/",
+      "rowsPerPage": "페이지당 행",
+      "total": "총 {count}건"
+    }
+  },
+  "draftDetail": {
+    "backToQueue": "큐로 돌아가기",
+    "noSubject": "(제목 없음)",
+    "classification": {
+      "title": "AI 분류",
+      "category": "분류",
+      "confidence": "신뢰도",
+      "riskFlags": "위험 표시",
+      "rationale": "근거",
+      "humanRequired": "사람 검토 필요"
+    },
+    "autoSend": {
+      "title": "자동 발송 평가",
+      "eligible": "자동 발송 가능",
+      "held": "사람 검토 대기",
+      "blockedReasons": "차단 사유",
+      "ruleApplied": "적용 규칙",
+      "minConfidence": "최소 신뢰도",
+      "active": "활성",
+      "killSwitch": "Kill switch"
+    },
+    "metadata": {
+      "title": "AI 런 메타",
+      "totalCost": "총 비용",
+      "totalLatency": "총 지연",
+      "classifier": "분류기",
+      "drafter": "회신 생성기",
+      "model": "모델",
+      "tokens": "입력 / 출력",
+      "cost": "비용",
+      "latency": "지연",
+      "editDistance": "편집 거리",
+      "editDistanceHint": "사람 편집 vs AI 원본 (낮을수록 AI 출력 보존)"
+    },
+    "inbound": {
+      "title": "원본 메일",
+      "from": "발신자",
+      "to": "수신자",
+      "cc": "참조",
+      "when": "시각",
+      "subject": "제목",
+      "noInbound": "연결된 인바운드 메일이 없습니다."
+    },
+    "editor": {
+      "title": "회신",
+      "edit": "편집",
+      "diff": "변경",
+      "subject": "제목",
+      "body": "본문",
+      "save": "저장",
+      "unsavedChanges": "저장되지 않은 변경",
+      "noUnsaved": "변경 없음",
+      "savedEditDistance": "저장된 편집 거리: {distance}",
+      "chars": "{count}자",
+      "readOnlyHint": "{status} 상태인 초안은 편집할 수 없습니다."
+    },
+    "actions": {
+      "approve": "승인",
+      "reject": "거부",
+      "approveTitle": "이 초안을 승인하시겠습니까?",
+      "approveDescription": "이 초안은 승인됨으로 표시되고 {action}됩니다.",
+      "approveActionSendNow": "즉시 발송",
+      "approveActionQueue": "추후 발송 대기",
+      "approveAndSend": "승인 후 발송",
+      "approveOnly": "승인만",
+      "rejectTitle": "이 초안을 거부하시겠습니까?",
+      "rejectDescription": "거부됨으로 표시되고 원본 메일은 수동 회신용으로 받은 편지함에 남습니다.",
+      "rejectReason": "사유",
+      "rejectNotes": "메모",
+      "cancel": "취소",
+      "sendImmediately": "즉시 발송",
+      "noInboundHint": "연결된 인바운드 메일 없음 — 발송 건너뜀.",
+      "diffNoChange": "AI 원본에서 변경 없음.",
+      "rejectReasons": {
+        "outdated_request": "오래된 / 더 이상 유효하지 않음",
+        "off_topic": "이 연락처에 부적합",
+        "wrong_tone": "톤 / 격식 부적합",
+        "incorrect_info": "잘못된 정보 포함",
+        "other": "기타 (아래에 명시)"
+      }
+    },
+    "diff": {
+      "noChanges": "AI 원본에서 변경 없음."
+    },
+    "toasts": {
+      "draftSaved": "초안이 저장되었습니다",
+      "saveFailed": "초안 저장 실패",
+      "approvedAndSent": "승인 및 발송 완료",
+      "approvedNotSent": "승인됨 (아직 발송 안 됨)",
+      "approveFailed": "승인 실패",
+      "rejected": "초안이 거부되었습니다",
+      "rejectFailed": "거부 실패"
+    }
+  },
+  "inbox": {
+    "queueTitle": "받은 편지함",
+    "queueDescription": "모든 통신 (인바운드 + 아웃바운드)",
+    "search": "검색",
+    "searchPlaceholder": "제목, 본문 검색...",
+    "noSubject": "(제목 없음)",
+    "aiDraft": "AI 초안",
+    "aiSent": "AI 발송",
+    "channels": {
+      "email": "이메일",
+      "slack": "Slack",
+      "sms": "SMS",
+      "phone": "전화",
+      "other": "기타"
+    },
+    "directions": {
+      "inbound": "수신",
+      "outbound": "발신"
+    },
+    "filters": {
+      "channel": "채널",
+      "allChannels": "전체 채널",
+      "direction": "방향",
+      "allDirections": "전체 방향",
+      "hasDraft": "AI 초안 있음",
+      "reset": "초기화"
+    },
+    "empty": {
+      "title": "메시지가 없습니다",
+      "description": "받은 메일이나 발송한 메시지가 여기에 표시됩니다."
+    },
+    "emptyFiltered": {
+      "title": "조건에 맞는 메시지가 없습니다",
+      "description": "필터를 초기화하거나 검색어를 변경해 보세요."
+    },
+    "detail": {
+      "from": "발신자",
+      "to": "수신자",
+      "cc": "참조",
+      "when": "시각",
+      "party": "거래처",
+      "messageId": "Message-ID",
+      "threadId": "Thread-ID",
+      "body": "본문",
+      "noSubject": "(제목 없음)",
+      "noBody": "본문 없음",
+      "failed": "발송 실패",
+      "generatedDrafts": "이 메시지에서 생성된 AI 초안",
+      "viewSourceDraft": "원본 초안 보기"
+    }
+  },
+  "partyDetail": {
+    "stats": {
+      "contacts": "컨택트",
+      "communications": "통신",
+      "pendingDrafts": "대기 초안",
+      "openEngagements": "진행 중 인게이지먼트",
+      "openTasks": "열린 태스크"
+    },
+    "contacts": {
+      "title": "컨택트",
+      "empty": "등록된 컨택트가 없습니다."
+    },
+    "engagements": {
+      "title": "인게이지먼트",
+      "empty": "진행 중인 인게이지먼트가 없습니다."
+    },
+    "tasks": {
+      "title": "태스크",
+      "empty": "열린 태스크가 없습니다."
+    },
+    "timeline": {
+      "title": "활동 타임라인",
+      "empty": "최근 활동이 없습니다."
+    },
+    "notes": {
+      "title": "메모"
+    }
+  },
+  "engagements": {
+    "queueTitle": "Kanban 보드",
+    "queueDescription": "{pipeline} 파이프라인의 진행 중 인게이지먼트",
+    "noPipeline": "이 모듈에 활성 파이프라인이 없습니다",
+    "totalLabel": "총 인게이지먼트",
+    "uncategorized": "미분류",
+    "emptyStage": "이 단계에 카드 없음",
+    "weightedSum": "가중치 합계: {value}",
+    "card": {
+      "open": "열기"
+    },
+    "empty": {
+      "pipelineMissingTitle": "파이프라인 미설정",
+      "pipelineMissingDescription": "{module} 모듈에 활성 파이프라인이 없습니다. 설정에서 파이프라인을 생성하세요.",
+      "configurePipeline": "파이프라인 설정",
+      "noEngagementsTitle": "인게이지먼트가 없습니다",
+      "noEngagementsDescription": "거래처에서 새 인게이지먼트를 만들면 여기에 표시됩니다."
+    },
+    "detail": {
+      "info": "정보",
+      "value": "가치",
+      "probability": "확률",
+      "weighted": "가중치",
+      "expectedClose": "예상 마감",
+      "actualClose": "실제 마감",
+      "source": "출처",
+      "description": "설명",
+      "wonLostReason": "Won/Lost 사유",
+      "updatedAt": "마지막 갱신",
+      "mover": {
+        "title": "단계 이동",
+        "selectStage": "단계 선택",
+        "move": "이동",
+        "moveSucceeded": "단계가 변경되었습니다",
+        "moveFailed": "단계 이동 실패"
+      },
+      "history": {
+        "title": "단계 이력",
+        "empty": "이동 이력이 없습니다",
+        "initial": "(초기)"
+      }
+    },
+    "toast": {
+      "movedToWon": "{name} — 🏆 성공으로 마감",
+      "movedToLost": "{name} — 실패로 마감"
+    }
+  },
+  "tasks": {
+    "queueTitle": "태스크",
+    "queueDescription": "할 일 목록 — 우선순위·만료·완료 관리",
+    "status": {
+      "open": "열린 항목",
+      "all": "전체",
+      "todo": "할 일",
+      "in_progress": "진행 중",
+      "blocked": "차단됨",
+      "done": "완료",
+      "cancelled": "취소됨"
+    },
+    "priority": {
+      "urgent": "긴급",
+      "high": "높음",
+      "medium": "보통",
+      "low": "낮음"
+    },
+    "filters": {
+      "status": "상태",
+      "allStatuses": "전체 상태",
+      "priority": "우선순위",
+      "allPriorities": "전체 우선순위",
+      "sort": "정렬",
+      "overdueOnly": "기한 초과만",
+      "reset": "초기화"
+    },
+    "sort": {
+      "due_soonest": "마감 임박 순",
+      "priority": "우선순위 순",
+      "newest": "최신순",
+      "oldest": "오래된 순"
+    },
+    "empty": {
+      "title": "태스크가 없습니다",
+      "description": "거래처나 인게이지먼트 페이지에서 태스크를 추가할 수 있습니다.",
+      "fallback": "—"
+    },
+    "emptyFiltered": {
+      "title": "조건에 맞는 태스크가 없습니다",
+      "description": "필터를 초기화하거나 다른 조건을 시도해 보세요."
+    }
+  },
+  "settings": {
+    "nav": {
+      "profile": "프로필",
+      "language": "언어",
+      "notifications": "알림",
+      "organization": "조직"
+    },
+    "profile": {
+      "title": "프로필",
+      "description": "본인 정보와 발신 메일 설정",
+      "emailLabel": "이메일 (로그인 ID)",
+      "emailHint": "이메일은 변경할 수 없습니다",
+      "fullName": "전체 이름",
+      "displayName": "표시 이름",
+      "displayNameHint": "비워두면 전체 이름이 사용됩니다",
+      "sendingEmail": "발신 이메일",
+      "sendingEmailHint": "AI 회신이 이 주소에서 발송됩니다 (비워두면 로그인 이메일 사용)",
+      "save": "저장",
+      "saved": "저장되었습니다"
+    },
+    "language": {
+      "title": "언어",
+      "description": "선호 언어 — UI 및 AI 회신 기본 언어",
+      "save": "저장",
+      "saved": "언어가 변경되었습니다"
+    },
+    "notifications": {
+      "title": "브라우저 알림",
+      "description": "새 AI 초안 도착 시 데스크톱 알림 (Q9 — 기본 꺼짐)",
+      "toggle": "데스크톱 알림 받기",
+      "requestPermission": "권한 요청",
+      "enabled": "알림이 활성화되었습니다",
+      "disabled": "알림이 비활성화되었습니다",
+      "permissionDenied": "브라우저 설정에서 알림 권한이 차단되었습니다",
+      "notSupported": "이 브라우저는 알림을 지원하지 않습니다",
+      "grantedHint": "권한이 허용되어 알림을 받을 수 있습니다"
+    },
+    "organization": {
+      "title": "조직",
+      "description": "현재 소속 조직 정보",
+      "name": "조직명",
+      "organizationId": "조직 ID",
+      "role": "역할",
+      "owner": "소유자",
+      "member": "구성원",
+      "phase1Notice": "Phase 1은 단일 조직만 지원합니다. 사용자 초대·역할 변경은 Phase 2에서 제공됩니다."
+    }
+  },
+  "realtime": {
+    "newDraft": "새 AI 초안이 도착했습니다",
+    "newDraftTitle": "URM — 새 초안",
+    "newDraftBody": "AI가 새 회신 초안을 생성했습니다. 검토 큐에서 확인하세요."
+  },
+  "partyForm": {
+    "industryTags": "산업 태그",
+    "industryTagsPlaceholder": "Venture Capital, Software, ...",
+    "industryTagsHint": "콤마(,)로 구분해서 입력하세요",
+    "interestTags": "관심 태그",
+    "interestTagsPlaceholder": "Early Stage, AI, Growth, ...",
+    "interestTagsHint": "콤마(,)로 구분해서 입력하세요. 거래처가 관심을 가지는 분야.",
+    "createTitle": "새 거래처",
+    "editTitle": "거래처 편집",
+    "createDescription": "신규 거래처 추가 — 투자자, 바이어, 파트너, 고객 등",
+    "editDescription": "거래처 정보 수정",
+    "name": "이름",
+    "module": "모듈",
+    "partyType": "유형",
+    "tier": "Tier",
+    "tiers": {
+      "tier_1": "Tier 1 — 핵심",
+      "tier_2": "Tier 2 — 중요",
+      "tier_3": "Tier 3 — 일반",
+      "cold": "Cold — 초기"
+    },
+    "partyTypes": {
+      "company": "회사",
+      "individual": "개인",
+      "organization": "단체"
+    },
+    "legalName": "법인명",
+    "legalNamePlaceholder": "주식회사 / Inc. / LLC ...",
+    "countryCode": "국가 코드",
+    "region": "지역",
+    "city": "도시",
+    "website": "웹사이트",
+    "industry": "산업",
+    "industryTags": "태그",
+    "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
+    "industryTagsHint": "쉼표로 구분",
+    "source": "출처",
+    "sourcePlaceholder": "LinkedIn, 추천, 콘퍼런스 ...",
+    "notes": "메모",
+    "create": "생성",
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "created": "거래처가 생성되었습니다",
+    "updated": "저장되었습니다",
+    "saveFailed": "저장 실패",
+    "deleteFailed": "삭제 실패",
+    "deleteConfirmTitle": "거래처를 삭제하시겠습니까?",
+    "deleteConfirmDescription": "\"{name}\"을(를) 삭제합니다. 관련 컨택트·인게이지먼트·태스크는 보존되지만 이 거래처는 목록에서 사라집니다.",
+    "deleteConfirm": "삭제"
+  },
+  "engagementForm": {
+    "createTitle": "새 인게이지먼트",
+    "editTitle": "인게이지먼트 편집",
+    "createDescription": "{party}와(과)의 새 딜",
+    "createDescriptionGeneric": "새 인게이지먼트",
+    "editDescription": "{party}의 인게이지먼트 수정",
+    "name": "이름",
+    "namePlaceholder": "Q3 시리즈 A, 5만개 박스 견적 ...",
+    "description": "설명",
+    "value": "가치",
+    "currency": "통화",
+    "probability": "확률 (%)",
+    "probabilityHint": "0~100",
+    "expectedClose": "예상 마감일",
+    "source": "출처",
+    "sourcePlaceholder": "Inbound, 추천, 콘퍼런스 ...",
+    "create": "생성",
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "created": "인게이지먼트가 생성되었습니다",
+    "updated": "저장되었습니다",
+    "deleted": "삭제되었습니다",
+    "saveFailed": "저장 실패",
+    "deleteFailed": "삭제 실패",
+    "partyRequired": "거래처가 필요합니다",
+    "deleteConfirmTitle": "인게이지먼트를 삭제하시겠습니까?",
+    "deleteConfirmDescription": "\"{name}\"을(를) 삭제합니다. 단계 이력은 보존됩니다.",
+    "deleteConfirm": "삭제"
+  },
+  "contactForm": {
+    "createTitle": "컨택트 추가",
+    "editTitle": "컨택트 편집",
+    "createDescription": "이 거래처의 새 담당자",
+    "editDescription": "담당자 정보 수정",
+    "fullName": "이름",
+    "title": "직책",
+    "email": "이메일",
+    "phone": "전화",
+    "isPrimary": "주 담당자로 설정",
+    "notes": "메모",
+    "create": "추가",
+    "save": "저장",
+    "cancel": "취소",
+    "created": "컨택트가 추가되었습니다",
+    "updated": "저장되었습니다",
+    "saveFailed": "저장 실패"
+  },
+  "taskForm": {
+    "createTitle": "새 태스크",
+    "editTitle": "태스크 편집",
+    "createDescription": "할 일 추가",
+    "editDescription": "태스크 정보 수정",
+    "title": "제목",
+    "titlePlaceholder": "샘플 발송, 견적 검토 ...",
+    "description": "설명",
+    "priority": "우선순위",
+    "dueAt": "마감",
+    "create": "추가",
+    "save": "저장",
+    "cancel": "취소",
+    "created": "태스크가 추가되었습니다",
+    "updated": "저장되었습니다",
+    "saveFailed": "저장 실패"
+  },
+  "compose": {
+    "title": "새 메일",
+    "description": "수동 발송 — 등록된 SMTP로 직접 전송",
+    "to": "받는 사람",
+    "cc": "참조",
+    "ccPlaceholder": "추가 수신자 (쉼표 구분)",
+    "ccHint": "쉼표 또는 세미콜론으로 구분",
+    "subject": "제목",
+    "body": "본문",
+    "send": "발송",
+    "cancel": "취소",
+    "sent": "발송 완료",
+    "sendFailed": "발송 실패"
+  }
+}

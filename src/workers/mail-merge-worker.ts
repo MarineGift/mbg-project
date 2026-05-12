@@ -1,302 +1,301 @@
+/**
+ * workers/mail-merge-worker.ts
+ *
+ * mail_merge_jobs 테이블을 폴링해 큐에 들어온 잡을 처리:
+ *   1. 잡 상태가 queued이고 scheduled_at이 도달한 잡 N건 fetch
+ *   2. tabs_campaign_id가 없으면 TABS Mailer createCampaign 호출
+ *   3. 잡 상태를 running으로 갱신
+ *   4. 통계 동기화 (syncCampaignToMergeJob) — 별도 5분 주기 권장이나 본 워커가 함께 수행
+ *   5. 실패 시 exponential backoff retry (max_retries 도달 시 status='failed')
+ *
+ * 수신자 명단 해석(recipient_filter jsonb → SQL → 발송)은 STEP 7 운영 정보 수령 후
+ * 추가. 본 STEP 3에서는 캠페인 등록·상태 동기화에 집중.
+ */
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
-import { TabsMailerClient } from '@/lib/email/tabs-mailer';
-import type {
-  CampaignRecipient,
-  CreateCampaignInput,
-  QuietHours,
-} from '@/types/email';
+import { env } from '../lib/env';
+import {
+  createTabsMailer,
+  TabsMailerError,
+  TabsMailerNotImplementedError,
+  type ITabsMailerClient,
+} from '../lib/email/tabs-mailer';
+import { evaluateQuietHours } from '../lib/email/quiet-hours';
+import {
+  mapMailMergeJobRow,
+  type MailMergeJobRow,
+} from '../types/email';
+import { createShutdownController, isMainEntry } from './runtime';
 
 const POLL_INTERVAL_MS = 10_000;
 const BATCH_SIZE = 5;
-const MAX_RETRY_COUNT = 5;
+const STATS_SYNC_BATCH_SIZE = 10;
 
-export class MailMergeWorkerError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
-    super(message);
-    this.name = 'MailMergeWorkerError';
-  }
+export interface ProcessJobOptions {
+  /** 단위 테스트에서 TabsMailer를 주입. */
+  mailer?: ITabsMailerClient;
+  /** 시각 고정. */
+  nowProvider?: () => Date;
 }
 
-export async function pickAndProcessOnce(
-  supabase: SupabaseClient,
-  tabsClient: TabsMailerClient,
-): Promise<{ processed: number; failed: number }> {
-  const nowIso = new Date().toISOString();
-  const { data: jobs, error } = await supabase
-    .schema('app')
-    .from('mail_merge_jobs')
-    .select('*')
-    .eq('status', 'queued')
-    .lte('scheduled_at', nowIso)
-    .order('scheduled_at', { ascending: true })
-    .limit(BATCH_SIZE);
-
-  if (error) {
-    throw new MailMergeWorkerError(
-      `mail_merge_jobs query failed: ${error.message}`,
-      error,
-    );
-  }
-
-  if (!jobs || jobs.length === 0) {
-    return { processed: 0, failed: 0 };
-  }
-
-  let processed = 0;
-  let failed = 0;
-
-  for (const jobRaw of jobs as Array<Record<string, unknown>>) {
-    try {
-      await processOneJob(supabase, tabsClient, jobRaw);
-      processed += 1;
-    } catch (err) {
-      failed += 1;
-      await markJobFailed(supabase, jobRaw, err as Error);
-    }
-  }
-
-  return { processed, failed };
+export interface ProcessJobResult {
+  jobId: string;
+  status: 'started' | 'rescheduled_quiet_hours' | 'failed' | 'skipped';
+  tabsCampaignId?: string;
+  errorMessage?: string;
+  nextSendAt?: string;
 }
 
-async function processOneJob(
+/* ============================================================
+ * 1. processOneJob — 단일 잡 처리 (테스트 표면)
+ * ============================================================ */
+
+export async function processOneJob(
   supabase: SupabaseClient,
-  tabsClient: TabsMailerClient,
-  job: Record<string, unknown>,
-): Promise<void> {
-  const jobId = String(job.id);
-  const organizationId = String(job.organization_id);
-  const retryCount = Number(job.retry_count ?? 0);
+  job: MailMergeJobRow,
+  options: ProcessJobOptions = {},
+): Promise<ProcessJobResult> {
+  const now = options.nowProvider ?? (() => new Date());
 
-  // [1] running 락
-  const { data: locked, error: lockErr } = await supabase
-    .schema('app')
-    .from('mail_merge_jobs')
-    .update({
-      status: 'running',
-      started_at: new Date().toISOString(),
-    })
-    .eq('id', jobId)
-    .eq('status', 'queued')
-    .select('id')
-    .maybeSingle();
-
-  if (lockErr || !locked) {
-    return;
+  // 컴플라이언스: legal 승인이 필요한데 미승인이면 skip
+  if (job.requiresLegalApproval && !job.legalApprovedAt) {
+    return {
+      jobId: job.id,
+      status: 'skipped',
+      errorMessage: 'legal_approval_pending',
+    };
   }
 
-  // [2] recipients 조회
-  const { data: recipientRows, error: recipErr } = await supabase
-    .schema('app')
-    .from('mail_merge_recipients')
-    .select(
-      'id, communication_id, party_id, contact_id, to_email, to_name, variables',
-    )
-    .eq('mail_merge_job_id', jobId)
-    .is('sent_at', null);
-
-  if (recipErr) {
-    throw new MailMergeWorkerError(
-      `mail_merge_recipients query failed: ${recipErr.message}`,
-    );
-  }
-
-  const recipients: CampaignRecipient[] = (recipientRows ?? []).map(
-    (r: Record<string, unknown>) => ({
-      partyId: optStr(r.party_id),
-      contactId: optStr(r.contact_id),
-      communicationId: String(r.communication_id),
-      to: {
-        address: String(r.to_email),
-        name: optStr(r.to_name),
-      },
-      variables: (r.variables as Record<string, string | number>) ?? {},
-    }),
-  );
-
-  if (recipients.length === 0) {
+  // Quiet hours 사전 검증 — 진입 시 차단되면 next_send_at으로 미루기
+  const quiet = evaluateQuietHours(job.quietHours, now());
+  if (quiet.blocked) {
     await supabase
       .schema('app')
       .from('mail_merge_jobs')
       .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
+        scheduled_at: quiet.nextAllowedAt ?? new Date(now().getTime() + 30 * 60_000).toISOString(),
+        last_error_message: `quiet_hours_blocked:${quiet.reason ?? 'unknown'}`,
       })
-      .eq('id', jobId);
-    return;
+      .eq('id', job.id)
+      .eq('organization_id', job.organizationId);
+
+    return {
+      jobId: job.id,
+      status: 'rescheduled_quiet_hours',
+      nextSendAt: quiet.nextAllowedAt,
+    };
   }
 
-  // [3] 캠페인 생성·발송
-  const campaignInput: CreateCampaignInput = {
-    name: String(job.name ?? `merge-${jobId}`),
-    mergeJobId: jobId,
-    fromAddress: String(job.from_address),
-    fromName: optStr(job.from_name),
-    replyToAddress: optStr(job.reply_to_address),
-    subjectTemplate: String(job.subject_template ?? ''),
-    bodyHtmlTemplate: optStr(job.body_html_template),
-    bodyPlainTemplate: optStr(job.body_plain_template),
-    recipients,
-    scheduledAt: optStr(job.scheduled_at),
-    rateLimitPerMinute: optNum(job.rate_limit_per_minute),
-    rateLimitPerHour: optNum(job.rate_limit_per_hour),
-    quietHours: parseQuietHours(job.quiet_hours),
-    urmCampaignHeaders: {
-      autoSend: false,
-      engagementId: optStr(job.engagement_id),
-      brandVoiceId: optStr(job.brand_voice_id),
-    },
-  };
-
-  const result = await tabsClient.createCampaign(campaignInput);
-
-  // [4] 캠페인 ID·진행 상태 갱신
-  const allRejected = result.rejectedCount === recipients.length;
-  await supabase
-    .schema('app')
-    .from('mail_merge_jobs')
-    .update({
-      tabs_campaign_id: result.tabsCampaignId,
-      status: allRejected ? 'failed' : 'completed',
-      completed_at: new Date().toISOString(),
-      retry_count: retryCount,
-    })
-    .eq('id', jobId);
-
-  // [5] recipients sent_at
-  await supabase
-    .schema('app')
-    .from('mail_merge_recipients')
-    .update({ sent_at: new Date().toISOString() })
-    .eq('mail_merge_job_id', jobId)
-    .is('sent_at', null);
+  const mailer = options.mailer ?? (await createTabsMailer());
 
   try {
-    await tabsClient.syncCampaignToMergeJob(jobId);
-  } catch {
-    // ignore
-  }
+    // 캠페인 미등록이면 등록
+    let tabsCampaignId = job.tabsCampaignId;
+    if (!tabsCampaignId) {
+      const created = await mailer.createCampaign({
+        name: job.name,
+        description: job.description,
+        templateId: job.templateId,
+        scheduledAt: job.scheduledAt ? new Date(job.scheduledAt) : undefined,
+        recipientCount: job.estimatedRecipientCount ?? 0,
+        fromAddress: job.fromAddress,
+        fromName: job.fromName,
+        replyToAddress: job.replyToAddress,
+      });
+      tabsCampaignId = created.tabsCampaignId;
 
-  void organizationId;
+      await supabase
+        .schema('app')
+        .from('mail_merge_jobs')
+        .update({
+          tabs_campaign_id: tabsCampaignId,
+          tabs_campaign_status: 'created',
+          status: 'running',
+          started_at: now().toISOString(),
+        })
+        .eq('id', job.id)
+        .eq('organization_id', job.organizationId);
+    }
+
+    return {
+      jobId: job.id,
+      status: 'started',
+      tabsCampaignId,
+    };
+  } catch (err) {
+    return await handleJobFailure(supabase, job, err, now());
+  }
 }
 
-async function markJobFailed(
+/* ============================================================
+ * 2. 실패 처리 — exponential backoff
+ * ============================================================ */
+
+async function handleJobFailure(
   supabase: SupabaseClient,
-  job: Record<string, unknown>,
-  err: Error,
-): Promise<void> {
-  const jobId = String(job.id);
-  const newRetryCount = Number(job.retry_count ?? 0) + 1;
-  const finalFail = newRetryCount >= MAX_RETRY_COUNT;
+  job: MailMergeJobRow,
+  err: unknown,
+  now: Date,
+): Promise<ProcessJobResult> {
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  const newRetryCount = job.retryCount + 1;
+  const isPermanent = err instanceof TabsMailerNotImplementedError;
+  const maxRetriesReached = newRetryCount >= job.maxRetries;
+  const shouldFail = isPermanent || maxRetriesReached;
+
+  const backoffSec = Math.min(Math.pow(2, newRetryCount) * 60, 3600);
+  const rescheduleAt = new Date(now.getTime() + backoffSec * 1000).toISOString();
 
   await supabase
     .schema('app')
     .from('mail_merge_jobs')
     .update({
-      status: finalFail ? 'failed' : 'queued',
+      status: shouldFail ? 'failed' : 'queued',
       retry_count: newRetryCount,
-      last_error_message: err.message,
-      last_error_at: new Date().toISOString(),
-      scheduled_at: finalFail
-        ? null
-        : new Date(Date.now() + 60_000 * newRetryCount).toISOString(),
+      error_message: errorMessage,
+      last_error_at: now.toISOString(),
+      scheduled_at: shouldFail ? job.scheduledAt : rescheduleAt,
     })
-    .eq('id', jobId);
+    .eq('id', job.id)
+    .eq('organization_id', job.organizationId);
 
-  // eslint-disable-next-line no-console
-  console.error(
-    `[mail-merge-worker] job ${jobId} failed (retry=${newRetryCount}): ${err.message}`,
-  );
-}
-
-function optStr(v: unknown): string | undefined {
-  if (v === null || v === undefined) return undefined;
-  return String(v);
-}
-
-function optNum(v: unknown): number | undefined {
-  if (v === null || v === undefined) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function parseQuietHours(v: unknown): QuietHours | undefined {
-  if (!v || typeof v !== 'object') return undefined;
-  const r = v as Record<string, unknown>;
-  if (
-    typeof r.timezone !== 'string'
-    || typeof r.start !== 'string'
-    || typeof r.end !== 'string'
-  ) {
-    return undefined;
-  }
   return {
-    timezone: r.timezone,
-    start: r.start,
-    end: r.end,
-    daysOfWeek: Array.isArray(r.daysOfWeek)
-      ? (r.daysOfWeek as number[])
-      : Array.isArray(r.days_of_week)
-        ? (r.days_of_week as number[])
-        : undefined,
+    jobId: job.id,
+    status: 'failed',
+    errorMessage,
+    nextSendAt: shouldFail ? undefined : rescheduleAt,
   };
 }
+
+/* ============================================================
+ * 3. processQueueBatch — 큐 일괄 처리
+ * ============================================================ */
+
+export async function processQueueBatch(
+  supabase: SupabaseClient,
+  options: ProcessJobOptions = {},
+): Promise<ProcessJobResult[]> {
+  const now = options.nowProvider ?? (() => new Date());
+
+  const { data: jobsRaw, error } = await supabase
+    .schema('app')
+    .from('mail_merge_jobs')
+    .select('*')
+    .eq('status', 'queued')
+    .lte('scheduled_at', now().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(BATCH_SIZE);
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[mail-merge-worker] queue fetch failed:', error);
+    return [];
+  }
+
+  if (!jobsRaw || jobsRaw.length === 0) return [];
+
+  const results: ProcessJobResult[] = [];
+  for (const raw of jobsRaw) {
+    const job = mapMailMergeJobRow(raw as Record<string, unknown>);
+    const r = await processOneJob(supabase, job, options);
+    results.push(r);
+  }
+  return results;
+}
+
+/* ============================================================
+ * 4. syncRunningCampaigns — 진행 중인 캠페인 통계 동기화
+ * ============================================================ */
+
+export async function syncRunningCampaigns(
+  supabase: SupabaseClient,
+  organizationIds: string[],
+  options: ProcessJobOptions = {},
+): Promise<{ synced: number; failed: number }> {
+  if (organizationIds.length === 0) return { synced: 0, failed: 0 };
+
+  const { data: jobsRaw } = await supabase
+    .schema('app')
+    .from('mail_merge_jobs')
+    .select('id, organization_id, tabs_campaign_id')
+    .eq('status', 'running')
+    .in('organization_id', organizationIds)
+    .not('tabs_campaign_id', 'is', null)
+    .limit(STATS_SYNC_BATCH_SIZE);
+
+  if (!jobsRaw || jobsRaw.length === 0) return { synced: 0, failed: 0 };
+
+  const mailer = options.mailer ?? (await createTabsMailer());
+  let synced = 0;
+  let failed = 0;
+  for (const j of jobsRaw) {
+    try {
+      await mailer.syncCampaignToMergeJob(
+        supabase,
+        j.organization_id as string,
+        j.id as string,
+      );
+      synced += 1;
+    } catch (err) {
+      failed += 1;
+      if (err instanceof TabsMailerNotImplementedError) {
+        // 운영 정보 미수령 — 더 이상 시도 안 함
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[mail-merge-worker] sync skipped: TABS spec not implemented',
+        );
+        break;
+      }
+      if (err instanceof TabsMailerError) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[mail-merge-worker] sync failed for job=${j.id}:`,
+          err.message,
+        );
+      }
+    }
+  }
+  return { synced, failed };
+}
+
+/* ============================================================
+ * 5. main — 폴링 루프 + graceful shutdown
+ * ============================================================ */
 
 async function main(): Promise<void> {
   const supabase = createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
   );
-  const tabsClient = new TabsMailerClient(supabase);
-
-  let isShuttingDown = false;
-  let currentCycle: Promise<unknown> | null = null;
-
-  const runCycle = async (): Promise<void> => {
-    try {
-      await pickAndProcessOnce(supabase, tabsClient);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[mail-merge-worker] cycle error:', (err as Error).message);
-    }
-  };
-
-  const shutdown = async (signal: string): Promise<void> => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    // eslint-disable-next-line no-console
-    console.log(`[mail-merge-worker] received ${signal}, draining...`);
-    if (currentCycle) {
-      await currentCycle.catch(() => {});
-    }
-    tabsClient.close();
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', () => {
-    void shutdown('SIGTERM');
-  });
-  process.on('SIGINT', () => {
-    void shutdown('SIGINT');
-  });
+  const ctl = createShutdownController('mail-merge-worker');
 
   // eslint-disable-next-line no-console
-  console.log('[mail-merge-worker] polling started');
+  console.log(
+    `[mail-merge-worker] starting (poll interval=${POLL_INTERVAL_MS}ms, batch=${BATCH_SIZE})`,
+  );
 
-  while (!isShuttingDown) {
-    currentCycle = runCycle();
-    await currentCycle;
-    currentCycle = null;
-    if (isShuttingDown) break;
-    await sleep(POLL_INTERVAL_MS);
+  while (!ctl.isShuttingDown()) {
+    try {
+      const results = await ctl.track(processQueueBatch(supabase));
+      if (results.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[mail-merge-worker] iteration: processed ${results.length} job(s)`,
+        );
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mail-merge-worker] iteration error:', err);
+    }
+    await ctl.sleep(POLL_INTERVAL_MS);
   }
+
+  await ctl.waitForInflight(30_000);
+  // eslint-disable-next-line no-console
+  console.log('[mail-merge-worker] shutdown complete');
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-if (require.main === module) {
+if (isMainEntry(import.meta.url)) {
   main().catch((err) => {
     // eslint-disable-next-line no-console
     console.error('[mail-merge-worker] fatal:', err);

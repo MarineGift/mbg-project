@@ -1,42 +1,97 @@
-import type { StandardCategory, RiskFlag } from './classification';
-
 /**
- * Anthropic 모델 ID. 마스터 시스템 프롬프트 §2.4에 의해 정확히 이 3개만 허용.
- * 구버전 명명(claude-3-opus, claude-opus-4-5 등)은 ClaudeInvalidModelError로 차단.
+ * types/ai.ts
+ *
+ * AI 시스템의 도메인 객체 타입.
+ * ai 스키마(ai.agents·ai.runs·ai.drafts·ai.brand_voice·ai.knowledge_chunks·
+ * ai.auto_send_rules)의 행을 camelCase로 매핑한다.
+ *
+ * DB row → 도메인 객체 변환은 lib/db/mappers.ts에서 수행.
  */
+
+import type { ClassificationOutput, RiskFlag, StandardCategory } from './classification';
+
+/* ============================================================
+ * 1. 모델·역할 enum
+ * ============================================================ */
+
+/** AI 에이전트 역할 (ai.agents.role 컬럼). */
+export type AgentRole =
+  | 'classifier' // 메일 분류기 (Haiku)
+  | 'reply_drafter' // 회신 초안 작성자 (Opus)
+  | 'strategy_advisor' // 전략 어드바이저 (Opus)
+  | 'summarizer' // 본문 요약기 (Haiku)
+  | 'content_extractor'; // 스크래핑 결과 정규화 (Haiku)
+
+/** 허용된 Claude 모델 ID. 다른 값이 들어오면 ClaudeInvalidModelError throw. */
 export type ClaudeModel =
   | 'claude-opus-4-7'
   | 'claude-sonnet-4-6'
   | 'claude-haiku-4-5-20251001';
 
-export const SUPPORTED_CLAUDE_MODELS: ReadonlySet<ClaudeModel> = new Set([
-  'claude-opus-4-7',
-  'claude-sonnet-4-6',
-  'claude-haiku-4-5-20251001',
-]);
-
-export function isSupportedClaudeModel(value: unknown): value is ClaudeModel {
-  return typeof value === 'string' && SUPPORTED_CLAUDE_MODELS.has(value as ClaudeModel);
-}
+export type DraftStatus =
+  | 'pending_review'
+  | 'approved'
+  | 'sent'
+  | 'rejected'
+  | 'expired'
+  | 'auto_sent';
 
 /**
- * ai.agents.role — STEP 2의 시드 데이터와 일치해야 한다.
+ * 분류기의 10개 표준 카테고리 (마스터 §4.2). 절대 변경 금지.
+ * SQL CHECK 제약 (ai.drafts.classification_category, ai.auto_send_rules)과 일치.
  */
-export type AgentRole =
-  | 'classifier'
-  | 'reply_drafter'
-  | 'strategy_advisor'
-  | 'summarizer'
-  | 'translator'
-  | 'risk_reviewer';
+export type ClassificationCategory =
+  | 'information_request'
+  | 'meeting_scheduling'
+  | 'simple_acknowledgment'
+  | 'price_negotiation'
+  | 'contract_terms'
+  | 'rejection'
+  | 'complaint'
+  | 'introduction'
+  | 'follow_up'
+  | 'other';
 
-export type AgentOutputFormat = 'text' | 'structured';
+/**
+ * 표준 카테고리 배열 — UI 드롭다운 등에 사용.
+ */
+export const CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
+  'information_request',
+  'meeting_scheduling',
+  'simple_acknowledgment',
+  'price_negotiation',
+  'contract_terms',
+  'rejection',
+  'complaint',
+  'introduction',
+  'follow_up',
+  'other',
+] as const;
 
+/**
+ * 도메인 수준 호출 상태(코드 vocabulary). recordRun()이 DB ai.run_status로 매핑한다.
+ * - success         → ai.run_status='completed'
+ * - failed          → ai.run_status='failed'
+ * - timeout         → ai.run_status='timed_out'
+ * - budget_exceeded → ai.run_status='failed' + metadata.error_class='ClaudeBudgetExceededError'
+ */
 export type RunStatus = 'success' | 'failed' | 'timeout' | 'budget_exceeded';
 
-/**
- * ai.agents 행의 도메인 표현 (camelCase).
- */
+/** 모듈 ENUM (마스터 프롬프트 §3.1). */
+export type ModuleType =
+  | 'investor'
+  | 'buyer'
+  | 'partner'
+  | 'customer'
+  | 'crowdfunding'
+  | 'product_launch'
+  | 'sales';
+
+export type Language = 'ko' | 'en' | 'ja';
+
+/* ============================================================
+ * 2. AgentRow — ai.agents 행
+ * ============================================================ */
 export interface AgentRow {
   id: string;
   organizationId: string;
@@ -46,139 +101,142 @@ export interface AgentRow {
   fallbackModel?: ClaudeModel;
   temperature: number;
   maxTokens: number;
-  outputFormat: AgentOutputFormat;
+  outputFormat: 'text' | 'structured';
   systemPrompt: string;
-  /** 모듈 매칭 ('investor' 등) — 빈 배열은 전 모듈 적용 */
-  applicableModules?: string[];
-  /** 'ko' | 'en' | 'ja' — 빈 배열은 전 언어 적용 */
-  applicableLanguages?: string[];
+  applicableModules?: ModuleType[];
+  applicableLanguages?: Language[];
   requirePiiMasking?: boolean;
-  /** ai.knowledge_chunks 조회 시 사용할 collection 식별자 */
   knowledgeCollection?: string;
   isActive: boolean;
   version: number;
 }
 
-/**
- * Supabase row(snake_case) → AgentRow(camelCase) 매퍼. 호출처에서 type assertion 대신
- * 본 함수를 사용해 컬럼 변경 시 컴파일 타임에 검출되도록 한다.
- */
-export function toAgentRow(dbRow: Record<string, unknown>): AgentRow {
-  const model = dbRow.model;
-  if (!isSupportedClaudeModel(model)) {
-    throw new Error(
-      `Invalid agent.model in DB: ${String(model)} (id=${String(dbRow.id)})`,
-    );
-  }
-  const fallbackModelRaw = dbRow.fallback_model;
-  const fallbackModel = isSupportedClaudeModel(fallbackModelRaw)
-    ? fallbackModelRaw
-    : undefined;
-
-  return {
-    id: String(dbRow.id),
-    organizationId: String(dbRow.organization_id),
-    role: dbRow.role as AgentRole,
-    name: String(dbRow.name ?? ''),
-    model,
-    fallbackModel,
-    temperature: Number(dbRow.temperature ?? 0.3),
-    maxTokens: Number(dbRow.max_tokens ?? 4096),
-    outputFormat: (dbRow.output_format as AgentOutputFormat) ?? 'text',
-    systemPrompt: String(dbRow.system_prompt ?? ''),
-    applicableModules: Array.isArray(dbRow.applicable_modules)
-      ? (dbRow.applicable_modules as string[])
-      : undefined,
-    applicableLanguages: Array.isArray(dbRow.applicable_languages)
-      ? (dbRow.applicable_languages as string[])
-      : undefined,
-    requirePiiMasking: dbRow.require_pii_masking === true,
-    knowledgeCollection:
-      typeof dbRow.knowledge_collection === 'string'
-        ? dbRow.knowledge_collection
-        : undefined,
-    isActive: dbRow.is_active === true,
-    version: Number(dbRow.version ?? 1),
-  };
-}
-
-/**
- * ai.brand_voice 도메인 표현.
- */
+/* ============================================================
+ * 3. BrandVoiceRow — ai.brand_voice 행
+ * ============================================================ */
 export interface BrandVoiceRow {
   id: string;
   organizationId: string;
-  module: string;
-  language: 'ko' | 'en' | 'ja';
-  toneDescription: string;
-  signatureBlock?: string;
-  fewShotExamples: Array<{ inbound: string; outbound: string; note?: string }>;
-  isDefault: boolean;
+  module: ModuleType;
+  language: Language;
+  toneGuidelines: string;
+  doSay: string[];
+  dontSay: string[];
+  glossary: Record<string, string>;
+  fewShotExamples: Array<{
+    input: string;
+    output: string;
+    notes?: string;
+  }>;
+  isActive: boolean;
+  version: number;
 }
 
-export function toBrandVoiceRow(dbRow: Record<string, unknown>): BrandVoiceRow {
-  return {
-    id: String(dbRow.id),
-    organizationId: String(dbRow.organization_id),
-    module: String(dbRow.module),
-    language: dbRow.language as BrandVoiceRow['language'],
-    toneDescription: String(dbRow.tone_description ?? ''),
-    signatureBlock:
-      typeof dbRow.signature_block === 'string' ? dbRow.signature_block : undefined,
-    fewShotExamples: Array.isArray(dbRow.few_shot_examples)
-      ? (dbRow.few_shot_examples as BrandVoiceRow['fewShotExamples'])
-      : [],
-    isDefault: dbRow.is_default === true,
-  };
-}
-
-/**
- * ai.knowledge_chunks 도메인 표현 (벡터 검색 결과).
- */
-export interface KnowledgeChunkRow {
+/* ============================================================
+ * 4. KnowledgeChunkRow (검색 결과)
+ * ============================================================ */
+export interface KnowledgeChunkSearchResult {
   id: string;
-  organizationId: string;
-  collection?: string;
-  title?: string;
+  collection: string;
   content: string;
-  /** cosine 유사도 (0~1, 1에 가까울수록 유사) */
   similarity: number;
+  sourceType: string;
+  sourceUri?: string;
   metadata?: Record<string, unknown>;
 }
 
-/**
- * ClaudeClient.complete 입력.
- */
-export interface ClaudeCompleteInput {
-  agentRole: AgentRole;
-  partyId?: string;
-  engagementId?: string;
-  inboundMessage: string;
-  language?: 'ko' | 'en' | 'ja';
-  module?: string;
-  maskPii?: boolean;
-  outputFormat?: 'text' | 'json';
-  caller?: string;
+/* ============================================================
+ * 5. AutoSendRuleRow — ai.auto_send_rules 행
+ * ============================================================ */
+export interface AutoSendRuleRow {
+  id: string;
+  organizationId: string;
+  classificationCategory: StandardCategory;
+  isBlocked: boolean;
+  blockReason?: string;
+  minConfidence: number;
+  requiresHumanApproval: boolean;
+  allowedModules: ModuleType[];
+  blockedKeywordsInBody: string[];
+  dailyLimit: number;
+  hourlyLimit: number;
+  perPartyDailyLimit: number;
+  requiresCalendarData: boolean;
+  isActive: boolean;
 }
 
-/**
- * ClaudeClient.complete 출력.
- */
+/* ============================================================
+ * 6. DraftRow — ai.drafts 행
+ * ============================================================ */
+export interface DraftRow {
+  id: string;
+  organizationId: string;
+  communicationId: string;
+  partyId?: string;
+  engagementId?: string;
+  classificationCategory: StandardCategory;
+  confidenceScore: number;
+  riskFlags: RiskFlag[];
+  subject: string;
+  bodyPlain: string;
+  bodyHtml?: string;
+  rationale?: string;
+  requiresHumanApproval: boolean;
+  autoSendEligible: boolean;
+  autoSendBlockedReasons: string[];
+  expiresAt: string;
+  status: DraftStatus;
+  classifierRunId?: string;
+  drafterRunId?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  sentAt?: string;
+  language: Language;
+  aiGenerated: boolean;
+}
+
+/* ============================================================
+ * 7. ClaudeClient I/O
+ * ============================================================ */
+
+export interface ClaudeCompleteInput {
+  agentRole: AgentRole;
+  /** Party 컨텍스트(선택). prompt-renderer가 조회. */
+  partyId?: string;
+  /** Engagement 컨텍스트(선택). thread_history 조회 시 보조. */
+  engagementId?: string;
+  /** 모델에 전달할 메시지 본문. PII 마스킹은 maskPii 옵션으로 제어. */
+  inboundMessage: string;
+  /** 응답 언어 힌트(brand_voice 매칭에 사용). */
+  language?: Language;
+  /** PII 마스킹 강제 여부. 미지정 시 agent.requirePiiMasking 따름. */
+  maskPii?: boolean;
+  /** 'json' 시 응답을 JSON.parse → parsedJson에 채움. */
+  outputFormat?: 'text' | 'json';
+  /** 사용자 메시지에 추가할 컨텍스트(prompt-renderer 입력 보강용). */
+  extraContext?: Record<string, unknown>;
+  /** 호출자 식별용 트레이스 라벨(로깅에만 사용). */
+  traceLabel?: string;
+}
+
 export interface ClaudeCompleteOutput {
   content: string;
   parsedJson?: object;
   runId: string;
+  /** ai.runs.agent_id와 동일. ai.drafts.agent_id (NOT NULL)에 사용. */
+  agentId: string;
   model: ClaudeModel;
   latencyMs: number;
   tokensIn: number;
   tokensOut: number;
   costUsd: number;
-  retryCount: number;
 }
 
-/**
- * Reply Drafter (Opus) 의 정형 출력.
- */
+/* ============================================================
+ * 8. ReplyDrafter 출력
+ * ============================================================ */
 export interface ReplyDrafterOutput {
   subject: string;
   bodyPlain: string;
@@ -186,50 +244,109 @@ export interface ReplyDrafterOutput {
   rationale: string;
   riskFlags: RiskFlag[];
   requiresHumanApproval: boolean;
-  language: 'ko' | 'en' | 'ja';
-  classificationCategory: StandardCategory;
+  language: Language;
+  /** 회신가가 사용한 brand_voice example의 인덱스(학습 루프용). */
+  usedBrandVoiceExampleIndices?: number[];
+  /** 사용된 knowledge_chunks의 ID(추적용). */
+  citedKnowledgeChunkIds?: string[];
 }
 
 /**
- * ai.drafts INSERT용 페이로드.
+ * Reply Drafter JSON 응답을 ReplyDrafterOutput으로 검증·변환.
+ * 위반 시 [false, 사유] 반환 — processor가 requires_human_approval=true로 강제.
  */
-export interface DraftInsertPayload {
-  organizationId: string;
-  communicationId: string;
+export function validateReplyDrafterOutput(
+  obj: unknown,
+):
+  | { ok: true; value: ReplyDrafterOutput }
+  | { ok: false; reasons: string[] } {
+  const reasons: string[] = [];
+  if (!obj || typeof obj !== 'object') {
+    return { ok: false, reasons: ['not_an_object'] };
+  }
+  const o = obj as Record<string, unknown>;
+
+  if (typeof o.subject !== 'string' || o.subject.trim().length === 0) {
+    reasons.push('subject_missing_or_empty');
+  }
+  if (typeof o.bodyPlain !== 'string' || o.bodyPlain.trim().length === 0) {
+    reasons.push('body_plain_missing_or_empty');
+  }
+  if (typeof o.rationale !== 'string') {
+    reasons.push('rationale_not_string');
+  }
+  if (!Array.isArray(o.riskFlags)) {
+    reasons.push('risk_flags_not_array');
+  }
+  if (typeof o.requiresHumanApproval !== 'boolean') {
+    reasons.push('requires_human_approval_not_boolean');
+  }
+  if (!['ko', 'en', 'ja'].includes(String(o.language))) {
+    reasons.push(`invalid_language:${String(o.language)}`);
+  }
+
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  return {
+    ok: true,
+    value: {
+      subject: (o.subject as string).trim(),
+      bodyPlain: o.bodyPlain as string,
+      bodyHtml: typeof o.bodyHtml === 'string' ? o.bodyHtml : undefined,
+      rationale: o.rationale as string,
+      riskFlags: (o.riskFlags as unknown[]).filter(
+        (f): f is RiskFlag => typeof f === 'string',
+      ) as RiskFlag[],
+      requiresHumanApproval: o.requiresHumanApproval as boolean,
+      language: o.language as Language,
+      usedBrandVoiceExampleIndices: Array.isArray(o.usedBrandVoiceExampleIndices)
+        ? (o.usedBrandVoiceExampleIndices as unknown[]).filter(
+            (n): n is number => typeof n === 'number',
+          )
+        : undefined,
+      citedKnowledgeChunkIds: Array.isArray(o.citedKnowledgeChunkIds)
+        ? (o.citedKnowledgeChunkIds as unknown[]).filter(
+            (s): s is string => typeof s === 'string',
+          )
+        : undefined,
+    },
+  };
+}
+
+/* ============================================================
+ * 9. RecordRun 입력 (cost-tracker → ai.runs INSERT)
+ * ============================================================ */
+export interface RecordRunInput {
+  agentId: string;
+  status: RunStatus;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  latencyMs: number;
+  piiMasked: boolean;
+  piiCategories: string[];
+  retryCount: number;
   partyId?: string;
   engagementId?: string;
-  module?: string;
-  language: 'ko' | 'en' | 'ja';
-  classificationCategory: StandardCategory;
-  subject: string;
-  bodyPlain: string;
-  bodyHtml?: string;
-  rationale: string;
-  riskFlags: RiskFlag[];
-  requiresHumanApproval: boolean;
-  autoSendEligible: boolean;
-  autoSendBlockedReasons: string[];
-  classifierRunId: string;
-  replyDrafterRunId: string;
-  expiresAt: string;
+  brandVoiceId?: string;
+  knowledgeChunkIds?: string[];
+  errorMessage?: string;
+  errorStatus?: number;
+  /** trace 라벨(예: 'processor:classifier'). */
+  traceLabel?: string;
 }
 
-/**
- * Strategy Advisor (consultation-worker) 의 출력.
- */
-export interface StrategyAdvisorOutput {
-  summary: string;
-  responseStrategies: Array<{
-    title: string;
-    rationale: string;
-    confidence: number;
-    actions: Array<{
-      title: string;
-      description: string;
-      due_in_days?: number;
-      assigned_role?: string;
-      priority?: 'low' | 'medium' | 'high' | 'urgent';
-    }>;
-  }>;
-  riskNotes: string[];
+/* ============================================================
+ * 10. 분류 결과 + 회신 결과를 함께 다루는 합성 타입
+ * ============================================================ */
+export interface ProcessedInbound {
+  communicationId: string;
+  classification: ClassificationOutput;
+  reply: ReplyDrafterOutput;
+  classifierRunId: string;
+  drafterRunId: string;
+  draftId: string;
+  autoSendAllowed: boolean;
+  autoSendBlockedReasons: string[];
 }
