@@ -60,3 +60,5 @@ next-env.d.ts
 tsc_errors.txt
 silent_errors.txt
 phase2_pages.txt
+
+env.local.mjs
