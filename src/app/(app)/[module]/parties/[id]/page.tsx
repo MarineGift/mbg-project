@@ -10,6 +10,8 @@
  *   - 2026-05-12: PartyTasksList에 partyId + module 전달 (Add Task 버튼)
  *   - 2026-05-12: PartyContactsList에 partyId 전달 (Add Contact 버튼)
  *   - 2026-05-12: PartyEngagementsList에 partyId + module 전달 (Add Engagement 버튼)
+ *   - 2026-05-14: Phase 6 — industry FK 있으면 IndustryPaperSection /
+ *                 IndustryFillerSection 풀 너비로 조건부 렌더.
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -21,6 +23,8 @@ import { PartyEngagementsList } from '@/components/parties/party-engagements-lis
 import { PartyTasksList } from '@/components/parties/party-tasks-list';
 import { PartyNotesCard } from '@/components/parties/party-notes-card';
 import { ActivityTimeline } from '@/components/parties/activity-timeline';
+import { IndustryPaperSection } from '@/components/parties/industry-paper-section';
+import { IndustryFillerSection } from '@/components/parties/industry-filler-section';
 import type { ModuleType } from '@/types/ai';
 
 const PHASE_1_MODULES: readonly ModuleType[] = [
@@ -60,6 +64,18 @@ export default async function PartyDetailPage({ params }: PageProps) {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <PartyStatsGrid party={full.party} />
+
+          {/* ── Phase 6: Industry detail sections (FK 있을 때만, 풀 너비) ── */}
+          {full.party.industryPaperCompanyId != null && (
+            <IndustryPaperSection
+              paperCompanyId={full.party.industryPaperCompanyId}
+            />
+          )}
+          {full.party.industryFillerSupplierId != null && (
+            <IndustryFillerSection
+              fillerSupplierId={full.party.industryFillerSupplierId}
+            />
+          )}
 
           <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             {/* Left: activity timeline + notes */}

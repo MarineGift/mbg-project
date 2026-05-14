@@ -18,6 +18,8 @@
  *                 close_date → expected_close_date 수정 + pipeline_stages
  *                 JOIN으로 stage 이름 가져오기. openEngagements 카운트
  *                 필터의 status enum 값을 실제 schema와 일치시킴.
+ *   - 2026-05-14: Phase 6 — industry_paper_company_id /
+ *                 industry_filler_supplier_id FK 컬럼 SELECT + mapping 추가.
  */
 
 import 'server-only';
@@ -56,6 +58,9 @@ interface RawPartyRow {
   source: string | null;
   created_at: string;
   updated_at: string;
+  // ▼ Phase 6 (2026-05-14)
+  industry_paper_company_id: number | null;
+  industry_filler_supplier_id: number | null;
 }
 
 const TIMELINE_LIMIT = 30;
@@ -82,7 +87,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
+      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at, industry_paper_company_id, industry_filler_supplier_id',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -209,6 +214,9 @@ export async function fetchPartyDetail(
     source: p.source,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
+    // ▼ Phase 6 (2026-05-14)
+    industryPaperCompanyId: p.industry_paper_company_id,
+    industryFillerSupplierId: p.industry_filler_supplier_id,
     counts: {
       contacts: contactsRes.count ?? 0,
       communications: commsRes.count ?? 0,

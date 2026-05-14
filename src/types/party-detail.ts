@@ -8,6 +8,8 @@
  *   - 2026-05-11: DB 스키마와 정합 — 단일 industry/tags 필드 제거,
  *                 industryTags/interestTags 배열로 분리.
  *                 (DB 실제 컬럼: industry_tags ARRAY, interest_tags ARRAY)
+ *   - 2026-05-14: Phase 6 — industryPaperCompanyId /
+ *                 industryFillerSupplierId FK 필드 추가.
  */
 
 import type { ModuleType } from './ai';
@@ -40,6 +42,10 @@ export interface PartyDetail {
   source: string | null;
   createdAt: string;
   updatedAt: string;
+
+  /** ▼ Phase 6 — industry master DB 연동 FK */
+  industryPaperCompanyId: number | null;
+  industryFillerSupplierId: number | null;
 
   /** 통계 — RPC나 별도 COUNT 쿼리로 채움 */
   counts: {
