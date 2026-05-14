@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModuleBadge } from '@/components/common/module-badge';
 import type { EngagementDetail } from '@/types/engagement';
@@ -21,40 +21,56 @@ const STATUS_COLORS: Record<EngagementDetail['status'], string> = {
 export function EngagementDetailHeader({ engagement }: Props) {
   return (
     <header className="border-b bg-background sticky top-0 z-20">
-      <div className="px-6 py-3 border-b flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon" className="h-8 w-8">
-          <Link
-            href={`/${engagement.module}/engagements`}
-            aria-label="Back to kanban"
+      {/* 상단 바: 좌측 = 뒤로 + 배지, 우측 = Edit 버튼 */}
+      <div className="px-6 py-3 border-b flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+            <Link
+              href={`/${engagement.module}/engagements`}
+              aria-label="Back to kanban"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <ModuleBadge module={engagement.module} size="sm" />
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
+              STATUS_COLORS[engagement.status],
+            )}
           >
-            <ArrowLeft className="h-4 w-4" />
+            {engagement.status}
+          </span>
+          {engagement.currentStageName && (
+            <span
+              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium border"
+              style={
+                engagement.currentStageColor
+                  ? {
+                      borderColor: engagement.currentStageColor,
+                      color: engagement.currentStageColor,
+                    }
+                  : undefined
+              }
+            >
+              {engagement.currentStageName}
+            </span>
+          )}
+        </div>
+
+        {/* Edit 버튼 — engagement 수정 페이지로 이동.
+            Delete는 수정 페이지의 폼 하단에서 처리. */}
+        <Button asChild variant="outline" size="sm" className="shrink-0">
+          <Link
+            href={`/engagements/${engagement.id}/edit`}
+            aria-label="Edit engagement"
+          >
+            <Pencil className="h-4 w-4" />
+            <span>Edit</span>
           </Link>
         </Button>
-        <ModuleBadge module={engagement.module} size="sm" />
-        <span
-          className={cn(
-            'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
-            STATUS_COLORS[engagement.status],
-          )}
-        >
-          {engagement.status}
-        </span>
-        {engagement.currentStageName && (
-          <span
-            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium border"
-            style={
-              engagement.currentStageColor
-                ? {
-                    borderColor: engagement.currentStageColor,
-                    color: engagement.currentStageColor,
-                  }
-                : undefined
-            }
-          >
-            {engagement.currentStageName}
-          </span>
-        )}
       </div>
+
       <div className="px-6 py-4">
         <h1 className="text-2xl font-semibold truncate">{engagement.name}</h1>
         <p className="text-sm text-muted-foreground mt-1">

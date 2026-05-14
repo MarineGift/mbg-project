@@ -11,7 +11,22 @@
  *   - updateEngagementStatus: 상태 변경 (open/in_progress/on_hold/won/lost/archived).
  *     일반 상태 토글용.
  *
+ *   - createEngagement: 단순 1-step INSERT.
+ *     FK constraint fk_engagement_stage_history_engagement_id가
+ *     DEFERRABLE INITIALLY DEFERRED로 설정되어 있어 BEFORE INSERT 트리거가
+ *     stage_history에 INSERT해도 commit 시점에 FK 검증되어 정상 작동.
+ *
+ *   - deleteEngagement: soft delete (deleted_at = now()).
+ *     audit log 트리거가 actor (auth.uid()) 자동 기록.
+ *
  * 권한: organization 멤버이면 모두 가능 (Q11 결정).
+ *
+ * 변경 이력:
+ *   - 2026-05-12: createEngagement를 2-step INSERT로 변경 (FK 위반 우회)
+ *   - 2026-05-12: deleteEngagement에서 존재하지 않는 deleted_by 컬럼 참조 제거.
+ *   - 2026-05-12: FK constraint를 DEFERRABLE로 변경한 SQL migration 후
+ *                 createEngagement를 다시 1-step INSERT로 단순화.
+ *                 stage_history도 INSERT 시점부터 정확히 기록됨.
  */
 
 'use server';
@@ -327,6 +342,10 @@ export async function createEngagement(
     currentStageId = (firstStageRaw as { id: string } | null)?.id ?? null;
   }
 
+  // 1-step INSERT — current_stage_id 포함.
+  // BEFORE INSERT 트리거 trg_engagements_stage_history가 stage_history에
+  // 자동 기록함. FK가 DEFERRABLE INITIALLY DEFERRED로 설정되어 있어 commit
+  // 시점에 검증되므로 안전.
   const insertRow: Record<string, unknown> = {
     organization_id: auth.organizationId,
     party_id: parsed.data.partyId,
@@ -434,12 +453,13 @@ export async function deleteEngagement(input: {
   }
 
   const supabase = await createSupabaseServerClient();
+  // soft delete — audit log 트리거가 actor (auth.uid()) 자동 기록.
+  // deleted_by 컬럼은 app.engagements 스키마에 존재하지 않음 (parties와 동일).
   const { error, data } = await supabase
     .schema('app')
     .from('engagements' as never)
     .update({
       deleted_at: new Date().toISOString(),
-      deleted_by: auth.userId,
     } as never)
     .eq('id', parsed.data.engagementId)
     .eq('organization_id', auth.organizationId)
