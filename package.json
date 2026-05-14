@@ -16,7 +16,10 @@
     "test:e2e:ui": "playwright test --ui",
     "worker:consultation": "tsx src/workers/consultation-worker.ts",
     "worker:draft-expiry": "tsx src/workers/draft-expiry-worker.ts",
-    "worker:mail-merge": "tsx src/workers/mail-merge-worker.ts"
+    "worker:mail-merge": "tsx src/workers/mail-merge-worker.ts",
+    "worker:mailcarrier": "tsx --env-file=.env.local src/workers/mailcarrier-worker.ts",
+    "sim:inbound": "tsx --env-file=.env.local src/scripts/simulate-inbound.ts",
+    "verify:smtp": "tsx --env-file=.env.local src/scripts/verify-smtp.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
@@ -74,15 +77,20 @@
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
+    "@types/babel__generator": "^7.27.0",
+    "@types/babel__template": "^7.4.4",
+    "@types/babel__traverse": "^7.28.0",
     "@types/diff": "^7.0.0",
     "@types/mailparser": "^3.4.5",
     "@types/node": "^22.5.0",
     "@types/nodemailer": "^6.4.16",
     "@types/pg": "^8.11.10",
+    "@types/prop-types": "^15.7.15",
     "@types/react": "^18.3.9",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.13",
     "jsdom": "^25.0.1",
@@ -91,6 +99,7 @@
     "tailwindcss": "^3.4.13",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "xlsx": "^0.18.5"
   }
 }
