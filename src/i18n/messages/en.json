@@ -255,11 +255,19 @@
       "slack": "Slack",
       "sms": "SMS",
       "phone": "Phone",
-      "other": "Other"
+      "other": "Other",
+      "linkedin": "LinkedIn",
+      "kakaotalk": "KakaoTalk",
+      "wechat": "WeChat",
+      "whatsapp": "WhatsApp",
+      "in_person": "In person",
+      "video_call": "Video call",
+      "webform": "Web form"
     },
     "directions": {
       "inbound": "Inbound",
-      "outbound": "Outbound"
+      "outbound": "Outbound",
+      "internal": "Internal"
     },
     "filters": {
       "channel": "Channel",
@@ -304,12 +312,12 @@
     "contacts": {
       "title": "Contacts",
       "empty": "No contacts registered.",
-      "empty": "No contacts registered.",
       "addContact": "Add Contact"
     },
     "engagements": {
       "title": "Engagements",
-      "empty": "No engagements in progress."
+      "empty": "No engagements in progress.",
+      "addEngagement": "Add Engagement"
     },
     "tasks": {
       "title": "Tasks",
@@ -543,7 +551,11 @@
     "partyRequired": "Party is required",
     "deleteConfirmTitle": "Delete this engagement?",
     "deleteConfirmDescription": "\"{name}\" will be removed. Stage history is preserved.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "descriptionPlaceholder": "Background and goals for this engagement.",
+    "stageNote": "Stage and status are changed separately from the detail page.",
+    "currentStage": "Current stage",
+    "currentStatus": "Current status"
   },
   "contactForm": {
     "createTitle": "Add Contact",

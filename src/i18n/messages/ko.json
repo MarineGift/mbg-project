@@ -255,11 +255,18 @@
       "slack": "Slack",
       "sms": "SMS",
       "phone": "전화",
-      "other": "기타"
+      "other": "기타",
+      "linkedin": "LinkedIn",
+      "kakaotalk": "카카오톡",
+      "wechat": "위챗",
+      "whatsapp": "왓츠앱",
+      "video_call": "화상통화",
+      "webform": "웹폼"    
     },
     "directions": {
       "inbound": "수신",
-      "outbound": "발신"
+      "outbound": "발신",
+      "internal": "내부"
     },
     "filters": {
       "channel": "채널",
@@ -304,17 +311,16 @@
     "contacts": {
       "title": "컨택트",
       "empty": "등록된 컨택트가 없습니다.",
-      "empty": "등록된 컨택트가 없습니다.",
       "addContact": "컨택트 추가"
     },
     "engagements": {
-      "title": "인게이지먼트",
-      "empty": "진행 중인 인게이지먼트가 없습니다."
+      "title": "엔게이지먼트",
+      "empty": "진행 중인 엔게이지먼트가 없습니다.",
+      "addEngagement": "엔게이지먼트 추가"
     },
     "tasks": {
       "title": "태스크",
       "empty": "열린 태스크가 없습니다.",
-
       "addTask": "작업 추가"
     },
     "timeline": {
@@ -544,7 +550,11 @@
     "partyRequired": "거래처가 필요합니다",
     "deleteConfirmTitle": "인게이지먼트를 삭제하시겠습니까?",
     "deleteConfirmDescription": "\"{name}\"을(를) 삭제합니다. 단계 이력은 보존됩니다.",
-    "deleteConfirm": "삭제"
+     "deleteConfirm": "삭제",
+     "descriptionPlaceholder": "이 엔게이지먼트의 배경과 목표를 적어주세요.",
+     "stageNote": "단계와 상태는 상세 페이지에서 별도로 변경하세요.",
+     "currentStage": "현재 단계",
+     "currentStatus": "현재 상태"
   },
   "contactForm": {
     "createTitle": "컨택트 추가",

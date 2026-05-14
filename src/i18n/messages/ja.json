@@ -255,11 +255,19 @@
       "slack": "Slack",
       "sms": "SMS",
       "phone": "電話",
-      "other": "その他"
+      "other": "その他",
+      "linkedin": "LinkedIn",
+      "kakaotalk": "カカオトーク",
+      "wechat": "WeChat",
+      "whatsapp": "WhatsApp",
+      "in_person": "対面",
+      "video_call": "ビデオ通話",
+      "webform": "ウェブフォーム"
     },
     "directions": {
       "inbound": "受信",
-      "outbound": "送信"
+      "outbound": "送信",
+      "internal": "内部"
     },
     "filters": {
       "channel": "チャネル",
@@ -304,12 +312,12 @@
     "contacts": {
       "title": "コンタクト",
       "empty": "登録されたコンタクトはありません。",
-      "empty": "登録されたコンタクトはありません。",
       "addContact": "コンタクト追加"
     },
     "engagements": {
       "title": "エンゲージメント",
-      "empty": "進行中のエンゲージメントがありません。"
+      "empty": "進行中のエンゲージメントがありません。",
+      "addEngagement": "エンゲージメントを追加"
     },
     "tasks": {
       "title": "タスク",
@@ -542,8 +550,12 @@
     "deleteFailed": "削除失敗",
     "partyRequired": "取引先が必要です",
     "deleteConfirmTitle": "このエンゲージメントを削除しますか?",
-    "deleteConfirmDescription": "\"{name}\" を削除します。ステージ履歴は保持されます。",
-    "deleteConfirm": "削除"
+    "deleteConfirmDescription": "\"{name}\" を削除します。ステージ履歴は保存されます。",
+    "deleteConfirm": "削除",
+    "descriptionPlaceholder": "このエンゲージメントの背景と目的。",
+    "stageNote": "ステージとステータスは詳細ページから個別に変更してください。",
+    "currentStage": "現在のステージ",
+    "currentStatus": "現在のステータス"
   },
   "contactForm": {
     "createTitle": "コンタクト追加",
