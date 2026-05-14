@@ -68,3 +68,4 @@ env.local.*.backup
 env.local.mjs
 worker-*.log
 data/
+backups-*/
