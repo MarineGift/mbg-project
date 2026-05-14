@@ -38,6 +38,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
+    if (!parts[1]) {
+      throw new Error('Invalid JWT format: missing payload section');
+    }
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const decoded = Buffer.from(padded, 'base64').toString('utf-8');

@@ -202,6 +202,14 @@ export interface MailRecipient {
   address: string;
 }
 
+/**
+ * 발신 주소 종류. 사용자가 회신 시 선택.
+ * - personal: 개인 메일 (예: yunyoung.heo@marinebiogroup.com)
+ * - role:     직책 메일 (예: ceo@marinebiogroup.com)
+ * - shared:   공통/팀 메일 (예: contact@marinebiogroup.com)
+ */
+export type SendingAddressKind = 'personal' | 'role' | 'shared';
+
 export interface SendOneInput {
   to: MailRecipient;
   cc?: MailRecipient[];
@@ -222,6 +230,8 @@ export interface SendOneInput {
   quietHours?: QuietHours;
   /** 추적용 라벨(로그·ai.runs trace_label). */
   traceLabel?: string;
+  /** 사용할 SMTP 자격증명 종류. 미지정 시 기존 단일 transporter 사용(하위호환). */
+  sendingAddressKind?: SendingAddressKind;
 }
 
 export interface SendOneOutput {

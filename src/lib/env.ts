@@ -50,6 +50,20 @@ const envSchema = z
       .union([z.boolean(), z.enum(['true', 'false'])])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
       .default(false),
+    TABS_MAILER_TLS_REJECT_UNAUTHORIZED: z
+      .union([z.boolean(), z.enum(['true', 'false'])])
+      .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
+      .optional(),
+
+    MAIL_PERSONAL_USERNAME: z.string().email().optional(),
+    MAIL_PERSONAL_PASSWORD: z.string().min(1).optional(),
+    MAIL_ROLE_USERNAME: z.string().email().optional(),
+    MAIL_ROLE_PASSWORD: z.string().min(1).optional(),
+    MAIL_SHARED_USERNAME: z.string().email().optional(),
+    MAIL_SHARED_PASSWORD: z.string().min(1).optional(),
+    MAIL_PERSONAL_DISPLAY_NAME: z.string().default('YunYoung Heo'),
+    MAIL_ROLE_DISPLAY_NAME: z.string().default('CEO'),
+    MAIL_SHARED_DISPLAY_NAME: z.string().default('Marinebio Group'),
 
     // ── MailCarrier 7 (수신) ─────────────────────────────
     MAILCARRIER_HOST: z.string().min(1),
@@ -66,6 +80,26 @@ const envSchema = z
       .int()
       .min(5)
       .default(30),
+    MAILCARRIER_TLS_REJECT_UNAUTHORIZED: z
+      .union([z.boolean(), z.enum(['true', 'false'])])
+      .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
+      .optional(),
+
+    // ── MailCarrier polling 대상 kinds (Phase 2) ─────────
+    // 어떤 발신 계정 inbox를 polling할지 결정.
+    // 빈 문자열 또는 미설정 시 단일 MAILCARRIER_USERNAME 사용 (Phase 1 하위호환).
+    // 예: MAILCARRIER_POLL_KINDS=personal,role,shared
+    MAILCARRIER_POLL_KINDS: z
+      .string()
+      .default('')
+      .transform((v) =>
+        v
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter((s): s is 'personal' | 'role' | 'shared' =>
+            s === 'personal' || s === 'role' || s === 'shared',
+          ),
+      ),  
 
     // ── 비즈니스 ─────────────────────────────────────────
     AI_AUTO_SEND_ENABLED: z
