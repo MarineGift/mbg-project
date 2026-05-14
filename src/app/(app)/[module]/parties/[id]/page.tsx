@@ -9,6 +9,7 @@
  * 변경 이력:
  *   - 2026-05-12: PartyTasksList에 partyId + module 전달 (Add Task 버튼)
  *   - 2026-05-12: PartyContactsList에 partyId 전달 (Add Contact 버튼)
+ *   - 2026-05-12: PartyEngagementsList에 partyId + module 전달 (Add Engagement 버튼)
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -72,7 +73,11 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 contacts={full.contacts}
                 partyId={full.party.id}
               />
-              <PartyEngagementsList engagements={full.engagements} />
+              <PartyEngagementsList
+                engagements={full.engagements}
+                partyId={full.party.id}
+                module={full.party.module}
+              />
               <PartyTasksList
                 tasks={full.tasks}
                 partyId={full.party.id}

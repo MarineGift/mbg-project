@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * components/inbox/inbox-filters.tsx
+ *
+ * Inbox 목록 페이지 상단 필터 바.
+ * URL searchParams 기반 상태 관리.
+ *
+ * 변경 이력:
+ *   - 2026-05-12 (1차): CHANNELS 배열을 DB enum 9개와 일치 (slack/other 제거).
+ *   - 2026-05-12 (2차): UI 호환을 위해 11개로 확장 (slack, other 재포함).
+ *   - 2026-05-12 (3차): DB enum과 완전 일치 (12개) — webform 추가.
+ *                       정확한 소문자 + DB enum/i18n 키와 일치하는 케이스 사용.
+ *                       대문자나 라벨 형식 ('Email', 'In person' 등) 사용 금지.
+ */
+
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
@@ -26,9 +40,16 @@ interface Props {
 
 const CHANNELS: readonly CommunicationChannel[] = [
   'email',
-  'slack',
-  'sms',
   'phone',
+  'sms',
+  'linkedin',
+  'kakaotalk',
+  'wechat',
+  'whatsapp',
+  'in_person',
+  'video_call',
+  'webform',
+  'slack',
   'other',
 ] as const;
 

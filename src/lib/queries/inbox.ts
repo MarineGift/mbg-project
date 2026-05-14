@@ -9,6 +9,11 @@
  * 정렬: occurred_at DESC (받은 시각 기준). 동일 시각 tiebreaker id ASC.
  *
  * AI 초안 표시: drafts.inbound_communication_id IN (...) 별도 쿼리로 'hasDraft' 결정.
+ *
+ * 변경 이력:
+ *   - 2026-05-12 (1차): ALL_CHANNELS 9개로 정렬 + attachment_count 제거.
+ *   - 2026-05-12 (2차): ALL_CHANNELS 11개로 확장 (slack, other 재포함).
+ *   - 2026-05-12 (3차): ALL_CHANNELS 12개 — webform 추가, DB enum과 완전 일치.
  */
 
 import 'server-only';
@@ -31,9 +36,16 @@ import {
 
 const ALL_CHANNELS: readonly CommunicationChannel[] = [
   'email',
-  'slack',
-  'sms',
   'phone',
+  'sms',
+  'linkedin',
+  'kakaotalk',
+  'wechat',
+  'whatsapp',
+  'in_person',
+  'video_call',
+  'webform',
+  'slack',
   'other',
 ] as const;
 
@@ -111,7 +123,6 @@ interface RawInboxRow {
   occurred_at: string;
   sent_at: string | null;
   ai_generated: boolean;
-  attachment_count: number | null;
   party_id: string | null;
   parties: { name: string; module: ModuleType } | null;
 }
@@ -127,7 +138,7 @@ export async function fetchInbox(
     .from('communications' as never)
     .select(
       `id, channel, direction, status, from_address, from_name, to_addresses,
-       subject, body_plain, occurred_at, sent_at, ai_generated, attachment_count,
+       subject, body_plain, occurred_at, sent_at, ai_generated,
        party_id,
        parties:party_id ( name, module )`,
       { count: 'exact' },
@@ -144,8 +155,6 @@ export async function fetchInbox(
     query = query.eq('party_id', filters.partyId);
   }
   if (filters.query.length > 0) {
-    // ilike + OR — pg_trgm GIN 인덱스 활용
-    // PostgREST의 .or()는 'col.ilike.pattern,col2.ilike.pattern' 형식
     const pattern = `%${escapeLikePattern(filters.query)}%`;
     query = query.or(`subject.ilike.${pattern},body_plain.ilike.${pattern}`);
   }
@@ -232,7 +241,8 @@ function toInboxRow(
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,
-    attachmentCount: raw.attachment_count ?? 0,
+    // Phase 1: 첨부파일 기능 미구현 — DB에 attachment_count 컬럼 없음
+    attachmentCount: 0,
   };
 }
 

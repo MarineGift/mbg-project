@@ -7,12 +7,17 @@
  *   - 최근 활동 타임라인 (communications + tasks 통합 시간순)
  *   - 컨택트 / 인게이지먼트 / 태스크 사이드바 목록
  *
- * RLS가 organization_id 자동 격리.
+ * RLS가 organization_id 자동 검증.
  *
  * 변경 이력:
  *   - 2026-05-11: 실제 스키마와 컬럼명 정합 (industry → industry_tags,
  *                 tags → interest_tags). deleted_at 필터 추가, 에러 로깅 강화.
  *   - 2026-05-11: PartyDetail 인터페이스 정리에 맞춰 1:1 매핑.
+ *   - 2026-05-12: contacts SELECT의 job_title → title 컬럼명 수정.
+ *   - 2026-05-12: engagements SELECT의 stage → current_stage_id,
+ *                 close_date → expected_close_date 수정 + pipeline_stages
+ *                 JOIN으로 stage 이름 가져오기. openEngagements 카운트
+ *                 필터의 status enum 값을 실제 schema와 일치시킴.
  */
 
 import 'server-only';
@@ -56,6 +61,17 @@ interface RawPartyRow {
 const TIMELINE_LIMIT = 30;
 const SIDEBAR_LIMIT = 10;
 
+/**
+ * "Open" engagement로 카운트할 때 제외할 status 값.
+ * 실제 app.engagement_status enum과 일치해야 함.
+ * (won, lost, archived는 종료 상태)
+ */
+const TERMINAL_ENGAGEMENT_STATUSES = new Set([
+  'won',
+  'lost',
+  'archived',
+]);
+
 export async function fetchPartyDetail(
   partyId: string,
 ): Promise<PartyDetailFull | null> {
@@ -93,7 +109,7 @@ export async function fetchPartyDetail(
     supabase
       .schema('app')
       .from('contacts' as never)
-      .select('id, full_name, email, job_title, phone, is_primary', {
+      .select('id, full_name, email, title, phone, is_primary', {
         count: 'exact',
       })
       .eq('party_id', partyId)
@@ -101,15 +117,18 @@ export async function fetchPartyDetail(
       .order('created_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
 
-    // engagements (10개)
+    // engagements (10개) — pipeline_stages JOIN으로 stage 이름 함께 fetch
     supabase
       .schema('app')
       .from('engagements' as never)
       .select(
-        'id, name, status, stage, value_amount, value_currency, close_date, updated_at',
+        `id, name, status, current_stage_id, value_amount, value_currency,
+         expected_close_date, updated_at,
+         pipeline_stages:current_stage_id ( name )`,
         { count: 'exact' },
       )
       .eq('party_id', partyId)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
 
@@ -145,7 +164,7 @@ export async function fetchPartyDetail(
       .eq('status', 'pending_review'),
   ]);
 
-  // 병렬 쿼리 에러 로깅 (silent swallow 방지 — 데이터는 빈 값으로 fallback해도
+  // 병렬 쿼리 에러 로깅 (silent swallow 방지 — 데이터는 빈 값으로 fallback하되
   // 에러는 반드시 로그에 남김)
   if (contactsRes.error) {
     console.error('[party-detail] contacts error:', contactsRes.error);
@@ -194,9 +213,10 @@ export async function fetchPartyDetail(
       contacts: contactsRes.count ?? 0,
       communications: commsRes.count ?? 0,
       pendingDrafts: pendingDraftsCountRes.count ?? 0,
+      // open engagement: terminal status (won/lost/archived)가 아닌 것
       openEngagements: ((engagementsRes.data ?? []) as Array<{ status: string }>)
-        .filter((e) => !['closed_won', 'closed_lost', 'abandoned'].includes(e.status))
-        .length, // open만 카운트 (정확도는 향후 SQL view로)
+        .filter((e) => !TERMINAL_ENGAGEMENT_STATUSES.has(e.status))
+        .length,
       openTasks: ((tasksRes.data ?? []) as Array<{ status: string }>)
         .filter((t) => !['done', 'cancelled'].includes(t.status))
         .length,
@@ -219,7 +239,7 @@ export async function fetchPartyDetail(
 }
 
 /* ============================================================
- * 매퍼들
+ * 매퍼
  * ============================================================ */
 
 function mapContact(raw: unknown): PartyContact {
@@ -228,7 +248,7 @@ function mapContact(raw: unknown): PartyContact {
     id: r.id as string,
     fullName: (r.full_name as string | null) ?? null,
     email: (r.email as string | null) ?? null,
-    jobTitle: (r.job_title as string | null) ?? null,
+    jobTitle: (r.title as string | null) ?? null,
     phone: (r.phone as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
   };
@@ -236,11 +256,22 @@ function mapContact(raw: unknown): PartyContact {
 
 function mapEngagement(raw: unknown): PartyEngagement {
   const r = raw as Record<string, unknown>;
+  // Supabase가 nested join을 객체 또는 배열로 반환할 수 있음 — 둘 다 처리
+  const stageJoin = r.pipeline_stages;
+  let stageName: string | null = null;
+  if (stageJoin) {
+    if (Array.isArray(stageJoin) && stageJoin.length > 0) {
+      stageName = (stageJoin[0] as { name?: string }).name ?? null;
+    } else if (typeof stageJoin === 'object') {
+      stageName = (stageJoin as { name?: string }).name ?? null;
+    }
+  }
+
   return {
     id: r.id as string,
     name: (r.name as string) ?? '',
     status: (r.status as string) ?? '',
-    stage: (r.stage as string | null) ?? null,
+    stage: stageName,
     valueAmount:
       typeof r.value_amount === 'number'
         ? r.value_amount
@@ -248,7 +279,7 @@ function mapEngagement(raw: unknown): PartyEngagement {
           ? Number(r.value_amount)
           : null,
     valueCurrency: (r.value_currency as string) ?? 'USD',
-    closeDate: (r.close_date as string | null) ?? null,
+    closeDate: (r.expected_close_date as string | null) ?? null,
     updatedAt: r.updated_at as string,
   };
 }

@@ -2,14 +2,19 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/common/relative-time';
 import type { PartyEngagement } from '@/types/party-detail';
+import type { ModuleType } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface Props {
   engagements: readonly PartyEngagement[];
+  /** "+ Add Engagement" 딥링크용 */
+  partyId: string;
+  module: ModuleType;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,15 +23,31 @@ const STATUS_COLORS: Record<string, string> = {
   closed_won: 'text-emerald-600 dark:text-emerald-400',
   closed_lost: 'text-muted-foreground',
   abandoned: 'text-muted-foreground',
+  won: 'text-emerald-600 dark:text-emerald-400',
+  lost: 'text-muted-foreground',
+  on_hold: 'text-yellow-600 dark:text-yellow-400',
+  archived: 'text-muted-foreground',
 };
 
-export function PartyEngagementsList({ engagements }: Props) {
+export function PartyEngagementsList({ engagements, partyId, module }: Props) {
   const t = useTranslations('partyDetail.engagements');
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm">{t('title')}</CardTitle>
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2"
+          aria-label={t('addEngagement')}
+        >
+          <Link href={`/${module}/engagements/new?partyId=${partyId}`}>
+            <Plus className="h-4 w-4" />
+            <span className="text-xs">{t('addEngagement')}</span>
+          </Link>
+        </Button>
       </CardHeader>
       <CardContent>
         {engagements.length === 0 ? (
@@ -43,20 +64,27 @@ export function PartyEngagementsList({ engagements }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{e.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 text-xs">
-                        <span className={cn(STATUS_COLORS[e.status] ?? 'text-muted-foreground')}>
+                        <span
+                          className={cn(
+                            STATUS_COLORS[e.status] ?? 'text-muted-foreground',
+                          )}
+                        >
                           {e.status}
                         </span>
                         {e.stage && (
                           <>
                             <span className="text-muted-foreground">·</span>
-                            <span className="text-muted-foreground">{e.stage}</span>
+                            <span className="text-muted-foreground">
+                              {e.stage}
+                            </span>
                           </>
                         )}
                         {e.valueAmount != null && (
                           <>
                             <span className="text-muted-foreground">·</span>
                             <span className="font-medium tabular-nums">
-                              {e.valueCurrency} {e.valueAmount.toLocaleString()}
+                              {e.valueCurrency}{' '}
+                              {e.valueAmount.toLocaleString()}
                             </span>
                           </>
                         )}
