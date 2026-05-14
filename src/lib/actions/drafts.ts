@@ -3,16 +3,21 @@
  *
  * AI 초안 검토 화면의 Server Actions.
  *
- * 보안·정합성 원칙:
- *   - 모든 액션이 첫 줄에 requireAuth() 호출
- *   - RLS가 organization_id로 자동 격리 (별도 .eq 불필요하지만 명시적으로도 추가)
- *   - status 검증: pending_review 행만 approve/reject/edit 가능
+ * 보안·통합 원칙:
+ *   - 모든 액션 첫 줄에 requireAuth() 호출
+ *   - RLS가 organization_id로 자동 격리 (별도 .eq 필요하지 않지만 명시적으로도 추가)
+ *   - status 검증: pending_review 한정 approve/reject/edit 가능
  *   - audit 로그는 DB 트리거로 자동
  *
  * 발송 전략 (Phase 1):
- *   - approveDraft({ sendImmediately: true })  → 즉시 동기 SMTP 발송
- *   - approveDraft({ sendImmediately: false }) → status='approved'만, 발송은 추후 워커
- *   - bulkApproveDrafts(ids)                   → 일괄 'approved'만, 발송 안 함 (안전성)
+ *   - approveDraft({ sendImmediately: true })   → 즉시 동기 SMTP 발송
+ *   - approveDraft({ sendImmediately: false })  → status='approved'만, 발송은 추후 처리
+ *   - bulkApproveDrafts(ids)                    → 일괄 'approved'만, 발송 안 함 (안전성)
+ *
+ * 발신 주소 (Step 1.2):
+ *   - sendingAddressKind: 'personal' | 'role' | 'shared'
+ *   - 사용자의 email_personal / email_role / email_shared 컬럼에서 From 결정
+ *   - tabs-mailer가 같은 kind 자격증명으로 SMTP 인증 (SPF/DKIM 일관성)
  */
 
 'use server';
@@ -23,7 +28,7 @@ import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
 import type { RejectReason } from '@/types/draft-detail';
-import { REJECT_REASONS } from '@/types/draft-detail';
+import type { SendingAddressKind } from '@/types/email';
 
 /* ============================================================
  * 공용 타입
@@ -133,11 +138,13 @@ export async function saveDraftEdits(input: {
 const approveDraftSchema = z.object({
   draftId: z.string().uuid(),
   sendImmediately: z.boolean().default(false),
+  sendingAddressKind: z.enum(['personal', 'role', 'shared']).optional(),
 });
 
 export async function approveDraft(input: {
   draftId: string;
   sendImmediately?: boolean;
+  sendingAddressKind?: SendingAddressKind;
 }): Promise<ActionResult<{ sent: boolean; outboundCommunicationId?: string }>> {
   let auth: AuthContext;
   try {
@@ -220,7 +227,7 @@ export async function approveDraft(input: {
     return { ok: true, data: { sent: false } };
   }
 
-  // [C] 즉시 발송 — 인바운드가 있어야 회신 대상이 결정됨
+  // [C] 즉시 발송 — 인바운드가 있어야 수신 대상이 결정됨
   if (!row.inbound_communication_id) {
     return {
       ok: false,
@@ -230,10 +237,15 @@ export async function approveDraft(input: {
     };
   }
 
-  // 발송 시도
-  const sendResult = await sendApprovedDraft(supabase, auth, row);
+  // 발송 시도 (선택된 kind 전달)
+  const sendResult = await sendApprovedDraft(
+    supabase,
+    auth,
+    row,
+    parsed.data.sendingAddressKind,
+  );
   if (!sendResult.ok) {
-    // status는 'approved'에 머무름 — 사용자가 재시도 가능
+    // status는 'approved' 머무름 — 사용자가 재시도 가능
     return sendResult;
   }
 
@@ -279,7 +291,7 @@ export async function rejectDraft(input: {
     };
   }
 
-  // review_notes에 preset + custom 함께 저장 (DB 컬럼 없음 — Q5 결정에 따라)
+  // review_notes — preset + custom 합쳐서 저장 (DB 컬럼 없음 → Q5 결정 따라)
   const reviewNotes = [
     `[${parsed.data.reason}]`,
     parsed.data.notes?.trim() ?? '',
@@ -325,8 +337,8 @@ export async function rejectDraft(input: {
 /* ============================================================
  * 4. bulkApproveDrafts / bulkRejectDrafts — 일괄 액션
  *    발송은 하지 않음. 안전성 우선.
- *    편집 중인 행(final_body_plain not null)은 제외해야 하지만,
- *    호출자(UI)가 이미 제외한 ID 배열만 전달.
+ *    편집 중인 행(final_body_plain not null)은 제외해야 하지만
+ *    호출처(UI)가 이미 제외한 ID 배열만 전달.
  * ============================================================ */
 
 const bulkIdsSchema = z.array(z.string().uuid()).min(1).max(100);
@@ -365,7 +377,7 @@ export async function bulkApproveDrafts(
   const supabase = await createSupabaseServerClient();
   const nowIso = new Date().toISOString();
 
-  // 단일 UPDATE — 가능한 행만 변경되고 나머지는 RETURNING으로 확인
+  // 단일 UPDATE 로 가능한 행만 변경되고 나머지는 RETURNING으로 확인
   const { data: updated, error } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -504,8 +516,14 @@ export async function bulkRejectDrafts(input: {
 }
 
 /* ============================================================
- * 5. 발송 헬퍼 — Approve & Send용
+ * 5. 발송 헬퍼 — Approve & Send
  *    TABS Mailer 호출 + outbound communication INSERT + draft status='sent' 갱신
+ *
+ *    Step 1.2 변경:
+ *    - sendingAddressKind 파라미터 받음
+ *    - 사용자 행에서 email_personal/role/shared 컬럼 조회
+ *    - kind 기반 fromAddress 결정 (fallback 체인 포함)
+ *    - mailer.sendOne 호출 시 sendingAddressKind 전달
  * ============================================================ */
 
 interface DraftSendableRow {
@@ -522,10 +540,41 @@ interface DraftSendableRow {
 interface SendApprovedResult
   extends ActionResult<{ sent: boolean; outboundCommunicationId: string }> {}
 
+/**
+ * kind 기반 발신 주소 결정.
+ * kind가 명시되고 해당 컬럼에 값이 있으면 그것 사용.
+ * 그 외엔 fallback 체인: personal → role → shared → sending_email → email → auth.email
+ */
+function resolveFromAddress(
+  kind: SendingAddressKind | undefined,
+  userRow: {
+    email_personal: string | null;
+    email_role: string | null;
+    email_shared: string | null;
+    sending_email: string | null;
+    email: string;
+  } | null,
+  authEmail: string,
+): string {
+  if (kind === 'personal' && userRow?.email_personal) return userRow.email_personal;
+  if (kind === 'role' && userRow?.email_role) return userRow.email_role;
+  if (kind === 'shared' && userRow?.email_shared) return userRow.email_shared;
+
+  return (
+    userRow?.email_personal ??
+    userRow?.email_role ??
+    userRow?.email_shared ??
+    userRow?.sending_email ??
+    userRow?.email ??
+    authEmail
+  );
+}
+
 async function sendApprovedDraft(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   auth: AuthContext,
   draft: DraftSendableRow,
+  sendingAddressKind?: SendingAddressKind,
 ): Promise<SendApprovedResult> {
   if (!draft.inbound_communication_id) {
     return {
@@ -535,7 +584,7 @@ async function sendApprovedDraft(
     };
   }
 
-  // 1. inbound communication 정보 조회 (회신 대상·thread·subject)
+  // 1. inbound communication 정보 조회 (수신자·thread·subject)
   const { data: inboundRaw } = await supabase
     .schema('app')
     .from('communications' as never)
@@ -563,18 +612,28 @@ async function sendApprovedDraft(
     };
   }
 
-  // 2. 현재 사용자의 발신 자격 조회
+  // 2. 현재 사용자의 발신 자격 조회 (3개 kind 컬럼 포함)
   const { data: userRaw } = await supabase
     .schema('app')
     .from('users' as never)
-    .select('sending_email, full_name, email')
+    .select(
+      'email, sending_email, full_name, email_personal, email_role, email_shared',
+    )
     .eq('id', auth.userId)
     .maybeSingle();
   const userRow = userRaw as
-    | { sending_email: string | null; full_name: string; email: string }
+    | {
+        email: string;
+        sending_email: string | null;
+        full_name: string | null;
+        email_personal: string | null;
+        email_role: string | null;
+        email_shared: string | null;
+      }
     | null;
 
-  const fromAddress = userRow?.sending_email ?? userRow?.email ?? auth.email;
+  // kind 기반 from 결정 (fallback 체인 포함)
+  const fromAddress = resolveFromAddress(sendingAddressKind, userRow, auth.email);
   const fromName = userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender';
 
   // 3. 본문·제목 결정 — 편집본 우선
@@ -582,8 +641,8 @@ async function sendApprovedDraft(
     draft.final_subject ?? draft.subject ?? `Re: ${inbound.subject ?? ''}`;
   const finalBody = draft.final_body_plain ?? draft.body_plain;
 
-  // 4. outbound communication 행 미리 INSERT (PROCESSING) — Message-ID 미정 상태로
-  // ↓ DB 트리거가 audit 로그 자동 기록
+  // 4. outbound communication 행 미리 INSERT (PROCESSING) → Message-ID 미정 상태로
+  //    이 DB 트리거가 audit 로그 자동 기록
   const placeholderOutbound = (await supabase
     .schema('app')
     .from('communications' as never)
@@ -618,7 +677,7 @@ async function sendApprovedDraft(
   }
   const outboundId = (placeholderOutbound.data as { id: string }).id;
 
-  // 5. TABS Mailer로 실제 발송
+  // 5. TABS Mailer로 실제 발송 (kind 전달)
   let mailer;
   try {
     mailer = await createTabsMailer();
@@ -644,6 +703,7 @@ async function sendApprovedDraft(
         autoSend: false,
       },
       traceLabel: `approve-and-send:${draft.id}`,
+      sendingAddressKind, // ← Step 1.2 추가: kind 전달
     });
 
     // 6. outbound communication 상태 갱신 — Message-ID, sent_at
@@ -703,8 +763,3 @@ async function markOutboundFailed(
     // 실패 표시 자체가 실패하더라도 상위 호출자에게 send_failed가 이미 반환됨
   }
 }
-
-/* ============================================================
- * REJECT_REASONS re-export — UI 컴포넌트가 같은 출처 참조
- * ============================================================ */
-export { REJECT_REASONS };

@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { rejectDraft, REJECT_REASONS } from '@/lib/actions/drafts';
+import { rejectDraft } from '@/lib/actions/drafts';
+import { REJECT_REASONS } from '@/types/draft-detail';
 import type { RejectReason } from '@/types/draft-detail';
 
 interface Props {

@@ -160,6 +160,23 @@ interface RawJoinedDraft {
     subject: string | null;
   } | null;
 }
+// ============================================================
+// 이 파일의 내용으로 src/lib/queries/drafts.ts 의
+// `export async function fetchDraftQueue(...)` 함수 한 개만 교체.
+// (다른 코드 — RawJoinedDraft, toQueueRow, import 문 등 — 은 그대로 둠)
+// ============================================================
+//
+// 변경 사유:
+//   PostgREST가 cross-schema FK (ai.drafts → app.parties / app.engagements
+//   / app.communications) 메타데이터를 캐시에 인덱싱하지 못하는 환경 이슈.
+//   schema reload / 프로젝트 재시작에도 해결 안 되는 케이스가 있어,
+//   nested join 대신 별도 조회 후 JS에서 합치는 방식으로 우회.
+//
+// 영향:
+//   - PostgREST 캐시 상태와 무관하게 100% 동작
+//   - 쿼리 1개 → 4개로 증가 (drafts + parties + engagements + communications)
+//   - 3개 보조 쿼리는 in() 절로 1회씩만 호출, Promise.all로 병렬 — 성능 영향 미미
+//   - RawJoinedDraft 형식으로 재조립해서 toQueueRow 로직 그대로 유지
 
 export async function fetchDraftQueue(
   filters: DraftQueueFilters = DEFAULT_FILTERS,
@@ -189,8 +206,7 @@ export async function fetchDraftQueue(
       break;
   }
 
-  // SELECT 절: 조인 포함
-  // 주의: stub 한계 때문에 from('drafts' as never) 캐스트
+  // ── [1] drafts 본체만 select (nested join 제거) ─────────────
   let query = supabase
     .schema('ai')
     .from('drafts' as never)
@@ -199,10 +215,7 @@ export async function fetchDraftQueue(
        subject, body_plain, final_body_plain,
        risk_flags, requires_human_approval, auto_send_eligible,
        expires_at, created_at,
-       party_id, engagement_id,
-       parties:party_id ( name ),
-       engagements:engagement_id ( name ),
-       inbound_communication:inbound_communication_id ( from_address, subject )`,
+       party_id, engagement_id, inbound_communication_id`,
       { count: 'exact' },
     );
 
@@ -220,9 +233,6 @@ export async function fetchDraftQueue(
     query = query.gte('confidence_score', filters.minConfidence);
   }
   if (filters.onlyRisky) {
-    // PostgREST: 배열 길이 > 0 필터 — risk_flags가 '{}' 아닌 행만
-    // 'not.eq.{}' 또는 'not.is.null + array_length > 0' 패턴.
-    // PostgREST array 비교: 'not.eq.{}' 사용.
     query = query.not('risk_flags', 'eq', '{}');
   }
 
@@ -233,7 +243,6 @@ export async function fetchDraftQueue(
       nullsFirst: false,
     });
   }
-  // 항상 마지막 tiebreaker로 id 추가 — 결정론적 페이지네이션
   query = query.order('id', { ascending: true });
 
   // 페이지네이션
@@ -255,7 +264,119 @@ export async function fetchDraftQueue(
     };
   }
 
-  const rawRows = (data ?? []) as unknown as RawJoinedDraft[];
+  // 빈 결과면 보조 쿼리 스킵
+  const draftRows = (data ?? []) as Array<{
+    id: string;
+    status: string;
+    module: string | null;
+    classification_category: string;
+    confidence_score: number;
+    language: string;
+    subject: string;
+    body_plain: string;
+    final_body_plain: string | null;
+    risk_flags: string[];
+    requires_human_approval: boolean;
+    auto_send_eligible: boolean;
+    expires_at: string;
+    created_at: string;
+    party_id: string | null;
+    engagement_id: string | null;
+    inbound_communication_id: string | null;
+  }>;
+
+  if (draftRows.length === 0) {
+    return {
+      rows: [],
+      totalCount: count ?? 0,
+      filters,
+      sort,
+      pagination,
+    };
+  }
+
+  // ── [2] 보조 id 모으기 (중복 제거) ──────────────────────────
+  const partyIds = Array.from(
+    new Set(draftRows.map((d) => d.party_id).filter((v): v is string => !!v)),
+  );
+  const engagementIds = Array.from(
+    new Set(draftRows.map((d) => d.engagement_id).filter((v): v is string => !!v)),
+  );
+  const communicationIds = Array.from(
+    new Set(
+      draftRows
+        .map((d) => d.inbound_communication_id)
+        .filter((v): v is string => !!v),
+    ),
+  );
+
+  // ── [3] 보조 정보 병렬 조회 ─────────────────────────────────
+  const [partiesRes, engagementsRes, commsRes] = await Promise.all([
+    partyIds.length > 0
+      ? supabase
+          .schema('app')
+          .from('parties' as never)
+          .select('id, name')
+          .in('id', partyIds)
+      : Promise.resolve({ data: [], error: null }),
+    engagementIds.length > 0
+      ? supabase
+          .schema('app')
+          .from('engagements' as never)
+          .select('id, name')
+          .in('id', engagementIds)
+      : Promise.resolve({ data: [], error: null }),
+    communicationIds.length > 0
+      ? supabase
+          .schema('app')
+          .from('communications' as never)
+          .select('id, from_address, subject')
+          .in('id', communicationIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  // 보조 조회 에러는 치명적이지 않게 — 로그만 남기고 빈 맵으로 진행
+  if (partiesRes.error) {
+    // eslint-disable-next-line no-console
+    console.error('[queries/drafts.fetchDraftQueue] parties lookup:', partiesRes.error);
+  }
+  if (engagementsRes.error) {
+    // eslint-disable-next-line no-console
+    console.error('[queries/drafts.fetchDraftQueue] engagements lookup:', engagementsRes.error);
+  }
+  if (commsRes.error) {
+    // eslint-disable-next-line no-console
+    console.error('[queries/drafts.fetchDraftQueue] communications lookup:', commsRes.error);
+  }
+
+  // ── [4] Map 생성 (id → 행) ──────────────────────────────────
+  const partyMap = new Map<string, { name: string }>();
+  for (const p of (partiesRes.data ?? []) as Array<{ id: string; name: string }>) {
+    partyMap.set(p.id, { name: p.name });
+  }
+  const engagementMap = new Map<string, { name: string }>();
+  for (const e of (engagementsRes.data ?? []) as Array<{ id: string; name: string }>) {
+    engagementMap.set(e.id, { name: e.name });
+  }
+  const commMap = new Map<string, { from_address: string | null; subject: string | null }>();
+  for (const c of (commsRes.data ?? []) as Array<{
+    id: string;
+    from_address: string | null;
+    subject: string | null;
+  }>) {
+    commMap.set(c.id, { from_address: c.from_address, subject: c.subject });
+  }
+
+  // ── [5] RawJoinedDraft 형식으로 재조립 ─────────────────────
+  const rawRows: RawJoinedDraft[] = draftRows.map((d) => ({
+    ...d,
+    parties: d.party_id ? partyMap.get(d.party_id) ?? null : null,
+    engagements: d.engagement_id ? engagementMap.get(d.engagement_id) ?? null : null,
+    inbound_communication: d.inbound_communication_id
+      ? commMap.get(d.inbound_communication_id) ?? null
+      : null,
+  })) as unknown as RawJoinedDraft[];
+
   const rows: DraftQueueRow[] = rawRows.map(toQueueRow);
 
   return {
@@ -266,7 +387,6 @@ export async function fetchDraftQueue(
     pagination,
   };
 }
-
 /**
  * SELECT 결과 한 행을 DraftQueueRow로 변환.
  * 조인 결과가 단일 객체 또는 배열로 오는 케이스를 모두 안전 처리.

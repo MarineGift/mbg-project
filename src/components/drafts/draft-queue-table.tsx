@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -53,7 +53,7 @@ export function DraftQueueTable({ rows }: DraftQueueTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="border-b bg-muted/40 sticky top-[57px] z-10">
+        <thead className="border-b-2 bg-muted/60">
           <tr>
             <th className="px-3 py-2 w-10">
               <Checkbox

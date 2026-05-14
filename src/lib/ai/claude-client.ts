@@ -308,7 +308,10 @@ export class ClaudeClient {
         response = await this.anthropic.messages.create({
           model: modelUsed,
           max_tokens: agent.maxTokens || DEFAULT_MAX_TOKENS,
-          temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
+          // Claude Opus 4.7+는 temperature 파라미터 미지원 (Anthropic 정책 변경)
+          ...(modelUsed === 'claude-opus-4-7'
+            ? {}
+            : { temperature: agent.temperature ?? DEFAULT_TEMPERATURE }),
           system: rendered.system,
           messages: rendered.messages,
         });
