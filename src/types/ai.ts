@@ -85,7 +85,8 @@ export type ModuleType =
   | 'customer'
   | 'crowdfunding'
   | 'product_launch'
-  | 'sales';
+  | 'sales'
+  | 'filler';
 
 export type Language = 'ko' | 'en' | 'ja';
 

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -57,7 +57,7 @@ const schema = z.object({
     'customer',
     'crowdfunding',
     'product_launch',
-    'sales',
+    'sales', 'filler',
   ]),
   partyType: z.enum(['company', 'individual', 'organization']),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),

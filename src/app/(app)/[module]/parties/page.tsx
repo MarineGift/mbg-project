@@ -13,6 +13,7 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
   'buyer',
   'partner',
   'customer',
+  'filler',
 ] as const;
 
 const MODULE_LABELS: Record<ModuleType, string> = {
@@ -23,6 +24,7 @@ const MODULE_LABELS: Record<ModuleType, string> = {
   crowdfunding: '크라우드펀딩',
   product_launch: '제품 출시',
   sales: '영업',
+  filler: '충전제 공급사',
 };
 
 const TIER_LABELS: Record<PartyTier, string> = {
@@ -61,10 +63,13 @@ interface PartyRow {
 
 interface PageProps {
   params: Promise<{ module: string }>;
+  searchParams: Promise<{ include_stubs?: string }>;
 }
 
-export default async function PartiesListPage({ params }: PageProps) {
+export default async function PartiesListPage({ params, searchParams }: PageProps) {
   const { module: moduleParam } = await params;
+  const { include_stubs } = await searchParams;
+  const showStubs = include_stubs === '1';
 
   if (!(PHASE_1_MODULES as readonly string[]).includes(moduleParam)) {
     notFound();
@@ -74,15 +79,19 @@ export default async function PartiesListPage({ params }: PageProps) {
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .schema('app')
     .from('parties' as never)
     .select('id, name, tier, status, country_code, city, industry_tags, website, created_at')
     .eq('module', module)
-    .is('deleted_at', null)
-    .order('tier', { ascending: true })
-    .order('name', { ascending: true })
-    .limit(200);
+    .is('deleted_at', null);
+
+  // Stub (Auto-created from industry mills/linkages) 제외 — ?include_stubs=1 로 포함 토글
+  if (!showStubs) {
+    query = query.or('notes.is.null,notes.not.ilike.Auto-created%');
+  }
+
+  const { data, error } = await query;
 
   // 에러를 silent하게 삼키지 않음 — Next.js error boundary가 잡아서
   // 적절한 에러 화면을 표시. "총 0개"로 잘못 보이는 것보다 명시적 에러가 디버깅에 안전.

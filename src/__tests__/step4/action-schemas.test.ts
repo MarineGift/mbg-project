@@ -1,4 +1,4 @@
-/**
+﻿/**
  * tests/action-schemas.test.ts
  *
  * Server Actions의 zod 검증 로직 테스트.
@@ -23,7 +23,7 @@ describe('Party action schemas', () => {
       'customer',
       'crowdfunding',
       'product_launch',
-      'sales',
+      'sales', 'filler',
     ]),
     partyType: z.enum(['company', 'individual', 'organization']).default('company'),
     tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']).optional().nullable(),
@@ -79,7 +79,7 @@ describe('Party action schemas', () => {
       'customer',
       'crowdfunding',
       'product_launch',
-      'sales',
+      'sales', 'filler',
     ];
     for (const m of modules) {
       expect(partySchema.safeParse({ name: 'X', module: m }).success).toBe(true);

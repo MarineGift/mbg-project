@@ -1,4 +1,4 @@
-/**
+﻿/**
  * lib/actions/engagements.ts
  *
  * Engagement Server Actions.
@@ -279,7 +279,7 @@ const engagementBaseSchema = z.object({
     'customer',
     'crowdfunding',
     'product_launch',
-    'sales',
+    'sales', 'filler',
   ]),
   name: z.string().min(1, 'Required').max(200),
   description: z.string().max(5000).optional().nullable(),

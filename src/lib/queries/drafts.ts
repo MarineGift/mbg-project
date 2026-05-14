@@ -1,4 +1,4 @@
-/**
+﻿/**
  * lib/queries/drafts.ts
  *
  * Server-side fetcher for AI 초안 큐.
@@ -37,7 +37,7 @@ const ALL_MODULES: readonly ModuleType[] = [
   'customer',
   'crowdfunding',
   'product_launch',
-  'sales',
+  'sales', 'filler',
 ] as const;
 
 const ALL_STATUSES: readonly DraftStatus[] = [

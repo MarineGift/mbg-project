@@ -28,6 +28,7 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
   'buyer',
   'partner',
   'customer',
+  'filler'
 ] as const;
 
 interface PageProps {

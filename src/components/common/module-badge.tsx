@@ -24,6 +24,7 @@ const MODULE_STYLES: Record<ModuleType, string> = {
   crowdfunding: 'bg-module-crowdfunding text-module-crowdfunding-foreground',
   product_launch: 'bg-module-product_launch text-module-product_launch-foreground',
   sales: 'bg-module-sales text-module-sales-foreground',
+  filler: 'bg-amber-100 text-amber-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
 };
 
 export function ModuleBadge({

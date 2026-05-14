@@ -41,14 +41,15 @@
     "settings": "설정"
   },
   "modules": {
-    "investor": "투자자",
-    "buyer": "구매처",
-    "partner": "파트너",
-    "customer": "고객",
-    "crowdfunding": "크라우드펀딩",
-    "product_launch": "제품 출시",
-    "sales": "판매"
-  },
+  "investor": "투자자",
+  "buyer": "구매자",
+  "partner": "파트너",
+  "customer": "고객",
+  "crowdfunding": "크라우드펀딩",
+  "product_launch": "제품 출시",
+  "sales": "영업",
+  "filler": "충전제 공급사"
+},
   "draftStatus": {
     "pending_review": "검토 대기",
     "approved": "승인됨",
