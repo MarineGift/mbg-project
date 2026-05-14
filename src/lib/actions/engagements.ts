@@ -274,7 +274,7 @@ const engagementBaseSchema = z.object({
   partyId: z.string().uuid(),
   module: z.enum([
     'investor',
-    'buyer',
+    'paper_mill',
     'partner',
     'customer',
     'crowdfunding',

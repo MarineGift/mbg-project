@@ -10,7 +10,7 @@ import type { PartyTier, PartyStatus } from '@/types/party-detail';
 
 const PHASE_1_MODULES: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
   'filler',
@@ -18,7 +18,7 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
 
 const MODULE_LABELS: Record<ModuleType, string> = {
   investor: '투자자',
-  buyer: '구매자',
+  paper_mill: '구매자',
   partner: '파트너',
   customer: '고객',
   crowdfunding: '크라우드펀딩',

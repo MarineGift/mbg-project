@@ -31,7 +31,7 @@ import type { ModuleType } from '@/types/ai';
 
 const PHASE_1_ACTIVE_MODULES: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
   'filler',
@@ -215,7 +215,7 @@ function NavLink({
 function ModuleDot({ module }: { module: ModuleType }) {
   const cls: Record<ModuleType, string> = {
   investor: 'bg-module-investor',
-  buyer: 'bg-module-buyer',
+  paper_mill: 'bg-module-buyer',
   partner: 'bg-module-partner',
   customer: 'bg-module-customer',
   crowdfunding: 'bg-module-crowdfunding',

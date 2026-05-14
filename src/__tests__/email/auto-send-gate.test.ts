@@ -44,7 +44,7 @@ const baseRule = {
   block_reason: null,
   min_confidence: 0.95,
   requires_human_approval: false,
-  allowed_modules: ['investor', 'buyer'],
+  allowed_modules: ['investor', 'paper_mill'],
   blocked_keywords_in_body: [],
   daily_limit: 0,
   hourly_limit: 0,
@@ -135,7 +135,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'partner', // not in ['investor','buyer']
+      module: 'partner', // not in ['investor','paper_mill']
       classification: baseClassification,
       draftBody: 'thanks',
     });

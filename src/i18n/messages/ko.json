@@ -42,7 +42,7 @@
   },
   "modules": {
   "investor": "투자자",
-  "buyer": "구매자",
+  "paper_mill": "구매자",
   "partner": "파트너",
   "customer": "고객",
   "crowdfunding": "크라우드펀딩",

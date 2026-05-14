@@ -32,7 +32,7 @@ import {
 
 const ALL_MODULES: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
   'crowdfunding',

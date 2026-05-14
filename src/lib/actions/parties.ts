@@ -34,7 +34,7 @@ const partySchema = z.object({
   legalName: z.string().max(200).optional().nullable(),
   module: z.enum([
     'investor',
-    'buyer',
+    'paper_mill',
     'partner',
     'customer',
     'crowdfunding',

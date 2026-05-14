@@ -34,7 +34,7 @@ const OPEN_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'blocked'] 
 const ALL_PRIORITIES: readonly TaskPriority[] = ['low', 'medium', 'high', 'urgent'] as const;
 const ALL_MODULES: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
   'crowdfunding',

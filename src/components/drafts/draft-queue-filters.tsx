@@ -38,7 +38,7 @@ const STATUS_OPTIONS: readonly DraftStatus[] = [
 
 const MODULE_OPTIONS: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
 ] as const;

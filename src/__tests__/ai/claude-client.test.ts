@@ -93,7 +93,7 @@ const haikuAgentRow = {
   max_tokens: 1024,
   output_format: 'structured',
   system_prompt: 'You are a classifier.',
-  applicable_modules: ['investor', 'buyer'],
+  applicable_modules: ['investor', 'paper_mill'],
   applicable_languages: ['ko', 'en', 'ja'],
   require_pii_masking: true,
   knowledge_collection: null,

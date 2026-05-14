@@ -97,7 +97,7 @@ export async function getPaperCompanyIntel(
 
   // ── [1] paper company 본체 ────────────────────────────────
   const { data: companyRaw, error: companyErr } = await supabase
-    .schema('industry')
+    .schema('industry' as never)
     .from('paper_companies' as never)
     .select(
       'id, name, market_code, headquarters, europe_mills_footprint, main_product_category, main_products, filler_use_intensity, known_filler_types, supply_structure_note, evidence_level, source_url, notes',
@@ -117,7 +117,7 @@ export async function getPaperCompanyIntel(
 
   // ── [2] mills ─────────────────────────────────────────────
   const { data: millsRawData, error: millsErr } = await supabase
-    .schema('industry')
+    .schema('industry' as never)
     .from('paper_mills' as never)
     .select(
       'id, paper_company_id, market_code, mill_name, city, region, main_product_category, main_products, filler_probability, likely_filler_types, likely_supply_structure, likely_supplier_note',
@@ -137,7 +137,7 @@ export async function getPaperCompanyIntel(
   let linkages: RawLinkageForPaperRow[] = [];
   if (millIds.length > 0) {
     const { data: linkRaw, error: linkErr } = await supabase
-      .schema('industry')
+      .schema('industry' as never)
       .from('supplier_mill_linkages' as never)
       .select(
         'id, paper_mill_id, filler_supplier_id, filler_type, supply_structure, relationship_type, confidence_grade, assessment_scope',
@@ -162,7 +162,7 @@ export async function getPaperCompanyIntel(
   const supplierMap = new Map<number, string>();
   if (supplierIds.length > 0) {
     const { data: supplierRaw, error: supplierErr } = await supabase
-      .schema('industry')
+      .schema('industry' as never)
       .from('filler_suppliers' as never)
       .select('id, name')
       .in('id', supplierIds);
@@ -327,7 +327,7 @@ export async function getFillerSupplierIntel(
 
   // ── [1] filler supplier 본체 ──────────────────────────────
   const { data: supplierRaw, error: supplierErr } = await supabase
-    .schema('industry')
+    .schema('industry' as never)
     .from('filler_suppliers' as never)
     .select(
       'id, name, market_code, supplier_type, market_role, relevant_filler_types, supply_model, europe_paper_evidence, onsite_pcc_evidence, evidence_level, source_url, notes',
@@ -350,7 +350,7 @@ export async function getFillerSupplierIntel(
 
   // ── [2] 이 supplier의 모든 linkage ────────────────────────
   const { data: linkagesRaw, error: linkagesErr } = await supabase
-    .schema('industry')
+    .schema('industry' as never)
     .from('supplier_mill_linkages' as never)
     .select(
       'id, paper_company_id, paper_company_name_raw, paper_mill_id, mill_site_raw, market_code, country_region, filler_type, supply_structure, relationship_type, confidence_grade, assessment_scope, confirmation_status',
@@ -384,14 +384,14 @@ export async function getFillerSupplierIntel(
   const [paperCompaniesRes, paperMillsRes] = await Promise.all([
     paperCompanyIds.length > 0
       ? supabase
-          .schema('industry')
+          .schema('industry' as never)
           .from('paper_companies' as never)
           .select('id, name')
           .in('id', paperCompanyIds)
       : Promise.resolve({ data: [], error: null }),
     paperMillIds.length > 0
       ? supabase
-          .schema('industry')
+          .schema('industry' as never)
           .from('paper_mills' as never)
           .select('id, mill_name')
           .in('id', paperMillIds)

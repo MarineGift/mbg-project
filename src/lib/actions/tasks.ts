@@ -129,7 +129,7 @@ const createTaskSchema = z.object({
   module: z
     .enum([
       'investor',
-      'buyer',
+      'paper_mill',
       'partner',
       'customer',
       'crowdfunding',

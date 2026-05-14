@@ -52,7 +52,7 @@ const schema = z.object({
   legalName: z.string().max(200).optional().or(z.literal('')),
   module: z.enum([
     'investor',
-    'buyer',
+    'paper_mill',
     'partner',
     'customer',
     'crowdfunding',
@@ -92,7 +92,7 @@ const PARTY_TYPES = ['company', 'individual', 'organization'] as const;
 const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
 const MODULES_PRIORITY: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
 ] as const;

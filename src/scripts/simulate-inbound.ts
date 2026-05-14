@@ -99,7 +99,7 @@ async function main(): Promise<void> {
       party_id: party.id,
       direction: 'inbound',
       channel: 'email',
-      module: party.module ?? 'buyer',
+      module: party.module ?? 'paper_mill',
       subject,
       body_plain: bodyPlain,
       from_address: 'mika.lehtinen@upm.com',

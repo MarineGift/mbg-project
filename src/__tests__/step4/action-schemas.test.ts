@@ -18,7 +18,7 @@ describe('Party action schemas', () => {
     name: z.string().min(1).max(200),
     module: z.enum([
       'investor',
-      'buyer',
+      'paper_mill',
       'partner',
       'customer',
       'crowdfunding',
@@ -45,20 +45,20 @@ describe('Party action schemas', () => {
   it('accepts valid input', () => {
     const result = partySchema.safeParse({
       name: 'Acme Inc.',
-      module: 'buyer',
+      module: 'paper_mill',
     });
     expect(result.success).toBe(true);
   });
 
   it('rejects empty name', () => {
-    const result = partySchema.safeParse({ name: '', module: 'buyer' });
+    const result = partySchema.safeParse({ name: '', module: 'paper_mill' });
     expect(result.success).toBe(false);
   });
 
   it('rejects name > 200 chars', () => {
     const result = partySchema.safeParse({
       name: 'A'.repeat(201),
-      module: 'buyer',
+      module: 'paper_mill',
     });
     expect(result.success).toBe(false);
   });
@@ -74,7 +74,7 @@ describe('Party action schemas', () => {
   it('accepts 7 valid modules', () => {
     const modules = [
       'investor',
-      'buyer',
+      'paper_mill',
       'partner',
       'customer',
       'crowdfunding',
@@ -88,18 +88,18 @@ describe('Party action schemas', () => {
 
   it('accepts 2-letter country code', () => {
     expect(
-      partySchema.safeParse({ name: 'X', module: 'buyer', countryCode: 'KR' }).success,
+      partySchema.safeParse({ name: 'X', module: 'paper_mill', countryCode: 'KR' }).success,
     ).toBe(true);
   });
 
   it('rejects 3-letter country code', () => {
     expect(
-      partySchema.safeParse({ name: 'X', module: 'buyer', countryCode: 'KOR' }).success,
+      partySchema.safeParse({ name: 'X', module: 'paper_mill', countryCode: 'KOR' }).success,
     ).toBe(false);
   });
 
   it('accepts empty string country (transforms to null)', () => {
-    const r = partySchema.safeParse({ name: 'X', module: 'buyer', countryCode: '' });
+    const r = partySchema.safeParse({ name: 'X', module: 'paper_mill', countryCode: '' });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.countryCode).toBeNull();
   });
@@ -108,7 +108,7 @@ describe('Party action schemas', () => {
     expect(
       partySchema.safeParse({
         name: 'X',
-        module: 'buyer',
+        module: 'paper_mill',
         website: 'https://example.com',
       }).success,
     ).toBe(true);
@@ -116,7 +116,7 @@ describe('Party action schemas', () => {
 
   it('rejects bare-domain website (no protocol)', () => {
     expect(
-      partySchema.safeParse({ name: 'X', module: 'buyer', website: 'example.com' })
+      partySchema.safeParse({ name: 'X', module: 'paper_mill', website: 'example.com' })
         .success,
     ).toBe(false);
   });

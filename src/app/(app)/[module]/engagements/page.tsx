@@ -16,7 +16,7 @@ import type { ModuleType } from '@/types/ai';
 
 const PHASE_1_MODULES: readonly ModuleType[] = [
   'investor',
-  'buyer',
+  'paper_mill',
   'partner',
   'customer',
   'filler',

@@ -18,7 +18,7 @@ interface ModuleBadgeProps {
 
 const MODULE_STYLES: Record<ModuleType, string> = {
   investor: 'bg-module-investor text-module-investor-foreground',
-  buyer: 'bg-module-buyer text-module-buyer-foreground',
+  paper_mill: 'bg-module-buyer text-module-buyer-foreground',
   partner: 'bg-module-partner text-module-partner-foreground',
   customer: 'bg-module-customer text-module-customer-foreground',
   crowdfunding: 'bg-module-crowdfunding text-module-crowdfunding-foreground',

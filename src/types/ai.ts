@@ -80,7 +80,7 @@ export type RunStatus = 'success' | 'failed' | 'timeout' | 'budget_exceeded';
 /** 모듈 ENUM (마스터 프롬프트 §3.1). */
 export type ModuleType =
   | 'investor'
-  | 'buyer'
+  | 'paper_mill'
   | 'partner'
   | 'customer'
   | 'crowdfunding'
