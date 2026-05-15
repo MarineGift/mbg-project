@@ -1,9 +1,5 @@
 // src/app/(app)/industry/paper-mills/page.tsx
-// 변경 (원본 대비):
-//   1) 경로: (authenticated)/ → (app)/
-//   2) import: createClient → createSupabaseServerClient (본인 환경)
-//   3) 호출: await createClient() → await createSupabaseServerClient()
-//   4) .schema('industry' as never) 캐스팅 유지 (#8 미해결)
+// v5.7 fix: 검색 OR에 paper_company.name 포함 (Sappi NA 누락 해결)
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { PaperMillsTable } from './PaperMillsTable'
 
@@ -40,10 +36,28 @@ export default async function PaperMillsPage({
     .order('id', { ascending: true })
 
   if (params.q) {
-    millsQuery = millsQuery.or(
-      `mill_name.ilike.%${params.q}%,city.ilike.%${params.q}%,main_products.ilike.%${params.q}%`
-    )
+    // Pre-fetch paper_company IDs matching the search term
+    const { data: matchingCompanies } = await supabase
+      .schema('industry' as never)
+      .from('paper_companies')
+      .select('id')
+      .ilike('name', `%${params.q}%`)
+
+    const companyIds = (matchingCompanies ?? []).map((c: { id: number }) => c.id)
+
+    // Build OR conditions, optionally appending paper_company_id match
+    const orParts = [
+      `mill_name.ilike.%${params.q}%`,
+      `city.ilike.%${params.q}%`,
+      `main_products.ilike.%${params.q}%`,
+    ]
+    if (companyIds.length > 0) {
+      orParts.push(`paper_company_id.in.(${companyIds.join(',')})`)
+    }
+
+    millsQuery = millsQuery.or(orParts.join(','))
   }
+
   if (params.market) {
     millsQuery = millsQuery.eq('market_code', params.market)
   }
