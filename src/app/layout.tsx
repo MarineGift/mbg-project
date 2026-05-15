@@ -2,7 +2,7 @@
  * app/layout.tsx
  *
  * Root layout — 모든 페이지의 최상위 (login 포함).
- *   - 다국어 폰트 로드 (Inter, Noto Sans KR, Noto Sans JP)
+ *   - 다국어 폰트 로드 (Inter, Noto Sans KR, Noto Sans JP, Geist)
  *   - locale + messages 결정 (next-intl)
  *   - 전역 providers (QueryProvider, IntlProvider, ToastProvider)
  *
@@ -11,12 +11,14 @@
 
 import type { Metadata } from 'next';
 import { Inter, Noto_Sans_KR, Noto_Sans_JP } from 'next/font/google';
+import { GeistSans } from 'geist/font/sans';
 import { getLocale, getMessages } from 'next-intl/server';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { IntlProvider } from '@/components/providers/intl-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { normalizeLocale } from '@/i18n/routing';
 import './globals.css';
+import { cn } from "@/lib/utils";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -53,7 +55,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${notoKr.variable} ${notoJp.variable}`}
+      className={cn(inter.variable, notoKr.variable, notoJp.variable, "font-sans", GeistSans.variable)}
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background font-sans antialiased">
