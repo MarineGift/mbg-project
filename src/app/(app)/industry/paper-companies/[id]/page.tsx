@@ -1,5 +1,6 @@
 // src/app/(app)/industry/paper-companies/[id]/page.tsx
 // v5.8 Step B1 EN: Paper Company Detail Page (English UI)
+// Phase 7-b: CRM party promote 연동
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -15,6 +16,8 @@ import { CompanyMillsTable } from './CompanyMillsTable'
 import { CompanySupplierSummary } from './CompanySupplierSummary'
 import { CompanyStatsCards } from './CompanyStatsCards'
 import { CountrySuppliersList } from './CountrySuppliersList'
+import { getPartyByCompanyId } from '@/app/actions/party'
+import { PromoteCompanyButton } from '@/components/industry/PromoteCompanyButton'
 
 export default async function PaperCompanyDetailPage({
   params,
@@ -43,6 +46,9 @@ export default async function PaperCompanyDetailPage({
   const countrySuppliers = intel.company.marketCode
     ? await getCountryFillerSuppliers(intel.company.marketCode)
     : []
+
+  // Phase 7-b: CRM party 연결 여부 확인
+  const linkedParty = await getPartyByCompanyId(id)
 
   return (
     <div className="space-y-6">
@@ -76,17 +82,28 @@ export default async function PaperCompanyDetailPage({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <TierRoleBadge tier={tierRole} />
-            <EvidenceBadge level={intel.company.evidenceLevel} />
-            {sourceUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  Source
-                </a>
-              </Button>
-            )}
+
+          {/* 우측: 배지 + CRM 승격 버튼 */}
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <TierRoleBadge tier={tierRole} />
+              <EvidenceBadge level={intel.company.evidenceLevel} />
+              {sourceUrl && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Source
+                  </a>
+                </Button>
+              )}
+            </div>
+            {/* Phase 7-b: CRM 승격 버튼 */}
+            <PromoteCompanyButton
+              companyId={id}
+              companyName={intel.company.name}
+              existingPartyId={linkedParty?.id ?? null}
+              existingPartyName={linkedParty?.name ?? null}
+            />
           </div>
         </div>
 

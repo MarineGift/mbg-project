@@ -1,5 +1,6 @@
 // src/app/(app)/industry/paper-mills/[id]/page.tsx
 // v5.8 Step B2 EN: Paper Mill Detail (English)
+// Phase 7-b: CRM party promote 연동
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -11,6 +12,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getCountryFillerSuppliers } from '@/lib/queries/industry-link-extensions'
 import { MillSuppliersMatrix } from './MillSuppliersMatrix'
 import { CountrySuppliersList } from './CountrySuppliersList'
+import { getPartyByMillId } from '@/app/actions/party'
+import { PromoteMillButton } from '@/components/industry/PromoteMillButton'
 
 export default async function PaperMillDetailPage({
   params,
@@ -95,6 +98,9 @@ export default async function PaperMillDetailPage({
 
   const likelyTypes = (mill.likely_filler_types as string[]) ?? []
 
+  // Phase 7-b: CRM party 연결 여부 확인
+  const linkedParty = await getPartyByMillId(id)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -135,6 +141,14 @@ export default async function PaperMillDetailPage({
               )}
             </div>
           </div>
+
+          {/* Phase 7-b: CRM 승격 버튼 */}
+          <PromoteMillButton
+            millId={id}
+            millName={mill.mill_name}
+            existingPartyId={linkedParty?.id ?? null}
+            existingPartyName={linkedParty?.name ?? null}
+          />
         </div>
 
         {(mill.main_product_category || mill.main_products) && (
