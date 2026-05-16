@@ -428,7 +428,8 @@
       "profile": "Profile",
       "language": "Language",
       "notifications": "Notifications",
-      "organization": "Organization"
+      "organization": "Organization",
+    "pipelines": "Pipeline Stages"
     },
     "profile": {
       "title": "Profile",
@@ -500,7 +501,8 @@
     "partyTypes": {
       "company": "Company",
       "individual": "Individual",
-      "organization": "Organization"
+      "organization": "Organization",
+    "pipelines": "Pipeline Stages"
     },
     "legalName": "Legal name",
     "legalNamePlaceholder": "Inc. / LLC / Co., Ltd. ...",

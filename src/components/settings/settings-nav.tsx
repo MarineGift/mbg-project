@@ -1,9 +1,8 @@
 'use client';
-
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { User, Languages, Bell, Building2 } from 'lucide-react';
+import { User, Languages, Bell, Building2, Workflow } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -11,12 +10,12 @@ const NAV_ITEMS = [
   { href: '/settings/language', labelKey: 'language', icon: Languages },
   { href: '/settings/notifications', labelKey: 'notifications', icon: Bell },
   { href: '/settings/organization', labelKey: 'organization', icon: Building2 },
+  { href: '/settings/pipelines', labelKey: 'pipelines', icon: Workflow },
 ] as const;
 
 export function SettingsNav() {
   const pathname = usePathname();
   const t = useTranslations('settings.nav');
-
   return (
     <nav className="w-56 shrink-0 border-r bg-card py-3 px-2 hidden md:block">
       <ul className="space-y-0.5">
