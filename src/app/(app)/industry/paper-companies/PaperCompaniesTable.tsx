@@ -1,7 +1,8 @@
 // src/app/(app)/industry/paper-companies/PaperCompaniesTable.tsx
-// v5.7 신규: PaperMillsTable.tsx 패턴 복제 + paper_companies 적응
+// v5.8 EN: All English UI + Link to detail page
 'use client'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -31,13 +32,14 @@ type Market = { code: string; name: string; region: string | null }
 const TIER_OPTIONS: TierRole[] = ['HQ', 'Regional', 'Country', 'Plant']
 
 export function PaperCompaniesTable({
-  companies, total, markets, currentPage, pageSize,
+  companies, total, markets, currentPage, pageSize, showObsolete,
 }: {
   companies: Company[]
   total: number
   markets: Market[]
   currentPage: number
   pageSize: number
+  showObsolete: boolean
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -47,10 +49,12 @@ export function PaperCompaniesTable({
     const params = new URLSearchParams(searchParams.toString())
     if (value && value !== 'all') params.set(key, value)
     else params.delete(key)
-    if (key !== 'page') params.delete('page') // reset page on filter
-    startTransition(() => {
-      router.push(`?${params.toString()}`)
-    })
+    if (key !== 'page') params.delete('page')
+    startTransition(() => { router.push(`?${params.toString()}`) })
+  }
+
+  const toggleShowObsolete = () => {
+    updateParam('showObsolete', showObsolete ? null : '1')
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -60,33 +64,27 @@ export function PaperCompaniesTable({
 
   return (
     <div className="space-y-4">
-      {/* Header with count */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">{total}</span> companies
           {hasFilters ? ' (filtered)' : ''}
+          {!showObsolete && (
+            <span className="ml-2 text-xs">· obsolete / family errors excluded</span>
+          )}
         </div>
         {isPending && <Badge variant="outline">Loading...</Badge>}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Search company name, HQ, products..."
+          placeholder="Search name, HQ, products, notes..."
           defaultValue={searchParams.get('q') ?? ''}
           onBlur={(e) => updateParam('q', e.target.value || null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') updateParam('q', e.currentTarget.value || null)
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') updateParam('q', e.currentTarget.value || null) }}
           className="max-w-sm"
         />
-        <Select
-          value={searchParams.get('market') ?? 'all'}
-          onValueChange={(v) => updateParam('market', v)}
-        >
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="All markets" />
-          </SelectTrigger>
+        <Select value={searchParams.get('market') ?? 'all'} onValueChange={(v) => updateParam('market', v)}>
+          <SelectTrigger className="w-56"><SelectValue placeholder="All markets" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All markets ({markets.length})</SelectItem>
             {markets.map(m => (
@@ -96,23 +94,24 @@ export function PaperCompaniesTable({
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={searchParams.get('tier') ?? 'all'}
-          onValueChange={(v) => updateParam('tier', v)}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="All tiers" />
-          </SelectTrigger>
+        <Select value={searchParams.get('tier') ?? 'all'} onValueChange={(v) => updateParam('tier', v)}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="All tiers" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All tiers</SelectItem>
-            {TIER_OPTIONS.map(t => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
+            {TIER_OPTIONS.map(t => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showObsolete}
+            onChange={toggleShowObsolete}
+            className="rounded border-gray-300"
+          />
+          <span className="text-muted-foreground">Show obsolete / family errors</span>
+        </label>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -136,19 +135,15 @@ export function PaperCompaniesTable({
             )}
             {companies.map(company => (
               <TableRow key={company.id}>
-                <TableCell className="text-muted-foreground font-mono text-xs">
-                  {company.id}
+                <TableCell className="text-muted-foreground font-mono text-xs">{company.id}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/industry/paper-companies/${company.id}`} className="hover:underline">
+                    {company.name}
+                  </Link>
                 </TableCell>
-                <TableCell className="font-medium">{company.name}</TableCell>
-                <TableCell>
-                  <TierRoleBadge tier={company.tier_role ?? null} />
-                </TableCell>
-                <TableCell>
-                  <EvidenceBadge level={company.evidence_level ?? null} />
-                </TableCell>
-                <TableCell>
-                  <code className="text-xs text-muted-foreground">{company.market_code}</code>
-                </TableCell>
+                <TableCell><TierRoleBadge tier={company.tier_role ?? null} /></TableCell>
+                <TableCell><EvidenceBadge level={company.evidence_level ?? null} /></TableCell>
+                <TableCell><code className="text-xs text-muted-foreground">{company.market_code}</code></TableCell>
                 <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                   {company.headquarters ?? '—'}
                 </TableCell>
@@ -161,7 +156,6 @@ export function PaperCompaniesTable({
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           {total > 0 && `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, total)} of ${total}`}

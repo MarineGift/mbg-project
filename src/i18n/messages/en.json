@@ -42,7 +42,7 @@
   },
   "modules": {
     "investor": "Investors",
-    "paper_mill": "Buyers",
+    "paper_mill": "Paper Companies",
     "partner": "Partners",
     "customer": "Customers",
     "crowdfunding": "Crowdfunding",

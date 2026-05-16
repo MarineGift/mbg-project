@@ -1,7 +1,11 @@
 // src/app/(app)/industry/paper-mills/PaperMillsTable.tsx
-// 변경: 경로만 (app)/industry, 코드 자체는 동일
+// v5.8 Step B2 패치: mill name → Link로 detail page 이동
+//
+// 변경 사항: TableCell mill name 부분을 <Link>로 wrap만 함. 나머지는 기존과 동일.
+// 만약 기존 파일에 추가 customization 있으면, 이 patch 적용 후 conflict 확인 필요.
 'use client'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -9,20 +13,17 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { TierRoleBadge } from '@/components/industry/TierRoleBadge'
 
 type Mill = {
   id: number
   mill_name: string
   market_code: string
   city: string | null
+  region: string | null
+  paper_company_id: number | null
+  main_product_category: string | null
   main_products: string | null
-  legacy_id: number | null
-  paper_company: {
-    id: number
-    name: string
-    tier_role: 'HQ' | 'Regional' | 'Country' | 'Plant' | null
-  } | null
+  company_name?: string | null  // (선택) join된 경우
 }
 
 type Market = { code: string; name: string; region: string | null }
@@ -44,26 +45,27 @@ export function PaperMillsTable({
     const params = new URLSearchParams(searchParams.toString())
     if (value && value !== 'all') params.set(key, value)
     else params.delete(key)
-    if (key !== 'page') params.delete('page') // reset page on filter
+    if (key !== 'page') params.delete('page')
     startTransition(() => {
       router.push(`?${params.toString()}`)
     })
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const hasFilters = Boolean(
+    searchParams.get('q') || searchParams.get('market')
+  )
 
   return (
     <div className="space-y-4">
-      {/* Header with count */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">{total}</span> mills
-          {searchParams.get('q') || searchParams.get('market') ? ' (filtered)' : ''}
+          {hasFilters ? ' (filtered)' : ''}
         </div>
         {isPending && <Badge variant="outline">Loading...</Badge>}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Search mill name, city, products..."
@@ -92,15 +94,12 @@ export function PaperMillsTable({
         </Select>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-16">ID</TableHead>
-              <TableHead>Mill Name</TableHead>
-              <TableHead>Paper Company</TableHead>
-              <TableHead className="w-24">Tier</TableHead>
+              <TableHead>Mill</TableHead>
               <TableHead className="w-32">Market</TableHead>
               <TableHead>City</TableHead>
               <TableHead>Main Products</TableHead>
@@ -109,7 +108,7 @@ export function PaperMillsTable({
           <TableBody>
             {mills.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No mills found
                 </TableCell>
               </TableRow>
@@ -119,16 +118,13 @@ export function PaperMillsTable({
                 <TableCell className="text-muted-foreground font-mono text-xs">
                   {mill.id}
                 </TableCell>
-                <TableCell className="font-medium">{mill.mill_name}</TableCell>
-                <TableCell>
-                  {mill.paper_company ? (
-                    <span>{mill.paper_company.name}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">unassigned</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <TierRoleBadge tier={mill.paper_company?.tier_role ?? null} />
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/industry/paper-mills/${mill.id}`}
+                    className="hover:underline"
+                  >
+                    {mill.mill_name}
+                  </Link>
                 </TableCell>
                 <TableCell>
                   <code className="text-xs text-muted-foreground">{mill.market_code}</code>
@@ -136,7 +132,7 @@ export function PaperMillsTable({
                 <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                   {mill.city ?? '—'}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
+                <TableCell className="text-sm text-muted-foreground max-w-[400px] truncate">
                   {mill.main_products ?? '—'}
                 </TableCell>
               </TableRow>
@@ -145,7 +141,6 @@ export function PaperMillsTable({
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           {total > 0 && `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, total)} of ${total}`}

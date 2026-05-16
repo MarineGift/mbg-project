@@ -1,9 +1,8 @@
 // src/app/(app)/industry/paper-companies/page.tsx
-// v5.7 신규: paper-mills 패턴 복제 + paper_companies 스키마 반영
-// 핵심 차이:
-//   - paper_companies는 자기 자신이 회사 → embed 불필요
-//   - tier_role 직접 컬럼 → 필터 dropdown 추가
-//   - evidence_level (A/B/C/D/E) 첫 활용 → EvidenceBadge
+// v5.8 패치: 
+//   - notes 컬럼 검색에 포함 (family 통합 검색 가능)
+//   - OBSOLETE / FAMILY ERROR / FAMILY — prefix 자동 제외 (default)
+//   - showObsolete=1 query param으로 모두 보기 (검증용)
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { PaperCompaniesTable } from './PaperCompaniesTable'
@@ -13,15 +12,22 @@ const PAGE_SIZE = 50
 export default async function PaperCompaniesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; market?: string; tier?: string; page?: string }>
+  searchParams: Promise<{ 
+    q?: string; 
+    market?: string; 
+    tier?: string; 
+    page?: string;
+    showObsolete?: string;
+  }>
 }) {
   const params = await searchParams
   const supabase = await createSupabaseServerClient()
   const page = Math.max(1, Number(params.page ?? 1))
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
+  const showObsolete = params.showObsolete === '1'
 
-  // 1) Paper Companies fetch (no embed — this IS the company)
+  // 1) Paper Companies fetch
   let companiesQuery = supabase
     .schema('industry' as never)
     .from('paper_companies')
@@ -39,9 +45,9 @@ export default async function PaperCompaniesPage({
     .order('id', { ascending: true })
 
   if (params.q) {
-    // Simple OR — no nested table, no 2-stage pre-fetch needed
+    // ✅ notes 컬럼도 검색에 포함 — family 통합 키워드 (예: "Nine Dragons" 검색이 ND Paper도 매치)
     companiesQuery = companiesQuery.or(
-      `name.ilike.%${params.q}%,headquarters.ilike.%${params.q}%,main_products.ilike.%${params.q}%`
+      `name.ilike.%${params.q}%,headquarters.ilike.%${params.q}%,main_products.ilike.%${params.q}%,notes.ilike.%${params.q}%`
     )
   }
 
@@ -53,9 +59,18 @@ export default async function PaperCompaniesPage({
     companiesQuery = companiesQuery.eq('tier_role', params.tier)
   }
 
+  // ✅ OBSOLETE / FAMILY ERROR / FAMILY — prefix 자동 제외 (default)
+  if (!showObsolete) {
+    companiesQuery = companiesQuery
+      .not('name', 'ilike', '[OBSOLETE]%')
+      .not('name', 'ilike', '[OBSOLETE-SUPPLIER-AGG]%')
+      .not('name', 'ilike', '[FAMILY ERROR%')
+      .not('name', 'ilike', '[FAMILY — %')
+  }
+
   const { data: companies, count } = await companiesQuery.range(from, to)
 
-  // 2) Markets (filter dropdown) — shared schema with paper-mills
+  // 2) Markets (filter dropdown)
   const { data: markets } = await supabase
     .schema('industry' as never)
     .from('markets')
@@ -69,6 +84,7 @@ export default async function PaperCompaniesPage({
       markets={(markets ?? []) as any[]}
       currentPage={page}
       pageSize={PAGE_SIZE}
+      showObsolete={showObsolete}
     />
   )
 }

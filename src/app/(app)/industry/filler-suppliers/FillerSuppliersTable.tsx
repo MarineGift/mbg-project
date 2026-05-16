@@ -1,10 +1,8 @@
 // src/app/(app)/industry/filler-suppliers/FillerSuppliersTable.tsx
-// v5.7 Step 3: PaperCompaniesTable 패턴 복제 + filler_suppliers 적응
-// 핵심 차이:
-//   - HQ 컬럼 없음 → "Type" (supplier_type + market_role)
-//   - relevant_filler_types ARRAY → Badge 그룹 렌더링
+// v5.8 Step B3 패치: supplier name → Link로 detail page 이동
 'use client'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -64,7 +62,6 @@ export function FillerSuppliersTable({
 
   return (
     <div className="space-y-4">
-      {/* Header with count */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">{total}</span> suppliers
@@ -73,7 +70,6 @@ export function FillerSuppliersTable({
         {isPending && <Badge variant="outline">Loading...</Badge>}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Search supplier name, type, role..."
@@ -116,7 +112,6 @@ export function FillerSuppliersTable({
         </Select>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -143,7 +138,14 @@ export function FillerSuppliersTable({
                 <TableCell className="text-muted-foreground font-mono text-xs">
                   {supplier.id}
                 </TableCell>
-                <TableCell className="font-medium">{supplier.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/industry/filler-suppliers/${supplier.id}`}
+                    className="hover:underline"
+                  >
+                    {supplier.name}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   <TierRoleBadge tier={supplier.tier_role ?? null} />
                 </TableCell>
@@ -192,7 +194,6 @@ export function FillerSuppliersTable({
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           {total > 0 && `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, total)} of ${total}`}
