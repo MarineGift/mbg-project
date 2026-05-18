@@ -145,6 +145,8 @@ export async function fetchInbox(
     );
 
   // 필터
+  query = query.is('deleted_at', null); // soft-delete 제외
+
   if (filters.channel !== 'all') {
     query = query.eq('channel', filters.channel);
   }
