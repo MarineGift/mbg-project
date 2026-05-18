@@ -2,7 +2,6 @@
 
 /**
  * src/components/tasks/task-delete-button.tsx
- * Inbox와 동일 패턴: hover 시 표시 + confirm dialog
  */
 
 import { useState, useTransition } from 'react';
@@ -85,9 +84,9 @@ export function TaskDeleteButton({ id, title }: Props) {
             Cancel
           </Button>
           <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
-            {isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting…</>
-            ) : 'Delete'}
+            {isPending
+              ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting…</>
+              : 'Delete'}
           </Button>
         </DialogFooter>
       </DialogContent>

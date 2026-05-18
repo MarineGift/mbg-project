@@ -39,7 +39,8 @@ export default async function AppGroupLayout({
       .schema('app')
       .from('tasks' as never)
       .select('id', { count: 'exact', head: true })
-      .not('status' as never, 'in', '("done","cancelled")'),
+      .not('status' as never, 'in', '("done","cancelled")')
+      .is('deleted_at' as never, null),
   ]);
 
   const userRow = (userRes.data ?? null) as
