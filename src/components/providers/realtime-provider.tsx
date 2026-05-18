@@ -37,6 +37,7 @@ export function RealtimeProvider({
   const decrement = useUiStore((s) => s.decrementPendingDraftCount);
   const notificationsEnabled = useUiStore((s) => s.notificationsEnabled);
   const setInboxUnreadCount = useUiStore((s) => s.setInboxUnreadCount);
+  const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
   const setOpenTaskCount = useUiStore((s) => s.setOpenTaskCount);
   const t = useTranslations('realtime');
 
@@ -52,6 +53,48 @@ export function RealtimeProvider({
   setTaskRef.current = setOpenTaskCount;
   useEffect(() => { setTaskRef.current(initialOpenTaskCount); }, [initialOpenTaskCount]);
 
+  // ── communications 변경 구독 (soft-delete 시 inbox 카운트 감소) ──────────
+  const inboxCountRef = useRef(inboxUnreadCount);
+  inboxCountRef.current = inboxUnreadCount;
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`communications:org-${organizationId}`)
+      .on('postgres_changes' as never,
+        {
+          event: 'UPDATE',
+          schema: 'app',
+          table: 'communications',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          const wasDeleted = !payload.old?.deleted_at && payload.new?.deleted_at;
+          const wasRestored = payload.old?.deleted_at && !payload.new?.deleted_at;
+          if (wasDeleted) {
+            setInboxUnreadCount(Math.max(0, inboxCountRef.current - 1));
+          } else if (wasRestored) {
+            setInboxUnreadCount(inboxCountRef.current + 1);
+          }
+        },
+      )
+      .on('postgres_changes' as never,
+        {
+          event: 'INSERT',
+          schema: 'app',
+          table: 'communications',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        () => {
+          setInboxUnreadCount(inboxCountRef.current + 1);
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
+
+  // ── drafts 변경 구독 ────────────────────────────────────────────────────
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase

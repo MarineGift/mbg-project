@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Sparkles, Paperclip, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ export function InboxTable({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const allSelected = rows.length > 0 && selected.size === rows.length;
   const someSelected = selected.size > 0 && !allSelected;
@@ -62,6 +64,7 @@ export function InboxTable({ rows }: Props) {
       if (errors.length > 0) toast.error(`${errors.length} failed to delete`);
       setSelected(new Set());
       setBulkDialogOpen(false);
+      router.refresh();
     });
   }
 
