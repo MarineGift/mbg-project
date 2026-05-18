@@ -1,19 +1,19 @@
-﻿/**
+/**
  * lib/email/auto-send-gate.ts
  *
- * AI媛 ?앹꽦???뚯떊 珥덉븞???먮룞諛쒖넚 媛???щ?瑜??됯??쒕떎.
- * ?대뒓 ?④퀎???듦낵?섏? 紐삵븯硫?reasons[]???ъ쑀瑜??꾩쟻?섍퀬 allowed=false.
+ * AI ???? ??? ????????.
+ * ? ?????? ?reasons[]?????? allowed=false.
  *
- * ?됯? ?쒖꽌 (留덉뒪??짠4.4 + 媛?대뱶 짠7.3):
- *   [1] 湲濡쒕쾶 ?뚮옒洹?env.AI_AUTO_SEND_ENABLED)
- *   [2] auto_send_rules ??議고쉶 (carrier횞category)
+ * ?? ? (??4.4 + ? 7.3):
+ *   [1]  ??env.AI_AUTO_SEND_ENABLED)
+ *   [2] auto_send_rules ?? (carriercategory)
  *   [3] rule.is_blocked
- *   [4] rule.allowed_modules??module ?ы븿 ?щ?
+ *   [4] rule.allowed_modules??module ? ??
  *   [5] classification.confidence ??rule.min_confidence
- *   [6] rule.requires_human_approval ?먮뒗 classification.requiresHuman
- *   [7] classification.riskFlags 鍮꾩뼱?덉쓬
- *   [8] blocked_keywords_in_body ?뺢퇋??留ㅼ묶 ?놁쓬
- *   [9] daily_limit / hourly_limit / per_party_daily_limit 誘몃떖?? *  [10] rule.requires_calendar_data ??誘명똿 媛?⑹꽦 ?뺤씤 (meeting_scheduling)
+ *   [6] rule.requires_human_approval ? classification.requiresHuman
+ *   [7] classification.riskFlags ?
+ *   [8] blocked_keywords_in_body ??? ?
+ *   [9] daily_limit / hourly_limit / per_party_daily_limit ?? *  [10] rule.requires_calendar_data ?? ? ? (meeting_scheduling)
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -22,7 +22,7 @@ import type { AutoSendRuleRow, ModuleType } from '../../types/ai';
 import type { ClassificationOutput } from '../../types/classification';
 
 /* ============================================================
- * 1. ?낆텧????? * ============================================================ */
+ * 1. ?????? * ============================================================ */
 
 export interface GateInput {
   organizationId: string;
@@ -30,7 +30,7 @@ export interface GateInput {
   partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
-  /** ?뚯떊媛媛 ?먯껜 ?먮떒???щ엺 寃???꾩슂 ?뚮옒洹?蹂꾨룄 媛뺤젣). */
+  /** ? ? ???? ??? ?? ). */
   drafterRequiresHuman?: boolean;
 }
 
@@ -53,14 +53,14 @@ export type GateBlockReason =
 export interface GateResult {
   allowed: boolean;
   reasons: GateBlockReason[];
-  /** 李⑤떒???몃━嫄고븳 猷?ID(?덉쑝硫?. */
+  /** ??? ?ID(??. */
   ruleId?: string;
-  /** ?붾쾭源끒룰컧?ъ슜 ?됯? 濡쒓렇. */
+  /** ?? ?? . */
   evaluationLog: Record<string, unknown>;
 }
 
 /* ============================================================
- * 2. 硫붿씤 吏꾩엯?? * ============================================================ */
+ * 2.  ?? * ============================================================ */
 
 export async function evaluateAutoSend(
   supabase: SupabaseClient,
@@ -69,7 +69,7 @@ export async function evaluateAutoSend(
   const reasons: GateBlockReason[] = [];
   const log: Record<string, unknown> = {};
 
-  // [1] 湲濡쒕쾶 ?뚮옒洹?  if (!env.AI_AUTO_SEND_ENABLED) {
+  // [1]  ??  if (!env.AI_AUTO_SEND_ENABLED) {
     return {
       allowed: false,
       reasons: ['global_disabled'],
@@ -77,7 +77,7 @@ export async function evaluateAutoSend(
     };
   }
 
-  // [2] 猷?議고쉶
+  // [2] ?
   const rule = await loadAutoSendRule(
     supabase,
     input.organizationId,
@@ -171,7 +171,7 @@ export async function evaluateAutoSend(
     Object.assign(log, limitVerdict.log);
   }
 
-  // [10] calendar (meeting_scheduling 移댄뀒怨좊━留??섎? ?덉쓬)
+  // [10] calendar (meeting_scheduling ??? ?)
   if (
     rule.requiresCalendarData &&
     input.classification.category === 'meeting_scheduling'
@@ -195,7 +195,7 @@ export async function evaluateAutoSend(
 }
 
 /* ============================================================
- * 3. 猷?議고쉶
+ * 3. ?
  * ============================================================ */
 
 async function loadAutoSendRule(
@@ -241,12 +241,12 @@ async function loadAutoSendRule(
 }
 
 /* ============================================================
- * 4. ?ㅼ썙??留ㅼ묶
+ * 4. ???
  * ============================================================ */
 
 /**
- * 李⑤떒 ?ㅼ썙??諛곗뿴 以??뚯떊 蹂몃Ц??留ㅼ묶?섎뒗 泥???ぉ??諛섑솚.
- * 媛??ㅼ썙?쒕뒗 ?뺢퇋?앹쑝濡??쒕룄 (?섎せ???뺢퇋?앹? ?⑥닚 substring?쇰줈 fallback).
+ *  ??? ?? ??? ?????.
+ * ??? ???? (?????? ? substring? fallback).
  */
 export function matchBlockedKeyword(
   body: string,
@@ -259,7 +259,7 @@ export function matchBlockedKeyword(
       const regex = new RegExp(kw, 'i');
       matched = regex.test(body);
     } catch {
-      // ?섎せ???뺢퇋??????뚮Ц??臾댁떆 substring
+      // ???????????? substring
       matched = body.toLowerCase().includes(kw.toLowerCase());
     }
     if (matched) return kw;
@@ -268,7 +268,7 @@ export function matchBlockedKeyword(
 }
 
 /* ============================================================
- * 5. Sending limit 寃利? * ============================================================ */
+ * 5. Sending limit ? * ============================================================ */
 
 interface LimitVerdict {
   reasons: GateBlockReason[];
@@ -288,7 +288,7 @@ async function checkSendingLimits(
   startOfDay.setHours(0, 0, 0, 0);
   const oneHourAgo = new Date(Date.now() - 3_600_000);
 
-  // ?쇱씪 ?쒕룄 ???먮룞諛쒖넚??communications 移댁슫??  if (rule.dailyLimit > 0) {
+  // ? ? ?????communications ??  if (rule.dailyLimit > 0) {
     const dailyCount = await countAutoSent(
       supabase,
       organizationId,
@@ -300,7 +300,7 @@ async function checkSendingLimits(
     }
   }
 
-  // ?쒓컙???쒕룄
+  // ????
   if (rule.hourlyLimit > 0) {
     const hourCount = await countAutoSent(
       supabase,
@@ -313,7 +313,7 @@ async function checkSendingLimits(
     }
   }
 
-  // 嫄곕옒泥섎퀎 24?쒓컙 ?쒕룄
+  //  24? ?
   if (rule.perPartyDailyLimit > 0 && partyId) {
     const partyCount = await countAutoSentForParty(
       supabase,
@@ -338,7 +338,7 @@ async function countAutoSent(
   organizationId: string,
   sinceIso: string,
 ): Promise<number> {
-  // ai_generated=true ?닿퀬 ?먮룞諛쒖넚??external_data.auto_send=true) 硫붿씪留?移댁슫??  const { count, error } = await supabase
+  // ai_generated=true ? ???external_data.auto_send=true) ???  const { count, error } = await supabase
     .schema('app')
     .from('communications')
     .select('id', { count: 'exact', head: true })
@@ -352,7 +352,7 @@ async function countAutoSent(
   if (error) {
     // eslint-disable-next-line no-console
     console.error('[auto-send-gate.countAutoSent]', error);
-    return Number.MAX_SAFE_INTEGER; // 蹂댁닔?? ?ㅽ뙣 ???쒕룄 珥덇낵濡?媛꾩＜
+    return Number.MAX_SAFE_INTEGER; // ?? ? ??? ?
   }
   return count ?? 0;
 }
@@ -384,11 +384,11 @@ async function countAutoSentForParty(
 }
 
 /* ============================================================
- * 6. Calendar 媛?⑹꽦
+ * 6. Calendar ?
  * ----------------------------------------------------------
- * ?댁쁺 ?쒖젏??google calendar / outlook ?듯빀 ???뺥솗??媛?⑹꽦 ?됯?.
- * 蹂?STEP 3?먯꽌??organization_settings.calendar_connected ?뚮옒洹몃쭔 ?뺤씤.
- * 誘몄뿰寃곗씠硫?誘명똿 ?먮룞 ?뚯떊 李⑤떒.
+ * ? ???google calendar / outlook ? ?????? ??.
+ * ?STEP 3???organization_settings.calendar_connected ? ?.
+ * ? ? ? .
  * ============================================================ */
 async function hasCalendarAvailability(
   supabase: SupabaseClient,
