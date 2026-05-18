@@ -1,6 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
+import { TopbarSearchInput } from './topbar-search-input';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { LanguageToggle } from './language-toggle';

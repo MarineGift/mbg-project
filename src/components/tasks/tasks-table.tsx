@@ -63,7 +63,7 @@ export function TasksTable({ rows }: Props) {
                       isDone && 'line-through',
                     )}
                   >
-                    {row.title}
+                    <Link href={"/tasks/" + row.id} className="hover:underline">{row.title}</Link>
                   </p>
                   {row.aiSuggested && (
                     <span

@@ -58,6 +58,8 @@ export function Sidebar() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const pendingDraftCount = useUiStore((s) => s.pendingDraftCount);
+  const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
+  const openTaskCount = useUiStore((s) => s.openTaskCount);
   const tNav = useTranslations('nav');
   const tModules = useTranslations('modules');
   const tCommon = useTranslations('common');
@@ -100,7 +102,7 @@ export function Sidebar() {
               label={tNav(item.labelKey)}
               active={isActive(pathname, item.href)}
               collapsed={collapsed}
-              badge={item.href === '/drafts' ? pendingDraftCount : undefined}
+              badge={item.href === '/drafts' ? pendingDraftCount : item.href === '/inbox' ? inboxUnreadCount : item.href === '/tasks' ? openTaskCount : undefined}
             />
           ))}
         </ul>
