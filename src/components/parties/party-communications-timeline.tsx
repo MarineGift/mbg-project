@@ -119,7 +119,7 @@ export function PartyCommunicationsTimeline(
           </h3>
           <button
             onClick={handleNewCompose}
-            disabled={!defaultContactEmail}
+            
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
           >
             <MessageSquarePlus className="w-4 h-4" />
