@@ -1,5 +1,5 @@
 'use server';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from 'next/headers';
 
 export interface EmailSignature {
@@ -12,7 +12,7 @@ export interface EmailSignature {
 }
 
 export async function getSignatures(orgId: string): Promise<EmailSignature[]> {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('email_signatures').select('*').eq('org_id', orgId)
     .order('is_default', { ascending: false });
@@ -21,7 +21,7 @@ export async function getSignatures(orgId: string): Promise<EmailSignature[]> {
 }
 
 export async function getDefaultSignature(orgId: string): Promise<EmailSignature | null> {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from('email_signatures').select('*')
     .eq('org_id', orgId).eq('is_default', true).maybeSingle();
@@ -31,7 +31,7 @@ export async function getDefaultSignature(orgId: string): Promise<EmailSignature
 export async function upsertSignature(
   sig: Partial<EmailSignature> & { org_id: string }
 ): Promise<EmailSignature> {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('email_signatures').upsert(sig, { onConflict: 'id' }).select().single();
   if (error) throw error;
@@ -39,13 +39,13 @@ export async function upsertSignature(
 }
 
 export async function deleteSignature(id: string) {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from('email_signatures').delete().eq('id', id);
   if (error) throw error;
 }
 
 export async function setDefaultSignature(id: string, orgId: string) {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   await supabase.from('email_signatures')
     .update({ is_default: false }).eq('org_id', orgId).eq('is_default', true);
   const { error } = await supabase.from('email_signatures')

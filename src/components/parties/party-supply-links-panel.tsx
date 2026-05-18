@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Factory, Package, ChevronRight, Plus, Trash2,
+  Factory, Package, Plus, Trash2,
   TrendingUp, Loader2, X, Search, AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,10 +30,10 @@ interface SearchParty {
 }
 
 const SUPPLY_TYPES = [
-  { value: 'active',     label: '공급 중',   color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-  { value: 'potential',  label: '잠재',      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  { value: 'pilot',      label: '파일럿',    color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
-  { value: 'historical', label: '과거 공급', color: 'bg-muted text-muted-foreground' },
+  { value: 'active',     label: 'Active',     color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  { value: 'potential',  label: 'Potential',  color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  { value: 'pilot',      label: 'Pilot',      color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  { value: 'historical', label: 'Historical', color: 'bg-muted text-muted-foreground' },
 ];
 
 const GRADES = ['PCC', 'GCC', 'PCC+GCC', 'Kaolin', 'Talc', 'TiO2', 'Other'];
@@ -51,7 +51,7 @@ interface Props {
 export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
   const isFillerPage = partyModule === 'filler';
   const linkedModule = isFillerPage ? 'paper_mill' : 'filler';
-  const title  = isFillerPage ? '공급 Paper Mills' : '사용 Filler 공급사';
+  const title  = isFillerPage ? 'Paper Mills supplied' : 'Filler suppliers in use';
   const Icon   = isFillerPage ? Factory : Package;
 
   const [links, setLinks]     = useState<SupplyLink[]>([]);
@@ -69,7 +69,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
   useEffect(() => { loadLinks(); }, [partyId]);
 
   async function removeLink(linkId: string) {
-    if (!confirm('연결을 삭제하시겠습니까?')) return;
+    if (!confirm('Delete this link?')) return;
     await fetch(`/api/supply-links/${linkId}`, { method: 'DELETE' });
     setLinks(prev => prev.filter(l => l.id !== linkId));
   }
@@ -83,7 +83,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
             {title}
             {!loading && (
               <span className="text-xs font-normal text-muted-foreground ml-1">
-                {links.length}개
+                {links.length}
               </span>
             )}
           </span>
@@ -91,7 +91,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
             onClick={() => setShowAdd(true)}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
-            <Plus className="h-3.5 w-3.5" /> 연결 추가
+            <Plus className="h-3.5 w-3.5" /> Add link
           </button>
         </CardTitle>
       </CardHeader>
@@ -103,7 +103,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
           </div>
         ) : links.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground italic">
-            {isFillerPage ? '공급 중인 제지사가 없습니다.' : '사용 중인 Filler 공급사가 없습니다.'}
+            {isFillerPage ? 'No paper mills supplied yet.' : 'No filler suppliers in use.'}
           </p>
         ) : (
           <div className="divide-y max-h-[380px] overflow-y-auto">
@@ -218,16 +218,22 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
   async function saveAsUnregistered() {
     setSaving(true);
     try {
-      const res = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&module=filler&limit=1');
-      const list = res.ok ? await res.json() : [];
+      // Search for placeholder [Unregistered] or legacy [Korean-encoded] party in DB
+      const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&module=filler&limit=1');
+      let list = res.ok ? await res.json() : [];
       if (list.length === 0) {
-        alert('[미등록] Filler Supplier가 DB에 없습니다. Normalize-Clean.sql을 먼저 실행하세요.');
+        // Fallback: legacy Korean placeholder [誘몃벑濡? (URL-encoded)
+        const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&module=filler&limit=1');
+        list = res2.ok ? await res2.json() : [];
+      }
+      if (list.length === 0) {
+        alert('[Unregistered] Filler Supplier not found in DB. Run Normalize-Clean.sql first.');
         setSaving(false);
         return;
       }
       setSelected(list[0]);
       setSupplyType('potential');
-      setNotes('미등록 공급사 — 실제 공급사 확인 후 업데이트 필요');
+      setNotes('Unregistered supplier - update needed once real supplier is confirmed');
     } finally { setSaving(false); }
   }
 
@@ -238,7 +244,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
       <div className="bg-background rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="font-semibold text-sm">
-            {isFillerPage ? 'Paper Mill 연결 추가' : 'Filler 공급사 연결 추가'}
+            {isFillerPage ? 'Add Paper Mill link' : 'Add Filler supplier link'}
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded">
             <X className="h-4 w-4" />
@@ -249,7 +255,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
           {!selected ? (
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                {isFillerPage ? 'Paper Mill 검색 (등록된 업체만)' : 'Filler 공급사 검색 (등록된 업체만)'}
+                {isFillerPage ? 'Search Paper Mills (registered only)' : 'Search Filler suppliers (registered only)'}
               </label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -258,7 +264,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="이름 입력..."
+                  placeholder="Enter name..."
                   className="w-full h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
                 />
                 {searching && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin" />}
@@ -271,7 +277,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{p.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {p.country_code} · {p.tier}
+                          {p.country_code} &middot; {p.tier}
                         </div>
                       </div>
                     </button>
@@ -280,14 +286,14 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
               )}
               <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 text-amber-500" />
-                DB에 없는 경우 아래 미등록 연결 버튼 사용
+                If not in DB, use the &quot;Unregistered link&quot; button below
               </p>
             </div>
           ) : (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{selected.name}</p>
-                <p className="text-xs text-muted-foreground">{selected.country_code} · {selected.tier}</p>
+                <p className="text-xs text-muted-foreground">{selected.country_code} &middot; {selected.tier}</p>
               </div>
               <button onClick={() => setSelected(null)} className="p-1 hover:bg-muted rounded">
                 <X className="h-3.5 w-3.5" />
@@ -296,7 +302,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
           )}
 
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">공급 상태</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Supply status</label>
             <div className="flex flex-wrap gap-1.5">
               {SUPPLY_TYPES.map(t => (
                 <button key={t.value} onClick={() => setSupplyType(t.value)}
@@ -310,15 +316,15 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">제품 등급</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Product grade</label>
               <select value={grade} onChange={e => setGrade(e.target.value)}
                 className="w-full h-8 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring">
-                <option value="">미선택</option>
+                <option value="">Not selected</option>
                 {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">연간 물량 (t/yr)</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Annual volume (t/yr)</label>
               <input type="number" value={volume} onChange={e => setVolume(e.target.value)}
                 placeholder="50000"
                 className="w-full h-8 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
@@ -326,9 +332,9 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
           </div>
 
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">메모</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Notes</label>
             <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="계약 현황, 특이사항 등..."
+              placeholder="Contract status, special notes, etc..."
               className="w-full h-8 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
           </div>
         </div>
@@ -336,17 +342,17 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
         <div className="flex justify-between gap-2 px-5 py-4 border-t bg-muted/20">
           <button onClick={saveAsUnregistered} disabled={saving}
             className="px-3 py-1.5 text-xs rounded-md border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-40 transition-colors">
-            미등록 연결
+            Unregistered link
           </button>
           <div className="flex gap-2">
             <button onClick={onClose}
               className="px-4 py-1.5 text-sm rounded-md border hover:bg-muted transition-colors">
-              취소
+              Cancel
             </button>
             <button onClick={save} disabled={!selected || saving}
               className="px-4 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 flex items-center gap-1.5">
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              연결 저장
+              Save link
             </button>
           </div>
         </div>

@@ -1,7 +1,6 @@
 // src/components/parties/party-communications-timeline.tsx
-// ============================================================
-// Phase 22a — Party Communications Timeline (forum-style threaded)
-// ============================================================
+// Party Communications Timeline (forum-style threaded view)
+// English-only UI, ASCII-clean source
 "use client";
 
 import { useState } from "react";
@@ -14,7 +13,6 @@ import {
   CornerDownRight,
   Star,
   Sparkles,
-  AlertCircle,
   CheckCircle2,
   Clock,
   XCircle,
@@ -42,10 +40,11 @@ interface PartyCommunicationsTimelineProps {
   orgId: string;
 }
 
-export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelineProps) {
+export function PartyCommunicationsTimeline(
+  props: PartyCommunicationsTimelineProps,
+) {
   const {
     partyId,
-    partyName,
     defaultContactEmail,
     defaultContactId,
     defaultContactName,
@@ -73,18 +72,16 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
     list.push(item);
     threads.set(key, list);
   }
-  // Sort each thread chronologically
   for (const [k, arr] of threads) {
     arr.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
     threads.set(k, arr);
   }
-  // Sort threads by most recent activity (newest first)
   const sortedThreads = Array.from(threads.entries()).sort(
     ([, a], [, b]) => {
       const aLatest = a[a.length - 1]?.occurred_at || "";
       const bLatest = b[b.length - 1]?.occurred_at || "";
       return bLatest.localeCompare(aLatest);
-    }
+    },
   );
 
   const handleNewCompose = () => {
@@ -113,7 +110,7 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
 
   return (
     <div className="bg-white rounded-lg border shadow-sm">
-      {/* Header with stats + compose button */}
+      {/* Header */}
       <div className="px-6 py-4 border-b">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -126,18 +123,18 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
           >
             <MessageSquarePlus className="w-4 h-4" />
-            새 메일 작성
+            New Email
           </button>
         </div>
 
-        {/* Stats cards */}
+        {/* Stats */}
         <div className="grid grid-cols-6 gap-2 text-center">
-          <StatBox label="총 메일" value={stats.total} />
-          <StatBox label="발송" value={stats.sent} accent="blue" />
-          <StatBox label="수신" value={stats.received} accent="green" />
-          <StatBox label="읽음" value={stats.opened} accent="purple" />
-          <StatBox label="회신함" value={stats.replied} accent="emerald" />
-          <StatBox label="스레드" value={stats.threads} />
+          <StatBox label="Total" value={stats.total} />
+          <StatBox label="Sent" value={stats.sent} accent="blue" />
+          <StatBox label="Received" value={stats.received} accent="green" />
+          <StatBox label="Opened" value={stats.opened} accent="purple" />
+          <StatBox label="Replied" value={stats.replied} accent="emerald" />
+          <StatBox label="Threads" value={stats.threads} />
         </div>
       </div>
 
@@ -145,7 +142,7 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
       <div className="divide-y">
         {sortedThreads.length === 0 ? (
           <div className="px-6 py-12 text-center text-gray-500 text-sm">
-            아직 주고받은 메일이 없습니다. 위 "새 메일 작성" 버튼을 눌러 시작하세요.
+            No emails yet. Click &quot;New Email&quot; above to start a conversation.
           </div>
         ) : (
           sortedThreads.map(([threadKey, threadItems]) => (
@@ -161,13 +158,14 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
       {/* Compose Dialog */}
       <ComposeEmailDialog
         open={composeOpen}
-        onClose={() => setComposeOpen(false)}
+        onOpenChange={setComposeOpen}
         partyId={partyId}
+        mode={replyContext ? "reply" : "new"}
         contactId={replyContext?.contactId ?? defaultContactId}
         contactName={replyContext?.contactName ?? defaultContactName}
-        recipientEmail={replyContext?.contactEmail || defaultContactEmail || ""}
+        defaultTo={replyContext?.contactEmail || defaultContactEmail || ""}
         replyToMessageId={replyContext?.messageId}
-        replyToCommunicationId={replyContext?.communicationId}
+        originalCommunicationId={replyContext?.communicationId}
         defaultSubject={replyContext?.subject}
         templates={templates}
         orgId={orgId}
@@ -176,7 +174,7 @@ export function PartyCommunicationsTimeline(props: PartyCommunicationsTimelinePr
   );
 }
 
-// ────────────────── Sub: Stat box ──────────────────
+// ?????????????????? Sub: Stat box ??????????????????
 function StatBox({
   label,
   value,
@@ -201,7 +199,7 @@ function StatBox({
   );
 }
 
-// ────────────────── Sub: Thread group (collapsible) ──────────────────
+// ?????????????????? Sub: Thread group (collapsible) ??????????????????
 function ThreadGroup({
   items,
   onReply,
@@ -235,10 +233,11 @@ function ThreadGroup({
         )}
         <div className="flex-1">
           <div className="font-medium text-sm">
-            {firstItem.subject || "(제목 없음)"}
+            {firstItem.subject || "(no subject)"}
           </div>
           <div className="text-xs text-gray-500">
-            {items.length}개 메시지 · 최근 {formatDate(latest.occurred_at)}
+            {items.length} messages &middot; last activity{" "}
+            {formatDate(latest.occurred_at)}
           </div>
         </div>
         <DirectionIcon direction={latest.direction} />
@@ -261,7 +260,7 @@ function ThreadGroup({
   );
 }
 
-// ────────────────── Sub: Message row ──────────────────
+// ?????????????????? Sub: Message row ??????????????????
 function MessageRow({
   item,
   onReply,
@@ -289,20 +288,22 @@ function MessageRow({
             <div className="flex-1 min-w-0">
               {!compact && (
                 <div className="font-medium text-sm truncate">
-                  {item.subject || "(제목 없음)"}
+                  {item.subject || "(no subject)"}
                 </div>
               )}
               <div className="text-xs text-gray-600 flex flex-wrap items-center gap-2 mt-0.5">
                 <span>
-                  {isOutbound ? "→" : "←"}{" "}
+                  {isOutbound ? "->" : "<-"}{" "}
                   {item.contact_name ||
                     item.contact_email ||
                     (item.to_addresses || [])[0] ||
                     item.from_address ||
                     "Unknown"}
                 </span>
-                <span className="text-gray-400">·</span>
-                <span suppressHydrationWarning>{formatDate(item.occurred_at)}</span>
+                <span className="text-gray-400">&middot;</span>
+                <span suppressHydrationWarning>
+                  {formatDate(item.occurred_at)}
+                </span>
                 {item.ai_generated && (
                   <span className="inline-flex items-center gap-0.5 text-purple-600">
                     <Sparkles className="w-3 h-3" />
@@ -312,7 +313,7 @@ function MessageRow({
                 {item.template_id && (
                   <span className="inline-flex items-center gap-0.5 text-blue-600">
                     <FileText className="w-3 h-3" />
-                    템플릿
+                    Template
                   </span>
                 )}
               </div>
@@ -337,7 +338,7 @@ function MessageRow({
                 />
               ) : (
                 <pre className="whitespace-pre-wrap font-sans">
-                  {item.body_plain || "(본문 없음)"}
+                  {item.body_plain || "(no body)"}
                 </pre>
               )}
             </div>
@@ -354,7 +355,7 @@ function MessageRow({
               onClick={() => setExpanded(!expanded)}
               className="text-xs text-gray-500 hover:text-gray-700"
             >
-              {expanded ? "접기" : "본문 보기"}
+              {expanded ? "Collapse" : "Show body"}
             </button>
             {item.message_id && (
               <button
@@ -362,7 +363,7 @@ function MessageRow({
                 className="text-xs text-blue-600 hover:text-blue-700 inline-flex items-center gap-0.5"
               >
                 <CornerDownRight className="w-3 h-3" />
-                회신
+                Reply
               </button>
             )}
           </div>
@@ -372,34 +373,39 @@ function MessageRow({
   );
 }
 
-// ────────────────── Direction icon ──────────────────
+// ?????????????????? Direction icon ??????????????????
 function DirectionIcon({ direction }: { direction: string }) {
   if (direction === "outbound") {
     return (
       <ArrowUpRight
         className="w-5 h-5 text-blue-500"
-        aria-label="발송"
+        aria-label="Outbound"
       />
     );
   }
   return (
     <ArrowDownLeft
       className="w-5 h-5 text-green-500"
-      aria-label="수신"
+      aria-label="Inbound"
     />
   );
 }
 
-// ────────────────── Status badges ──────────────────
+// ?????????????????? Status badges ??????????????????
 function StatusBadges({ item }: { item: CommunicationTimelineItem }) {
-  const badges: Array<{ icon: typeof Eye; label: string; color: string; title: string }> = [];
+  const badges: Array<{
+    icon: typeof Eye;
+    label: string;
+    color: string;
+    title: string;
+  }> = [];
 
   if (item.is_starred) {
     badges.push({
       icon: Star,
       label: "",
       color: "text-yellow-500",
-      title: "별표",
+      title: "Starred",
     });
   }
 
@@ -407,65 +413,49 @@ function StatusBadges({ item }: { item: CommunicationTimelineItem }) {
     if (item.status === "failed" || item.status === "bounced") {
       badges.push({
         icon: XCircle,
-        label: "실패",
+        label: "Failed",
         color: "text-red-500",
         title: item.status,
       });
     } else if (item.sent_at) {
       badges.push({
         icon: CheckCircle2,
-        label: "발송됨",
+        label: "Sent",
         color: "text-blue-500",
-        title: `발송 ${formatDate(item.sent_at)}`,
+        title: `Sent ${formatDate(item.sent_at)}`,
       });
     } else if (item.status === "draft") {
       badges.push({
         icon: Clock,
-        label: "초안",
+        label: "Draft",
         color: "text-gray-400",
-        title: "초안",
+        title: "Draft",
       });
     }
 
     if (item.opened_at) {
       badges.push({
         icon: Eye,
-        label: "읽음",
+        label: "Opened",
         color: "text-purple-500",
-        title: `읽음 ${formatDate(item.opened_at)}`,
+        title: `Opened ${formatDate(item.opened_at)}`,
       });
     }
     if (item.clicked_at) {
       badges.push({
         icon: MousePointerClick,
-        label: "클릭",
+        label: "Clicked",
         color: "text-emerald-500",
-        title: `클릭 ${formatDate(item.clicked_at)}`,
+        title: `Clicked ${formatDate(item.clicked_at)}`,
       });
     }
     if (item.replied_at) {
       badges.push({
         icon: CornerDownRight,
-        label: "회신받음",
+        label: "Got reply",
         color: "text-green-600",
-        title: `회신 ${formatDate(item.replied_at)}`,
+        title: `Reply ${formatDate(item.replied_at)}`,
       });
-    }
-  } else {
-    // inbound
-    if (item.ai_classification?.intent) {
-      const intent = item.ai_classification.intent;
-      const intentColors: Record<string, string> = {
-        interested: "text-green-600",
-        not_now: "text-yellow-600",
-        objection: "text-orange-600",
-        unsubscribe: "text-red-600",
-        wrong_person: "text-gray-500",
-        question: "text-blue-600",
-        auto_reply: "text-gray-400",
-        unknown: "text-gray-400",
-      };
-      // No icon, will show as text badge below
     }
   }
 
@@ -488,7 +478,7 @@ function StatusBadges({ item }: { item: CommunicationTimelineItem }) {
   );
 }
 
-// ────────────────── AI Classification badge ──────────────────
+// ?????????????????? AI Classification badge ??????????????????
 function AIClassificationBadge({
   classification,
 }: {
@@ -501,13 +491,41 @@ function AIClassificationBadge({
     string,
     { label: string; color: string; bg: string }
   > = {
-    interested: { label: "관심있음", color: "text-green-700", bg: "bg-green-50" },
-    not_now: { label: "타이밍 아님", color: "text-yellow-700", bg: "bg-yellow-50" },
-    objection: { label: "반박/우려", color: "text-orange-700", bg: "bg-orange-50" },
-    unsubscribe: { label: "수신거부", color: "text-red-700", bg: "bg-red-50" },
-    wrong_person: { label: "잘못된 수신자", color: "text-gray-700", bg: "bg-gray-100" },
-    question: { label: "질문", color: "text-blue-700", bg: "bg-blue-50" },
-    auto_reply: { label: "자동회신", color: "text-gray-600", bg: "bg-gray-100" },
+    interested: {
+      label: "Interested",
+      color: "text-green-700",
+      bg: "bg-green-50",
+    },
+    not_now: {
+      label: "Not now",
+      color: "text-yellow-700",
+      bg: "bg-yellow-50",
+    },
+    objection: {
+      label: "Objection",
+      color: "text-orange-700",
+      bg: "bg-orange-50",
+    },
+    unsubscribe: {
+      label: "Unsubscribe",
+      color: "text-red-700",
+      bg: "bg-red-50",
+    },
+    wrong_person: {
+      label: "Wrong recipient",
+      color: "text-gray-700",
+      bg: "bg-gray-100",
+    },
+    question: {
+      label: "Question",
+      color: "text-blue-700",
+      bg: "bg-blue-50",
+    },
+    auto_reply: {
+      label: "Auto-reply",
+      color: "text-gray-600",
+      bg: "bg-gray-100",
+    },
   };
 
   const meta = intentMeta[intent] || intentMeta.question;
@@ -532,14 +550,14 @@ function AIClassificationBadge({
       )}
       {classification.suggested_action && (
         <span className="text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-          💡 {classification.suggested_action}
+          Tip: {classification.suggested_action}
         </span>
       )}
     </div>
   );
 }
 
-// ────────────────── Helpers ──────────────────
+// ?????????????????? Helpers ??????????????????
 function formatDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -550,11 +568,11 @@ function formatDate(iso: string | null): string {
 
   if (hours < 1) {
     const mins = Math.floor(diff / 60000);
-    return `${mins}분 전`;
+    return `${mins} min ago`;
   }
-  if (hours < 24) return `${hours}시간 전`;
-  if (days < 7) return `${days}일 전`;
-  return d.toLocaleDateString("ko-KR", {
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString("en-US", {
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",

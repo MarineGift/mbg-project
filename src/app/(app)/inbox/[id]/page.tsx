@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Reply, Forward, Paperclip, Calendar } from "lucide-react";
-import { fetchCommunicationDetail } from "@/lib/queries/communications";
 import { ComposeEmailDialog } from "@/components/email/compose-email-dialog";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -58,7 +57,17 @@ export default function InboxDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchCommunicationDetail(id);
+      const res = await fetch(`/api/communications/${id}`, { cache: "no-store" });
+      if (!res.ok) {
+        if (res.status === 404) {
+          setError("Message not found");
+          setLoading(false);
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      const result = json.data;
       if (!result) {
         setError("메시지를 찾을 수 없습니다.");
       } else {

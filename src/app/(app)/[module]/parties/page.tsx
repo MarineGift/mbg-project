@@ -33,7 +33,7 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
 
 const MODULE_LABELS: Record<ModuleType, string> = {
   investor:       'Investors',
-  paper_mill:     'Paper Companies',
+  paper_mill:     'Paper Mills',
   partner:        'Partners',
   customer:       'Customers',
   crowdfunding:   'Crowdfunding',

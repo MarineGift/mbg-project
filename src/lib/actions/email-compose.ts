@@ -2,7 +2,7 @@
 // Phase 22b: contact_id 치환 수정 + 이메일 서명 + 첨부파일 지원
 "use server";
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
 import Anthropic from "@anthropic-ai/sdk";
@@ -174,7 +174,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   messageId?: string;
   error?: string;
 }> {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
     data: { user },
@@ -313,7 +313,7 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
   draft?: string;
   error?: string;
 }> {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const { data: comm } = await supabase
     .from("communications")
@@ -384,7 +384,7 @@ export async function upsertEmailSignature(input: {
   htmlContent: string;
   isDefault: boolean;
 }): Promise<{ success: boolean; error?: string }> {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
@@ -429,7 +429,7 @@ export async function upsertEmailSignature(input: {
 }
 
 export async function deleteEmailSignature(id: string): Promise<{ success: boolean; error?: string }> {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
@@ -447,7 +447,7 @@ export async function listEmailSignatures(): Promise<{
   data?: Array<{ id: string; name: string; html_content: string; is_default: boolean }>;
   error?: string;
 }> {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 

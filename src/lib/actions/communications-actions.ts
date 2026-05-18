@@ -1,9 +1,9 @@
-﻿// src/lib/actions/communications-actions.ts
+// src/lib/actions/communications-actions.ts
 // Phase 22b: communications 愿??server actions
 // (Client Component?먯꽌 吏곸젒 ?몄텧 媛?ν븳 "use server" wrapper)
 "use server";
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 
 /**
@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
  * inbox/[id]/page.tsx ?먯꽌 useEffect ???몄텧
  */
 export async function fetchCommunicationDetailAction(id: string) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("communications")

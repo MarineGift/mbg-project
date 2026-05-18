@@ -44,7 +44,7 @@ export type ModuleGroup = {
 // 사이드바 라벨과 일치 (영어 기본)
 const MODULE_NAMES: Record<string, string> = {
   investor: 'Investors',
-  paper_mill: 'Paper Companies',
+  paper_mill: 'Paper Mills',
   partner: 'Partners',
   customer: 'Customers',
   filler_supplier: 'Filler Suppliers',

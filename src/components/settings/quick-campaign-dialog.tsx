@@ -20,7 +20,7 @@ interface Props {
 
 const MODULES = [
   { value: '',            label: 'All modules' },
-  { value: 'paper_mill',  label: 'Paper Companies' },
+  { value: 'paper_mill',  label: 'Paper Mills' },
   { value: 'investor',    label: 'Investors' },
   { value: 'partner',     label: 'Partners' },
   { value: 'customer',    label: 'Customers' },

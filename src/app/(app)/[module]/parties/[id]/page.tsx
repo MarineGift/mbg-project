@@ -182,7 +182,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 partyId={full.party.id}
                 module={full.party.module}
               />
-              <PartySupplyLinks partyId={full.party.id} partyModule={full.party.module as 'paper_mill' | 'filler'} />
+              <PartySupplyLinksPanel partyId={full.party.id} partyModule={full.party.module as 'paper_mill' | 'filler'} />
               <PartyTasksList
                 tasks={full.tasks}
                 partyId={full.party.id}

@@ -1,78 +1,102 @@
 // src/components/email/compose-email-dialog.tsx
-// Phase 22b: contact_id 전달 수정 + 첨부파일 UI + 서명 토글
+// Compose Email Dialog
+// - 3 modes: new / reply / template
+// - Backward-compatible Props (accepts both old and new naming)
+// - Attachment upload + signature toggle + AI reply generation
 "use client";
 
 import { useState, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Paperclip, X, Sparkles, Signature } from "lucide-react";
-import { sendEmail, generateAIReply, type ComposePayload, type ComposeMode } from "@/lib/actions/email-compose";
+import {
+  Loader2,
+  Send,
+  Paperclip,
+  X,
+  Sparkles,
+  Signature,
+} from "lucide-react";
+import {
+  sendEmail,
+  generateAIReply,
+  type ComposePayload,
+  type ComposeMode,
+} from "@/lib/actions/email-compose";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
-// ─────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────
+// ?????????????????????????????????????????????
+// Props (accept both old and new naming for backward compatibility)
+// ?????????????????????????????????????????????
 interface ComposeEmailDialogProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  // Caller may use either onOpenChange (preferred) or onClose
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
 
-  // 필수
+  // Required
   partyId: string;
-  mode: ComposeMode;
+  // Optional - defaults to "new" if not provided
+  mode?: ComposeMode;
 
-  // Fix: contact_id 명시적 전달
+  // Optional contact info
   contactId?: string | null;
+  contactName?: string | null;
 
-  // 초기값
+  // Initial values: caller may use either defaultTo or recipientEmail
   defaultTo?: string;
+  recipientEmail?: string;
   defaultSubject?: string;
   defaultBody?: string;
   templateId?: string;
 
-  // reply 모드
+  // Reply mode: caller may use either originalCommunicationId or replyToCommunicationId
   replyToMessageId?: string;
   threadId?: string;
-  originalCommunicationId?: string; // AI reply 생성용
+  originalCommunicationId?: string;
+  replyToCommunicationId?: string;
+
+  // Reserved for future Template mode (UI to pick a template inside the dialog)
+  templates?: unknown[];
+  // Reserved for future signature loading
+  orgId?: string;
 }
 
-// ─────────────────────────────────────────────
-// Attachment item
-// ─────────────────────────────────────────────
 interface AttachmentItem {
   file: File;
-  storagePath: string | null; // 업로드 완료 후 채워짐
+  storagePath: string | null;
   uploading: boolean;
   error?: string;
 }
 
-// ─────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────
-export function ComposeEmailDialog({
-  open,
-  onOpenChange,
-  partyId,
-  mode,
-  contactId,
-  defaultTo = "",
-  defaultSubject = "",
-  defaultBody = "",
-  templateId,
-  replyToMessageId,
-  threadId,
-  originalCommunicationId,
-}: ComposeEmailDialogProps) {
+export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
+  // Normalize props
+  const handleOpenChange = (next: boolean) => {
+    props.onOpenChange?.(next);
+    if (!next) props.onClose?.();
+  };
+
+  const effectiveMode: ComposeMode = props.mode ?? "new";
+  const effectiveTo = props.defaultTo ?? props.recipientEmail ?? "";
+  const effectiveOriginalCommunicationId =
+    props.originalCommunicationId ?? props.replyToCommunicationId;
+
   const supabase = createSupabaseBrowserClient();
 
-  const [to, setTo] = useState(defaultTo);
-  const [subject, setSubject] = useState(defaultSubject);
-  const [body, setBody] = useState(defaultBody);
+  const [to, setTo] = useState(effectiveTo);
+  const [subject, setSubject] = useState(props.defaultSubject ?? "");
+  const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
@@ -80,12 +104,11 @@ export function ComposeEmailDialog({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── 파일 선택 → Supabase Storage 업로드
+  // ?? File select -> upload to Supabase Storage
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
-    // 즉시 목록에 추가 (uploading=true)
     const newItems: AttachmentItem[] = files.map((f) => ({
       file: f,
       storagePath: null,
@@ -93,9 +116,8 @@ export function ComposeEmailDialog({
     }));
     setAttachments((prev) => [...prev, ...newItems]);
 
-    // 각 파일 업로드
     for (const item of newItems) {
-      const path = `${partyId}/${Date.now()}-${item.file.name}`;
+      const path = `${props.partyId}/${Date.now()}-${item.file.name}`;
       const { error } = await supabase.storage
         .from("email-attachments")
         .upload(path, item.file, { upsert: false });
@@ -103,15 +125,20 @@ export function ComposeEmailDialog({
       setAttachments((prev) =>
         prev.map((a) =>
           a.file === item.file
-            ? { ...a, uploading: false, storagePath: error ? null : path, error: error?.message }
-            : a
-        )
+            ? {
+                ...a,
+                uploading: false,
+                storagePath: error ? null : path,
+                error: error?.message,
+              }
+            : a,
+        ),
       );
 
-      if (error) toast.error(`업로드 실패: ${item.file.name}`);
+      if (error) toast.error(`Upload failed: ${item.file.name}`);
     }
 
-    // input 초기화 (같은 파일 재선택 허용)
+    // Reset input so the same file can be picked again
     e.target.value = "";
   }
 
@@ -119,40 +146,51 @@ export function ComposeEmailDialog({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // ── AI 답장 생성
+  // ?? AI reply generation
   async function handleGenerateAI() {
-    if (!originalCommunicationId) {
-      toast.error("원본 메시지 ID가 없습니다.");
+    if (!effectiveOriginalCommunicationId) {
+      toast.error("Original message ID is missing.");
       return;
     }
     setGeneratingAI(true);
     try {
       const result = await generateAIReply({
-        communicationId: originalCommunicationId,
-        partyId,
-        contactId,
+        communicationId: effectiveOriginalCommunicationId,
+        partyId: props.partyId,
+        contactId: props.contactId,
         tone: "professional",
       });
       if (result.success && result.draft) {
         setBody(result.draft);
-        toast.success("AI 답장 초안이 생성되었습니다.");
+        toast.success("AI reply draft generated.");
       } else {
-        toast.error(result.error ?? "AI 생성 실패");
+        toast.error(result.error ?? "AI generation failed.");
       }
     } finally {
       setGeneratingAI(false);
     }
   }
 
-  // ── 발송
+  // ?? Send
   async function handleSend() {
-    if (!to.trim()) { toast.error("수신 주소를 입력하세요."); return; }
-    if (!subject.trim()) { toast.error("제목을 입력하세요."); return; }
-    if (!body.trim()) { toast.error("본문을 입력하세요."); return; }
+    if (!to.trim()) {
+      toast.error("Please enter a recipient.");
+      return;
+    }
+    if (!subject.trim()) {
+      toast.error("Please enter a subject.");
+      return;
+    }
+    if (!body.trim()) {
+      toast.error("Please enter the body.");
+      return;
+    }
 
-    // 업로드 중인 파일이 있으면 대기
     const stillUploading = attachments.some((a) => a.uploading);
-    if (stillUploading) { toast.error("파일 업로드가 완료될 때까지 기다려 주세요."); return; }
+    if (stillUploading) {
+      toast.error("Please wait for file uploads to finish.");
+      return;
+    }
 
     const attachmentPaths = attachments
       .filter((a) => a.storagePath)
@@ -161,15 +199,15 @@ export function ComposeEmailDialog({
     setSending(true);
     try {
       const payload: ComposePayload = {
-        mode,
-        partyId,
-        contactId: contactId ?? null,   // ← Fix: 명시적 전달
+        mode: effectiveMode,
+        partyId: props.partyId,
+        contactId: props.contactId ?? null,
         to: to.trim(),
         subject: subject.trim(),
         body,
-        templateId,
-        replyToMessageId,
-        threadId,
+        templateId: props.templateId,
+        replyToMessageId: props.replyToMessageId,
+        threadId: props.threadId,
         attachmentPaths,
         useSignature,
       };
@@ -177,38 +215,43 @@ export function ComposeEmailDialog({
       const result = await sendEmail(payload);
 
       if (result.success) {
-        toast.success("이메일이 발송되었습니다.");
-        onOpenChange(false);
+        toast.success("Email sent.");
+        handleOpenChange(false);
       } else {
-        toast.error(result.error ?? "발송 실패");
+        toast.error(result.error ?? "Send failed.");
       }
     } finally {
       setSending(false);
     }
   }
 
-  // ── 모드 레이블
-  const modeLabel = mode === "reply" ? "답장" : mode === "template" ? "템플릿 발송" : "새 이메일";
+  // ?? Mode label (English)
+  const modeLabel =
+    effectiveMode === "reply"
+      ? "Reply"
+      : effectiveMode === "template"
+        ? "Send from Template"
+        : "New Email";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={props.open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="h-4 w-4" />
             {modeLabel}
-            {contactId && (
+            {props.contactId && (
               <Badge variant="outline" className="text-xs font-normal">
-                contact 연결됨
+                Contact linked
               </Badge>
             )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {/* 수신 */}
+          {/* To */}
           <div className="space-y-1">
-            <Label htmlFor="to">수신</Label>
+            <Label htmlFor="to">To</Label>
             <Input
               id="to"
               value={to}
@@ -218,22 +261,22 @@ export function ComposeEmailDialog({
             />
           </div>
 
-          {/* 제목 */}
+          {/* Subject */}
           <div className="space-y-1">
-            <Label htmlFor="subject">제목</Label>
+            <Label htmlFor="subject">Subject</Label>
             <Input
               id="subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="이메일 제목"
+              placeholder="Email subject"
             />
           </div>
 
-          {/* 본문 */}
+          {/* Body */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <Label htmlFor="body">본문</Label>
-              {mode === "reply" && originalCommunicationId && (
+              <Label htmlFor="body">Body</Label>
+              {effectiveMode === "reply" && effectiveOriginalCommunicationId && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -246,7 +289,7 @@ export function ComposeEmailDialog({
                   ) : (
                     <Sparkles className="h-3 w-3 mr-1" />
                   )}
-                  AI 초안 생성
+                  Generate AI draft
                 </Button>
               )}
             </div>
@@ -254,15 +297,15 @@ export function ComposeEmailDialog({
               id="body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="이메일 본문을 입력하세요..."
+              placeholder="Type your email body here..."
               className="min-h-[200px] font-mono text-sm"
             />
           </div>
 
-          {/* 첨부파일 */}
+          {/* Attachments */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>첨부파일</Label>
+              <Label>Attachments</Label>
               <Button
                 variant="outline"
                 size="sm"
@@ -270,7 +313,7 @@ export function ComposeEmailDialog({
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Paperclip className="h-3 w-3 mr-1" />
-                파일 추가
+                Add file
               </Button>
             </div>
             <input
@@ -294,7 +337,11 @@ export function ComposeEmailDialog({
                     ) : (
                       <Paperclip className="h-3 w-3 text-muted-foreground" />
                     )}
-                    <span className={`flex-1 truncate ${att.error ? "text-destructive" : ""}`}>
+                    <span
+                      className={`flex-1 truncate ${
+                        att.error ? "text-destructive" : ""
+                      }`}
+                    >
                       {att.file.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -314,11 +361,14 @@ export function ComposeEmailDialog({
             )}
           </div>
 
-          {/* 서명 토글 */}
+          {/* Signature toggle */}
           <div className="flex items-center gap-3 rounded-md border px-3 py-2">
             <Signature className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="sig-toggle" className="flex-1 cursor-pointer text-sm">
-              서명 자동 첨부
+            <Label
+              htmlFor="sig-toggle"
+              className="flex-1 cursor-pointer text-sm"
+            >
+              Attach signature automatically
             </Label>
             <Switch
               id="sig-toggle"
@@ -329,19 +379,23 @@ export function ComposeEmailDialog({
         </div>
 
         <DialogFooter className="border-t pt-3 mt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>
-            취소
+          <Button
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={sending}
+          >
+            Cancel
           </Button>
           <Button onClick={handleSend} disabled={sending}>
             {sending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                발송 중...
+                Sending...
               </>
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" />
-                발송
+                Send
               </>
             )}
           </Button>

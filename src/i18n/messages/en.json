@@ -42,7 +42,7 @@
   },
   "modules": {
     "investor": "Investors",
-    "paper_mill": "Paper Companies",
+    "paper_mill": "Paper Mills",
     "partner": "Partners",
     "customer": "Customers",
     "crowdfunding": "Crowdfunding",
@@ -220,7 +220,7 @@
       "rejectNotes": "Notes",
       "cancel": "Cancel",
       "sendImmediately": "Send immediately",
-      "noInboundHint": "No inbound message linked — send will be skipped.",
+      "noInboundHint": "No inbound message linked - send will be skipped.",
       "diffNoChange": "No changes from AI original.",
       "rejectReasons": {
         "outdated_request": "Outdated / no longer relevant",
@@ -376,13 +376,13 @@
       }
     },
     "toast": {
-      "movedToWon": "{name} — 🏆 marked as won",
-      "movedToLost": "{name} — marked as lost"
+      "movedToWon": "{name} marked as won",
+      "movedToLost": "{name} marked as lost"
     }
   },
   "tasks": {
     "queueTitle": "Tasks",
-    "queueDescription": "Things to do — manage priorities, due dates, and completion",
+    "queueDescription": "Things to do - manage priorities, due dates, and completion",
     "status": {
       "open": "Open",
       "all": "All",
@@ -416,7 +416,7 @@
     "empty": {
       "title": "No tasks",
       "description": "Add tasks from party or engagement pages.",
-      "fallback": "—"
+      "fallback": "-"
     },
     "emptyFiltered": {
       "title": "No tasks match the filters",
@@ -429,7 +429,13 @@
       "language": "Language",
       "notifications": "Notifications",
       "organization": "Organization",
-    "pipelines": "Pipeline Stages"
+      "pipelines": "Pipeline Stages",
+      "emailTemplates": "Email Templates",
+      "emailSequences": "Email Sequences",
+      "emailHistory": "Email History",
+      "emailSignature": "Email Signature",
+      "emailSignatures": "Email Signatures",
+      "emailWhitelist": "Email Whitelist"
     },
     "profile": {
       "title": "Profile",
@@ -446,20 +452,20 @@
     },
     "language": {
       "title": "Language",
-      "description": "Preferred language — UI and AI reply default language",
+      "description": "Preferred language - UI and AI reply default language",
       "save": "Save",
       "saved": "Language updated"
     },
     "notifications": {
       "title": "Browser Notifications",
-      "description": "Desktop notifications for new AI drafts (Q9 — default off)",
+      "description": "Desktop notifications for new AI drafts (default off)",
       "toggle": "Receive desktop notifications",
       "requestPermission": "Request permission",
       "enabled": "Notifications enabled",
       "disabled": "Notifications disabled",
       "permissionDenied": "Notifications were blocked in browser settings",
       "notSupported": "This browser does not support notifications",
-      "grantedHint": "Permission granted — you can receive notifications"
+      "grantedHint": "Permission granted - you can receive notifications"
     },
     "organization": {
       "title": "Organization",
@@ -470,11 +476,34 @@
       "owner": "Owner",
       "member": "Member",
       "phase1Notice": "Phase 1 supports a single organization. User invitations and role changes are coming in Phase 2."
+    },
+    "emailSignature": {
+      "title": "Email Signature",
+      "description": "Manage HTML signatures automatically attached to outbound emails.",
+      "noOrg": "Organization not found",
+      "empty": "No signatures registered.",
+      "addFirst": "Add first signature",
+      "addSignature": "Add signature",
+      "loading": "Loading..."
+    },
+    "emailWhitelist": {
+      "title": "Email Whitelist",
+      "description": "Emails from registered domains and addresses are auto-received.",
+      "totalRegistered": "Total registered",
+      "domains": "Domains",
+      "emailAddresses": "Email addresses",
+      "addEntry": "Add",
+      "pattern": "Pattern",
+      "note": "Note",
+      "registeredAt": "Registered",
+      "status": "Status",
+      "delete": "Delete",
+      "addNew": "Add"
     }
   },
   "realtime": {
     "newDraft": "New AI draft arrived",
-    "newDraftTitle": "URM — New draft",
+    "newDraftTitle": "URM - New draft",
     "newDraftBody": "AI has generated a new reply draft. Check your review queue."
   },
   "partyForm": {
@@ -486,23 +515,22 @@
     "interestTagsHint": "Comma-separated. Focus areas the party cares about.",
     "createTitle": "New Party",
     "editTitle": "Edit Party",
-    "createDescription": "Add a new party — investor, buyer, partner, customer, ...",
+    "createDescription": "Add a new party - investor, buyer, partner, customer, ...",
     "editDescription": "Edit party information",
     "name": "Name",
     "module": "Module",
     "partyType": "Type",
     "tier": "Tier",
     "tiers": {
-      "tier_1": "Tier 1 — Strategic",
-      "tier_2": "Tier 2 — Important",
-      "tier_3": "Tier 3 — Standard",
-      "cold": "Cold — Early"
+      "tier_1": "Tier 1 - Strategic",
+      "tier_2": "Tier 2 - Important",
+      "tier_3": "Tier 3 - Standard",
+      "cold": "Cold - Early"
     },
     "partyTypes": {
       "company": "Company",
       "individual": "Individual",
-      "organization": "Organization",
-    "pipelines": "Pipeline Stages"
+      "organization": "Organization"
     },
     "legalName": "Legal name",
     "legalNamePlaceholder": "Inc. / LLC / Co., Ltd. ...",
@@ -538,7 +566,7 @@
     "value": "Value",
     "currency": "Currency",
     "probability": "Probability (%)",
-    "probabilityHint": "0–100",
+    "probabilityHint": "0-100",
     "expectedClose": "Expected close",
     "source": "Source",
     "sourcePlaceholder": "Inbound, referral, conference ...",
