@@ -91,7 +91,7 @@ export function CountryPeersPanelClient({ partyId, country, countryName, current
       <CardHeader className="pb-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <MapPin className="h-4 w-4 text-muted-foreground" />
-          {locationLabel} — 동일 국가 관련 업체
+          {locationLabel} — Same-country peers
         </CardTitle>
         {/* Tab buttons */}
         <div className="flex gap-0 mt-3 border-b">
