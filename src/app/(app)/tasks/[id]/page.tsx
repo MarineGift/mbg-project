@@ -1,8 +1,7 @@
 // src/app/(app)/tasks/[id]/page.tsx
-// Phase 22b: Task detail page (placeholder - redirects to list)
-// TODO: build full task detail UI
-
-import { redirect } from "next/navigation";
+import { notFound } from 'next/navigation';
+import { fetchTaskById } from '@/lib/queries/tasks';
+import { TaskDetailClient } from '@/components/tasks/task-detail-client';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -10,7 +9,7 @@ interface PageProps {
 
 export default async function TaskDetailPage({ params }: PageProps) {
   const { id } = await params;
-  // Until task detail UI is built, send users back to the list
-  // with the task highlighted in URL query
-  redirect(`/tasks?focus=${encodeURIComponent(id)}`);
+  const task = await fetchTaskById(id);
+  if (!task) notFound();
+  return <TaskDetailClient task={task} />;
 }

@@ -242,3 +242,26 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     aiSuggested: r.linked_strategy_action_id != null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// fetchTaskById
+// ---------------------------------------------------------------------------
+export async function fetchTaskById(id: string): Promise<TaskRow | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .select(
+      id, title, description, status, priority, due_at, reminder_at, module,
+       party_id, engagement_id, assigned_to_user_id, created_at, completed_at,
+       linked_strategy_action_id,
+       parties:party_id ( name, module ),
+       engagements:engagement_id ( name ),
+    )
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toTaskRow(data as unknown as RawTaskRow);
+}
