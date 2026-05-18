@@ -78,7 +78,7 @@ function PeerRow({ peer }: { peer: CountryPeer }) {
 }
 
 export function CountryPeersPanelClient({ partyId, country, countryName, currentModule, mills, fillers }: Props) {
-  // paper_mill 페이지 → filler 탭 먼저, filler 페이지 → mills 탭 먼저
+  // paper_mill page: filler tab first; filler page: mills tab first
   const [activeTab, setActiveTab] = useState<'mills' | 'fillers'>(
     currentModule === 'filler' ? 'mills' : 'fillers'
   );
@@ -130,8 +130,7 @@ export function CountryPeersPanelClient({ partyId, country, countryName, current
       <CardContent className="p-0 max-h-[400px] overflow-y-auto">
         {list.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground italic">
-            {activeTab === 'mills' ? 'Paper Mill' : 'Filler Supplier'} 없음
-          </div>
+            {activeTab === 'mills' ? 'No paper mills' : 'No filler suppliers'} in this country</div>
         ) : (
           list.map((p) => <PeerRow key={p.id} peer={p} />)
         )}

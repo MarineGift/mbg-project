@@ -43,7 +43,7 @@ export function CountryFilterBar({ countries, current }: Props) {
         onChange={(e) => navigate(e.target.value)}
         className="h-8 pl-2 pr-6 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer min-w-[140px]"
       >
-        <option value="">전체 국가</option>
+        <option value="">All countries</option>
         {sorted.map((cc) => (
           <option key={cc} value={cc}>
             {cc} — {COUNTRY_NAMES[cc] ?? cc}

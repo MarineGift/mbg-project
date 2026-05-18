@@ -133,7 +133,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler' || module === 'paper_mill';
   const linkRole  = module === 'filler' ? 'filler' : 'paper_mill';
-  const linkLabel = module === 'filler' ? '연결 제지사' : '연결 Filler';
+  const linkLabel = module === 'filler' ? 'Linked Paper Mill' : 'Linked Filler';
 
   let query = supabase
     .schema('app')
@@ -219,7 +219,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             {showLinks && unlinkedCount > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-600 font-medium text-xs">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                {unlinkedCount}개 미연결 — 영업 타겟
+                {unlinkedCount} unlinked — sales targets
               </span>
             )}
             {sortByScore && (
