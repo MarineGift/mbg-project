@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Sparkles, Clock, AlertTriangle, Briefcase } from 'lucide-react';
 import { TaskCheckbox } from './task-checkbox';
+import { TaskDeleteButton } from './task-delete-button';
 import { ModuleBadge } from '@/components/common/module-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import type { TaskPriority, TaskRow } from '@/types/task';
@@ -45,10 +46,10 @@ export function TasksTable({ rows }: Props) {
         void PRIORITY_ORDER;
 
         return (
-          <li key={row.id}>
+          <li key={row.id} className="relative group">
             <div
               className={cn(
-                'flex items-start gap-3 px-4 py-3 hover:bg-muted/40 transition-colors',
+                'flex items-start gap-3 px-4 py-3 pr-10 hover:bg-muted/40 transition-colors',
                 isDone && 'opacity-60',
                 isCancelled && 'opacity-40 italic',
               )}
@@ -63,7 +64,7 @@ export function TasksTable({ rows }: Props) {
                       isDone && 'line-through',
                     )}
                   >
-                    <Link href={"/tasks/" + row.id} className="hover:underline">{row.title}</Link>
+                    {row.title}
                   </p>
                   {row.aiSuggested && (
                     <span
@@ -127,6 +128,11 @@ export function TasksTable({ rows }: Props) {
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* 삭제 버튼 — hover 시 표시 */}
+            <div className="absolute top-2.5 right-2">
+              <TaskDeleteButton id={row.id} title={row.title} />
             </div>
           </li>
         );
