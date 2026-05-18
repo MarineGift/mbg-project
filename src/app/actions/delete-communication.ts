@@ -88,13 +88,22 @@ export async function deleteCommunication(
   const supabase = await createSupabaseServerClient();
 
   // 1. 메시지 조회 (이미 삭제됐거나 없으면 early return)
-  const { data: comm, error: fetchError } = await supabase
-    .schema('app')
-    .from('communications')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commQuery = supabase.schema('app').from('communications') as any;
+
+  const { data: comm, error: fetchError } = await commQuery
     .select('id, message_id, direction, external_data')
     .eq('id', id)
     .is('deleted_at', null)
-    .single();
+    .single() as {
+      data: {
+        id: string;
+        message_id: string | null;
+        direction: string;
+        external_data: Record<string, unknown> | null;
+      } | null;
+      error: unknown;
+    };
 
   if (fetchError || !comm) {
     return { success: false, error: 'Message not found or already deleted' };
@@ -112,15 +121,14 @@ export async function deleteCommunication(
       await deleteFromImap(comm.message_id, accountKind);
     } catch (imapErr) {
       // IMAP 실패는 non-fatal — DB 삭제는 계속 진행
-      // (서버에서 이미 삭제된 경우 등)
       console.error('[deleteComm] IMAP delete failed (non-fatal):', imapErr);
     }
   }
 
   // 3. DB soft-delete
-  const { error: deleteError } = await supabase
-    .schema('app')
-    .from('communications')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateQuery = supabase.schema('app').from('communications') as any;
+  const { error: deleteError } = await updateQuery
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null); // 이중 실행 방지
@@ -132,6 +140,7 @@ export async function deleteCommunication(
   // 4. 캐시 무효화
   revalidatePath('/inbox');
   revalidatePath(`/inbox/${id}`);
+  revalidatePath('/', 'layout');
 
   return { success: true };
 }
@@ -160,5 +169,6 @@ export async function deleteCommunicationsBulk(
   }
 
   revalidatePath('/inbox');
+  revalidatePath('/', 'layout');
   return { deleted, errors };
 }

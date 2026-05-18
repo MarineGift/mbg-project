@@ -2,25 +2,20 @@
 
 /**
  * src/components/inbox/inbox-delete-button.tsx
- *
- * 단건 삭제 버튼 — 확인 다이얼로그 포함.
- * InboxTable 행(row)에 삽입.
  */
 
 import { useState, useTransition } from 'react';
-import { Trash2, Loader2 } from 'lucide-react';
+import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { deleteCommunication } from '@/app/actions/delete-communication';
 
@@ -49,42 +44,55 @@ export function InboxDeleteButton({ id, subject, direction }: Props) {
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
           aria-label="Delete message"
-          onClick={(e) => e.stopPropagation()} // 행 클릭 이벤트 차단
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
-      </AlertDialogTrigger>
+      </DialogTrigger>
 
-      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete message?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {subject && (
-              <span className="block font-medium text-foreground mb-1 truncate">
-                &ldquo;{subject}&rdquo;
+      <DialogContent onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Delete message?
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div>
+              {subject && (
+                <span className="block font-medium text-foreground mb-2 truncate">
+                  &ldquo;{subject}&rdquo;
+                </span>
+              )}
+              <span className="block text-sm">
+                {isInbound
+                  ? 'This will permanently delete the message from both the mail server and this platform.'
+                  : 'This will remove the message from this platform. Outbound messages are not deleted from the mail server.'}
               </span>
-            )}
-            {isInbound
-              ? 'This will permanently delete the message from both the mail server and this platform.'
-              : 'This will remove the message from this platform. (Outbound messages are not deleted from the mail server.)'}
-            <span className="block mt-2 text-destructive font-medium">
-              This action cannot be undone.
-            </span>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
+              <span className="block mt-2 text-sm text-destructive font-medium">
+                This action cannot be undone.
+              </span>
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
             onClick={handleDelete}
             disabled={isPending}
-            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
           >
             {isPending ? (
               <>
@@ -94,9 +102,9 @@ export function InboxDeleteButton({ id, subject, direction }: Props) {
             ) : (
               'Delete'
             )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
