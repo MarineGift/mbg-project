@@ -1,11 +1,12 @@
 // src/components/email/compose-email-dialog.tsx
-// Compose Email Dialog
-// - 3 modes: new / reply / template
-// - Backward-compatible Props (accepts both old and new naming)
-// - Attachment upload + signature toggle + AI reply generation
+// Compose Email Dialog with 3 modes (tabs):
+//   - Direct:    blank compose form
+//   - Template:  select template + merge-field substitution
+//   - AI Draft:  AI-generated reply (uses generateAIReply, reply mode only)
+// All UI English, ASCII-clean.
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,9 @@ import {
   X,
   Sparkles,
   Signature,
+  FileText,
+  PenLine,
+  Info,
 } from "lucide-react";
 import {
   sendEmail,
@@ -34,42 +38,46 @@ import {
   type ComposeMode,
 } from "@/lib/actions/email-compose";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
 
-// ?????????????????????????????????????????????
-// Props (accept both old and new naming for backward compatibility)
-// ?????????????????????????????????????????????
+// Template shape (matches src/types/phase22a.ts > TemplateForCompose)
+interface TemplateLite {
+  id: string;
+  name: string;
+  category: string | null;
+  subject: string | null;
+  body_plain: string | null;
+  body_html: string | null;
+  module: string | null;
+}
+
+// Tabs
+type TabId = "direct" | "template" | "ai";
+
 interface ComposeEmailDialogProps {
   open: boolean;
-  // Caller may use either onOpenChange (preferred) or onClose
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
 
-  // Required
   partyId: string;
-  // Optional - defaults to "new" if not provided
   mode?: ComposeMode;
 
-  // Optional contact info
   contactId?: string | null;
   contactName?: string | null;
 
-  // Initial values: caller may use either defaultTo or recipientEmail
   defaultTo?: string;
   recipientEmail?: string;
   defaultSubject?: string;
   defaultBody?: string;
   templateId?: string;
 
-  // Reply mode: caller may use either originalCommunicationId or replyToCommunicationId
   replyToMessageId?: string;
   threadId?: string;
   originalCommunicationId?: string;
   replyToCommunicationId?: string;
 
-  // Reserved for future Template mode (UI to pick a template inside the dialog)
   templates?: unknown[];
-  // Reserved for future signature loading
   orgId?: string;
 }
 
@@ -81,7 +89,6 @@ interface AttachmentItem {
 }
 
 export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
-  // Normalize props
   const handleOpenChange = (next: boolean) => {
     props.onOpenChange?.(next);
     if (!next) props.onClose?.();
@@ -91,20 +98,85 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const effectiveTo = props.defaultTo ?? props.recipientEmail ?? "";
   const effectiveOriginalCommunicationId =
     props.originalCommunicationId ?? props.replyToCommunicationId;
+  const isReplyMode = effectiveMode === "reply" && !!effectiveOriginalCommunicationId;
+
+  // Cast templates prop to typed array
+  const templates = useMemo<TemplateLite[]>(
+    () => (Array.isArray(props.templates) ? (props.templates as TemplateLite[]) : []),
+    [props.templates],
+  );
 
   const supabase = createSupabaseBrowserClient();
 
+  // ?? Common form state ???????????????????????????????????
+  const [activeTab, setActiveTab] = useState<TabId>("direct");
   const [to, setTo] = useState(effectiveTo);
   const [subject, setSubject] = useState(props.defaultSubject ?? "");
   const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
+
+  // ?? Template tab state ??????????????????????????????????
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
+    props.templateId ?? "",
+  );
+
+  // ?? AI tab state ????????????????????????????????????????
+  const [aiTone, setAiTone] = useState<"professional" | "friendly" | "concise">(
+    "professional",
+  );
   const [generatingAI, setGeneratingAI] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ?? File select -> upload to Supabase Storage
+  // ?? Template select handler ?????????????????????????????
+  function handleTemplateSelect(templateId: string) {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+    const t = templates.find((x) => x.id === templateId);
+    if (!t) return;
+
+    // Build merge-field context (best-effort with what we know on the client)
+    const firstName =
+      (props.contactName ?? "").trim().split(/\s+/)[0] ?? "";
+    const data: Record<string, string> = {
+      "contact.name": props.contactName ?? "",
+      "contact.firstName": firstName,
+      "contact.given_name": firstName,
+    };
+
+    setSubject(renderMergeFields(t.subject ?? "", data));
+    setBody(renderMergeFields(t.body_plain ?? "", data));
+    toast.success(`Template applied: ${t.name}`);
+  }
+
+  // ?? AI generate (reply mode only) ???????????????????????
+  async function handleGenerateAI() {
+    if (!isReplyMode || !effectiveOriginalCommunicationId) {
+      toast.error("AI generation requires replying to an existing message.");
+      return;
+    }
+    setGeneratingAI(true);
+    try {
+      const result = await generateAIReply({
+        communicationId: effectiveOriginalCommunicationId,
+        partyId: props.partyId,
+        contactId: props.contactId,
+        tone: aiTone,
+      });
+      if (result.success && result.draft) {
+        setBody(result.draft);
+        toast.success("AI draft generated.");
+      } else {
+        toast.error(result.error ?? "AI generation failed.");
+      }
+    } finally {
+      setGeneratingAI(false);
+    }
+  }
+
+  // ?? Attachments ?????????????????????????????????????????
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
@@ -138,7 +210,6 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       if (error) toast.error(`Upload failed: ${item.file.name}`);
     }
 
-    // Reset input so the same file can be picked again
     e.target.value = "";
   }
 
@@ -146,32 +217,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // ?? AI reply generation
-  async function handleGenerateAI() {
-    if (!effectiveOriginalCommunicationId) {
-      toast.error("Original message ID is missing.");
-      return;
-    }
-    setGeneratingAI(true);
-    try {
-      const result = await generateAIReply({
-        communicationId: effectiveOriginalCommunicationId,
-        partyId: props.partyId,
-        contactId: props.contactId,
-        tone: "professional",
-      });
-      if (result.success && result.draft) {
-        setBody(result.draft);
-        toast.success("AI reply draft generated.");
-      } else {
-        toast.error(result.error ?? "AI generation failed.");
-      }
-    } finally {
-      setGeneratingAI(false);
-    }
-  }
-
-  // ?? Send
+  // ?? Send ????????????????????????????????????????????????
   async function handleSend() {
     if (!to.trim()) {
       toast.error("Please enter a recipient.");
@@ -186,8 +232,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       return;
     }
 
-    const stillUploading = attachments.some((a) => a.uploading);
-    if (stillUploading) {
+    if (attachments.some((a) => a.uploading)) {
       toast.error("Please wait for file uploads to finish.");
       return;
     }
@@ -196,16 +241,28 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       .filter((a) => a.storagePath)
       .map((a) => a.storagePath!);
 
+    // Determine final ComposeMode for the action
+    // (template tab => "template" payload, ai tab + reply => "reply", direct + reply => "reply", else "new")
+    const finalMode: ComposeMode =
+      activeTab === "template"
+        ? "template"
+        : effectiveMode === "reply"
+          ? "reply"
+          : "new";
+
     setSending(true);
     try {
       const payload: ComposePayload = {
-        mode: effectiveMode,
+        mode: finalMode,
         partyId: props.partyId,
         contactId: props.contactId ?? null,
         to: to.trim(),
         subject: subject.trim(),
         body,
-        templateId: props.templateId,
+        templateId:
+          activeTab === "template" && selectedTemplateId
+            ? selectedTemplateId
+            : props.templateId,
         replyToMessageId: props.replyToMessageId,
         threadId: props.threadId,
         attachmentPaths,
@@ -225,13 +282,31 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     }
   }
 
-  // ?? Mode label (English)
+  // ?? Header label ????????????????????????????????????????
   const modeLabel =
     effectiveMode === "reply"
       ? "Reply"
       : effectiveMode === "template"
         ? "Send from Template"
         : "New Email";
+
+  // Group templates by category for the dropdown
+  const templatesByCategory = useMemo(() => {
+    const out: Record<string, TemplateLite[]> = {};
+    for (const t of templates) {
+      const cat = t.category ?? "General";
+      (out[cat] ??= []).push(t);
+    }
+    return out;
+  }, [templates]);
+
+  // ?? Tab button helper ???????????????????????????????????
+  const tabBtnClass = (id: TabId) =>
+    `flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors ${
+      activeTab === id
+        ? "border-primary text-primary font-medium"
+        : "border-transparent text-muted-foreground hover:text-foreground"
+    }`;
 
   return (
     <Dialog open={props.open} onOpenChange={handleOpenChange}>
@@ -248,8 +323,125 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {/* To */}
+        {/* Tabs */}
+        <div className="flex border-b -mx-6 px-6">
+          <button
+            type="button"
+            className={tabBtnClass("direct")}
+            onClick={() => setActiveTab("direct")}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            Direct
+          </button>
+          <button
+            type="button"
+            className={tabBtnClass("template")}
+            onClick={() => setActiveTab("template")}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Template
+          </button>
+          <button
+            type="button"
+            className={tabBtnClass("ai")}
+            onClick={() => setActiveTab("ai")}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Draft
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1 pt-2">
+          {/* Tab-specific top section */}
+          {activeTab === "template" && (
+            <div className="space-y-1">
+              <Label htmlFor="template-select">Choose template</Label>
+              {templates.length === 0 ? (
+                <div className="rounded border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5" />
+                  No templates available. Create templates in Settings &gt; Email Templates.
+                </div>
+              ) : (
+                <select
+                  id="template-select"
+                  value={selectedTemplateId}
+                  onChange={(e) => handleTemplateSelect(e.target.value)}
+                  className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">-- Select a template --</option>
+                  {Object.entries(templatesByCategory).map(([cat, list]) => (
+                    <optgroup key={cat} label={cat}>
+                      {list.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Tokens like <code>{"{{contact.firstName}}"}</code> are replaced automatically when you pick a template.
+              </p>
+            </div>
+          )}
+
+          {activeTab === "ai" && (
+            <div className="space-y-2 rounded-md border bg-violet-50/50 p-3">
+              {isReplyMode ? (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="ai-tone" className="text-xs">
+                      Tone
+                    </Label>
+                    <select
+                      id="ai-tone"
+                      value={aiTone}
+                      onChange={(e) =>
+                        setAiTone(
+                          e.target.value as "professional" | "friendly" | "concise",
+                        )
+                      }
+                      className="h-7 px-2 text-xs rounded border border-input bg-background"
+                    >
+                      <option value="professional">Professional</option>
+                      <option value="friendly">Friendly</option>
+                      <option value="concise">Concise</option>
+                    </select>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleGenerateAI}
+                    disabled={generatingAI}
+                    className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                  >
+                    {generatingAI ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                        Generate AI reply
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <div className="text-xs text-muted-foreground flex items-start gap-1.5">
+                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    AI Draft is available when replying to an inbound message.
+                    Open the inbox or party timeline and click <strong>Reply</strong> on an existing email.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Common: To */}
           <div className="space-y-1">
             <Label htmlFor="to">To</Label>
             <Input
@@ -261,7 +453,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             />
           </div>
 
-          {/* Subject */}
+          {/* Common: Subject */}
           <div className="space-y-1">
             <Label htmlFor="subject">Subject</Label>
             <Input
@@ -272,27 +464,9 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             />
           </div>
 
-          {/* Body */}
+          {/* Common: Body */}
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="body">Body</Label>
-              {effectiveMode === "reply" && effectiveOriginalCommunicationId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleGenerateAI}
-                  disabled={generatingAI}
-                  className="h-7 text-xs text-violet-600 hover:text-violet-700"
-                >
-                  {generatingAI ? (
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3 w-3 mr-1" />
-                  )}
-                  Generate AI draft
-                </Button>
-              )}
-            </div>
+            <Label htmlFor="body">Body</Label>
             <Textarea
               id="body"
               value={body}
