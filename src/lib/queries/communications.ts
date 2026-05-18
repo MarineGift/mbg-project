@@ -1,6 +1,6 @@
 // src/lib/queries/communications.ts
 // ============================================================
-// Phase 22a — Communications data access
+// Phase 22a  Communications data access
 // ============================================================
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -95,7 +95,7 @@ export async function listTemplatesForCompose(
   return (data || []) as TemplateForCompose[];
 }
 
-// ── Inbox detail page ──────────────────────────────────────────────────────
+//  Inbox detail page 
 export async function fetchCommunicationDetail(id: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -113,7 +113,7 @@ export async function fetchCommunicationDetail(id: string) {
   return data;
 }
 
-// ── Thread grouping utilities ──────────────────────────────────────────────
+//  Thread grouping utilities 
 export function groupByThread(
   items: CommunicationTimelineItem[]
 ): Map<string, CommunicationTimelineItem[]> {
@@ -143,7 +143,7 @@ export function sortThreadsByRecency(
   return entries;
 }
 
-// ── Phase 22b: markCommunicationRead ─────────────────────────────────
+//  Phase 22b: markCommunicationRead 
 // Safe no-op if read_at column does not exist yet
 export async function markCommunicationRead(id: string): Promise<void> {
   try {
@@ -154,11 +154,11 @@ export async function markCommunicationRead(id: string): Promise<void> {
       .update({ read_at: new Date().toISOString() } as any)
       .eq('id', id);
   } catch (_) {
-    // Silently ignore — read_at column may not exist until SQL migration runs
+    // Silently ignore  read_at column may not exist until SQL migration runs
   }
 }
 
-// ── Phase 22b: getUnreadCount ─────────────────────────────────────────
+//  Phase 22b: getUnreadCount 
 export async function getUnreadCount(): Promise<number> {
   try {
     const supabase = await createSupabaseServerClient();

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Sparkles, Paperclip } from 'lucide-react';
 import { ChannelDirectionIcon } from './channel-direction-icon';
+import { InboxDeleteButton } from './inbox-delete-button';
 import { ModuleBadge } from '@/components/common/module-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import type { InboxRow } from '@/types/inbox';
@@ -20,10 +21,10 @@ export function InboxTable({ rows }: Props) {
   return (
     <ul className="divide-y" aria-label={t('queueTitle')}>
       {rows.map((row) => (
-        <li key={row.id}>
+        <li key={row.id} className="relative group">
           <Link
             href={`/inbox/${row.id}`}
-            className="block hover:bg-muted/40 transition-colors"
+            className="block hover:bg-muted/40 transition-colors pr-10"
           >
             <div className="flex items-start gap-3 px-4 py-3">
               <ChannelDirectionIcon
@@ -94,6 +95,15 @@ export function InboxTable({ rows }: Props) {
               </div>
             </div>
           </Link>
+
+          {/* 삭제 버튼 — Link 바깥 절대 위치, hover 시 표시 */}
+          <div className="absolute top-2.5 right-2">
+            <InboxDeleteButton
+              id={row.id}
+              subject={row.subject}
+              direction={row.direction}
+            />
+          </div>
         </li>
       ))}
     </ul>

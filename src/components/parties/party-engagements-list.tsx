@@ -38,9 +38,8 @@ export function PartyEngagementsList({ engagements, partyId, module }: Props) {
         <CardTitle className="text-sm">{t('title')}</CardTitle>
         <Button
           asChild
-          variant="ghost"
           size="sm"
-          className="h-7 px-2"
+          className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
           aria-label={t('addEngagement')}
         >
           <Link href={`/${module}/engagements/new?partyId=${partyId}`}>
