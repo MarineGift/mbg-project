@@ -39,11 +39,11 @@ export function EmailWhitelistClient({
     });
 
   const handleDelete = (id: string, pattern: string) => {
-    if (!confirm('"' + pattern + '"을 삭제하시겠습니까?')) return;
+    if (!confirm('Delete "' + pattern + '"?')) return;
     start(async () => {
       await deleteWhitelistEntry(id);
       setEntries(p => p.filter(e => e.id !== id));
-      showToast('"' + pattern + '" 삭제됨');
+      showToast('"' + pattern + '" deleted');
     });
   };
 
@@ -64,7 +64,7 @@ export function EmailWhitelistClient({
         <div>
           <h2 className="text-xl font-semibold">Email Whitelist</h2>
           <p className="text-sm text-gray-500 mt-1">
-            등록된 도메인/주소에서 온 메일만 자동 수신됩니다.
+            Emails from registered domains and addresses are automatically approved.
           </p>
         </div>
         <div className="flex gap-2">
@@ -74,43 +74,45 @@ export function EmailWhitelistClient({
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-md text-sm hover:bg-emerald-700"
             >
               <Download className="w-4 h-4" />
-              Party 도메인 가져오기 ({unregistered.length})
+              Import Party Domains ({unregistered.length})
             </button>
           )}
           <button
             onClick={() => setShowAdd(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
           >
-            <Plus className="w-4 h-4" /> 추가
+            <Plus className="w-4 h-4" /> Add
           </button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="전체 등록" value={entries.length} />
-        <StatCard label="도메인" value={domains.length} color="text-blue-600" />
-        <StatCard label="이메일 주소" value={addresses.length} color="text-purple-600" />
+        <StatCard label="Total Registered" value={entries.length} />
+        <StatCard label="Domains" value={domains.length} color="text-blue-600" />
+        <StatCard label="Email Addresses" value={addresses.length} color="text-purple-600" />
       </div>
 
       {/* Add form */}
       {showAdd && (
         <AddForm
           onClose={() => setShowAdd(false)}
-          onAdded={entry => { setEntries(p => [...p, entry]); setShowAdd(false); showToast('"' + entry.pattern + '" 등록됨'); }}
+          onAdded={entry => { setEntries(p => [...p, entry]); setShowAdd(false); showToast('"' + entry.pattern + '" registered'); }}
           onError={msg => showToast(msg, false)}
         />
       )}
 
       {/* Domain section */}
       <Section
-        title="도메인" icon={<Globe className="w-4 h-4" />}
+        title="Domains"
+        icon={<Globe className="w-4 h-4" />}
         entries={domains} onToggle={handleToggle} onDelete={handleDelete} isPending={isPending}
       />
 
       {/* Address section */}
       <Section
-        title="이메일 주소" icon={<Mail className="w-4 h-4" />}
+        title="Email Addresses"
+        icon={<Mail className="w-4 h-4" />}
         entries={addresses} onToggle={handleToggle} onDelete={handleDelete} isPending={isPending}
       />
 
@@ -119,7 +121,7 @@ export function EmailWhitelistClient({
         <ImportModal
           domains={unregistered}
           onClose={() => setShowImport(false)}
-          onImported={added => { setShowImport(false); setUnregistered([]); showToast(added + "개 도메인 등록됨"); }}
+          onImported={added => { setShowImport(false); setUnregistered([]); showToast(added + " domains registered"); }}
         />
       )}
     </div>
@@ -150,21 +152,21 @@ function Section({
       <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-2 font-medium text-sm">
         {icon}
         {title}
-        <span className="ml-auto text-gray-500 font-normal">{entries.length}개</span>
+        <span className="ml-auto text-gray-500 font-normal">{entries.length}</span>
       </div>
       {entries.length === 0 ? (
         <div className="px-4 py-8 text-center text-gray-400 text-sm">
-          등록된 {title}이 없습니다.
+          No registered {title}.
         </div>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-gray-50/50 text-xs text-gray-500">
-              <th className="px-4 py-2 text-left">패턴</th>
-              <th className="px-4 py-2 text-left">메모</th>
-              <th className="px-4 py-2 text-left">등록일</th>
-              <th className="px-4 py-2 text-center">상태</th>
-              <th className="px-4 py-2 text-center">삭제</th>
+              <th className="px-4 py-2 text-left">Pattern</th>
+              <th className="px-4 py-2 text-left">Notes</th>
+              <th className="px-4 py-2 text-left">Registered</th>
+              <th className="px-4 py-2 text-center">Status</th>
+              <th className="px-4 py-2 text-center">Delete</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -175,14 +177,14 @@ function Section({
                     <code className="text-sm font-mono">{e.pattern}</code>
                     {FREE.has(e.pattern) && (
                       <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
-                        무료 메일
+                        Free email
                       </span>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{e.notes || "—"}</td>
+                <td className="px-4 py-3 text-gray-600">{e.notes || "-"}</td>
                 <td className="px-4 py-3 text-gray-500">
-                  {new Date(e.created_at).toLocaleDateString("ko-KR")}
+                  {new Date(e.created_at).toLocaleDateString("en-US")}
                 </td>
                 <td className="px-4 py-3 text-center">
                   <button onClick={() => onToggle(e.id, e.is_active)} disabled={isPending}>
@@ -226,7 +228,7 @@ function AddForm({
     setErr(null);
     start(async () => {
       const res = await addWhitelistEntry(pattern, kind, notes);
-      if (!res.ok) { setErr(res.error || "오류"); return; }
+      if (!res.ok) { setErr(res.error || "Error"); return; }
       onAdded({
         id: crypto.randomUUID(),
         pattern: pattern.trim().toLowerCase(),
@@ -240,7 +242,7 @@ function AddForm({
   return (
     <div className="border rounded-lg p-4 bg-blue-50 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">새 항목 추가</h3>
+        <h3 className="font-medium text-sm">Add New Entry</h3>
         <button onClick={onClose}><X className="w-4 h-4 text-gray-500" /></button>
       </div>
       <div className="flex gap-2">
@@ -250,29 +252,29 @@ function AddForm({
             onClick={() => setKind(k)}
             className={["flex-1 py-2 rounded-md text-sm border", kind === k ? "bg-blue-600 text-white border-blue-600" : "bg-white"].join(" ")}
           >
-            {k === "domain" ? "🌐 도메인" : "✉️ 이메일 주소"}
+            {k === "domain" ? "Domain" : "Email Address"}
           </button>
         ))}
       </div>
       <input
         type="text" value={pattern} onChange={e => setPattern(e.target.value)}
         onKeyDown={e => e.key === "Enter" && submit()}
-        placeholder={kind === "domain" ? "예: marinepad.com" : "예: jane@marinepad.com"}
+        placeholder={kind === "domain" ? "e.g. marinepad.com" : "e.g. jane@marinepad.com"}
         className="w-full px-3 py-2 border rounded-md text-sm"
       />
       <input
         type="text" value={notes} onChange={e => setNotes(e.target.value)}
-        placeholder="메모 (선택)" className="w-full px-3 py-2 border rounded-md text-sm"
+        placeholder="Notes (optional)" className="w-full px-3 py-2 border rounded-md text-sm"
       />
-      {err && <p className="text-xs text-red-600">⚠️ {err}</p>}
+      {err && <p className="text-xs text-red-600">Error: {err}</p>}
       <div className="flex gap-2 justify-end">
-        <button onClick={onClose} className="px-3 py-1.5 border rounded-md text-sm bg-white">취소</button>
+        <button onClick={onClose} className="px-3 py-1.5 border rounded-md text-sm bg-white">Cancel</button>
         <button
           onClick={submit} disabled={!pattern.trim() || isPending}
           className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm disabled:opacity-50 inline-flex items-center gap-1"
         >
           {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-          추가
+          Add
         </button>
       </div>
     </div>
@@ -307,12 +309,12 @@ function ImportModal({
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h2 className="font-semibold flex items-center gap-2">
-            <Download className="w-4 h-4" /> Party 도메인 가져오기
+            <Download className="w-4 h-4" /> Import Party Domains
           </h2>
           <button onClick={onClose}><X className="w-4 h-4 text-gray-400" /></button>
         </div>
         <p className="px-5 py-3 bg-gray-50 border-b text-xs text-gray-600">
-          Party contacts 이메일에서 추출한 미등록 도메인입니다.
+          Domains found in party contact emails.
         </p>
         <div className="divide-y max-h-72 overflow-y-auto">
           {domains.map(d => (
@@ -323,10 +325,10 @@ function ImportModal({
                   <code className="font-mono text-sm">{d.domain}</code>
                   {FREE.has(d.domain) && (
                     <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
-                      ⚠️ 무료 메일
+                      Warning: Free email
                     </span>
                   )}
-                  <span className="text-xs text-gray-500">{d.contact_count}명</span>
+                  <span className="text-xs text-gray-500">{d.contact_count}</span>
                 </div>
                 <div className="text-xs text-gray-500 truncate">{d.party_names}</div>
               </div>
@@ -334,16 +336,16 @@ function ImportModal({
           ))}
         </div>
         <div className="flex items-center justify-between px-5 py-4 border-t bg-gray-50">
-          <span className="text-sm text-gray-600">{selected.size}개 선택됨</span>
+          <span className="text-sm text-gray-600">{selected.size} selected</span>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 border rounded-md text-sm bg-white">취소</button>
+            <button onClick={onClose} className="px-3 py-1.5 border rounded-md text-sm bg-white">Cancel</button>
             <button
               onClick={doImport} disabled={selected.size === 0 || isPending}
               className="px-3 py-1.5 bg-emerald-600 text-white rounded-md text-sm disabled:opacity-50 inline-flex items-center gap-1"
             >
               {isPending
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> 등록 중...</>
-                : <><Check className="w-3 h-3" /> {selected.size}개 등록</>}
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Registering...</>
+                : <><Check className="w-3 h-3" /> Register {selected.size}</>}
             </button>
           </div>
         </div>

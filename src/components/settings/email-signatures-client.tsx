@@ -1,5 +1,5 @@
 // src/components/settings/email-signatures-client.tsx
-// Phase 22b: 이메일 서명 관리 UI (CRUD)
+// Phase 22b: Email Signatures Management UI (CRUD)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -60,7 +60,7 @@ export function EmailSignaturesClient() {
     if (result.success) {
       setSignatures(result.data ?? []);
     } else {
-      toast.error(result.error ?? "조회 실패");
+      toast.error(result.error ?? "Failed to load");
     }
     setLoading(false);
   }
@@ -70,12 +70,12 @@ export function EmailSignaturesClient() {
     setFormName("");
     setFormHtml(
       `<p style="font-family:sans-serif;font-size:13px;color:#555;line-height:1.6;">
-  <strong>이름</strong><br>
-  직함 | 회사명<br>
-  📧 email@example.com
+  <strong>Your Name</strong><br>
+  Title | Company<br>
+  Email: email@example.com
 </p>`
     );
-    setFormIsDefault(signatures.length === 0); // 첫 번째면 기본값으로
+    setFormIsDefault(signatures.length === 0); // First signature becomes default
     setDialogOpen(true);
   }
 
@@ -88,8 +88,8 @@ export function EmailSignaturesClient() {
   }
 
   async function handleSave() {
-    if (!formName.trim()) { toast.error("서명 이름을 입력하세요."); return; }
-    if (!formHtml.trim()) { toast.error("서명 내용을 입력하세요."); return; }
+    if (!formName.trim()) { toast.error("Signature name is required"); return; }
+    if (!formHtml.trim()) { toast.error("Signature content is required"); return; }
 
     setSaving(true);
     const result = await upsertEmailSignature({
@@ -100,24 +100,24 @@ export function EmailSignaturesClient() {
     });
 
     if (result.success) {
-      toast.success(editing ? "서명이 수정되었습니다." : "서명이 추가되었습니다.");
+      toast.success(editing ? "Signature updated" : "Signature created");
       setDialogOpen(false);
       await load();
     } else {
-      toast.error(result.error ?? "저장 실패");
+      toast.error(result.error ?? "Save failed");
     }
     setSaving(false);
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("이 서명을 삭제하시겠습니까?")) return;
+    if (!confirm("Delete this signature?")) return;
     setDeleting(id);
     const result = await deleteEmailSignature(id);
     if (result.success) {
-      toast.success("서명이 삭제되었습니다.");
+      toast.success("Signature deleted");
       await load();
     } else {
-      toast.error(result.error ?? "삭제 실패");
+      toast.error(result.error ?? "Delete failed");
     }
     setDeleting(null);
   }
@@ -126,21 +126,21 @@ export function EmailSignaturesClient() {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
         <Loader2 className="h-4 w-4 animate-spin" />
-        불러오는 중...
+        Loading...
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* 서명 목록 */}
+      {/* Signature list */}
       {signatures.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center">
-            <p className="text-sm text-muted-foreground mb-3">등록된 서명이 없습니다.</p>
+            <p className="text-sm text-muted-foreground mb-3">No signatures registered.</p>
             <Button size="sm" onClick={openNew}>
               <Plus className="h-4 w-4 mr-1" />
-              첫 서명 추가
+              Add First Signature
             </Button>
           </CardContent>
         </Card>
@@ -149,7 +149,7 @@ export function EmailSignaturesClient() {
           <div className="flex justify-end">
             <Button size="sm" onClick={openNew}>
               <Plus className="h-4 w-4 mr-1" />
-              서명 추가
+              Add Signature
             </Button>
           </div>
           <div className="space-y-3">
@@ -162,7 +162,7 @@ export function EmailSignaturesClient() {
                       {sig.is_default && (
                         <Badge variant="secondary" className="gap-1 text-xs">
                           <Star className="h-3 w-3 fill-current" />
-                          기본
+                          Default
                         </Badge>
                       )}
                     </div>
@@ -192,7 +192,7 @@ export function EmailSignaturesClient() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {/* 미리보기 */}
+                  {/* Preview */}
                   <div
                     className="rounded border bg-muted/30 px-4 py-3 text-sm"
                     dangerouslySetInnerHTML={{ __html: sig.html_content }}
@@ -204,41 +204,41 @@ export function EmailSignaturesClient() {
         </>
       )}
 
-      {/* 편집 Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editing ? "서명 수정" : "새 서명 추가"}</DialogTitle>
+            <DialogTitle>{editing ? "Edit Signature" : "Add New Signature"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* 이름 */}
+            {/* Name */}
             <div className="space-y-1">
-              <Label htmlFor="sig-name">서명 이름</Label>
+              <Label htmlFor="sig-name">Signature Name</Label>
               <Input
                 id="sig-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="예: 기본 서명, 영문 서명"
+                placeholder="e.g. Default Signature, Formal Signature"
               />
             </div>
 
-            {/* HTML 내용 */}
+            {/* HTML Content */}
             <div className="space-y-1">
-              <Label htmlFor="sig-html">HTML 서명</Label>
+              <Label htmlFor="sig-html">HTML Content</Label>
               <textarea
                 id="sig-html"
                 value={formHtml}
                 onChange={(e) => setFormHtml(e.target.value)}
                 className="w-full min-h-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="<p>HTML 서명 코드를 입력하세요...</p>"
+                placeholder="<p>Enter HTML signature content...</p>"
               />
             </div>
 
-            {/* 미리보기 */}
+            {/* Preview */}
             {formHtml && (
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">미리보기</Label>
+                <Label className="text-xs text-muted-foreground">Preview</Label>
                 <div
                   className="rounded border bg-muted/30 px-4 py-3 text-sm"
                   dangerouslySetInnerHTML={{ __html: formHtml }}
@@ -246,7 +246,7 @@ export function EmailSignaturesClient() {
               </div>
             )}
 
-            {/* 기본 서명 토글 */}
+            {/* Default signature toggle */}
             <div className="flex items-center gap-3">
               <Switch
                 id="sig-default"
@@ -254,20 +254,20 @@ export function EmailSignaturesClient() {
                 onCheckedChange={setFormIsDefault}
               />
               <Label htmlFor="sig-default" className="cursor-pointer">
-                기본 서명으로 설정
+                Set as default
               </Label>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              취소
+              Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />저장 중...</>
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
               ) : (
-                "저장"
+                "Save"
               )}
             </Button>
           </DialogFooter>
