@@ -1,19 +1,20 @@
 /**
  * lib/email/auto-send-gate.ts
  *
- * AI ???? ??? ????????.
- * ? ?????? ?reasons[]?????? allowed=false.
+ * AI       .
+ *     reasons[]   allowed=false.
  *
- * ?? ? (??4.4 + ? 7.3):
- *   [1]  ??env.AI_AUTO_SEND_ENABLED)
- *   [2] auto_send_rules ?? (carriercategory)
+ *   ( 4.4 +  7.3):
+ *   [1]  (env.AI_AUTO_SEND_ENABLED)
+ *   [2] auto_send_rules   (carriercategory)
  *   [3] rule.is_blocked
- *   [4] rule.allowed_modules??module ? ??
- *   [5] classification.confidence ??rule.min_confidence
- *   [6] rule.requires_human_approval ? classification.requiresHuman
- *   [7] classification.riskFlags ?
- *   [8] blocked_keywords_in_body ??? ?
- *   [9] daily_limit / hourly_limit / per_party_daily_limit ?? *  [10] rule.requires_calendar_data ?? ? ? (meeting_scheduling)
+ *   [4] rule.allowed_modules module  
+ *   [5] classification.confidence  rule.min_confidence
+ *   [6] rule.requires_human_approval  classification.requiresHuman
+ *   [7] classification.riskFlags 
+ *   [8] blocked_keywords_in_body   
+ *   [9] daily_limit / hourly_limit / per_party_daily_limit 
+ *  [10] rule.requires_calendar_data     (meeting_scheduling)
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -22,7 +23,8 @@ import type { AutoSendRuleRow, ModuleType } from '../../types/ai';
 import type { ClassificationOutput } from '../../types/classification';
 
 /* ============================================================
- * 1. ?????? * ============================================================ */
+ * 1.  
+ * ============================================================ */
 
 export interface GateInput {
   organizationId: string;
@@ -30,7 +32,7 @@ export interface GateInput {
   partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
-  /** ? ? ???? ??? ?? ). */
+  /**       ( ). */
   drafterRequiresHuman?: boolean;
 }
 
@@ -53,14 +55,15 @@ export type GateBlockReason =
 export interface GateResult {
   allowed: boolean;
   reasons: GateBlockReason[];
-  /** ??? ?ID(??. */
+  /**    ID(). */
   ruleId?: string;
-  /** ?? ?? . */
+  /**   . */
   evaluationLog: Record<string, unknown>;
 }
 
 /* ============================================================
- * 2.  ?? * ============================================================ */
+ * 2.  
+ * ============================================================ */
 
 export async function evaluateAutoSend(
   supabase: SupabaseClient,
@@ -69,7 +72,8 @@ export async function evaluateAutoSend(
   const reasons: GateBlockReason[] = [];
   const log: Record<string, unknown> = {};
 
-  // [1]  ??  if (!env.AI_AUTO_SEND_ENABLED) {
+  // [1]  
+  if (!env.AI_AUTO_SEND_ENABLED) {
     return {
       allowed: false,
       reasons: ['global_disabled'],
@@ -77,7 +81,7 @@ export async function evaluateAutoSend(
     };
   }
 
-  // [2] ?
+  // [2]  
   const rule = await loadAutoSendRule(
     supabase,
     input.organizationId,
@@ -171,7 +175,7 @@ export async function evaluateAutoSend(
     Object.assign(log, limitVerdict.log);
   }
 
-  // [10] calendar (meeting_scheduling ??? ?)
+  // [10] calendar (meeting_scheduling   )
   if (
     rule.requiresCalendarData &&
     input.classification.category === 'meeting_scheduling'
@@ -195,7 +199,7 @@ export async function evaluateAutoSend(
 }
 
 /* ============================================================
- * 3. ?
+ * 3.  
  * ============================================================ */
 
 async function loadAutoSendRule(
@@ -241,12 +245,12 @@ async function loadAutoSendRule(
 }
 
 /* ============================================================
- * 4. ???
+ * 4.  
  * ============================================================ */
 
 /**
- *  ??? ?? ??? ?????.
- * ??? ???? (?????? ? substring? fallback).
+ *          .
+ *     (   substring fallback).
  */
 export function matchBlockedKeyword(
   body: string,
@@ -259,7 +263,7 @@ export function matchBlockedKeyword(
       const regex = new RegExp(kw, 'i');
       matched = regex.test(body);
     } catch {
-      // ???????????? substring
+      //      substring
       matched = body.toLowerCase().includes(kw.toLowerCase());
     }
     if (matched) return kw;
@@ -268,7 +272,8 @@ export function matchBlockedKeyword(
 }
 
 /* ============================================================
- * 5. Sending limit ? * ============================================================ */
+ * 5. Sending limit 
+ * ============================================================ */
 
 interface LimitVerdict {
   reasons: GateBlockReason[];
@@ -288,7 +293,8 @@ async function checkSendingLimits(
   startOfDay.setHours(0, 0, 0, 0);
   const oneHourAgo = new Date(Date.now() - 3_600_000);
 
-  // ? ? ?????communications ??  if (rule.dailyLimit > 0) {
+  //     communications 
+  if (rule.dailyLimit > 0) {
     const dailyCount = await countAutoSent(
       supabase,
       organizationId,
@@ -300,7 +306,7 @@ async function checkSendingLimits(
     }
   }
 
-  // ????
+  //  
   if (rule.hourlyLimit > 0) {
     const hourCount = await countAutoSent(
       supabase,
@@ -313,7 +319,7 @@ async function checkSendingLimits(
     }
   }
 
-  //  24? ?
+  //  24 
   if (rule.perPartyDailyLimit > 0 && partyId) {
     const partyCount = await countAutoSentForParty(
       supabase,
@@ -338,7 +344,8 @@ async function countAutoSent(
   organizationId: string,
   sinceIso: string,
 ): Promise<number> {
-  // ai_generated=true ? ???external_data.auto_send=true) ???  const { count, error } = await supabase
+  // ai_generated=true  (external_data.auto_send=true)  
+  const { count, error } = await supabase
     .schema('app')
     .from('communications')
     .select('id', { count: 'exact', head: true })
@@ -352,7 +359,7 @@ async function countAutoSent(
   if (error) {
     // eslint-disable-next-line no-console
     console.error('[auto-send-gate.countAutoSent]', error);
-    return Number.MAX_SAFE_INTEGER; // ?? ? ??? ?
+    return Number.MAX_SAFE_INTEGER; // :     
   }
   return count ?? 0;
 }
@@ -384,11 +391,11 @@ async function countAutoSentForParty(
 }
 
 /* ============================================================
- * 6. Calendar ?
+ * 6. Calendar 
  * ----------------------------------------------------------
- * ? ???google calendar / outlook ? ?????? ??.
- * ?STEP 3???organization_settings.calendar_connected ? ?.
- * ? ? ? .
+ *   google calendar / outlook     .
+ *  STEP 3 organization_settings.calendar_connected  .
+ *     .
  * ============================================================ */
 async function hasCalendarAvailability(
   supabase: SupabaseClient,
