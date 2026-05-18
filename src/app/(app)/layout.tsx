@@ -33,7 +33,8 @@ export default async function AppGroupLayout({
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
-      .is('read_at' as never, null),
+      .is('read_at' as never, null)
+      .is('deleted_at' as never, null),
     supabase
       .schema('app')
       .from('tasks' as never)
