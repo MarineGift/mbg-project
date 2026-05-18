@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { fetchCommunicationDetail } from '@/lib/queries/communications';
+import { fetchCommunicationDetailV2 } from '@/lib/queries/communication-detail-v2';
 import { CommunicationDetailView } from '@/components/inbox/communication-detail-view';
 
 interface PageProps {
@@ -12,7 +12,7 @@ interface PageProps {
 
 export default async function InboxDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const comm = await fetchCommunicationDetail(id);
+  const comm = await fetchCommunicationDetailV2(id);
   if (!comm) notFound();
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
@@ -22,7 +22,7 @@ export default async function InboxDetailPage({ params }: PageProps) {
           Back
         </Link>
       </Button>
-      <CommunicationDetailView comm={comm!} />
+      <CommunicationDetailView comm={comm} />
     </div>
   );
 }
