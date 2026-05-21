@@ -1,15 +1,15 @@
 // src/types/phase21b.ts
-// Phase 21b â€” Email Sequence Types
+// Phase 21b ??Email Sequence Types
 
 export type SequenceStatus    = 'active' | 'paused' | 'archived';
 export type EnrollmentStatus  = 'active' | 'paused' | 'completed' | 'cancelled';
 export type SequenceSendStatus = 'sent' | 'failed' | 'skipped';
 
-// â”€â”€ DB rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ DB rows ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface EmailSequence {
   id:                 string;
-  org_id:             string;
+  organization_id:             string;
   name:               string;
   description:        string | null;
   status:             SequenceStatus;
@@ -49,7 +49,7 @@ export interface PartyEnrollmentSummary {
 
 export interface DueEnrollmentRow {
   enrollment_id:   string;
-  org_id:          string;
+  organization_id:          string;
   sequence_id:     string;
   party_id:        string | null;
   contact_id:      string | null;
@@ -63,7 +63,7 @@ export interface DueEnrollmentRow {
   is_last_step:    boolean;
 }
 
-// â”€â”€ Processor result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Processor result ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface ProcessorResult {
   enrollment_id: string;
@@ -73,7 +73,7 @@ export interface ProcessorResult {
   error?:        string;
 }
 
-// â”€â”€ Form / draft types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Form / draft types ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface StepDraft {
   /** undefined = brand new step (no DB id yet) */

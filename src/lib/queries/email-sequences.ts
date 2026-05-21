@@ -6,17 +6,17 @@ import type {
   PartyEnrollmentSummary,
 } from '@/types/phase21b';
 
-/** Settings 페이지: 조직의 시퀀스 목록 */
+/** Settings ?�이지: 조직???�퀀??목록 */
 export async function fetchSequences(orgId: string): Promise<EmailSequence[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('list_sequences', {
-    p_org_id: orgId,
+    p_organization_id: orgId,
   });
   if (error) throw new Error(`fetchSequences: ${error.message}`);
   return (data ?? []) as EmailSequence[];
 }
 
-/** 시퀀스 단건 + steps 전체 */
+/** ?�퀀???�건 + steps ?�체 */
 export async function fetchSequenceWithSteps(
   sequenceId: string,
 ): Promise<EmailSequenceWithSteps | null> {
@@ -28,7 +28,7 @@ export async function fetchSequenceWithSteps(
   return (data as EmailSequenceWithSteps) ?? null;
 }
 
-/** Party 상세 페이지: 해당 파티의 등록 목록 */
+/** Party ?�세 ?�이지: ?�당 ?�티???�록 목록 */
 export async function fetchPartyEnrollments(
   partyId: string,
 ): Promise<PartyEnrollmentSummary[]> {

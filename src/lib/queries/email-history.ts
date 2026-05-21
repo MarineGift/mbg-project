@@ -26,7 +26,7 @@ export async function fetchEmailHistory(
 ): Promise<EmailHistoryRow[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('get_email_history', {
-    p_org_id: orgId,
+    p_organization_id: orgId,
     p_limit:  limit,
     p_offset: offset,
   });
@@ -37,7 +37,7 @@ export async function fetchEmailHistory(
 export async function countEmailHistory(orgId: string): Promise<number> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('count_email_history', {
-    p_org_id: orgId,
+    p_organization_id: orgId,
   });
   if (error) throw new Error(error.message);
   return Number(data ?? 0);

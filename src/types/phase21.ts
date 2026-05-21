@@ -1,9 +1,9 @@
 // src/types/phase21.ts
-// Phase 21a — Email Tracking types
+// Phase 21a ??Email Tracking types
 
 export interface EmailTracking {
   id: string;
-  org_id: string;
+  organization_id: string;
   draft_id: string | null;
   party_id: string | null;
   contact_id: string | null;

@@ -1,11 +1,13 @@
 'use server';
+
+import type { EmailSequenceWithSteps } from '@/types/phase21b';
 // src/lib/actions/email-sequences.ts
 
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { SequenceDraft } from '@/types/phase21b';
 
-// â”€â”€ Sequence CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Sequence CRUD ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export async function createSequence(
   orgId: string,
@@ -21,7 +23,7 @@ export async function createSequence(
   }));
 
   const { data, error } = await supabase.rpc('create_sequence', {
-    p_org_id:      orgId,
+    p_organization_id: orgId,
     p_name:        draft.name.trim(),
     p_description: draft.description.trim(),
     p_steps:       stepsJson,
@@ -69,7 +71,7 @@ export async function archiveSequence(
   return {};
 }
 
-// â”€â”€ Enrollment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Enrollment ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export async function enrollParty(
   orgId:      string,
@@ -84,7 +86,7 @@ export async function enrollParty(
   if (!user) return { error: 'Not authenticated' };
 
   const { data, error } = await supabase.rpc('enroll_in_sequence', {
-    p_org_id:      orgId,
+    p_organization_id: orgId,
     p_sequence_id: sequenceId,
     p_party_id:    partyId,
     p_contact_id:  contactId,
@@ -92,7 +94,7 @@ export async function enrollParty(
   });
 
   if (error) {
-    // unique constraint ìœ„ë°˜ â†’ ì´ë¯¸ í™œì„± ë“±ë¡ ìˆìŒ
+    // unique constraint ?„ë°˜ ???´ë? ?œì„± ?±ë¡ ?ˆìŒ
     if (error.code === '23505') {
       return { error: 'Already enrolled in this sequence (active).' };
     }
@@ -116,9 +118,9 @@ export async function cancelEnrollment(
   return {};
 }
 
-// â”€â”€ Manual processor trigger (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Manual processor trigger (admin only) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
-/** Settingsì—ì„œ "Run Now" ë²„íŠ¼ â†’ ë‚´ë¶€ì ìœ¼ë¡œ processor API í˜¸ì¶œ */
+/** Settings?ì„œ "Run Now" ë²„íŠ¼ ???´ë??ìœ¼ë¡?processor API ?¸ì¶œ */
 export async function triggerSequenceProcessor(): Promise<{
   processed: number;
   results: unknown[];
@@ -145,18 +147,20 @@ export async function triggerSequenceProcessor(): Promise<{
 }
 
 
-// â”€â”€ Read action (for client components that need sequence + steps) â”€
+// ?€?€ Read action (for client components that need sequence + steps) ?€
 
-export async function getSequenceForEdit(sequenceId: string) {
+export async function getSequenceForEdit(
+  sequenceId: string
+): Promise<{ data: EmailSequenceWithSteps } | { error: string }> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('get_sequence_with_steps', {
     p_sequence_id: sequenceId,
   });
   if (error) return { error: error.message };
-  return { data };
+  return { data: data as EmailSequenceWithSteps };
 }
 
-// â”€â”€ Bulk enrollment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Bulk enrollment ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface BulkEnrollFilters {
   module?:        string | null;
@@ -184,7 +188,7 @@ async function callBulkEnrollRpc(
 ): Promise<BulkEnrollResult | { error: string }> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('bulk_enroll_filtered', {
-    p_org_id:        orgId,
+    p_organization_id: orgId,
     p_sequence_id:   sequenceId,
     p_module:        filters.module       || null,
     p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : null,
@@ -232,7 +236,7 @@ export async function bulkEnrollFiltered(
   return result;
 }
 
-// â”€â”€ Campaign from template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Campaign from template ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface CampaignTemplate {
   id:          string;
@@ -307,7 +311,7 @@ export async function createCampaignFromTemplate(
   if (!user) return { error: 'Not authenticated' };
 
   const { data, error } = await supabase.rpc('create_campaign_from_template', {
-    p_org_id:        orgId,
+    p_organization_id: orgId,
     p_template_id:   templateId,
     p_campaign_name: campaignName,
     p_module:        filters.module       || null,
