@@ -65,6 +65,7 @@ interface RawPartyRow {
 
 const TIMELINE_LIMIT = 30;
 const SIDEBAR_LIMIT = 10;
+const MEETINGS_LIMIT = 100;  // 2026-05-19
 
 /**
  * "Open" engagement로 카운트할 때 제외할 status 값.
@@ -76,6 +77,60 @@ const TERMINAL_ENGAGEMENT_STATUSES = new Set([
   'lost',
   'archived',
 ]);
+
+// ============================================================
+// 2026-05-19: 미팅 관련 타입 (app.meetings)
+// 주: meeting_mode 컬럼은 DB 에 존재하지 않음.
+// Stage 24 에서 channel enum 으로 정리 예정.
+// ============================================================
+
+export type MeetingStatus =
+  | 'scheduled'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show'
+  | 'rescheduled';
+
+export interface MeetingAttendeeRef {
+  name?: string;
+  email?: string;
+  role?: string;
+  party_id?: string;
+  response?: 'no_response' | 'accepted' | 'declined' | 'tentative';
+}
+
+export interface PartyMeeting {
+  id: string;
+  partyId: string;
+  engagementId: string | null;
+  meetingType: string;
+  title: string;
+  agenda: string | null;
+  notes: string | null;
+  aiSummary: string | null;
+  outcome: string | null;
+  nextSteps: string | null;
+  occurredAt: string;
+  scheduledAt: string | null;
+  actualStartedAt: string | null;
+  actualEndedAt: string | null;
+  durationMin: number | null;
+  attendees: MeetingAttendeeRef[] | null;
+  status: MeetingStatus;
+  location: string | null;
+  meetingUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartyMeetingStats {
+  total: number;
+  completed: number;
+  scheduled: number;
+  upcoming: number;
+  lastOccurredAt: string | null;
+  nextScheduledAt: string | null;
+}
 
 export async function fetchPartyDetail(
   partyId: string,
@@ -349,4 +404,160 @@ function buildTimeline(
   });
 
   return items.slice(0, TIMELINE_LIMIT);
+}
+
+// ============================================================
+// 2026-05-19: 미팅 query 함수 (방향 Y - meeting_mode 컬럼 미사용)
+// ============================================================
+
+const MEETING_SELECT_COLS = [
+  'id', 'party_id', 'engagement_id', 'meeting_type', 'title',
+  'agenda', 'notes', 'ai_summary', 'outcome', 'next_steps',
+  'occurred_at', 'scheduled_at', 'actual_started_at', 'actual_ended_at',
+  'duration_min', 'attendees', 'status', 'location', 'meeting_url',
+  'created_at', 'updated_at',
+].join(', ');
+
+export async function fetchPartyMeetings(
+  partyId: string,
+  limit: number = MEETINGS_LIMIT,
+): Promise<PartyMeeting[]> {
+  if (!partyId) return [];
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select(MEETING_SELECT_COLS)
+    .eq('party_id', partyId)
+    .order('occurred_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('[party-detail] meetings fetch error:', error);
+    return [];
+  }
+  return ((data ?? []) as unknown[]).map(mapMeeting);
+}
+
+export async function fetchUpcomingPartyMeetings(
+  partyId: string,
+): Promise<PartyMeeting[]> {
+  if (!partyId) return [];
+  const supabase = await createSupabaseServerClient();
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select(MEETING_SELECT_COLS)
+    .eq('party_id', partyId)
+    .eq('status', 'scheduled')
+    .gte('scheduled_at', nowIso)
+    .order('scheduled_at', { ascending: true })
+    .limit(SIDEBAR_LIMIT);
+
+  if (error) {
+    console.error('[party-detail] upcoming meetings error:', error);
+    return [];
+  }
+  return ((data ?? []) as unknown[]).map(mapMeeting);
+}
+
+export async function fetchPartyMeetingStats(
+  partyId: string,
+): Promise<PartyMeetingStats> {
+  const empty: PartyMeetingStats = {
+    total: 0,
+    completed: 0,
+    scheduled: 0,
+    upcoming: 0,
+    lastOccurredAt: null,
+    nextScheduledAt: null,
+  };
+  if (!partyId) return empty;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select('status, occurred_at, scheduled_at')
+    .eq('party_id', partyId);
+
+  if (error) {
+    console.error('[party-detail] meeting stats error:', error);
+    return empty;
+  }
+
+  const rows = (data ?? []) as Array<{
+    status: MeetingStatus;
+    occurred_at: string | null;
+    scheduled_at: string | null;
+  }>;
+  const nowMs = Date.now();
+
+  const occurredTimes = rows
+    .map((r) => r.occurred_at)
+    .filter((v): v is string => !!v)
+    .sort();
+  const upcomingTimes = rows
+    .filter(
+      (r) =>
+        r.status === 'scheduled' &&
+        r.scheduled_at &&
+        new Date(r.scheduled_at).getTime() >= nowMs,
+    )
+    .map((r) => r.scheduled_at as string)
+    .sort();
+
+  return {
+    total: rows.length,
+    completed: rows.filter((r) => r.status === 'completed').length,
+    scheduled: rows.filter((r) => r.status === 'scheduled').length,
+    upcoming: upcomingTimes.length,
+    lastOccurredAt: occurredTimes.length
+      ? (occurredTimes[occurredTimes.length - 1] ?? null)
+      : null,
+    nextScheduledAt: upcomingTimes.length ? (upcomingTimes[0] ?? null) : null,
+  };
+}
+
+function mapMeeting(raw: unknown): PartyMeeting {
+  const r = raw as Record<string, unknown>;
+  const rawAttendees = r.attendees;
+  let attendees: MeetingAttendeeRef[] | null = null;
+  if (Array.isArray(rawAttendees)) {
+    attendees = rawAttendees as MeetingAttendeeRef[];
+  } else if (rawAttendees && typeof rawAttendees === 'object') {
+    attendees = [rawAttendees as MeetingAttendeeRef];
+  }
+
+  return {
+    id: r.id as string,
+    partyId: r.party_id as string,
+    engagementId: (r.engagement_id as string | null) ?? null,
+    meetingType: (r.meeting_type as string) ?? '',
+    title: (r.title as string) ?? '',
+    agenda: (r.agenda as string | null) ?? null,
+    notes: (r.notes as string | null) ?? null,
+    aiSummary: (r.ai_summary as string | null) ?? null,
+    outcome: (r.outcome as string | null) ?? null,
+    nextSteps: (r.next_steps as string | null) ?? null,
+    occurredAt: r.occurred_at as string,
+    scheduledAt: (r.scheduled_at as string | null) ?? null,
+    actualStartedAt: (r.actual_started_at as string | null) ?? null,
+    actualEndedAt: (r.actual_ended_at as string | null) ?? null,
+    durationMin:
+      typeof r.duration_min === 'number'
+        ? r.duration_min
+        : r.duration_min != null
+          ? Number(r.duration_min)
+          : null,
+    attendees,
+    status: r.status as MeetingStatus,
+    location: (r.location as string | null) ?? null,
+    meetingUrl: (r.meeting_url as string | null) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
 }

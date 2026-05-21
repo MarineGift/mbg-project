@@ -1,7 +1,6 @@
 // src/app/api/calendar/microsoft/callback/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createHmac } from 'crypto'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { exchangeMicrosoftCode, getMicrosoftUserInfo } from '@/lib/calendar/microsoft-client'
 import { saveCalendarConnection } from '@/lib/calendar/token-crypto'
@@ -34,7 +33,14 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
 
-    const orgId = user.app_metadata?.organization_id
+    // URM: app.users.organization_id 가 single source of truth
+    const { data: appUser } = await supabase
+      .schema('app')
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+    const orgId = appUser?.organization_id
     if (!orgId) throw new Error('No organization')
 
     const tokens   = await exchangeMicrosoftCode(code)

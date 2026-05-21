@@ -43,7 +43,14 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
 
-    const orgId = user.app_metadata?.organization_id
+    // URM: app.users.organization_id 가 single source of truth
+    const { data: appUser } = await supabase
+      .schema('app')
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+    const orgId = appUser?.organization_id
     if (!orgId) throw new Error('No organization')
 
     // Exchange code for tokens

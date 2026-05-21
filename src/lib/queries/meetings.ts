@@ -51,7 +51,7 @@ export interface MeetingRow {
   meeting_type: MeetingType
   meeting_mode: MeetingMode
   scheduled_at: string
-  duration_minutes: number
+  duration_min: number
   actual_started_at: string | null
   actual_ended_at: string | null
   location: string | null
@@ -85,7 +85,7 @@ export async function fetchMeetings(options?: {
     .from('meetings')
     .select(`
       id, title, meeting_type, meeting_mode, status,
-      scheduled_at, duration_minutes, location, meeting_url,
+      scheduled_at, duration_min, location, meeting_url,
       party_id, engagement_id, calendar_event_id,
       parties ( id, name ),
       engagements ( id, title )
@@ -136,7 +136,7 @@ export interface CreateMeetingInput {
   party_id: string           // required
   title: string
   scheduled_at: string       // ISO
-  duration_minutes?: number
+  duration_min?: number
   meeting_type?: MeetingType
   meeting_mode?: MeetingMode
   agenda?: string
@@ -162,7 +162,7 @@ export async function createMeeting(input: CreateMeetingInput) {
     .from('meetings')
     .insert({
       ...meetingData,
-      duration_minutes: meetingData.duration_minutes ?? 30,
+      duration_min: meetingData.duration_min ?? 30,
       meeting_type: meetingData.meeting_type ?? 'discovery',
       meeting_mode: meetingData.meeting_mode ?? 'video_call',
       status: 'scheduled',
@@ -206,7 +206,7 @@ export async function updateMeeting(
   patch: Partial<Pick<MeetingRow,
     | 'title' | 'agenda' | 'notes' | 'ai_summary'
     | 'action_items' | 'status' | 'meeting_type' | 'meeting_mode'
-    | 'scheduled_at' | 'duration_minutes' | 'location' | 'meeting_url'
+    | 'scheduled_at' | 'duration_min' | 'location' | 'meeting_url'
     | 'actual_started_at' | 'actual_ended_at'
   >>
 ) {

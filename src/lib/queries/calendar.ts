@@ -57,7 +57,7 @@ export async function fetchCalendarItems(
     // 2. meetings (calendar_event_id 유무 모두 포함)
     supabase.schema('app').from('meetings').select(`
       id, title, meeting_type, meeting_mode,
-      scheduled_at, duration_minutes, status,
+      scheduled_at, duration_min, status,
       location, meeting_url,
       party_id, engagement_id,
       parties ( name )
@@ -116,7 +116,7 @@ export async function fetchCalendarItems(
   // meetings
   for (const m of (meetingsRes.data ?? []) as any[]) {
     const endAt = new Date(
-      new Date(m.scheduled_at).getTime() + (m.duration_minutes ?? 30) * 60_000
+      new Date(m.scheduled_at).getTime() + (m.duration_min ?? 30) * 60_000
     ).toISOString()
     items.push({
       id:            m.id,
