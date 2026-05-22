@@ -14,6 +14,7 @@
 //   - Calls classifyInboundEmail not needed here (inbound only)
 // ============================================================
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { rpc } from "@/lib/rpc/typed-rpc";
 import nodemailer from "nodemailer";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 
@@ -46,7 +47,7 @@ export async function processSequence(): Promise<{
   const supabase = await createSupabaseServerClient();
 
   // Get due enrollments
-  const { data: due, error: dueErr } = await supabase.rpc("get_due_enrollments");
+  const { data: due, error: dueErr } = await rpc(supabase, "get_due_enrollments");
   if (dueErr || !due) {
     console.error("[processSequence] get_due_enrollments error", dueErr);
     return { processed: 0, sent: 0, failed: 0, skipped: 0 };
@@ -71,7 +72,7 @@ export async function processSequence(): Promise<{
   for (const e of enrollments) {
     try {
       if (!e.contact_email) {
-        await supabase.rpc("advance_enrollment", {
+        await rpc(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
           p_status: "skipped_no_email",
         });
@@ -148,7 +149,7 @@ export async function processSequence(): Promise<{
 
       if (insErr) {
         console.error("[processSequence] insert error", insErr);
-        await supabase.rpc("advance_enrollment", {
+        await rpc(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
           p_status: "failed",
         });
@@ -187,7 +188,7 @@ export async function processSequence(): Promise<{
               updated_at: new Date().toISOString(),
             })
             .eq("id", commId);
-          await supabase.rpc("advance_enrollment", {
+          await rpc(supabase, "advance_enrollment", {
             p_enrollment_id: e.enrollment_id,
             p_status: "failed",
           });
@@ -222,7 +223,7 @@ export async function processSequence(): Promise<{
         });
 
       // Advance enrollment
-      await supabase.rpc("advance_enrollment", {
+      await rpc(supabase, "advance_enrollment", {
         p_enrollment_id: e.enrollment_id,
         p_status: "sent",
       });
@@ -237,9 +238,9 @@ export async function processSequence(): Promise<{
   return { processed: enrollments.length, sent, failed, skipped };
 }
 
-// ?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?
+// ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?
 // Helpers
-// ?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?ï¿?
+// ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?
 function unwrapMerge(result: unknown): string {
   if (typeof result === "string") return result;
   if (
