@@ -5,9 +5,10 @@ import type { EmailSequenceWithSteps } from '@/types/phase21b';
 
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpc } from '@/lib/rpc/typed-rpc';
 import type { SequenceDraft } from '@/types/phase21b';
 
-// ?€?€ Sequence CRUD ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ Sequence CRUD ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 
 export async function createSequence(
   orgId: string,
@@ -22,7 +23,7 @@ export async function createSequence(
     body_text:  s.body_text,
   }));
 
-  const { data, error } = await supabase.rpc('create_sequence', {
+  const { data, error } = await rpc(supabase, 'create_sequence', {
     p_organization_id: orgId,
     p_name:        draft.name.trim(),
     p_description: draft.description.trim(),
@@ -47,7 +48,7 @@ export async function updateSequence(
     body_text:  s.body_text,
   }));
 
-  const { error } = await supabase.rpc('update_sequence', {
+  const { error } = await rpc(supabase, 'update_sequence', {
     p_sequence_id: sequenceId,
     p_name:        draft.name.trim(),
     p_description: draft.description.trim(),
@@ -63,7 +64,7 @@ export async function archiveSequence(
   sequenceId: string,
 ): Promise<{ error?: string }> {
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc('archive_sequence', {
+  const { error } = await rpc(supabase, 'archive_sequence', {
     p_sequence_id: sequenceId,
   });
   if (error) return { error: error.message };
@@ -71,7 +72,7 @@ export async function archiveSequence(
   return {};
 }
 
-// ?€?€ Enrollment ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ Enrollment ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 
 export async function enrollParty(
   orgId:      string,
@@ -85,7 +86,7 @@ export async function enrollParty(
   } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
-  const { data, error } = await supabase.rpc('enroll_in_sequence', {
+  const { data, error } = await rpc(supabase, 'enroll_in_sequence', {
     p_organization_id: orgId,
     p_sequence_id: sequenceId,
     p_party_id:    partyId,
@@ -94,7 +95,7 @@ export async function enrollParty(
   });
 
   if (error) {
-    // unique constraint ?„ë°˜ ???´ë? ?œì„± ?±ë¡ ?ˆìŒ
+    // unique constraint ?ï¿½ë°˜ ???ï¿½ï¿½? ?ï¿½ì„± ?ï¿½ë¡ ?ï¿½ìŒ
     if (error.code === '23505') {
       return { error: 'Already enrolled in this sequence (active).' };
     }
@@ -110,7 +111,7 @@ export async function cancelEnrollment(
   partyId:      string,
 ): Promise<{ error?: string }> {
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc('cancel_enrollment', {
+  const { error } = await rpc(supabase, 'cancel_enrollment', {
     p_enrollment_id: enrollmentId,
   });
   if (error) return { error: error.message };
@@ -118,9 +119,9 @@ export async function cancelEnrollment(
   return {};
 }
 
-// ?€?€ Manual processor trigger (admin only) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ Manual processor trigger (admin only) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 
-/** Settings?ì„œ "Run Now" ë²„íŠ¼ ???´ë??ìœ¼ë¡?processor API ?¸ì¶œ */
+/** Settings?ï¿½ì„œ "Run Now" ë²„íŠ¼ ???ï¿½ï¿½??ï¿½ìœ¼ï¿½?processor API ?ï¿½ì¶œ */
 export async function triggerSequenceProcessor(): Promise<{
   processed: number;
   results: unknown[];
@@ -147,20 +148,20 @@ export async function triggerSequenceProcessor(): Promise<{
 }
 
 
-// ?€?€ Read action (for client components that need sequence + steps) ?€
+// ?ï¿½?ï¿½ Read action (for client components that need sequence + steps) ?ï¿½
 
 export async function getSequenceForEdit(
   sequenceId: string
 ): Promise<{ data: EmailSequenceWithSteps } | { error: string }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('get_sequence_with_steps', {
+  const { data, error } = await rpc(supabase, 'get_sequence_with_steps', {
     p_sequence_id: sequenceId,
   });
   if (error) return { error: error.message };
   return { data: data as EmailSequenceWithSteps };
 }
 
-// ?€?€ Bulk enrollment ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ Bulk enrollment ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 
 export interface BulkEnrollFilters {
   module?:        string | null;
@@ -187,7 +188,7 @@ async function callBulkEnrollRpc(
   dryRun:     boolean,
 ): Promise<BulkEnrollResult | { error: string }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('bulk_enroll_filtered', {
+  const { data, error } = await rpc(supabase, 'bulk_enroll_filtered', {
     p_organization_id: orgId,
     p_sequence_id:   sequenceId,
     p_module:        filters.module       || null,
@@ -236,7 +237,7 @@ export async function bulkEnrollFiltered(
   return result;
 }
 
-// ?€?€ Campaign from template ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ Campaign from template ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 
 export interface CampaignTemplate {
   id:          string;
@@ -267,7 +268,7 @@ export async function fetchActiveTemplates(
   orgId: string,
 ): Promise<CampaignTemplate[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('list_active_templates', {
+  const { data, error } = await rpc(supabase, 'list_active_templates', {
     p_org_id: orgId,
   });
   if (error) throw new Error(error.message);
@@ -279,7 +280,7 @@ export async function previewCampaignFilter(
   filters: BulkEnrollFilters,
 ): Promise<CampaignPreview | { error: string }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('preview_campaign_filter', {
+  const { data, error } = await rpc(supabase, 'preview_campaign_filter', {
     p_org_id:        orgId,
     p_module:        filters.module       || null,
     p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : null,
@@ -310,7 +311,7 @@ export async function createCampaignFromTemplate(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
-  const { data, error } = await supabase.rpc('create_campaign_from_template', {
+  const { data, error } = await rpc(supabase, 'create_campaign_from_template', {
     p_organization_id: orgId,
     p_template_id:   templateId,
     p_campaign_name: campaignName,
