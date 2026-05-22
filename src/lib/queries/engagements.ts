@@ -45,6 +45,7 @@ interface RawEngagementListRow {
   module: ModuleType;
   status: EngagementStatus;
   current_stage_id: string | null;
+  pipeline_definition_id: string | null;
   party_id: string;
   value_amount: number | string | null;
   value_currency: string;
@@ -81,7 +82,7 @@ interface RawEngagementDetailRow {
 }
 
 const ENGAGEMENT_LIST_SELECT = `
-  id, name, module, status, current_stage_id, party_id,
+  id, name, module, status, current_stage_id, pipeline_definition_id, party_id,
   value_amount, value_currency, probability_pct, weighted_amount,
   expected_close_date, owner_user_id, updated_at,
   parties:party_id ( name )
@@ -99,6 +100,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
     module: r.module,
     status: r.status,
     currentStageId: r.current_stage_id,
+    pipelineDefinitionId: r.pipeline_definition_id ?? null,
     partyId: r.party_id,
     partyName: party?.name ?? '(unknown party)',
     valueAmount:

@@ -1,6 +1,16 @@
 'use client'
 // src/components/meetings/meeting-create-modal.tsx
-import { useState, useTransition } from 'react'
+//
+// Stage 26 (2026-05-21):
+// party → engagement → stage cascading selector.
+// - engagement_id, stage_id 둘 다 optional (DB 도 nullable)
+// - active engagement (open / in_progress / on_hold) 만 노출
+// - terminal stage (won / lost) 는 visual marker
+// - 의존: src/lib/actions/meeting-form.ts (server action wrapper)
+//
+// 기존 Stage 24 의 channel + meetings.ts API 위에 cascading 만 얹는 형태.
+
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -14,6 +24,11 @@ import {
 } from '@/components/ui/select'
 import { createMeeting } from '@/lib/queries/meetings'
 import { MeetingType, MeetingChannel } from '@/lib/queries/meetings'
+import {
+  loadPartyEngagementsForForm,
+  loadStagesForForm,
+} from '@/lib/actions/meeting-form'
+import type { KanbanCard, KanbanStage } from '@/types/engagement'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -25,7 +40,7 @@ interface Props {
 }
 
 const MEETING_TYPES: { value: MeetingType; label: string }[] = [
-  { value: 'discovery',   label: '발굴 미팅' },
+  { value: 'discovery',   label: '발견 미팅' },
   { value: 'demo',        label: '데모' },
   { value: 'proposal',    label: '제안' },
   { value: 'negotiation', label: '협상' },
@@ -36,17 +51,23 @@ const MEETING_TYPES: { value: MeetingType; label: string }[] = [
 ]
 
 const MEETING_CHANNELS: { value: MeetingChannel; label: string; icon: string }[] = [
-  { value: 'video_call', label: '화상 통화',  icon: '🎥' },
-  { value: 'phone_call', label: '전화',       icon: '📞' },
-  { value: 'in_person',  label: '대면 미팅',  icon: '🤝' },
-  { value: 'hybrid',     label: '하이브리드', icon: '💻' },
+  { value: 'video_call', label: '영상 통화', icon: '🎥' },
+  { value: 'phone_call', label: '전화',     icon: '📞' },
+  { value: 'in_person',  label: '대면 미팅', icon: '🏢' },
+  { value: 'hybrid',     label: '하이브리드', icon: '🔀' },
 ]
+
+// engagement filter — modal 에는 active 상태만 (won/lost/archived 숨김)
+const ACTIVE_ENGAGEMENT_STATUSES = new Set(['open', 'in_progress', 'on_hold'])
 
 function todayAt(h: number, m = 0): string {
   const d = new Date()
   d.setHours(h, m, 0, 0)
   return d.toISOString().slice(0, 16)   // "YYYY-MM-DDTHH:MM"
 }
+
+// Select 의 "선택 안 함" 의 sentinel value (Radix Select 는 empty string 불가)
+const NONE = '__none__'
 
 export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId, defaultPartyName }: Props) {
   const router = useRouter()
@@ -68,11 +89,78 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
   const [meetingUrl,   setMeetingUrl]  = useState('')
   const [agenda,       setAgenda]      = useState('')
 
+  // Stage 26 — cascading selector state
+  const [engagementId, setEngagementId] = useState<string | null>(null)
+  const [stageId,      setStageId]      = useState<string | null>(null)
+  const [engagements,  setEngagements]  = useState<KanbanCard[]>([])
+  const [stages,       setStages]       = useState<KanbanStage[]>([])
+  const [loadingEngagements, setLoadingEngagements] = useState(false)
+  const [loadingStages,      setLoadingStages]      = useState(false)
+
+  // Effect 1: partyId 변경 → engagement 후보 로드 (cascading 리셋)
+  useEffect(() => {
+    setEngagementId(null)
+    setStageId(null)
+    setStages([])
+
+    if (!partyId) {
+      setEngagements([])
+      return
+    }
+
+    let cancelled = false
+    setLoadingEngagements(true)
+    loadPartyEngagementsForForm(partyId)
+      .then((cards) => {
+        if (cancelled) return
+        // active engagement 만 노출
+        setEngagements(cards.filter(c => ACTIVE_ENGAGEMENT_STATUSES.has(c.status)))
+      })
+      .catch(() => { if (!cancelled) setEngagements([]) })
+      .finally(() => { if (!cancelled) setLoadingEngagements(false) })
+
+    return () => { cancelled = true }
+  }, [partyId])
+
+  // Effect 2: engagementId 변경 → engagement 의 pipeline stage 로드
+  useEffect(() => {
+    setStageId(null)
+
+    if (!engagementId) {
+      setStages([])
+      return
+    }
+
+    const engagement = engagements.find(e => e.id === engagementId)
+    if (!engagement?.pipelineDefinitionId) {
+      setStages([])
+      return
+    }
+
+    let cancelled = false
+    setLoadingStages(true)
+    loadStagesForForm(engagement.pipelineDefinitionId)
+      .then((s) => {
+        if (cancelled) return
+        setStages(s)
+        // engagement 의 current stage 가 있으면 preselect
+        if (engagement.currentStageId) {
+          setStageId(engagement.currentStageId)
+        }
+      })
+      .catch(() => { if (!cancelled) setStages([]) })
+      .finally(() => { if (!cancelled) setLoadingStages(false) })
+
+    return () => { cancelled = true }
+  }, [engagementId, engagements])
+
   function reset() {
     setTitle(''); setPartyId(''); setPartySearch('')
     setScheduledAt(defaultDt); setDuration(30)
     setMeetingType('discovery'); setMeetingMode('video_call')
     setMeetingUrl(''); setAgenda(''); setError(null)
+    setEngagementId(null); setStageId(null)
+    setEngagements([]); setStages([])
   }
 
   function handleClose() { reset(); onClose() }
@@ -86,8 +174,10 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
         await createMeeting({
           title:            title.trim(),
           party_id:         partyId,
+          engagement_id:    engagementId ?? undefined,
+          stage_id:         stageId ?? undefined,
           scheduled_at:     new Date(scheduledAt).toISOString(),
-          duration_min: duration,
+          duration_min:     duration,
           meeting_type:     meetingType,
           channel:          meetingMode,
           meeting_url:      meetingUrl.trim() || undefined,
@@ -133,6 +223,80 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
               TODO: PartySearchCombobox로 교체
             </p>
           </div>
+
+          {/* Stage 26 — Engagement (optional, partyId 선택 후 노출) */}
+          {partyId && (
+            <div className="space-y-1">
+              <Label htmlFor="mtg-engagement">관련 Engagement (선택)</Label>
+              {loadingEngagements ? (
+                <p className="text-xs text-muted-foreground">불러오는 중...</p>
+              ) : engagements.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  진행 중인 engagement 없음 (engagement 없이도 미팅 등록 가능)
+                </p>
+              ) : (
+                <Select
+                  value={engagementId ?? NONE}
+                  onValueChange={v => setEngagementId(v === NONE ? null : v)}
+                >
+                  <SelectTrigger id="mtg-engagement">
+                    <SelectValue placeholder="engagement 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>— 연결 안 함 —</SelectItem>
+                    {engagements.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({e.status})
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
+          {/* Stage 26 — Stage (optional, engagementId 선택 후 노출) */}
+          {engagementId && (
+            <div className="space-y-1">
+              <Label htmlFor="mtg-stage">단계 (선택)</Label>
+              {loadingStages ? (
+                <p className="text-xs text-muted-foreground">불러오는 중...</p>
+              ) : stages.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  pipeline stage 없음
+                </p>
+              ) : (
+                <Select
+                  value={stageId ?? NONE}
+                  onValueChange={v => setStageId(v === NONE ? null : v)}
+                >
+                  <SelectTrigger id="mtg-stage">
+                    <SelectValue placeholder="단계 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>— 미지정 —</SelectItem>
+                    {stages.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                        {s.isWon && (
+                          <span className="ml-1 text-xs text-green-600">✓ won</span>
+                        )}
+                        {s.isLost && (
+                          <span className="ml-1 text-xs text-red-600">✗ lost</span>
+                        )}
+                        {s.isTerminal && !s.isWon && !s.isLost && (
+                          <span className="ml-1 text-xs text-muted-foreground">● terminal</span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
 
           {/* Date/Time + Duration */}
           <div className="grid grid-cols-2 gap-3">
@@ -220,7 +384,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             <Label htmlFor="mtg-agenda">안건 (선택)</Label>
             <Textarea
               id="mtg-agenda"
-              placeholder="논의할 주요 안건을 입력하세요"
+              placeholder="회의의 주요 안건을 입력하세요"
               rows={3}
               value={agenda}
               onChange={e => setAgenda(e.target.value)}
@@ -241,7 +405,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             disabled={isPending}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isPending ? '저장 중…' : '미팅 생성'}
+            {isPending ? '저장 중...' : '미팅 생성'}
           </Button>
         </DialogFooter>
       </DialogContent>

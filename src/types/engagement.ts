@@ -52,6 +52,7 @@ export interface KanbanCard {
   module: ModuleType;
   status: EngagementStatus;
   currentStageId: string | null;
+  pipelineDefinitionId: string | null;
   partyId: string;
   partyName: string;
   valueAmount: number | null;
