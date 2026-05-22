@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/actions/engagements.ts
  *
  * Engagement Server Actions.
@@ -27,6 +27,11 @@
  *   - 2026-05-12: FK constraint를 DEFERRABLE로 변경한 SQL migration 후
  *                 createEngagement를 다시 1-step INSERT로 단순화.
  *                 stage_history도 INSERT 시점부터 정확히 기록됨.
+ *   - 2026-05-21 (Stage 25): createEngagement 의 default pipeline + first stage
+ *                 lookup 을 queries/pipelines.ts 의 fetchPipelineForModule +
+ *                 fetchFirstStage 로 위임. URM single source.
+ *                 moveEngagementStage 는 mutation-specific org 검증 때문에
+ *                 그대로 둠 (defense-in-depth).
  */
 
 'use server';
@@ -35,6 +40,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { fetchFirstStage, fetchPipelineForModule } from '@/lib/queries/pipelines';
 import type { EngagementStatus } from '@/types/engagement';
 
 export interface EngagementActionResult {
@@ -313,33 +319,19 @@ export async function createEngagement(
   const supabase = await createSupabaseServerClient();
 
   // pipelineDefinitionId가 없으면 모듈의 default pipeline을 자동 할당
+  // URM (Stage 25): pipelines.ts 의 read API 위임 — single source.
   let pipelineDefinitionId = parsed.data.pipelineDefinitionId ?? null;
   let currentStageId = parsed.data.currentStageId ?? null;
 
   if (!pipelineDefinitionId) {
-    const { data: pipeRaw } = await supabase
-      .schema('app')
-      .from('pipeline_definitions' as never)
-      .select('id')
-      .eq('module', parsed.data.module)
-      .eq('is_default', true)
-      .is('deleted_at', null)
-      .maybeSingle();
-    pipelineDefinitionId = (pipeRaw as { id: string } | null)?.id ?? null;
+    const pipeline = await fetchPipelineForModule(parsed.data.module);
+    pipelineDefinitionId = pipeline?.id ?? null;
   }
 
   if (pipelineDefinitionId && !currentStageId) {
     // 첫 stage 자동 할당
-    const { data: firstStageRaw } = await supabase
-      .schema('app')
-      .from('pipeline_stages' as never)
-      .select('id')
-      .eq('pipeline_definition_id', pipelineDefinitionId)
-      .is('deleted_at', null)
-      .order('sort_order', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    currentStageId = (firstStageRaw as { id: string } | null)?.id ?? null;
+    const firstStage = await fetchFirstStage(pipelineDefinitionId);
+    currentStageId = firstStage?.id ?? null;
   }
 
   // 1-step INSERT — current_stage_id 포함.
