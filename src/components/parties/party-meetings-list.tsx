@@ -26,7 +26,7 @@ export function PartyMeetingsList({ meetings }: PartyMeetingsListProps) {
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm text-gray-900 truncate">{m.title}</div>
               <div className="text-xs text-gray-500 mt-0.5">
-                {new Date(m.scheduled_at).toLocaleString()}
+                {new Date(m.scheduledAt ?? m.occurredAt).toLocaleString()}
                 {m.location && (
                   <span> { ', ' }{m.location}</span>
                 )}

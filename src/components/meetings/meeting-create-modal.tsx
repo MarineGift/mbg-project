@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { createMeeting } from '@/lib/queries/meetings'
-import { MeetingType, MeetingMode } from '@/lib/queries/meetings'
+import { MeetingType, MeetingChannel } from '@/lib/queries/meetings'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -35,9 +35,9 @@ const MEETING_TYPES: { value: MeetingType; label: string }[] = [
   { value: 'other',       label: '기타' },
 ]
 
-const MEETING_MODES: { value: MeetingMode; label: string; icon: string }[] = [
+const MEETING_CHANNELS: { value: MeetingChannel; label: string; icon: string }[] = [
   { value: 'video_call', label: '화상 통화',  icon: '🎥' },
-  { value: 'phone',      label: '전화',       icon: '📞' },
+  { value: 'phone_call', label: '전화',       icon: '📞' },
   { value: 'in_person',  label: '대면 미팅',  icon: '🤝' },
   { value: 'hybrid',     label: '하이브리드', icon: '💻' },
 ]
@@ -64,7 +64,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
   const [scheduledAt,  setScheduledAt] = useState(defaultDt)
   const [duration,     setDuration]    = useState(30)
   const [meetingType,  setMeetingType] = useState<MeetingType>('discovery')
-  const [meetingMode,  setMeetingMode] = useState<MeetingMode>('video_call')
+  const [meetingMode,  setMeetingMode] = useState<MeetingChannel>('video_call')
   const [meetingUrl,   setMeetingUrl]  = useState('')
   const [agenda,       setAgenda]      = useState('')
 
@@ -89,7 +89,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
           scheduled_at:     new Date(scheduledAt).toISOString(),
           duration_min: duration,
           meeting_type:     meetingType,
-          meeting_mode:     meetingMode,
+          channel:          meetingMode,
           meeting_url:      meetingUrl.trim() || undefined,
           agenda:           agenda.trim() || undefined,
         })
@@ -182,7 +182,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             <div className="space-y-1">
               <Label>미팅 방식</Label>
               <div className="grid grid-cols-2 gap-1">
-                {MEETING_MODES.map(m => (
+                {MEETING_CHANNELS.map(m => (
                   <button
                     key={m.value}
                     type="button"

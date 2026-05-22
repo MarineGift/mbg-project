@@ -26,7 +26,6 @@ export interface CalendarItem {
   location?:     string | null
   // meeting-specific
   meeting_type?: string
-  meeting_mode?: string
 }
 
 // ─────────────────────────────────────────────
@@ -42,7 +41,7 @@ export async function fetchCalendarItems(
   const [eventsRes, meetingsRes, tasksRes, commsRes] = await Promise.all([
 
     // 1. calendar_events (Google/MS/internal — meeting_id 없는 것)
-    supabase.schema('app').from('calendar_events').select(`
+    supabase.schema('app').from('calendar_events' as never).select(`
       id, title, location, meeting_url,
       start_at, end_at, is_all_day, status, source,
       party_id, engagement_id, meeting_id,
@@ -55,8 +54,8 @@ export async function fetchCalendarItems(
     .order('start_at'),
 
     // 2. meetings (calendar_event_id 유무 모두 포함)
-    supabase.schema('app').from('meetings').select(`
-      id, title, meeting_type, meeting_mode,
+    supabase.schema('app').from('meetings' as never).select(`
+      id, title, meeting_type,
       scheduled_at, duration_min, status,
       location, meeting_url,
       party_id, engagement_id,
@@ -68,7 +67,7 @@ export async function fetchCalendarItems(
     .order('scheduled_at'),
 
     // 3. tasks with due_at
-    supabase.schema('app').from('tasks').select(`
+    supabase.schema('app').from('tasks' as never).select(`
       id, title, due_at,
       party_id,
       parties ( name )
@@ -80,7 +79,7 @@ export async function fetchCalendarItems(
     .order('due_at'),
 
     // 4. communications with occurred_at
-    supabase.schema('app').from('communications').select(`
+    supabase.schema('app').from('communications' as never).select(`
       id, subject, occurred_at,
       party_id,
       parties ( name )
@@ -129,7 +128,6 @@ export async function fetchCalendarItems(
       location:      m.location,
       meeting_url:   m.meeting_url,
       meeting_type:  m.meeting_type,
-      meeting_mode:  m.meeting_mode,
       party_id:      m.party_id      ?? null,
       party_name:    (m.parties as any)?.name ?? null,
       engagement_id: m.engagement_id ?? null,
@@ -189,8 +187,8 @@ export async function createCalendarEvent(input: CreateCalendarEventInput) {
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase
     .schema('app')
-    .from('calendar_events')
-    .insert({ ...input, source: 'internal', is_all_day: input.is_all_day ?? false })
+    .from('calendar_events' as never)
+    .insert({ ...input, source: 'internal', is_all_day: input.is_all_day ?? false } as never)
     .select()
     .single()
   if (error) throw error

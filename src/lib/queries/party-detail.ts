@@ -414,7 +414,7 @@ const MEETING_SELECT_COLS = [
   'id', 'party_id', 'engagement_id', 'meeting_type', 'title',
   'agenda', 'notes', 'ai_summary', 'outcome', 'next_steps',
   'occurred_at', 'scheduled_at', 'actual_started_at', 'actual_ended_at',
-  'duration_min', 'attendees', 'status', 'location', 'meeting_url',
+  'duration_min', 'status', 'location', 'meeting_url',
   'created_at', 'updated_at',
 ].join(', ');
 
