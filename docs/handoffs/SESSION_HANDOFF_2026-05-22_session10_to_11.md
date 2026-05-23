@@ -311,3 +311,48 @@ $tscOutput -split "`r?`n" | Where-Object { $_ -like '*email-compose.ts*' } |
 
 **Session 10 종료. Stage 27 완료. URM 백본의 schema-level closure 선언.**
 **Session 11 첫 작업 후보: Stage 28 (email-compose schema-generic fix) 또는 사용자 선택 (operational stages).**
+
+---
+
+## Session 10.5 사이드 작업 (2026-05-22) — 완료된 사실들
+
+### urm.* 신규 satellite 4개 (모두 COMMIT됨)
+- urm.investor_profile         : 111 rows  (from app.investor_profile)
+- urm.paper_mill_profile       : 1,074 rows (from app.paper_mill_profile; 3 orphans dropped)
+- urm.filler_supplier_profile  : 232 rows  (from app.filler_supplier_profile)
+- urm.contacts                 : 118 -> 236 rows
+  (+118 from app.investor_partner_profile, absorbed via contact_type='investor_partner')
+- urm.contact_types            : 5 -> 6 entries (investor_partner id=6 added)
+
+### Migration policy applied
+- organization_id 컬럼은 모든 satellite에서 drop (URM is single-tenant)
+- FK는 모두 urm.parties로 재구성 (UUID space shared with app.parties)
+- app.* 원본 4개 테이블은 그대로 유지 (drop은 Phase 2 read paths 완료 후)
+
+### Spec drift 발견
+- spec section 3b: "party_id (renamed from firm_party_id)" 잘못 적혀 있음.
+  실제 DB는 firm_party_id 유지. URM naming convention 확정:
+  테이블명 복수 + FK는 단수_id + role prefix (firm_party_id, billing_address_id 등) 허용.
+- database.ts 재생성 시 spec 컬럼 정보 신뢰 불가 -> 옵션 A (supabase gen types) 사실상 필수.
+- supabase gen types 명령에 신규 4개 satellite 포함되어야 함.
+
+### app.* 대상 폐기 (Phase 2 완료 + .schema('app') 0건 확인 후 일괄)
+- 마이그레이션된 4개: investor_profile, paper_mill_profile, filler_supplier_profile,
+  investor_partner_profile
+- 명시적 폐기 결정 9개: buyer_profile, buyer_partner_profile, customer_profile,
+  partner_profile, govt_grant_profile, govt_grant_contact_profile,
+  filler_supplier_contact_profile, investor_portfolio_companies, investor_subtype_meta
+- Views (6개): v_filler_suppliers, v_investor_outreach_list, v_investor_subtype_options,
+  v_investor_with_partners, v_paper_mills, v_portfolio_with_investors
+- app.contacts: 6 rows (불필요 확정, 같은 시점에 drop)
+
+### Phase 2 작업 시 검증 권장
+- urm.contacts 236행 사람 단위 중복 검증 (이름/이메일 기준).
+  app.investor_partner_profile 118행과 기존 urm.contacts 118행은 id가 0% overlap이었음
+  -> 같은 사람이 다른 id로 두 번 들어왔을 가능성. 발견되면 정리 SQL 별도 필요.
+- paper_mill_profile orphan 3 rows: drop된 상태. 필요시 Supabase 자동 백업
+  (2026-05-22 11:45 UTC) 또는 app.paper_mill_profile에서 복원 가능.
+
+### 안전망
+- Supabase scheduled backup: 2026-05-22 11:45 UTC (마이그레이션 직전)
+- 모든 마이그레이션은 BEGIN ... COMMIT 트랜잭션 안에서 실행됨
