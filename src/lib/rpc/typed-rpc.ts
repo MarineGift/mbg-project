@@ -108,10 +108,16 @@ export type RpcResult<N extends FnName> = {
 // ---------------------------------------------------------------
 // Wrapper — single cast site (Gotcha #28 의 RPC 버전).
 // v2: `as any` (not `as never`) to keep callable signature.
+// Stage 28-a: client param의 SchemaName generic widen (3번째 param도 any로).
+//   server.ts factory가 <Database, 'app'>으로 변경되면서 caller가 넘기는
+//   client는 SupabaseClient<Database, 'app', Database['app']>. 'public' 고정
+//   하면 mismatch → 첫번째 외 두 generic 모두 any로 받아 RPC만 가능하면 OK.
+//   .rpc()는 schema generic과 무관 (RPC는 public.Functions 또는 명시 schema).
 // ---------------------------------------------------------------
 
 export async function rpc<N extends FnName>(
-  client: SupabaseClient<Database>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: SupabaseClient<Database, any, any>,
   fnName: N,
   args: FnArgs<N>,
 ): Promise<RpcResult<N>> {

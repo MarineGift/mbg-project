@@ -19,14 +19,18 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 import { env } from '@/lib/env';
 
-type SupabaseAdminDb = ReturnType<typeof createClient<Database, 'public'>>;
+// Stage 28-a: schema generic을 'app'으로 변경 (server.ts/client.ts와 일치).
+type SupabaseAdminDb = ReturnType<typeof createClient<Database, 'app'>>;
+
+/** Stage 28-a: caller가 type annotation 가능하도록 export. */
+export type SbAdminClient = SupabaseAdminDb;
 
 let adminClient: SupabaseAdminDb | null = null;
 
 export function createSupabaseAdminClient(): SupabaseAdminDb {
   if (adminClient) return adminClient;
 
-  adminClient = createClient<Database, 'public'>(
+  adminClient = createClient<Database, 'app'>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
     {

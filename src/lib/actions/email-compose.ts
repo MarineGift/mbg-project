@@ -2,7 +2,7 @@
 // Phase 22b: contact_id 치환 수정 + 이메일 서명 + 첨부파일 지원
 "use server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, type SbClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
 import Anthropic from "@anthropic-ai/sdk";
@@ -37,7 +37,7 @@ export interface AIReplyPayload {
 // Template merge: {{party.name}}, {{contact.given_name}} 등
 // ─────────────────────────────────────────────
 async function renderWithContext(
-  supabase: ReturnType<typeof createServerActionClient>,
+  supabase: SbClient,
   template: string,
   partyId: string,
   contactId?: string | null
@@ -105,7 +105,7 @@ async function renderWithContext(
 // 기본 서명 조회
 // ─────────────────────────────────────────────
 async function getDefaultSignature(
-  supabase: ReturnType<typeof createServerActionClient>,
+  supabase: SbClient,
   orgId: string
 ): Promise<string | null> {
   const { data } = await supabase
@@ -121,7 +121,7 @@ async function getDefaultSignature(
 // Supabase Storage → nodemailer 첨부파일 변환
 // ─────────────────────────────────────────────
 async function resolveAttachments(
-  supabase: ReturnType<typeof createServerActionClient>,
+  supabase: SbClient,
   paths: string[]
 ): Promise<nodemailer.SendMailOptions["attachments"]> {
   if (!paths || paths.length === 0) return [];
