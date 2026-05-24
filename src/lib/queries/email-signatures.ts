@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 export interface EmailSignature {
   id: string;
-  org_id: string;
+  organization_id: string;
   name: string;
   html: string;
   plain_text: string;
@@ -14,7 +14,7 @@ export interface EmailSignature {
 export async function getSignatures(orgId: string): Promise<EmailSignature[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from('email_signatures').select('*').eq('org_id', orgId)
+    .from('email_signatures').select('*').eq('organization_id', orgId)
     .order('is_default', { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -24,12 +24,12 @@ export async function getDefaultSignature(orgId: string): Promise<EmailSignature
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from('email_signatures').select('*')
-    .eq('org_id', orgId).eq('is_default', true).maybeSingle();
+    .eq('organization_id', orgId).eq('is_default', true).maybeSingle();
   return data;
 }
 
 export async function upsertSignature(
-  sig: Partial<EmailSignature> & { org_id: string }
+  sig: Partial<EmailSignature> & { organization_id: string }
 ): Promise<EmailSignature> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -47,7 +47,7 @@ export async function deleteSignature(id: string) {
 export async function setDefaultSignature(id: string, orgId: string) {
   const supabase = await createSupabaseServerClient();
   await supabase.from('email_signatures')
-    .update({ is_default: false }).eq('org_id', orgId).eq('is_default', true);
+    .update({ is_default: false }).eq('organization_id', orgId).eq('is_default', true);
   const { error } = await supabase.from('email_signatures')
     .update({ is_default: true }).eq('id', id);
   if (error) throw error;

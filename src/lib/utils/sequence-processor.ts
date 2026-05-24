@@ -22,7 +22,7 @@ const FROM_NAME = process.env.TABS_MAILER_FROM_NAME || "URM";
 
 interface DueEnrollment {
   enrollment_id: string;
-  org_id: string;
+  organization_id: string;
   party_id: string;
   contact_id: string | null;
   sequence_id: string;

@@ -25,7 +25,7 @@ async function getSessionOrgId(): Promise<{ orgId: string } | null> {
     );
     const orgId: string | undefined =
       payload.organization_id ??
-      payload.org_id ??
+      payload.organization_id ??
       payload.app_metadata?.organization_id;
     if (!orgId) return null;
     return { orgId };

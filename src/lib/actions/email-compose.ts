@@ -111,7 +111,7 @@ async function getDefaultSignature(
   const { data } = await supabase
     .from("email_signatures")
     .select("html_content")
-    .eq("org_id", orgId)
+    .eq("organization_id", orgId)
     .eq("is_default", true)
     .maybeSingle();
   return data?.html_content ?? null;
@@ -184,12 +184,12 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   // org_id 조회
   const { data: member } = await supabase
     .from("org_members")
-    .select("org_id")
+    .select("organization_id")
     .eq("user_id", user.id)
     .single();
   if (!member) return { success: false, error: "조직 정보 없음" };
 
-  const orgId = member.org_id;
+  const orgId = member.organization_id;
 
   // 화이트리스트 확인
   const domain = payload.to.split("@")[1]?.toLowerCase();
@@ -197,7 +197,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     const { data: wl } = await supabase
       .from("email_whitelist")
       .select("id")
-      .eq("org_id", orgId)
+      .eq("organization_id", orgId)
       .or(`value.eq.${domain},value.eq.${payload.to.toLowerCase()}`)
       .maybeSingle();
 
@@ -279,7 +279,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   const { data: comm, error: dbErr } = await supabase
     .from("communications")
     .insert({
-      org_id: orgId,
+      organization_id: orgId,
       party_id: payload.partyId,
       contact_id: payload.contactId ?? null,
       direction: "outbound",
@@ -317,7 +317,7 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
 
   const { data: comm } = await supabase
     .from("communications")
-    .select("subject, body_html, body_text, from_address, to_address, sent_at")
+    .select("subject, body_html, body_plain, from_address, to_address, sent_at")
     .eq("id", payload.communicationId)
     .single();
 
@@ -334,7 +334,7 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
     if (c) contactName = [c.given_name, c.family_name].filter(Boolean).join(" ");
   }
 
-  const originalBody = comm.body_text ?? comm.body_html?.replace(/<[^>]+>/g, "") ?? "";
+  const originalBody = comm.body_plain ?? comm.body_html?.replace(/<[^>]+>/g, "") ?? "";
   const tone = payload.tone ?? "professional";
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -390,7 +390,7 @@ export async function upsertEmailSignature(input: {
 
   const { data: member } = await supabase
     .from("org_members")
-    .select("org_id")
+    .select("organization_id")
     .eq("user_id", user.id)
     .single();
   if (!member) return { success: false, error: "조직 없음" };
@@ -400,7 +400,7 @@ export async function upsertEmailSignature(input: {
     await supabase
       .from("email_signatures")
       .update({ is_default: false })
-      .eq("org_id", member.org_id)
+      .eq("organization_id", member.organization_id)
       .eq("is_default", true);
   }
 
@@ -413,11 +413,11 @@ export async function upsertEmailSignature(input: {
         is_default: input.isDefault,
       })
       .eq("id", input.id)
-      .eq("org_id", member.org_id);
+      .eq("organization_id", member.organization_id);
     if (error) return { success: false, error: error.message };
   } else {
     const { error } = await supabase.from("email_signatures").insert({
-      org_id: member.org_id,
+      organization_id: member.organization_id,
       name: input.name,
       html_content: input.htmlContent,
       is_default: input.isDefault,
@@ -453,7 +453,7 @@ export async function listEmailSignatures(): Promise<{
 
   const { data: member } = await supabase
     .from("org_members")
-    .select("org_id")
+    .select("organization_id")
     .eq("user_id", user.id)
     .single();
   if (!member) return { success: false, error: "조직 없음" };
@@ -461,7 +461,7 @@ export async function listEmailSignatures(): Promise<{
   const { data, error } = await supabase
     .from("email_signatures")
     .select("id, name, html_content, is_default")
-    .eq("org_id", member.org_id)
+    .eq("organization_id", member.organization_id)
     .order("is_default", { ascending: false });
 
   if (error) return { success: false, error: error.message };

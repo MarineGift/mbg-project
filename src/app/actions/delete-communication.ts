@@ -84,7 +84,7 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
     console.log('[deleteComm] JWT keys=', Object.keys(payload).join(','));
     orgId =
       payload.organization_id ??
-      payload.org_id ??
+      payload.organization_id ??
       payload.app_metadata?.organization_id ??
       payload.user_metadata?.organization_id;
     console.log('[deleteComm] orgId=', orgId ?? 'NOT FOUND');

@@ -35,14 +35,14 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
   async function save() {
     if (!cur) return;
     setSaving(true);
-    try { await upsertSignature({ ...cur, org_id: orgId }); toast.success('저장되었습니다.'); }
+    try { await upsertSignature({ ...cur, organization_id: orgId }); toast.success('저장되었습니다.'); }
     catch (e) { toast.error('저장 실패: ' + String(e)); }
     finally { setSaving(false); }
   }
 
   async function add() {
     try {
-      const created = await upsertSignature({ ...BLANK, org_id: orgId } as any);
+      const created = await upsertSignature({ ...BLANK, organization_id: orgId } as any);
       setSigs((p) => [...p, created]); setEditing(created.id);
     } catch (e) { toast.error('생성 실패: ' + String(e)); }
   }
