@@ -73,7 +73,7 @@ export async function fetchCommunicationDetailV2(
     attachmentCount:  0,
     aiGenerated:      r.ai_generated    ?? false,
     aiDraftId:        r.ai_draft_id     ?? null,
-    party:   party   ? { id: party.id,   name: party.name,   module: party.module } : null,
+    party:   party   ? { id: party.id,   name: party.name,   partyType: party.module } : null,
     contact: contact ? {
       id:       contact.id,
       fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,

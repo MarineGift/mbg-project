@@ -205,7 +205,7 @@ export function TasksTable({ rows }: Props) {
                         {row.engagementName}
                       </Link>
                     )}
-                    {row.partyType && <ModuleBadge module={row.partyType} size="sm" />}
+                    {row.partyType && <ModuleBadge partyType={row.partyType} size="sm" />}
                     {row.dueAt && (
                       <span className={cn('inline-flex items-center gap-1', isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground')}>
                         <Clock className="h-3 w-3" />

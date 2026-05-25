@@ -31,7 +31,7 @@ export function CommunicationDetailView({ comm }: Props) {
             <span className="text-xs text-muted-foreground uppercase tracking-wide">
               {comm.channel} · {comm.direction}
             </span>
-            {comm.party && <ModuleBadge module={comm.party.partyType} size="sm" />}
+            {comm.party && <ModuleBadge partyType={comm.party.partyType} size="sm" />}
             {comm.status === 'failed' && (
               <span className="inline-flex items-center gap-1 text-xs text-destructive">
                 <AlertCircle className="h-3 w-3" />

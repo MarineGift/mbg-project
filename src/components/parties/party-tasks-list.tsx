@@ -97,7 +97,7 @@ export function PartyTasksList({ tasks, partyId, module }: Props) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         partyId={partyId}
-        module={module}
+        partyType={module}
       />
     </>
   );

@@ -191,7 +191,7 @@ export function TaskDetailClient({ task: initial }: Props) {
                 Overdue
               </span>
             )}
-            {task.partyType && <ModuleBadge module={task.partyType} size="sm" />}
+            {task.partyType && <ModuleBadge partyType={task.partyType} size="sm" />}
           </div>
 
           {/* Status change */}

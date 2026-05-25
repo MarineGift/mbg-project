@@ -27,7 +27,7 @@ export function DraftDetailHeader({ draft }: Props) {
         </Button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <StatusBadge status={draft.status} size="sm" />
-          {draft.partyType && <ModuleBadge module={draft.partyType} size="sm" />}
+          {draft.partyType && <ModuleBadge partyType={draft.partyType} size="sm" />}
           {draft.status === 'pending_review' && (
             <ExpiryCountdown expiresAt={draft.expiresAt} />
           )}

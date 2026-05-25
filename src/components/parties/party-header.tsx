@@ -47,7 +47,7 @@ export function PartyHeader({ party }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <ModuleBadge module={party.partyType} size="sm" />
+        <ModuleBadge partyType={party.partyType} size="sm" />
         {party.tier && (
           <span
             className={cn(
