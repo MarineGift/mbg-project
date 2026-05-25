@@ -80,8 +80,8 @@ export default async function PartyDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  if (full.party.module !== urlModule) {
-    redirect(`/${full.party.module}/parties/${id}`);
+  if (full.party.partyType !== urlModule) {
+    redirect(`/${full.party.partyType}/parties/${id}`);
   }
 
   // org_id: env 변수 (단일 조직 앱)
@@ -94,7 +94,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
   const [commTimeline, commStats, templates] = await Promise.all([
     getPartyCommunicationsTimeline(full.party.id, 100),
     getPartyCommunicationStats(full.party.id),
-    listTemplatesForCompose(orgId, full.party.module),
+    listTemplatesForCompose(orgId, full.party.partyType),
   ]);
 
   // Default contact for "new email" button: first contact with an email
@@ -170,7 +170,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             <div className="space-y-4">
               <PartySupplyLinksPanel
                 partyId={full.party.id}
-                partyModule={full.party.module as 'filler_supplier' | 'paper_mill'}
+                partyModule={full.party.partyType as 'filler_supplier' | 'paper_mill'}
                 orgId={orgId}
               />
               <PartyContactsList
@@ -180,12 +180,12 @@ export default async function PartyDetailPage({ params }: PageProps) {
               <PartyEngagementsList
                 engagements={full.engagements}
                 partyId={full.party.id}
-                module={full.party.module}
+                module={full.party.partyType}
               />
               <PartyTasksList
                 tasks={full.tasks}
                 partyId={full.party.id}
-                module={full.party.module}
+                module={full.party.partyType}
               />
               {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
                 <CountryPeersPanel

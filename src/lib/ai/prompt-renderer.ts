@@ -60,7 +60,7 @@ export interface RenderedPrompt {
 interface PartyContextSummary {
   id: string;
   name: string;
-  module?: PartyTypeCode;
+  partyType?: PartyTypeCode;
   tier?: string;
   countryCode?: string;
   industryTags?: string[];
@@ -137,7 +137,7 @@ export async function embedQuery(
 async function loadBrandVoice(
   supabase: SupabaseClient,
   organizationId: string,
-  module: PartyTypeCode | undefined,
+  partyType: PartyTypeCode | undefined,
   language: Language | undefined,
 ): Promise<BrandVoiceRow | null> {
   if (!module || !language) return null;
@@ -164,7 +164,7 @@ async function loadBrandVoice(
   return {
     id: data.id,
     organizationId: data.organization_id,
-    module: data.module,
+    partyType: data.partyType,
     language: data.language,
     toneGuidelines: data.tone_guidelines ?? '',
     doSay: data.do_say ?? [],
@@ -190,7 +190,7 @@ async function loadParty(
   return {
     id: data.id,
     name: data.name,
-    module: data.module ?? undefined,
+    partyType: data.partyType ?? undefined,
     tier: data.tier ?? undefined,
     countryCode: data.country_code ?? undefined,
     industryTags: data.industry_tags ?? [],

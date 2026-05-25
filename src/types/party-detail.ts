@@ -29,7 +29,7 @@ export interface PartyDetail {
   id: string;
   organizationId: string;
   name: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   countryCode: string | null;

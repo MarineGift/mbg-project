@@ -43,11 +43,11 @@ export function PartyHeader({ party }: Props) {
     <header className="border-b bg-background">
       <div className="px-6 py-3 border-b flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" className="h-8 w-8">
-          <Link href={`/${party.module}/parties`} aria-label="Back">
+          <Link href={`/${party.partyType}/parties`} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <ModuleBadge module={party.module} size="sm" />
+        <ModuleBadge module={party.partyType} size="sm" />
         {party.tier && (
           <span
             className={cn(
@@ -67,7 +67,7 @@ export function PartyHeader({ party }: Props) {
           {party.status}
         </span>
         <Button asChild variant="outline" size="sm" className="ml-auto">
-          <Link href={`/${party.module}/parties/${party.id}/edit`}>
+          <Link href={`/${party.partyType}/parties/${party.id}/edit`}>
             <Pencil className="h-3.5 w-3.5" />
             Edit
           </Link>

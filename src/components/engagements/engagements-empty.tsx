@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { PartyTypeCode } from '@/types/ai';
 
 interface Props {
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
 }
 
 export function EngagementsPipelineMissing({ module }: Props) {

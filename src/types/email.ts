@@ -109,7 +109,7 @@ export interface CommunicationRow {
   partyId?: string;
   contactId?: string;
   engagementId?: string;
-  module?: PartyTypeCode;
+  partyType?: PartyTypeCode;
   channel: Channel;
   direction: Direction;
   // RFC 5322

@@ -11,7 +11,7 @@ import type { PartyTypeCode } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface ModuleBadgeProps {
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   size?: 'sm' | 'md';
   className?: string;
 }

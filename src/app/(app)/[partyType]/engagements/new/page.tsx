@@ -55,7 +55,7 @@ export default async function NewEngagementPage({
 
   // 4. party 존재 + module 일치 검증
   const full = await fetchPartyDetail(partyId);
-  if (!full || full.party.module !== module) {
+  if (!full || full.party.partyType !== module) {
     notFound();
   }
 

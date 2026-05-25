@@ -26,13 +26,13 @@ export function EngagementDetailHeader({ engagement }: Props) {
         <div className="flex items-center gap-3 min-w-0">
           <Button asChild variant="ghost" size="icon" className="h-8 w-8">
             <Link
-              href={`/${engagement.module}/engagements`}
+              href={`/${engagement.partyType}/engagements`}
               aria-label="Back to kanban"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <ModuleBadge module={engagement.module} size="sm" />
+          <ModuleBadge module={engagement.partyType} size="sm" />
           <span
             className={cn(
               'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
@@ -75,7 +75,7 @@ export function EngagementDetailHeader({ engagement }: Props) {
         <h1 className="text-2xl font-semibold truncate">{engagement.name}</h1>
         <p className="text-sm text-muted-foreground mt-1">
           <Link
-            href={`/${engagement.partyModule}/parties/${engagement.partyId}`}
+            href={`/${engagement.partyType}/parties/${engagement.partyId}`}
             className="hover:underline"
           >
             {engagement.partyName}

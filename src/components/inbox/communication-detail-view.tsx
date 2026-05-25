@@ -31,7 +31,7 @@ export function CommunicationDetailView({ comm }: Props) {
             <span className="text-xs text-muted-foreground uppercase tracking-wide">
               {comm.channel} · {comm.direction}
             </span>
-            {comm.party && <ModuleBadge module={comm.party.module} size="sm" />}
+            {comm.party && <ModuleBadge module={comm.party.partyType} size="sm" />}
             {comm.status === 'failed' && (
               <span className="inline-flex items-center gap-1 text-xs text-destructive">
                 <AlertCircle className="h-3 w-3" />
@@ -63,7 +63,7 @@ export function CommunicationDetailView({ comm }: Props) {
               <>
                 <span className="text-muted-foreground">{t('party')}</span>
                 <Link
-                  href={`/${comm.party.module}/parties/${comm.party.id}`}
+                  href={`/${comm.party.partyType}/parties/${comm.party.id}`}
                   className="text-primary hover:underline truncate"
                 >
                   {comm.party.name}

@@ -34,7 +34,7 @@ interface RawDraftRow {
   id: string;
   organization_id: string;
   status: DraftStatus;
-  module: PartyTypeCode | null;
+  partyType: PartyTypeCode | null;
   language: Language;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
@@ -178,7 +178,7 @@ export async function fetchDraftDetail(
     id: d.id,
     organizationId: d.organization_id,
     status: d.status,
-    module: d.module,
+    partyType: d.partyType,
     language: d.language,
     classificationCategory: d.classification_category,
     confidenceScore: d.confidence_score,
@@ -239,7 +239,7 @@ function mapParty(raw: unknown): DraftPartySummary | null {
   return {
     id: r.id as string,
     name: (r.name as string) ?? '',
-    module: r.module as PartyTypeCode,
+    partyType: r.partyType as PartyTypeCode,
     tier: (r.tier as string | null) ?? null,
     countryCode: (r.country_code as string | null) ?? null,
     website: (r.website as string | null) ?? null,
@@ -263,7 +263,7 @@ function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   return {
     id: r.id as string,
     name: (r.deal_name as string) ?? '',
-    module: moduleValue,
+    partyType: moduleValue,
     status: (r.status as string) ?? 'open',
     valueAmount:
       typeof r.value_amount === 'number'

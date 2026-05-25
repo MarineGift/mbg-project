@@ -124,7 +124,7 @@ export interface AgentRow {
 export interface BrandVoiceRow {
   id: string;
   organizationId: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   language: Language;
   toneGuidelines: string;
   doSay: string[];

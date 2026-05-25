@@ -14,7 +14,7 @@ interface Props {
   engagements: readonly PartyEngagement[];
   /** "+ Add Engagement" 딥링크용 */
   partyId: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
 }
 
 const STATUS_COLORS: Record<string, string> = {

@@ -11,7 +11,7 @@ export interface SavedView {
   id: string;
   name: string;
   entity_type: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   filters: Record<string, unknown>;
   is_default?: boolean;
   created_at?: string;

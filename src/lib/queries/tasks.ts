@@ -64,7 +64,7 @@ export function parseTaskFilters(
   const priority = pickEnum(params.priority, ALL_PRIORITIES, 'all' as const) as
     | TaskPriority
     | 'all';
-  const module = pickEnum(params.module, ALL_MODULES, 'all' as const) as
+  const module = pickEnum(params.partyType, ALL_MODULES, 'all' as const) as
     | PartyTypeCode
     | 'all';
   const overdueOnly = single(params.overdue) === '1';
@@ -122,7 +122,7 @@ interface RawTaskRow {
   priority: TaskPriority;
   due_at: string | null;
   reminder_at: string | null;
-  module: PartyTypeCode | null;
+  partyType: PartyTypeCode | null;
   party_id: string | null;
   engagement_id: string | null;
   assigned_to_user_id: string | null;
@@ -162,8 +162,8 @@ export async function fetchTasks(
   if (filters.priority !== 'all') {
     query = query.eq('priority', filters.priority);
   }
-  if (filters.module !== 'all') {
-    query = query.eq('module', filters.module);
+  if (filters.partyType !== 'all') {
+    query = query.eq('module', filters.partyType);
   }
   if (filters.overdueOnly) {
     query = query
@@ -228,10 +228,10 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     priority: r.priority,
     dueAt: r.due_at,
     reminderAt: r.reminder_at,
-    module: r.module,
+    partyType: r.partyType,
     partyId: r.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.module ?? null,
+    partyModule: party?.partyType ?? null,
     engagementId: r.engagement_id,
     engagementName: engagement?.name ?? null,
     assignedToUserId: r.assigned_to_user_id,

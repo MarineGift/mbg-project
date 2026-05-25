@@ -43,16 +43,16 @@ export default async function EditPartyPage({ params }: PageProps) {
     notFound();
   }
 
-  // URL module과 party.module 불일치 시 정확한 URL로 redirect
-  if (full.party.module !== urlModule) {
-    redirect(`/${full.party.module}/parties/${id}/edit`);
+  // URL module과 party.partyType 불일치 시 정확한 URL로 redirect
+  if (full.party.partyType !== urlModule) {
+    redirect(`/${full.party.partyType}/parties/${id}/edit`);
   }
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <PartyForm
         mode="edit"
-        initialModule={full.party.module}
+        initialModule={full.party.partyType}
         existing={full.party}
       />
     </div>

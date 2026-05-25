@@ -47,7 +47,7 @@ interface RawPartyRow {
   id: string;
   organization_id: string;
   name: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   country_code: string | null;
@@ -256,7 +256,7 @@ export async function fetchPartyDetail(
     id: p.id,
     organizationId: p.organization_id,
     name: p.name,
-    module: p.module,
+    partyType: p.partyType,
     tier: p.tier,
     status: p.status,
     countryCode: p.country_code,

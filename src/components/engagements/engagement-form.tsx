@@ -60,7 +60,7 @@ import type { EngagementDetail } from '@/types/engagement';
 interface Props {
   mode: 'create' | 'edit';
   /** create + edit 모두에서 module 결정용 */
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   /** create 모드 필수, edit 모드에서는 existing.partyId 사용 */
   partyId?: string;
   /** create 모드 표시용. edit 모드에서는 existing.partyName 사용 */
@@ -198,7 +198,7 @@ export function EngagementForm({
       if (result.ok) {
         toast.success(t('deleted'));
         // delete 후 party 상세 페이지로 이동
-        router.push(`/${existing.partyModule}/parties/${existing.partyId}`);
+        router.push(`/${existing.partyType}/parties/${existing.partyId}`);
       } else {
         toast.error(result.errorMessage ?? t('deleteFailed'));
         setShowDelete(false);

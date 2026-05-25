@@ -11,7 +11,7 @@
  * URM schema 차이점 흡수:
  *   - app.engagements.name → urm.deals.deal_name
  *   - app.engagements.pipeline_definition_id → urm.deals.pipeline_id
- *   - app.engagements.module 제거 → urm.parties.party_type_id 기반 추론
+ *   - app.engagements.partyType 제거 → urm.parties.party_type_id 기반 추론
  *   - app.engagements.weighted_amount 제거 → 클라이언트 계산
  *     (value_amount * probability_pct / 100)
  *   - organization_id filter 제거 (RLS 가정)
@@ -156,7 +156,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
   return {
     id: r.id,
     name: r.deal_name,
-    module: partyTypeIdToModule(party?.party_type_id ?? null),
+    partyType: partyTypeIdToModule(party?.party_type_id ?? null),
     status: r.status,
     currentStageId: r.current_stage_id,
     pipelineDefinitionId: r.pipeline_id ?? null,
@@ -184,7 +184,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
  * ============================================================ */
 
 export async function fetchKanbanBoard(
-  module: PartyTypeCode,
+  partyType: PartyTypeCode,
 ): Promise<KanbanBoard> {
   const pipeline = await fetchPipelineForModule(module);
 
@@ -319,10 +319,9 @@ export async function fetchEngagementDetail(
     organizationId: '',
     partyId: e.party_id,
     partyName: party?.name ?? '(unknown party)',
-    partyModule: moduleValue,
     primaryContactId: e.primary_contact_id,
     primaryContactName: contact?.full_name ?? null,
-    module: moduleValue,
+    partyType: moduleValue,
     name: e.deal_name,
     description: e.description,
     pipelineDefinitionId: e.pipeline_id,

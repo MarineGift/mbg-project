@@ -20,7 +20,7 @@ import type {
 export interface DraftQueueRow {
   id: string;
   status: DraftStatus;
-  module: PartyTypeCode | null;
+  partyType: PartyTypeCode | null;
   classificationCategory: ClassificationCategory | null;
   confidenceScore: number | null;
   language: Language;
@@ -51,7 +51,7 @@ export interface DraftQueueRow {
 export interface DraftQueueFilters {
   /** 상태 — 기본 'pending_review'. 'all'은 모든 상태 */
   status: DraftStatus | 'all';
-  module: PartyTypeCode | 'all';
+  partyType: PartyTypeCode | 'all';
   category: ClassificationCategory | 'all';
   /** 최소 신뢰도 (0~1). 0이면 필터 없음 */
   minConfidence: number;
@@ -94,7 +94,7 @@ export interface DraftQueueResult {
 
 export const DEFAULT_FILTERS: DraftQueueFilters = {
   status: 'pending_review',
-  module: 'all',
+  partyType: 'all',
   category: 'all',
   minConfidence: 0,
   onlyRisky: false,

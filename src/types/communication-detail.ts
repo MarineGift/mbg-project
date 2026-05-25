@@ -41,7 +41,7 @@ export interface CommunicationDetail {
   party: {
     id: string;
     name: string;
-    module: PartyTypeCode;
+    partyType: PartyTypeCode;
   } | null;
   /** 컨택트 요약 */
   contact: {

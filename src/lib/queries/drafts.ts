@@ -63,7 +63,7 @@ export function parseFilters(
   params: Record<string, string | string[] | undefined>,
 ): DraftQueueFilters {
   const status = pickEnum(params.status, ALL_STATUSES, 'pending_review' as const);
-  const module = pickEnum(params.module, ALL_MODULES, 'all' as const);
+  const module = pickEnum(params.partyType, ALL_MODULES, 'all' as const);
   const category = pickEnum(
     params.category,
     CLASSIFICATION_CATEGORIES,
@@ -77,7 +77,7 @@ export function parseFilters(
     status: (status === 'pending_review' || status === 'all') && params.status === undefined
       ? 'pending_review'  // 기본
       : (status as DraftStatus | 'all'),
-    module: module as PartyTypeCode | 'all',
+    partyType: module as PartyTypeCode | 'all',
     category: category as ClassificationCategory | 'all',
     minConfidence,
     onlyRisky,
@@ -135,7 +135,7 @@ function clamp01(n: number): number {
 interface RawJoinedDraft {
   id: string;
   status: DraftStatus;
-  module: PartyTypeCode | null;
+  partyType: PartyTypeCode | null;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
   language: Language;
@@ -221,8 +221,8 @@ export async function fetchDraftQueue(
   if (filters.status !== 'all') {
     query = query.eq('status', filters.status);
   }
-  if (filters.module !== 'all') {
-    query = query.eq('module', filters.module);
+  if (filters.partyType !== 'all') {
+    query = query.eq('module', filters.partyType);
   }
   if (filters.category !== 'all') {
     query = query.eq('classification_category', filters.category);
@@ -266,7 +266,7 @@ export async function fetchDraftQueue(
   const draftRows = (data ?? []) as Array<{
     id: string;
     status: string;
-    module: string | null;
+    partyType: string | null;
     classification_category: string;
     confidence_score: number;
     language: string;
@@ -402,7 +402,7 @@ function toQueueRow(raw: RawJoinedDraft): DraftQueueRow {
   return {
     id: raw.id,
     status: raw.status,
-    module: raw.module,
+    partyType: raw.partyType,
     classificationCategory: raw.classification_category,
     confidenceScore: raw.confidence_score,
     language: raw.language,

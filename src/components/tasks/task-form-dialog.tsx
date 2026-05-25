@@ -37,7 +37,7 @@ interface Props {
   /** create 컨텍스트 — 빈 폼이지만 partyId/engagementId 자동 연결 */
   partyId?: string | null;
   engagementId?: string | null;
-  module?: PartyTypeCode | null;
+  partyType?: PartyTypeCode | null;
   /** edit 모드면 기존 task */
   existing?: TaskRow | null;
 }
@@ -102,7 +102,7 @@ export function TaskFormDialog({
         dueAt: dueAtIso,
         partyId: existing?.partyId ?? partyId ?? null,
         engagementId: existing?.engagementId ?? engagementId ?? null,
-        module: existing?.module ?? module ?? null,
+        partyType: existing?.partyType ?? module ?? null,
       };
 
       const result = existing

@@ -13,7 +13,7 @@ import type { PartyTypeCode } from '@/types/ai';
 interface SavedViewsDropdownProps {
   views: SavedView[];
   entityType: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   className?: string;
 }
 

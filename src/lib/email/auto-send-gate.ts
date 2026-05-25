@@ -28,7 +28,7 @@ import type { ClassificationOutput } from '../../types/classification';
 
 export interface GateInput {
   organizationId: string;
-  module?: PartyTypeCode;
+  partyType?: PartyTypeCode;
   partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
@@ -114,13 +114,13 @@ export async function evaluateAutoSend(
   }
 
   // [4] applicable_modules
-  if (input.module) {
+  if (input.partyType) {
     const allowed = rule.allowedModules ?? [];
-    if (allowed.length === 0 || !allowed.includes(input.module)) {
+    if (allowed.length === 0 || !allowed.includes(input.partyType)) {
       reasons.push('module_not_allowed');
       log.module_check = {
         allowedModules: allowed,
-        requestedModule: input.module,
+        requestedModule: input.partyType,
       };
     }
   }

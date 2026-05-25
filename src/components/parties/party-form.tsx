@@ -50,7 +50,7 @@ interface Props {
 const schema = z.object({
   name: z.string().min(1, 'Required').max(200),
   legalName: z.string().max(200).optional().or(z.literal('')),
-  module: z.enum([
+  partyType: z.enum([
     'investor',
     'paper_mill',
     'partner',
@@ -129,7 +129,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
       ? {
           name: existing.name,
           legalName: '',
-          module: existing.module,
+          partyType: existing.partyType,
           partyType: 'company',
           tier: existing.tier ?? 'tier_3',
           countryCode: existing.countryCode ?? '',
@@ -144,7 +144,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
       : {
           name: '',
           legalName: '',
-          module: initialModule,
+          partyType: initialModule,
           partyType: 'company',
           tier: 'tier_3',
           countryCode: '',
@@ -170,7 +170,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
       const payload = {
         name: values.name,
         legalName: values.legalName || null,
-        module: values.module,
+        partyType: values.partyType,
         partyType: values.partyType,
         tier: values.tier,
         countryCode: values.countryCode || null,
@@ -187,7 +187,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
         const result = await createParty(payload);
         if (result.ok && result.partyId) {
           toast.success(t('created'));
-          router.push(`/${values.module}/parties/${result.partyId}`);
+          router.push(`/${values.partyType}/parties/${result.partyId}`);
         } else {
           toast.error(result.errorMessage ?? t('saveFailed'));
         }
@@ -195,7 +195,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
         const result = await updateParty({ partyId: existing.id, ...payload });
         if (result.ok) {
           toast.success(t('updated'));
-          router.push(`/${values.module}/parties/${existing.id}`);
+          router.push(`/${values.partyType}/parties/${existing.id}`);
         } else {
           toast.error(result.errorMessage ?? t('saveFailed'));
         }

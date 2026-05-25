@@ -63,7 +63,7 @@ export function KanbanCardComponent({ card, isDragging, asOverlay }: Props) {
               {card.name}
             </Link>
             <Link
-              href={`/${card.module}/parties/${card.partyId}`}
+              href={`/${card.partyType}/parties/${card.partyId}`}
               className="text-xs text-muted-foreground hover:underline truncate block"
               onPointerDown={(e) => e.stopPropagation()}
             >

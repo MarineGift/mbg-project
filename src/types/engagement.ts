@@ -49,7 +49,7 @@ export interface KanbanStage {
 export interface KanbanCard {
   id: string;
   name: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   status: EngagementStatus;
   currentStageId: string | null;
   pipelineDefinitionId: string | null;
@@ -66,7 +66,7 @@ export interface KanbanCard {
 
 /** Kanban 보드 — 한 모듈의 default pipeline + stages + cards. */
 export interface KanbanBoard {
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   /** module에 default pipeline이 없을 경우 null — 사용자에게 안내 표시 */
   pipelineDefinitionId: string | null;
   pipelineName: string | null;
@@ -100,10 +100,9 @@ export interface EngagementDetail {
   organizationId: string;
   partyId: string;
   partyName: string;
-  partyModule: PartyTypeCode;
   primaryContactId: string | null;
   primaryContactName: string | null;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   name: string;
   description: string | null;
   pipelineDefinitionId: string | null;

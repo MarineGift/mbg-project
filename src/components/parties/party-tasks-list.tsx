@@ -16,7 +16,7 @@ interface Props {
   /** Add Task 다이얼로그에서 자동 연결할 party */
   partyId: string;
   /** Task에 자동 채울 module */
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {

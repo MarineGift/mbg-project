@@ -94,7 +94,7 @@ export function DraftQueueFilters({
 
   const isDirty =
     filters.status !== 'pending_review' ||
-    filters.module !== 'all' ||
+    filters.partyType !== 'all' ||
     filters.category !== 'all' ||
     filters.minConfidence > 0 ||
     filters.onlyRisky ||
@@ -130,7 +130,7 @@ export function DraftQueueFilters({
       <div className="space-y-1 min-w-[140px]">
         <Label className="text-xs text-muted-foreground">{t('module')}</Label>
         <Select
-          value={filters.module}
+          value={filters.partyType}
           onValueChange={(v) => setParam('module', v)}
         >
           <SelectTrigger>

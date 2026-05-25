@@ -48,7 +48,7 @@ export interface DraftInboundSummary {
 export interface DraftPartySummary {
   id: string;
   name: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   tier: string | null;
   countryCode: string | null;
   website: string | null;
@@ -58,7 +58,7 @@ export interface DraftPartySummary {
 export interface DraftEngagementSummary {
   id: string;
   name: string;
-  module: PartyTypeCode;
+  partyType: PartyTypeCode;
   status: string;
   valueAmount: number | null;
   valueCurrency: string;
@@ -87,7 +87,7 @@ export interface DraftDetail {
   id: string;
   organizationId: string;
   status: DraftStatus;
-  module: PartyTypeCode | null;
+  partyType: PartyTypeCode | null;
   language: Language;
 
   // 분류 결과
