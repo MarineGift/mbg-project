@@ -177,12 +177,12 @@ export async function fetchPartyDetail(
 
     // engagements (10개) — pipeline_stages JOIN으로 stage 이름 함께 fetch
     supabase
-      .schema('app')
-      .from('engagements' as never)
+      .schema('urm')
+      .from('deals' as never)
       .select(
-        `id, name, status, current_stage_id, value_amount, value_currency,
+        `id, deal_name, status, current_stage_id, value_amount, value_currency,
          expected_close_date, updated_at,
-         pipeline_stages:current_stage_id ( name )`,
+         stages:current_stage_id ( name )`,
         { count: 'exact' },
       )
       .eq('party_id', partyId)
@@ -318,7 +318,7 @@ function mapContact(raw: unknown): PartyContact {
 function mapEngagement(raw: unknown): PartyEngagement {
   const r = raw as Record<string, unknown>;
   // Supabase가 nested join을 객체 또는 배열로 반환할 수 있음 — 둘 다 처리
-  const stageJoin = r.pipeline_stages;
+  const stageJoin = r.stages;
   let stageName: string | null = null;
   if (stageJoin) {
     if (Array.isArray(stageJoin) && stageJoin.length > 0) {
@@ -330,7 +330,7 @@ function mapEngagement(raw: unknown): PartyEngagement {
 
   return {
     id: r.id as string,
-    name: (r.name as string) ?? '',
+    name: (r.deal_name as string) ?? '',
     status: (r.status as string) ?? '',
     stage: stageName,
     valueAmount:

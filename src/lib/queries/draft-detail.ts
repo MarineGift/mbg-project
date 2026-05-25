@@ -13,6 +13,7 @@
  */
 
 import 'server-only';
+import { PARTY_TYPE_CODE_BY_ID, partyTypeToModule } from '@/types/party-type';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   ClassificationCategory,
@@ -116,9 +117,11 @@ export async function fetchDraftDetail(
 
     d.engagement_id
       ? supabase
-          .schema('app')
-          .from('engagements' as never)
-          .select('id, name, module, status, value_amount, value_currency')
+          .schema('urm')
+          .from('deals' as never)
+          .select(
+            'id, deal_name, status, value_amount, value_currency, parties:party_id ( party_type_id )',
+          )
           .eq('id', d.engagement_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -246,10 +249,21 @@ function mapParty(raw: unknown): DraftPartySummary | null {
 function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
+  // urm.deals ??module ?놁쓬 - parties join ??party_type_id 濡?derive.
+  const partyJoin = r.parties as
+    | { party_type_id?: number | null }
+    | Array<{ party_type_id?: number | null }>
+    | null
+    | undefined;
+  const party = Array.isArray(partyJoin) ? partyJoin[0] : partyJoin;
+  const partyTypeId = party?.party_type_id ?? null;
+  const code = partyTypeId != null ? PARTY_TYPE_CODE_BY_ID[partyTypeId] : null;
+  const moduleValue: ModuleType =
+    (code ? (partyTypeToModule(code) ?? 'investor') : 'investor') as ModuleType;
   return {
     id: r.id as string,
-    name: (r.name as string) ?? '',
-    module: r.module as ModuleType,
+    name: (r.deal_name as string) ?? '',
+    module: moduleValue,
     status: (r.status as string) ?? 'open',
     valueAmount:
       typeof r.value_amount === 'number'

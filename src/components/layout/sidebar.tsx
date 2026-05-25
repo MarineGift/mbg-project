@@ -34,7 +34,7 @@ const PHASE_1_ACTIVE_MODULES: readonly ModuleType[] = [
   'paper_mill',
   'partner',
   'customer',
-  'filler',
+  'filler_supplier',
 ] as const;
 
 interface NavItem {
@@ -220,9 +220,6 @@ function ModuleDot({ module }: { module: ModuleType }) {
   paper_mill: 'bg-module-buyer',
   partner: 'bg-module-partner',
   customer: 'bg-module-customer',
-  crowdfunding: 'bg-module-crowdfunding',
-  product_launch: 'bg-module-product_launch',
-  sales: 'bg-module-sales',
   filler: 'bg-amber-500',  // 충전제(광물성) — amber 톤. 추후 tailwind config에 bg-module-filler 추가 가능
 };
   return (

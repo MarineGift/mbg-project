@@ -1,0 +1,128 @@
+/**
+ * types/party-type.ts
+ *
+ * URM 표준 PartyTypeCode — urm.party_types.code 의 union type.
+ *
+ * Source of truth: urm.party_types (7 rows, seeded 2026-05-22).
+ *
+ * Migration plan (Stage 29-c P2a Cutover, 2026-05-25):
+ *   1. (Step 0) 이 파일 도입. 기존 ModuleType (types/ai.ts) 은 그대로 유지.
+ *   2. (Step 1+) DB cutover 코드 (queries/pipelines.ts, queries/engagements.ts,
+ *      actions/engagements.ts) 에서 PartyTypeCode 를 점진적으로 사용 시작.
+ *   3. (Step N) 모든 ModuleType import 를 PartyTypeCode 로 일괄 rename.
+ *      'filler_supplier' literal → 'filler_supplier' 일괄 변환.
+ *      'crowdfunding', 'product_launch', 'sales' literal 사용처 제거.
+ *   4. (Step N+1) types/ai.ts 의 ModuleType 정의 삭제.
+ *   5. (Step N+2) routing 폴더 [module] → [partyType] rename + params 변경.
+ *
+ * Value 차이 (ModuleType vs PartyTypeCode):
+ *   - 'filler_supplier' → 'filler_supplier' (rename)
+ *   - 'crowdfunding', 'product_launch', 'sales' → 제거 (urm.party_types 에 없음)
+ *   - 'buyer', 'government_grant' → 추가 (urm 신규)
+ */
+
+export type PartyTypeCode =
+  | 'investor'
+  | 'paper_mill'
+  | 'filler_supplier'
+  | 'buyer'
+  | 'customer'
+  | 'partner'
+  | 'government_grant';
+
+/** 전체 PartyTypeCode 배열 (UI 드롭다운, zod enum, 테스트 등에서 사용). */
+export const PARTY_TYPE_CODES: readonly PartyTypeCode[] = [
+  'investor',
+  'paper_mill',
+  'filler_supplier',
+  'buyer',
+  'customer',
+  'partner',
+  'government_grant',
+] as const;
+
+/**
+ * urm.party_types.id (smallint) ↔ code 매핑.
+ * urm.parties.party_type_id (smallint) 와 join 할 때 사용.
+ */
+export const PARTY_TYPE_ID_BY_CODE: Record<PartyTypeCode, number> = {
+  investor: 1,
+  paper_mill: 2,
+  filler_supplier: 3,
+  buyer: 4,
+  customer: 5,
+  partner: 6,
+  government_grant: 7,
+};
+
+export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyTypeCode> = {
+  1: 'investor',
+  2: 'paper_mill',
+  3: 'filler_supplier',
+  4: 'buyer',
+  5: 'customer',
+  6: 'partner',
+  7: 'government_grant',
+};
+
+/** 다국어 표시명 (i18n 미통합 환경에서 직접 사용). */
+export const PARTY_TYPE_DISPLAY: Record<
+  PartyTypeCode,
+  { en: string; ko: string; ja: string }
+> = {
+  investor: { en: 'Investor', ko: '투자자', ja: '投資家' },
+  paper_mill: { en: 'Paper Mill', ko: '제지사', ja: '製紙会社' },
+  filler_supplier: {
+    en: 'Filler Supplier',
+    ko: '광물공급사',
+    ja: 'フィラー会社',
+  },
+  buyer: { en: 'Buyer', ko: '구매사', ja: '購買会社' },
+  customer: { en: 'Customer', ko: '고객사', ja: '顧客' },
+  partner: { en: 'Partner', ko: '협력사', ja: 'パートナー' },
+  government_grant: {
+    en: 'Government Grant',
+    ko: '정부지원',
+    ja: '政府補助',
+  },
+};
+
+/** Type guard. unknown 값을 PartyTypeCode 로 narrowing. */
+export function isPartyTypeCode(v: unknown): v is PartyTypeCode {
+  return (
+    typeof v === 'string' && PARTY_TYPE_CODES.includes(v as PartyTypeCode)
+  );
+}
+
+/**
+ * Legacy ModuleType value → PartyTypeCode 변환.
+ *
+ * P2a 진행 중 app.engagements.module / app.parties.module 같은 legacy DB column
+ * 의 string 을 안전하게 PartyTypeCode 로 변환.
+ *
+ * - 'filler_supplier' → 'filler_supplier' (rename)
+ * - Deprecated values ('crowdfunding', 'product_launch', 'sales') → null
+ * - 매칭되는 PartyTypeCode → 그대로 반환
+ * - null/undefined/unknown → null
+ */
+export function moduleToPartyType(
+  legacy: string | null | undefined,
+): PartyTypeCode | null {
+  if (!legacy) return null;
+  if (isPartyTypeCode(legacy)) return legacy;
+  if (legacy === 'filler_supplier') return 'filler_supplier';
+  return null;
+}
+
+/**
+ * PartyTypeCode → Legacy ModuleType (URL slug 또는 legacy table 호환).
+ *
+ * - 'filler_supplier' → 'filler_supplier'
+ * - 'buyer', 'government_grant' → null (legacy 에 없음)
+ * - 매칭되는 ModuleType → 그대로 반환
+ */
+export function partyTypeToModule(code: PartyTypeCode): string | null {
+  if (code === 'filler_supplier') return 'filler_supplier';
+  if (code === 'buyer' || code === 'government_grant') return null;
+  return code;
+}

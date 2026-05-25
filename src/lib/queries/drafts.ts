@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/queries/drafts.ts
  *
  * Server-side fetcher for AI 초안 큐.
@@ -35,9 +35,7 @@ const ALL_MODULES: readonly ModuleType[] = [
   'paper_mill',
   'partner',
   'customer',
-  'crowdfunding',
-  'product_launch',
-  'sales', 'filler',
+  'filler_supplier',
 ] as const;
 
 const ALL_STATUSES: readonly DraftStatus[] = [
@@ -321,9 +319,9 @@ export async function fetchDraftQueue(
       : Promise.resolve({ data: [], error: null }),
     engagementIds.length > 0
       ? supabase
-          .schema('app')
-          .from('engagements' as never)
-          .select('id, name')
+          .schema('urm')
+          .from('deals' as never)
+          .select('id, deal_name')
           .in('id', engagementIds)
       : Promise.resolve({ data: [], error: null }),
     communicationIds.length > 0
@@ -355,8 +353,8 @@ export async function fetchDraftQueue(
     partyMap.set(p.id, { name: p.name });
   }
   const engagementMap = new Map<string, { name: string }>();
-  for (const e of (engagementsRes.data ?? []) as Array<{ id: string; name: string }>) {
-    engagementMap.set(e.id, { name: e.name });
+  for (const e of (engagementsRes.data ?? []) as Array<{ id: string; deal_name: string }>) {
+    engagementMap.set(e.id, { name: e.deal_name });
   }
   const commMap = new Map<string, { from_address: string | null; subject: string | null }>();
   for (const c of (commsRes.data ?? []) as Array<{

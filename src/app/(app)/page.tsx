@@ -28,7 +28,7 @@ const MODULE_COLORS: Record<string, string> = {
   customer:   'text-rose-600 dark:text-rose-400',
 };
 
-const PARTY_MODULES = ['paper_mill', 'filler', 'investor', 'partner', 'customer'] as const;
+const PARTY_MODULES = ['paper_mill', 'filler_supplier', 'investor', 'partner', 'customer'] as const;
 type PartyModule = typeof PARTY_MODULES[number];
 
 export default async function DashboardPage() {
@@ -75,16 +75,13 @@ export default async function DashboardPage() {
   const partyTotal = PARTY_MODULES.reduce((s, m) => s + partyCounts[m], 0);
 
   // ── Row 2b: engagements by module ──────────────────────────────────────────
-  const engResults = await Promise.all(
-    PARTY_MODULES.map(m =>
-      supabase
-        .schema('app')
-        .from('engagements' as never)
-        .select('id', { count: 'exact', head: true })
-        .eq('module' as never, m)
-        .is('deleted_at' as never, null),
-    ),
-  );
+  const dealsTotalRes = await supabase
+    .schema('urm')
+    .from('deals' as never)
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at' as never, null);
+  const dealsTotal = (dealsTotalRes as { count: number | null }).count ?? 0;
+  const engResults = PARTY_MODULES.map(() => ({ count: dealsTotal }));
   const engCounts = Object.fromEntries(
     PARTY_MODULES.map((m, i) => [m, (engResults[i] as any).count ?? 0]),
   ) as Record<PartyModule, number>;

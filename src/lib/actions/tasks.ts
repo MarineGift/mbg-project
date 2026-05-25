@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/actions/tasks.ts
  *
  * Task Server Actions.
@@ -132,9 +132,7 @@ const createTaskSchema = z.object({
       'paper_mill',
       'partner',
       'customer',
-      'crowdfunding',
-      'product_launch',
-      'sales', 'filler',
+      'filler_supplier',
     ])
     .optional()
     .nullable(),

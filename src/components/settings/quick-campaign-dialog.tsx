@@ -24,7 +24,7 @@ const MODULES = [
   { value: 'investor',    label: 'Investors' },
   { value: 'partner',     label: 'Partners' },
   { value: 'customer',    label: 'Customers' },
-  { value: 'filler',      label: 'Filler Suppliers' },
+  { value: 'filler_supplier',      label: 'Filler Suppliers' },
 ];
 
 const TIERS = [

@@ -44,13 +44,13 @@ function cn(...classes: (string | undefined | false)[]) {
 
 interface Props {
   partyId: string;
-  partyModule: 'filler' | 'paper_mill';
+  partyModule: 'filler_supplier' | 'paper_mill';
   orgId: string;
 }
 
 export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
-  const isFillerPage = partyModule === 'filler';
-  const linkedModule = isFillerPage ? 'paper_mill' : 'filler';
+  const isFillerPage = partyModule === 'filler_supplier';
+  const linkedModule = isFillerPage ? 'paper_mill' : 'filler_supplier';
   const title  = isFillerPage ? 'Paper Mills supplied' : 'Filler suppliers in use';
   const Icon   = isFillerPage ? Factory : Package;
 
@@ -108,7 +108,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
         ) : (
           <div className="divide-y max-h-[380px] overflow-y-auto">
             {links.map(lk => {
-              const route    = lk.linked_module === 'paper_mill' ? 'paper_mill' : 'filler';
+              const route    = lk.linked_module === 'paper_mill' ? 'paper_mill' : 'filler_supplier';
               const typeInfo = SUPPLY_TYPES.find(t => t.value === lk.supply_type) ?? SUPPLY_TYPES[0];
               return (
                 <div key={lk.id} className="flex items-start gap-2 px-4 py-3 hover:bg-muted/30 group">
@@ -197,7 +197,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
     if (!selected) return;
     setSaving(true);
     try {
-      const isFillerPage = partyModule === 'filler';
+      const isFillerPage = partyModule === 'filler_supplier';
       await fetch('/api/supply-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,7 +237,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
     } finally { setSaving(false); }
   }
 
-  const isFillerPage = partyModule === 'filler';
+  const isFillerPage = partyModule === 'filler_supplier';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

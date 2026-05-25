@@ -5,11 +5,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const partyId = searchParams.get('partyId');
-  const role    = searchParams.get('role'); // 'filler' | 'paper_mill'
+  const role    = searchParams.get('role'); // 'filler_supplier' | 'paper_mill'
   if (!partyId) return NextResponse.json([], { status: 400 });
 
   const supabase = await createSupabaseServerClient();
-  const isFillerRole = role === 'filler';
+  const isFillerRole = role === 'filler_supplier';
   const selfCol   = isFillerRole ? 'filler_party_id' : 'mill_party_id';
   const linkedCol = isFillerRole ? 'mill_party_id'   : 'filler_party_id';
 

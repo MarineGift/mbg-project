@@ -13,7 +13,7 @@ export interface CountryPeer {
 
 export async function getCountryPeers(
   countryCode: string,
-  module: 'paper_mill' | 'filler',
+  module: 'paper_mill' | 'filler_supplier',
   excludeId: string,
   limit = 50
 ): Promise<CountryPeer[]> {

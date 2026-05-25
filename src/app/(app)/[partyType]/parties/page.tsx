@@ -28,7 +28,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
 const PHASE_1_MODULES: readonly ModuleType[] = [
-  'investor', 'paper_mill', 'partner', 'customer', 'filler',
+  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier',
 ] as const;
 
 const MODULE_LABELS: Record<ModuleType, string> = {
@@ -36,9 +36,6 @@ const MODULE_LABELS: Record<ModuleType, string> = {
   paper_mill:     'Paper Mills',
   partner:        'Partners',
   customer:       'Customers',
-  crowdfunding:   'Crowdfunding',
-  product_launch: 'Product Launch',
-  sales:          'Sales',
   filler:         'Filler Suppliers',
 };
 
@@ -70,7 +67,7 @@ interface PartyRow {
 }
 
 interface PageProps {
-  params: Promise<{ module: string }>;
+  params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
   }>;
@@ -81,12 +78,12 @@ interface PageProps {
 async function fetchSupplyLinks(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   partyIds: string[],
-  role: 'filler' | 'paper_mill',
+  role: 'filler_supplier' | 'paper_mill',
 ): Promise<Record<string, string[]>> {
   if (partyIds.length === 0) return {};
   try {
-    const selfCol   = role === 'filler' ? 'filler_party_id' : 'mill_party_id';
-    const linkedCol = role === 'filler' ? 'mill_party_id'   : 'filler_party_id';
+    const selfCol   = role === 'filler_supplier' ? 'filler_party_id' : 'mill_party_id';
+    const linkedCol = role === 'filler_supplier' ? 'mill_party_id'   : 'filler_party_id';
 
     const { data, error } = await supabase
       .schema('app')
@@ -131,9 +128,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const supabase = await createSupabaseServerClient();
 
   // Show supply links column only for filler and paper_mill
-  const showLinks = module === 'filler' || module === 'paper_mill';
-  const linkRole  = module === 'filler' ? 'filler' : 'paper_mill';
-  const linkLabel = module === 'filler' ? 'Linked Paper Mill' : 'Linked Filler';
+  const showLinks = module === 'filler_supplier' || module === 'paper_mill';
+  const linkRole  = module === 'filler_supplier' ? 'filler_supplier' : 'paper_mill';
+  const linkLabel = module === 'filler_supplier' ? 'Linked Paper Mill' : 'Linked Filler';
 
   let query = supabase
     .schema('app')

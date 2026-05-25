@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/queries/tasks.ts
  *
  * 태스크 목록 fetch + 필터 + 정렬 + 페이지네이션.
@@ -37,9 +37,7 @@ const ALL_MODULES: readonly ModuleType[] = [
   'paper_mill',
   'partner',
   'customer',
-  'crowdfunding',
-  'product_launch',
-  'sales', 'filler',
+  'filler_supplier',
 ] as const;
 const ALL_SORTS: readonly TaskSort[] = [
   'due_soonest',

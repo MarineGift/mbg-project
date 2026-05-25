@@ -6,7 +6,6 @@
  *
  * 책임:
  *   - fetchPipelineForModule:    module 별 default pipeline (1 개 보장 — Stage 25 cleanup 후)
- *   - fetchPipelineById:         pipeline id 로 단일 lookup (이름 표시용)
  *   - fetchStages:               pipeline 의 모든 stage (sort_order)
  *   - fetchFirstStage:           pipeline 의 첫 stage (createEngagement 용)
  *   - fetchStageHistory:         engagement 의 stage 변경 이력 (stage 이름 lookup 포함)
@@ -116,27 +115,7 @@ export async function fetchPipelineForModule(
 }
 
 /* ============================================================
- * 2. fetchPipelineById — pipeline 1 개를 id 로 lookup (이름 표시용)
- * ============================================================ */
-
-export async function fetchPipelineById(
-  pipelineDefinitionId: string,
-): Promise<{ id: string; name: string } | null> {
-  const supabase = await createSupabaseServerClient();
-
-  const { data } = await supabase
-    .schema('app')
-    .from('pipeline_definitions' as never)
-    .select('id, name')
-    .eq('id', pipelineDefinitionId)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  return (data as RawPipelineDef | null) ?? null;
-}
-
-/* ============================================================
- * 3. fetchStages — pipeline 의 모든 stage (sort_order 순)
+ * 2. fetchStages — pipeline 의 모든 stage (sort_order 순)
  * ============================================================ */
 
 export async function fetchStages(
@@ -158,7 +137,7 @@ export async function fetchStages(
 }
 
 /* ============================================================
- * 4. fetchFirstStage — pipeline 의 첫 stage (createEngagement 용)
+ * 3. fetchFirstStage — pipeline 의 첫 stage (createEngagement 용)
  * ============================================================ */
 
 export async function fetchFirstStage(
@@ -180,7 +159,7 @@ export async function fetchFirstStage(
 }
 
 /* ============================================================
- * 5. fetchStageHistory — engagement 의 stage 변경 이력.
+ * 4. fetchStageHistory — engagement 의 stage 변경 이력.
  *    Stage 이름 lookup 포함 (현재 pipeline 의 stages 만 — 다른 pipeline 이력은
  *    이름 미해석 '(unknown stage)').
  * ============================================================ */
@@ -240,7 +219,7 @@ export async function fetchStageHistory(
 }
 
 /* ============================================================
- * 6. fetchAllPipelinesForModule
+ * 5. fetchAllPipelinesForModule
  *    Admin/select 용. Default + non-default 모두.
  *    Stage 25 cleanup 후엔 module 당 1 개만 활성이지만,
  *    미래 multi-pipeline (예: 'Enterprise' vs 'SMB' funnel) 대비.

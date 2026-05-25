@@ -3,35 +3,33 @@
  *
  * Engagement Server Actions.
  *
+ * URM cutover (Stage 29-c, 2026-05-25):
+ *   - 모든 mutation 이 urm.deals 대상.
+ *   - app.engagements + app.pipeline_stages → urm.deals + urm.stages.
+ *   - organization_id filter 제거 (RLS 가정).
+ *   - module column 제거 (urm.deals 에 없음). zod schema 의 module 인자는
+ *     legacy 호환 위해 그대로 받지만 INSERT 에서 무시.
+ *
  * 핵심:
- *   - moveEngagementStage: kanban drag-drop으로 stage 변경.
- *     트리거 trg_engagements_stage_history가 engagement_stage_history에 자동 기록.
- *     terminal stage (is_won/is_lost) 이동 시 status도 함께 갱신.
+ *   - moveEngagementStage: kanban drag-drop 으로 stage 변경.
+ *     (트리거 trg_deals_stage_history 가 urm.deal_stage_history 에 자동 기록
+ *      되는지 확인 필요 — 없으면 별도 INSERT 추가 검토.)
  *
- *   - updateEngagementStatus: 상태 변경 (open/in_progress/on_hold/won/lost/archived).
- *     일반 상태 토글용.
+ *   - updateEngagementStatus: 상태만 변경 (open/in_progress/on_hold/won/lost/archived).
  *
- *   - createEngagement: 단순 1-step INSERT.
- *     FK constraint fk_engagement_stage_history_engagement_id가
- *     DEFERRABLE INITIALLY DEFERRED로 설정되어 있어 BEFORE INSERT 트리거가
- *     stage_history에 INSERT해도 commit 시점에 FK 검증되어 정상 작동.
+ *   - createEngagement: 1-step INSERT.
+ *
+ *   - updateEngagement: 일반 필드 업데이트.
  *
  *   - deleteEngagement: soft delete (deleted_at = now()).
- *     audit log 트리거가 actor (auth.uid()) 자동 기록.
  *
- * 권한: organization 멤버이면 모두 가능 (Q11 결정).
- *
- * 변경 이력:
- *   - 2026-05-12: createEngagement를 2-step INSERT로 변경 (FK 위반 우회)
- *   - 2026-05-12: deleteEngagement에서 존재하지 않는 deleted_by 컬럼 참조 제거.
- *   - 2026-05-12: FK constraint를 DEFERRABLE로 변경한 SQL migration 후
- *                 createEngagement를 다시 1-step INSERT로 단순화.
- *                 stage_history도 INSERT 시점부터 정확히 기록됨.
- *   - 2026-05-21 (Stage 25): createEngagement 의 default pipeline + first stage
- *                 lookup 을 queries/pipelines.ts 의 fetchPipelineForModule +
- *                 fetchFirstStage 로 위임. URM single source.
- *                 moveEngagementStage 는 mutation-specific org 검증 때문에
- *                 그대로 둠 (defense-in-depth).
+ * revalidatePath:
+ *   urm.deals 에 module column 이 없어서 정확한 module path 무효화 불가.
+ *   - 옵션 (a): party_type 별도 query 로 추론 → 비용 ↑
+ *   - 옵션 (b): 모든 알려진 module path 일괄 무효화 → 단순, 약간 over-invalidation
+ *   - 옵션 (c): revalidatePath('/') → 가장 단순, cache 효율 ↓
+ *   여기서는 (b) 채택 — 알려진 5 module path 일괄 무효화.
+ *   build round 3 에서 routing rename 이후 단일 path 로 정리.
  */
 
 'use server';
@@ -64,6 +62,31 @@ const ENGAGEMENT_STATUSES: readonly EngagementStatus[] = [
   'lost',
   'archived',
 ] as const;
+
+// Legacy ModuleType 8 값 — build round 3 에서 PARTY_TYPE_CODES 의 7 값으로 교체.
+// 지금은 caller (UI) 호환 위해 그대로 유지. 어차피 INSERT 에는 안 들어감.
+const LEGACY_MODULE_VALUES = [
+  'investor',
+  'paper_mill',
+  'partner',
+  'customer',
+  'filler_supplier',
+] as const;
+
+/** revalidate 대상 module path 목록 (build round 3 에서 단일 path 로 정리). */
+const REVALIDATE_MODULES = [
+  'investor',
+  'paper_mill',
+  'partner',
+  'customer',
+  'filler_supplier',
+] as const;
+
+function revalidateAllModulePaths(pathSuffix: string): void {
+  for (const m of REVALIDATE_MODULES) {
+    revalidatePath(`/${m}${pathSuffix}`);
+  }
+}
 
 /* ============================================================
  * 1. moveEngagementStage — Kanban drag-drop
@@ -98,54 +121,53 @@ export async function moveEngagementStage(input: {
 
   const supabase = await createSupabaseServerClient();
 
-  // [1] engagement과 target stage를 검증 — 같은 pipeline에 속해야 함
-  const [engRes, stageRes] = await Promise.all([
+  // [1] deal + target stage 병렬 검증
+  const [dealRes, stageRes] = await Promise.all([
     supabase
-      .schema('app')
-      .from('engagements' as never)
-      .select('id, pipeline_definition_id, current_stage_id, module, status')
+      .schema('urm')
+      .from('deals' as never)
+      .select('id, pipeline_id, current_stage_id, status')
       .eq('id', parsed.data.engagementId)
-      .eq('organization_id', auth.organizationId)
       .is('deleted_at', null)
       .maybeSingle(),
 
     supabase
-      .schema('app')
-      .from('pipeline_stages' as never)
-      .select(
-        'id, pipeline_definition_id, is_won, is_lost, default_probability_pct',
-      )
+      .schema('urm')
+      .from('stages' as never)
+      .select('id, pipeline_id, is_won, is_lost, default_probability_pct')
       .eq('id', parsed.data.toStageId)
-      .eq('organization_id', auth.organizationId)
-      .is('deleted_at', null)
+      .eq('is_active', true)
       .maybeSingle(),
   ]);
 
-  if (engRes.error || !engRes.data) {
+  if (dealRes.error || !dealRes.data) {
     return { ok: false, errorCode: 'not_found' };
   }
   if (stageRes.error || !stageRes.data) {
-    return { ok: false, errorCode: 'invalid_stage', errorMessage: 'Target stage not found' };
+    return {
+      ok: false,
+      errorCode: 'invalid_stage',
+      errorMessage: 'Target stage not found',
+    };
   }
 
-  const eng = engRes.data as {
+  const deal = dealRes.data as {
     id: string;
-    pipeline_definition_id: string | null;
+    pipeline_id: string | null;
     current_stage_id: string | null;
-    module: string;
     status: EngagementStatus;
   };
   const stage = stageRes.data as {
     id: string;
-    pipeline_definition_id: string;
+    pipeline_id: string;
     is_won: boolean;
     is_lost: boolean;
     default_probability_pct: number;
   };
 
   if (
-    eng.pipeline_definition_id != null &&
-    eng.pipeline_definition_id !== stage.pipeline_definition_id
+    deal.pipeline_id != null &&
+    deal.pipeline_id !== stage.pipeline_id
   ) {
     return {
       ok: false,
@@ -154,40 +176,37 @@ export async function moveEngagementStage(input: {
     };
   }
 
-  if (eng.current_stage_id === stage.id) {
-    // No-op — 같은 stage로 drop
+  if (deal.current_stage_id === stage.id) {
     return { ok: true };
   }
 
-  // [2] UPDATE — 트리거가 stage_history 자동 기록
+  // [2] UPDATE
   const updates: Record<string, unknown> = {
     current_stage_id: stage.id,
     probability_pct: stage.default_probability_pct,
   };
 
-  // terminal stage이면 status도 함께 갱신
   if (stage.is_won) {
     updates.status = 'won';
     updates.actual_close_date = new Date().toISOString().slice(0, 10);
   } else if (stage.is_lost) {
     updates.status = 'lost';
     updates.actual_close_date = new Date().toISOString().slice(0, 10);
-  } else if (eng.status === 'open') {
-    // open → 이동 시 in_progress로 자동 전이
+  } else if (deal.status === 'open') {
     updates.status = 'in_progress';
   }
 
-  // pipeline_definition_id가 null이었으면 채워주기
-  if (eng.pipeline_definition_id == null) {
-    updates.pipeline_definition_id = stage.pipeline_definition_id;
+  if (deal.pipeline_id == null) {
+    updates.pipeline_id = stage.pipeline_id;
   }
 
+  updates.updated_by = auth.userId;
+
   const { error: updateErr } = await supabase
-    .schema('app')
-    .from('engagements' as never)
+    .schema('urm')
+    .from('deals' as never)
     .update(updates as never)
-    .eq('id', parsed.data.engagementId)
-    .eq('organization_id', auth.organizationId);
+    .eq('id', parsed.data.engagementId);
 
   if (updateErr) {
     return {
@@ -197,7 +216,7 @@ export async function moveEngagementStage(input: {
     };
   }
 
-  revalidatePath(`/${eng.module}/engagements`);
+  revalidateAllModulePaths('/engagements');
   revalidatePath(`/engagements/${parsed.data.engagementId}`);
   return { ok: true };
 }
@@ -241,6 +260,7 @@ export async function updateEngagementStatus(input: {
 
   const updates: Record<string, unknown> = {
     status: parsed.data.status,
+    updated_by: auth.userId,
   };
   if (parsed.data.status === 'won' || parsed.data.status === 'lost') {
     updates.actual_close_date = new Date().toISOString().slice(0, 10);
@@ -250,13 +270,12 @@ export async function updateEngagementStatus(input: {
   }
 
   const { error, data } = await supabase
-    .schema('app')
-    .from('engagements' as never)
+    .schema('urm')
+    .from('deals' as never)
     .update(updates as never)
     .eq('id', parsed.data.engagementId)
-    .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, module')
+    .select('id')
     .maybeSingle();
 
   if (error) {
@@ -265,9 +284,8 @@ export async function updateEngagementStatus(input: {
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
   }
-  const updated = data as { id: string; module: string };
 
-  revalidatePath(`/${updated.module}/engagements`);
+  revalidateAllModulePaths('/engagements');
   revalidatePath(`/engagements/${parsed.data.engagementId}`);
   return { ok: true };
 }
@@ -278,15 +296,9 @@ export async function updateEngagementStatus(input: {
 
 const engagementBaseSchema = z.object({
   partyId: z.string().uuid(),
-  module: z.enum([
-    'investor',
-    'paper_mill',
-    'partner',
-    'customer',
-    'crowdfunding',
-    'product_launch',
-    'sales', 'filler',
-  ]),
+  // module argument — legacy 호환, INSERT 에는 안 들어감.
+  // build round 3 에서 PartyTypeCode 7 값으로 교체.
+  module: z.enum(LEGACY_MODULE_VALUES),
   name: z.string().min(1, 'Required').max(200),
   description: z.string().max(5000).optional().nullable(),
   pipelineDefinitionId: z.string().uuid().optional().nullable(),
@@ -318,34 +330,38 @@ export async function createEngagement(
 
   const supabase = await createSupabaseServerClient();
 
-  // pipelineDefinitionId가 없으면 모듈의 default pipeline을 자동 할당
-  // URM (Stage 25): pipelines.ts 의 read API 위임 — single source.
-  let pipelineDefinitionId = parsed.data.pipelineDefinitionId ?? null;
+  // pipelineId 없으면 default pipeline 자동 할당.
+  // URM 에 모듈 분리 없어서 모든 module 이 동일 default pipeline 사용.
+  let pipelineId = parsed.data.pipelineDefinitionId ?? null;
   let currentStageId = parsed.data.currentStageId ?? null;
 
-  if (!pipelineDefinitionId) {
+  if (!pipelineId) {
     const pipeline = await fetchPipelineForModule(parsed.data.module);
-    pipelineDefinitionId = pipeline?.id ?? null;
+    pipelineId = pipeline?.id ?? null;
   }
 
-  if (pipelineDefinitionId && !currentStageId) {
-    // 첫 stage 자동 할당
-    const firstStage = await fetchFirstStage(pipelineDefinitionId);
+  if (pipelineId && !currentStageId) {
+    const firstStage = await fetchFirstStage(pipelineId);
     currentStageId = firstStage?.id ?? null;
   }
 
-  // 1-step INSERT — current_stage_id 포함.
-  // BEFORE INSERT 트리거 trg_engagements_stage_history가 stage_history에
-  // 자동 기록함. FK가 DEFERRABLE INITIALLY DEFERRED로 설정되어 있어 commit
-  // 시점에 검증되므로 안전.
+  if (!pipelineId || !currentStageId) {
+    return {
+      ok: false,
+      errorCode: 'invalid_stage',
+      errorMessage: 'No default pipeline / first stage available',
+    };
+  }
+
+  // urm.deals INSERT — NOT NULL 필수: party_id, pipeline_id, current_stage_id, deal_name.
+  // Default 있는 column (status, priority, module_data, value_currency) 은 omit 가능
+  //   하지만 명시적으로 'open' 등 세팅해서 도메인 의미 유지.
   const insertRow: Record<string, unknown> = {
-    organization_id: auth.organizationId,
     party_id: parsed.data.partyId,
-    module: parsed.data.module,
-    name: parsed.data.name.trim(),
-    description: parsed.data.description?.trim() || null,
-    pipeline_definition_id: pipelineDefinitionId,
+    pipeline_id: pipelineId,
     current_stage_id: currentStageId,
+    deal_name: parsed.data.name.trim(),
+    description: parsed.data.description?.trim() || null,
     status: 'open',
     value_amount: parsed.data.valueAmount ?? null,
     value_currency: parsed.data.valueCurrency,
@@ -357,8 +373,8 @@ export async function createEngagement(
   };
 
   const { data, error } = await supabase
-    .schema('app')
-    .from('engagements' as never)
+    .schema('urm')
+    .from('deals' as never)
     .insert(insertRow as never)
     .select('id')
     .single();
@@ -372,7 +388,7 @@ export async function createEngagement(
   }
   const engagementId = (data as { id: string }).id;
 
-  revalidatePath(`/${parsed.data.module}/engagements`);
+  revalidateAllModulePaths('/engagements');
   return { ok: true, engagementId };
 }
 
@@ -400,7 +416,7 @@ export async function updateEngagement(
 
   const supabase = await createSupabaseServerClient();
   const updates: Record<string, unknown> = {
-    name: parsed.data.name.trim(),
+    deal_name: parsed.data.name.trim(),
     description: parsed.data.description?.trim() || null,
     value_amount: parsed.data.valueAmount ?? null,
     value_currency: parsed.data.valueCurrency,
@@ -411,20 +427,20 @@ export async function updateEngagement(
   };
 
   const { error, data } = await supabase
-    .schema('app')
-    .from('engagements' as never)
+    .schema('urm')
+    .from('deals' as never)
     .update(updates as never)
     .eq('id', parsed.data.engagementId)
-    .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, module')
+    .select('id')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error)
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
   if (!data) return { ok: false, errorCode: 'not_found' };
 
   revalidatePath(`/engagements/${parsed.data.engagementId}`);
-  revalidatePath(`/${parsed.data.module}/engagements`);
+  revalidateAllModulePaths('/engagements');
   return { ok: true };
 }
 
@@ -445,24 +461,22 @@ export async function deleteEngagement(input: {
   }
 
   const supabase = await createSupabaseServerClient();
-  // soft delete — audit log 트리거가 actor (auth.uid()) 자동 기록.
-  // deleted_by 컬럼은 app.engagements 스키마에 존재하지 않음 (parties와 동일).
   const { error, data } = await supabase
-    .schema('app')
-    .from('engagements' as never)
+    .schema('urm')
+    .from('deals' as never)
     .update({
       deleted_at: new Date().toISOString(),
+      updated_by: auth.userId,
     } as never)
     .eq('id', parsed.data.engagementId)
-    .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('module')
+    .select('id')
     .maybeSingle();
 
-  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (error)
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
   if (!data) return { ok: false, errorCode: 'not_found' };
-  const module = (data as { module: string }).module;
 
-  revalidatePath(`/${module}/engagements`);
+  revalidateAllModulePaths('/engagements');
   return { ok: true };
 }

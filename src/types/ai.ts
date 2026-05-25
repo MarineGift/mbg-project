@@ -78,15 +78,19 @@ export const CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
 export type RunStatus = 'success' | 'failed' | 'timeout' | 'budget_exceeded';
 
 /** 모듈 ENUM (마스터 프롬프트 §3.1). */
-export type ModuleType =
-  | 'investor'
-  | 'paper_mill'
-  | 'partner'
-  | 'customer'
-  | 'crowdfunding'
-  | 'product_launch'
-  | 'sales'
-  | 'filler';
+/**
+ * @deprecated Use PartyTypeCode from '@/types/party-type' instead.
+ *
+ * URM cutover (2026-05-25): ModuleType becomes an alias to PartyTypeCode.
+ * Value set differs from legacy:
+ *   - 'filler_supplier' -> 'filler_supplier' (rename)
+ *   - 'crowdfunding', 'product_launch', 'sales' removed
+ *   - 'buyer', 'government_grant' added
+ *
+ * 'filler_supplier' / 'crowdfunding' / 'product_launch' / 'sales' literals now fail
+ * type-check. Migrate to PartyTypeCode in a cleanup sprint.
+ */
+export type ModuleType = import('./party-type').PartyTypeCode;
 
 export type Language = 'ko' | 'en' | 'ja';
 

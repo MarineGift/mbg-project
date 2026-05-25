@@ -35,7 +35,7 @@ export async function CountryPeersPanel({ partyId, country, currentModule }: Pro
       .limit(20),
     supabase.schema('app').from('parties' as never)
       .select('id, name, city, tier, party_level')
-      .eq('module' as never, 'filler')
+      .eq('module' as never, 'filler_supplier')
       .eq('country_code' as never, country)
       .is('deleted_at' as never, null)
       .order('name')

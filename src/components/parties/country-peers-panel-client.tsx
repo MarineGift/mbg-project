@@ -12,7 +12,7 @@ interface Props {
   partyId: string;
   country: string;
   countryName?: string;
-  currentModule: 'paper_mill' | 'filler';
+  currentModule: 'paper_mill' | 'filler_supplier';
   mills: CountryPeer[];
   fillers: CountryPeer[];
 }
@@ -29,7 +29,7 @@ const TIER_COLOR: Record<string, string> = {
 
 const MODULE_ROUTE: Record<string, string> = {
   paper_mill: 'paper_mill',
-  filler: 'filler',
+  filler: 'filler_supplier',
 };
 
 function PeerRow({ peer }: { peer: CountryPeer }) {
@@ -80,7 +80,7 @@ function PeerRow({ peer }: { peer: CountryPeer }) {
 export function CountryPeersPanelClient({ partyId, country, countryName, currentModule, mills, fillers }: Props) {
   // paper_mill page: filler tab first; filler page: mills tab first
   const [activeTab, setActiveTab] = useState<'mills' | 'fillers'>(
-    currentModule === 'filler' ? 'mills' : 'fillers'
+    currentModule === 'filler_supplier' ? 'mills' : 'fillers'
   );
 
   const locationLabel = countryName ?? country;

@@ -8,7 +8,7 @@ import {
   type TemplateInput,
 } from '@/lib/actions/email-templates';
 
-const MODULES = ['investor', 'paper_mill', 'partner', 'customer', 'filler'] as const;
+const MODULES = ['investor', 'paper_mill', 'partner', 'customer', 'filler_supplier'] as const;
 type ModuleValue = (typeof MODULES)[number] | '';
 
 interface Props {

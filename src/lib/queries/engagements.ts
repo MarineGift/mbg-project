@@ -3,20 +3,26 @@
  *
  * Engagement Kanban + 상세 + party-scoped list 의 read API.
  *
- * URM (Stage 25):
- *   - pipeline / stage / stage-history read 는 모두 ./pipelines 위임.
- *   - 본 파일은 engagements (+ parties join) 의 read API 만 책임.
+ * URM cutover (Stage 29-c, 2026-05-25):
+ *   - app.engagements → urm.deals (atomic cutover)
+ *   - parties join 도 urm.parties (FK target)
+ *   - module 정보는 urm.party_types.code 에서 lookup (urm.parties.party_type_id)
  *
- * Kanban 조립:
- *   1. fetchPipelineForModule  (default pipeline)
- *   2. fetchStages              (sort_order 순)
- *   3. engagements fetch        (parties join, current_stage_id 기준 그룹화)
+ * URM schema 차이점 흡수:
+ *   - app.engagements.name → urm.deals.deal_name
+ *   - app.engagements.pipeline_definition_id → urm.deals.pipeline_id
+ *   - app.engagements.module 제거 → urm.parties.party_type_id 기반 추론
+ *   - app.engagements.weighted_amount 제거 → 클라이언트 계산
+ *     (value_amount * probability_pct / 100)
+ *   - organization_id filter 제거 (RLS 가정)
  *
- * Stage 25 변경:
- *   - RawPipelineDef / RawPipelineStage / RawStageHistoryRow / mapStage 제거
- *     (pipelines.ts 가 단일 source)
- *   - fetchKanbanBoard / fetchEngagementDetail 의 inline pipeline lookup 제거
- *   - fetchPartyEngagements 신규 (modal engagement selector 용)
+ * 도메인 type (KanbanCard, EngagementDetail) 은 그대로 유지.
+ * mapping layer 에서 column rename 및 derived field 처리.
+ *
+ * 책임:
+ *   1. fetchKanbanBoard      ← module 별 Kanban 보드
+ *   2. fetchEngagementDetail ← engagement 1개 + pipeline + stages + history
+ *   3. fetchPartyEngagements ← party 의 모든 engagement (selector 용)
  */
 
 import 'server-only';
@@ -29,6 +35,11 @@ import type {
   KanbanCard,
 } from '@/types/engagement';
 import {
+  PARTY_TYPE_CODE_BY_ID,
+  partyTypeToModule,
+  type PartyTypeCode,
+} from '@/types/party-type';
+import {
   fetchPipelineById,
   fetchPipelineForModule,
   fetchStageHistory,
@@ -36,42 +47,42 @@ import {
 } from './pipelines';
 
 /* ============================================================
- * Raw row types — engagements + parties join (kanban / list 공용)
+ * Raw row types — urm.deals + urm.parties join
  * ============================================================ */
+
+interface RawPartyJoin {
+  name: string;
+  party_type_id: number | null;
+}
 
 interface RawEngagementListRow {
   id: string;
-  name: string;
-  module: ModuleType;
+  deal_name: string;
   status: EngagementStatus;
   current_stage_id: string | null;
-  pipeline_definition_id: string | null;
+  pipeline_id: string | null;
   party_id: string;
   value_amount: number | string | null;
   value_currency: string;
-  probability_pct: number;
-  weighted_amount: number | string | null;
+  probability_pct: number | null;
   expected_close_date: string | null;
   owner_user_id: string | null;
   updated_at: string;
-  parties: { name: string } | null;
+  parties: RawPartyJoin | RawPartyJoin[] | null;
 }
 
 interface RawEngagementDetailRow {
   id: string;
-  organization_id: string;
   party_id: string;
   primary_contact_id: string | null;
-  module: ModuleType;
-  name: string;
+  deal_name: string;
   description: string | null;
-  pipeline_definition_id: string | null;
+  pipeline_id: string | null;
   current_stage_id: string | null;
   status: EngagementStatus;
   value_amount: number | string | null;
   value_currency: string;
-  probability_pct: number;
-  weighted_amount: number | string | null;
+  probability_pct: number | null;
   expected_close_date: string | null;
   actual_close_date: string | null;
   owner_user_id: string | null;
@@ -81,12 +92,59 @@ interface RawEngagementDetailRow {
   updated_at: string;
 }
 
-const ENGAGEMENT_LIST_SELECT = `
-  id, name, module, status, current_stage_id, pipeline_definition_id, party_id,
-  value_amount, value_currency, probability_pct, weighted_amount,
+/**
+ * Kanban / list 용 SELECT clause.
+ *
+ * urm.deals 의 column 명으로 작성. parties join 으로 name + party_type_id 가져옴.
+ * party_type_id 가 mapping 단계에서 ModuleType 으로 변환됨.
+ */
+const DEAL_LIST_SELECT = `
+  id, deal_name, status, current_stage_id, pipeline_id, party_id,
+  value_amount, value_currency, probability_pct,
   expected_close_date, owner_user_id, updated_at,
-  parties:party_id ( name )
+  parties:party_id ( name, party_type_id )
 ` as const;
+
+/* ============================================================
+ * Helpers
+ * ============================================================ */
+
+function toNumberOrNull(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return v;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * urm.parties.party_type_id (smallint) → ModuleType 변환.
+ *
+ * Steps:
+ *   1. id → PartyTypeCode (PARTY_TYPE_CODE_BY_ID)
+ *   2. PartyTypeCode → ModuleType (partyTypeToModule)
+ *   3. fallback: 'investor' (default safe value)
+ *
+ * NOTE: PartyTypeCode 가 'buyer' 또는 'government_grant' 면 partyTypeToModule
+ *       는 null 반환 → 'investor' fallback. 추후 도메인 type 이
+ *       PartyTypeCode 로 rename 되면 fallback 제거.
+ */
+function partyTypeIdToModule(
+  partyTypeId: number | null | undefined,
+): ModuleType {
+  if (partyTypeId == null) return 'investor';
+  const code: PartyTypeCode | undefined = PARTY_TYPE_CODE_BY_ID[partyTypeId];
+  if (!code) return 'investor';
+  const legacy = partyTypeToModule(code);
+  return (legacy ?? 'investor') as ModuleType;
+}
+
+function computeWeightedAmount(
+  valueAmount: number | null,
+  probabilityPct: number | null,
+): number | null {
+  if (valueAmount == null || probabilityPct == null) return null;
+  return (valueAmount * probabilityPct) / 100;
+}
 
 /* ============================================================
  * Mapper — engagement raw row → KanbanCard
@@ -94,29 +152,21 @@ const ENGAGEMENT_LIST_SELECT = `
 
 function mapCard(r: RawEngagementListRow): KanbanCard {
   const party = Array.isArray(r.parties) ? r.parties[0] : r.parties;
+  const valueAmount = toNumberOrNull(r.value_amount);
+  const probabilityPct = r.probability_pct ?? 0;
   return {
     id: r.id,
-    name: r.name,
-    module: r.module,
+    name: r.deal_name,
+    module: partyTypeIdToModule(party?.party_type_id ?? null),
     status: r.status,
     currentStageId: r.current_stage_id,
-    pipelineDefinitionId: r.pipeline_definition_id ?? null,
+    pipelineDefinitionId: r.pipeline_id ?? null,
     partyId: r.party_id,
     partyName: party?.name ?? '(unknown party)',
-    valueAmount:
-      typeof r.value_amount === 'number'
-        ? r.value_amount
-        : r.value_amount != null
-          ? Number(r.value_amount)
-          : null,
+    valueAmount,
     valueCurrency: r.value_currency,
-    probabilityPct: r.probability_pct,
-    weightedAmount:
-      typeof r.weighted_amount === 'number'
-        ? r.weighted_amount
-        : r.weighted_amount != null
-          ? Number(r.weighted_amount)
-          : null,
+    probabilityPct,
+    weightedAmount: computeWeightedAmount(valueAmount, probabilityPct),
     expectedCloseDate: r.expected_close_date,
     ownerUserId: r.owner_user_id,
     updatedAt: r.updated_at,
@@ -124,13 +174,19 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
 }
 
 /* ============================================================
- * 1. fetchKanbanBoard — module 별 Kanban 보드 조립
+ * 1. fetchKanbanBoard — module 별 Kanban 보드
+ *
+ * NOTE: urm 에 모듈 분리 없으므로 module argument 는 fetchPipelineForModule
+ *       및 board metadata 표시용으로만 사용. 모든 module 이 동일 default
+ *       pipeline + 동일 stages + 동일 cards 를 봄.
+ *
+ *       module 별 카드 분리가 필요하면, party_type_id 기반 filter 를
+ *       SELECT 단계에서 추가해야 함 (P2b/c 의 영역).
  * ============================================================ */
 
 export async function fetchKanbanBoard(
   module: ModuleType,
 ): Promise<KanbanBoard> {
-  // [1] default pipeline 찾기 (없으면 빈 보드)
   const pipeline = await fetchPipelineForModule(module);
 
   if (!pipeline) {
@@ -145,15 +201,13 @@ export async function fetchKanbanBoard(
     };
   }
 
-  // [2] stages + [3] engagements (cards) 병렬 fetch
   const supabase = await createSupabaseServerClient();
   const [stages, cardsRes] = await Promise.all([
     fetchStages(pipeline.id),
     supabase
-      .schema('app')
-      .from('engagements' as never)
-      .select(ENGAGEMENT_LIST_SELECT, { count: 'exact' })
-      .eq('module', module)
+      .schema('urm')
+      .from('deals' as never)
+      .select(DEAL_LIST_SELECT, { count: 'exact' })
       .neq('status', 'archived')
       .is('deleted_at', null)
       .order('updated_at', { ascending: false })
@@ -163,7 +217,7 @@ export async function fetchKanbanBoard(
   const rawCards = (cardsRes.data ?? []) as unknown as RawEngagementListRow[];
   const cards = rawCards.map(mapCard);
 
-  // [4] stage_id 로 그룹화
+  // stage_id 로 그룹핑
   const cardsByStage: Record<string, KanbanCard[]> = {};
   for (const stage of stages) {
     cardsByStage[stage.id] = [];
@@ -191,7 +245,7 @@ export async function fetchKanbanBoard(
 }
 
 /* ============================================================
- * 2. fetchEngagementDetail — engagement 1 개 + pipeline + stages + history
+ * 2. fetchEngagementDetail — engagement 1개 + pipeline + stages + history
  * ============================================================ */
 
 export async function fetchEngagementDetail(
@@ -200,9 +254,15 @@ export async function fetchEngagementDetail(
   const supabase = await createSupabaseServerClient();
 
   const { data: rawDetail, error } = await supabase
-    .schema('app')
-    .from('engagements' as never)
-    .select('*')
+    .schema('urm')
+    .from('deals' as never)
+    .select(
+      `id, party_id, primary_contact_id,
+       deal_name, description, pipeline_id, current_stage_id, status,
+       value_amount, value_currency, probability_pct,
+       expected_close_date, actual_close_date, owner_user_id,
+       won_lost_reason, source, created_at, updated_at`,
+    )
     .eq('id', engagementId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -214,34 +274,34 @@ export async function fetchEngagementDetail(
   const [partyRes, contactRes, pipeline, availableStages, stageHistory] =
     await Promise.all([
       supabase
-        .schema('app')
+        .schema('urm')
         .from('parties' as never)
-        .select('id, name, module')
+        .select('id, name, party_type_id')
         .eq('id', e.party_id)
         .maybeSingle(),
 
       e.primary_contact_id
         ? supabase
-            .schema('app')
+            .schema('urm')
             .from('contacts' as never)
             .select('id, full_name')
             .eq('id', e.primary_contact_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
 
-      e.pipeline_definition_id
-        ? fetchPipelineById(e.pipeline_definition_id)
+      e.pipeline_id
+        ? fetchPipelineById(e.pipeline_id)
         : Promise.resolve(null),
 
-      e.pipeline_definition_id
-        ? fetchStages(e.pipeline_definition_id)
-        : Promise.resolve([]),
+      e.pipeline_id
+        ? fetchStages(e.pipeline_id)
+        : Promise.resolve([] as KanbanStage[]),
 
-      fetchStageHistory(engagementId, e.pipeline_definition_id, 50),
+      fetchStageHistory(engagementId, e.pipeline_id, 50),
     ]);
 
   const party = partyRes?.data as
-    | { id: string; name: string; module: ModuleType }
+    | { id: string; name: string; party_type_id: number | null }
     | null;
   const contact = contactRes?.data as
     | { id: string; full_name: string | null }
@@ -250,37 +310,32 @@ export async function fetchEngagementDetail(
   const currentStage =
     availableStages.find((s) => s.id === e.current_stage_id) ?? null;
 
+  const valueAmount = toNumberOrNull(e.value_amount);
+  const probabilityPct = e.probability_pct ?? 0;
+  const moduleValue = partyTypeIdToModule(party?.party_type_id ?? null);
+
   return {
     id: e.id,
-    organizationId: e.organization_id,
+    // organization_id 는 urm.deals 에 없음 → 빈 string (도메인 type 호환)
+    organizationId: '',
     partyId: e.party_id,
     partyName: party?.name ?? '(unknown party)',
-    partyModule: party?.module ?? e.module,
+    partyModule: moduleValue,
     primaryContactId: e.primary_contact_id,
     primaryContactName: contact?.full_name ?? null,
-    module: e.module,
-    name: e.name,
+    module: moduleValue,
+    name: e.deal_name,
     description: e.description,
-    pipelineDefinitionId: e.pipeline_definition_id,
+    pipelineDefinitionId: e.pipeline_id,
     pipelineName: pipeline?.name ?? null,
     currentStageId: e.current_stage_id,
     currentStageName: currentStage?.name ?? null,
     currentStageColor: currentStage?.colorHex ?? null,
     status: e.status,
-    valueAmount:
-      typeof e.value_amount === 'number'
-        ? e.value_amount
-        : e.value_amount != null
-          ? Number(e.value_amount)
-          : null,
+    valueAmount,
     valueCurrency: e.value_currency,
-    probabilityPct: e.probability_pct,
-    weightedAmount:
-      typeof e.weighted_amount === 'number'
-        ? e.weighted_amount
-        : e.weighted_amount != null
-          ? Number(e.weighted_amount)
-          : null,
+    probabilityPct,
+    weightedAmount: computeWeightedAmount(valueAmount, probabilityPct),
     expectedCloseDate: e.expected_close_date,
     actualCloseDate: e.actual_close_date,
     ownerUserId: e.owner_user_id,
@@ -294,8 +349,8 @@ export async function fetchEngagementDetail(
 }
 
 /* ============================================================
- * 3. fetchPartyEngagements — 한 party 의 모든 engagement list
- *    Stage 26 의 meeting-create-modal engagement selector 용.
+ * 3. fetchPartyEngagements — 한 party 의 모든 engagement
+ *    Stage 26 이후 meeting-create-modal engagement selector 용.
  *    Soft-deleted / archived 제외, updated_at desc.
  * ============================================================ */
 
@@ -305,9 +360,9 @@ export async function fetchPartyEngagements(
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
-    .schema('app')
-    .from('engagements' as never)
-    .select(ENGAGEMENT_LIST_SELECT)
+    .schema('urm')
+    .from('deals' as never)
+    .select(DEAL_LIST_SELECT)
     .eq('party_id', partyId)
     .neq('status', 'archived')
     .is('deleted_at', null)

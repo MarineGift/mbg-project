@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/actions/parties.ts
  *
  * Party Server Actions — 생성, 수정, 삭제.
@@ -37,9 +37,7 @@ const partySchema = z.object({
     'paper_mill',
     'partner',
     'customer',
-    'crowdfunding',
-    'product_launch',
-    'sales', 'filler',
+    'filler_supplier',
   ]),
   partyType: z.enum(['company', 'individual', 'organization']).default('company'),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']).optional().nullable(),

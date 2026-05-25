@@ -48,9 +48,6 @@ const MODULE_NAMES: Record<string, string> = {
   partner: 'Partners',
   customer: 'Customers',
   filler_supplier: 'Filler Suppliers',
-  crowdfunding: 'Crowdfunding',
-  product_launch: 'Product Launch',
-  sales: 'Sales',
 }
 
 function moduleDisplayName(module: string): string {

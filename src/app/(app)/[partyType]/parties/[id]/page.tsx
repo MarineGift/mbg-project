@@ -37,7 +37,7 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
   'paper_mill',
   'partner',
   'customer',
-  'filler'
+  'filler_supplier'
 ] as const;
 
 interface PageProps {
@@ -170,7 +170,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             <div className="space-y-4">
               <PartySupplyLinksPanel
                 partyId={full.party.id}
-                partyModule={full.party.module as 'filler' | 'paper_mill'}
+                partyModule={full.party.module as 'filler_supplier' | 'paper_mill'}
                 orgId={orgId}
               />
               <PartyContactsList
@@ -187,11 +187,11 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 partyId={full.party.id}
                 module={full.party.module}
               />
-              {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler') && (
+              {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
                 <CountryPeersPanel
                   partyId={full.party.id}
                   country={partyCountry}
-                  currentModule={urlModule as 'paper_mill' | 'filler'}
+                  currentModule={urlModule as 'paper_mill' | 'filler_supplier'}
                 />
               )}
             </div>

@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const MODULES = ['investor', 'paper_mill', 'partner', 'customer', 'filler'] as const;
+const MODULES = ['investor', 'paper_mill', 'partner', 'customer', 'filler_supplier'] as const;
 
 const TemplateInputSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),

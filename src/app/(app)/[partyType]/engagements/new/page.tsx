@@ -25,11 +25,11 @@ const PHASE_1_MODULES: readonly ModuleType[] = [
   'paper_mill',
   'partner',
   'customer',
-  'filler',
+  'filler_supplier',
 ] as const;
 
 interface PageProps {
-  params: Promise<{ module: string }>;
+  params: Promise<{ partyType: string }>;
   searchParams: Promise<{ partyId?: string }>;
 }
 
