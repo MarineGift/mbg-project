@@ -59,8 +59,6 @@ interface RawPartyRow {
   created_at: string;
   updated_at: string;
   // ▼ Phase 6 (2026-05-14)
-  industry_paper_company_id: number | null;
-  industry_filler_supplier_id: number | null;
 }
 
 const TIMELINE_LIMIT = 30;
@@ -142,7 +140,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at, industry_paper_company_id, industry_filler_supplier_id',
+      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -270,8 +268,8 @@ export async function fetchPartyDetail(
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     // ▼ Phase 6 (2026-05-14)
-    industryPaperCompanyId: p.industry_paper_company_id,
-    industryFillerSupplierId: p.industry_filler_supplier_id,
+    industryPaperCompanyId: null,
+    industryFillerSupplierId: null,
     counts: {
       contacts: contactsRes.count ?? 0,
       communications: commsRes.count ?? 0,
