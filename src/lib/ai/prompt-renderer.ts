@@ -25,7 +25,7 @@ import type {
   BrandVoiceRow,
   KnowledgeChunkSearchResult,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from '../../types/ai';
 
 /* ============================================================
@@ -60,7 +60,7 @@ export interface RenderedPrompt {
 interface PartyContextSummary {
   id: string;
   name: string;
-  module?: ModuleType;
+  module?: PartyTypeCode;
   tier?: string;
   countryCode?: string;
   industryTags?: string[];
@@ -137,7 +137,7 @@ export async function embedQuery(
 async function loadBrandVoice(
   supabase: SupabaseClient,
   organizationId: string,
-  module: ModuleType | undefined,
+  module: PartyTypeCode | undefined,
   language: Language | undefined,
 ): Promise<BrandVoiceRow | null> {
   if (!module || !language) return null;
@@ -287,11 +287,11 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
   } = input;
 
   // 1. brand_voice (agent.applicableModules[0]을 우선 사용)
-  const moduleType = agent.applicableModules?.[0];
+  const PartyTypeCode = agent.applicableModules?.[0];
   const brandVoice = await loadBrandVoice(
     supabase,
     organizationId,
-    moduleType,
+    PartyTypeCode,
     language,
   );
 

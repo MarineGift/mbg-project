@@ -19,7 +19,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../env';
-import type { AutoSendRuleRow, ModuleType } from '../../types/ai';
+import type { AutoSendRuleRow, PartyTypeCode } from '../../types/ai';
 import type { ClassificationOutput } from '../../types/classification';
 
 /* ============================================================
@@ -28,7 +28,7 @@ import type { ClassificationOutput } from '../../types/classification';
 
 export interface GateInput {
   organizationId: string;
-  module?: ModuleType;
+  module?: PartyTypeCode;
   partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
@@ -233,7 +233,7 @@ async function loadAutoSendRule(
     blockReason: (data.block_reason as string | null) ?? undefined,
     minConfidence: Number(data.min_confidence ?? 0.95),
     requiresHumanApproval: Boolean(data.requires_human_approval),
-    allowedModules: (data.allowed_modules as ModuleType[] | null) ?? [],
+    allowedModules: (data.allowed_modules as PartyTypeCode[] | null) ?? [],
     blockedKeywordsInBody:
       (data.blocked_keywords_in_body as string[] | null) ?? [],
     dailyLimit: Number(data.daily_limit ?? 0),

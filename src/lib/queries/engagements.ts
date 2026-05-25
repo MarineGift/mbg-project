@@ -27,7 +27,6 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
 import type {
   EngagementDetail,
   EngagementStatus,
@@ -96,7 +95,7 @@ interface RawEngagementDetailRow {
  * Kanban / list 용 SELECT clause.
  *
  * urm.deals 의 column 명으로 작성. parties join 으로 name + party_type_id 가져옴.
- * party_type_id 가 mapping 단계에서 ModuleType 으로 변환됨.
+ * party_type_id 가 mapping 단계에서 PartyTypeCode 으로 변환됨.
  */
 const DEAL_LIST_SELECT = `
   id, deal_name, status, current_stage_id, pipeline_id, party_id,
@@ -117,11 +116,11 @@ function toNumberOrNull(v: number | string | null | undefined): number | null {
 }
 
 /**
- * urm.parties.party_type_id (smallint) → ModuleType 변환.
+ * urm.parties.party_type_id (smallint) → PartyTypeCode 변환.
  *
  * Steps:
  *   1. id → PartyTypeCode (PARTY_TYPE_CODE_BY_ID)
- *   2. PartyTypeCode → ModuleType (partyTypeToModule)
+ *   2. PartyTypeCode → PartyTypeCode (partyTypeToModule)
  *   3. fallback: 'investor' (default safe value)
  *
  * NOTE: PartyTypeCode 가 'buyer' 또는 'government_grant' 면 partyTypeToModule
@@ -130,12 +129,12 @@ function toNumberOrNull(v: number | string | null | undefined): number | null {
  */
 function partyTypeIdToModule(
   partyTypeId: number | null | undefined,
-): ModuleType {
+): PartyTypeCode {
   if (partyTypeId == null) return 'investor';
   const code: PartyTypeCode | undefined = PARTY_TYPE_CODE_BY_ID[partyTypeId];
   if (!code) return 'investor';
   const legacy = partyTypeToModule(code);
-  return (legacy ?? 'investor') as ModuleType;
+  return (legacy ?? 'investor') as PartyTypeCode;
 }
 
 function computeWeightedAmount(
@@ -185,7 +184,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
  * ============================================================ */
 
 export async function fetchKanbanBoard(
-  module: ModuleType,
+  module: PartyTypeCode,
 ): Promise<KanbanBoard> {
   const pipeline = await fetchPipelineForModule(module);
 

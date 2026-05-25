@@ -7,14 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/common/relative-time';
 import type { PartyEngagement } from '@/types/party-detail';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface Props {
   engagements: readonly PartyEngagement[];
   /** "+ Add Engagement" 딥링크용 */
   partyId: string;
-  module: ModuleType;
+  module: PartyTypeCode;
 }
 
 const STATUS_COLORS: Record<string, string> = {

@@ -24,7 +24,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -47,7 +47,7 @@ interface RawPartyRow {
   id: string;
   organization_id: string;
   name: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   country_code: string | null;

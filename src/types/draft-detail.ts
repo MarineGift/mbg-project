@@ -9,7 +9,7 @@ import type {
   ClassificationCategory,
   DraftStatus,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from './ai';
 
 /** AI 런 메타 (분류기·회신가 각각). */
@@ -48,7 +48,7 @@ export interface DraftInboundSummary {
 export interface DraftPartySummary {
   id: string;
   name: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   tier: string | null;
   countryCode: string | null;
   website: string | null;
@@ -58,7 +58,7 @@ export interface DraftPartySummary {
 export interface DraftEngagementSummary {
   id: string;
   name: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   status: string;
   valueAmount: number | null;
   valueCurrency: string;
@@ -87,7 +87,7 @@ export interface DraftDetail {
   id: string;
   organizationId: string;
   status: DraftStatus;
-  module: ModuleType | null;
+  module: PartyTypeCode | null;
   language: Language;
 
   // 분류 결과

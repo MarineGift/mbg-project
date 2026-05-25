@@ -18,9 +18,9 @@ import { notFound } from 'next/navigation';
 import { EngagementForm } from '@/components/engagements/engagement-form';
 import { fetchPartyDetail } from '@/lib/queries/party-detail';
 import { requireAuthOrRedirect } from '@/lib/auth';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -42,7 +42,7 @@ export default async function NewEngagementPage({
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();
   }
-  const module = urlModule as ModuleType;
+  const module = urlModule as PartyTypeCode;
 
   // 2. 인증
   await requireAuthOrRedirect();

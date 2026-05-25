@@ -29,10 +29,10 @@ import { LinkedMillSection } from '@/components/industry/LinkedMillSection';
 import { PartySequencePanel } from '@/components/parties/party-sequence-panel';
 import { CountryPeersPanel } from '@/components/parties/country-peers-panel';
 import { PartyCommunicationsTimeline } from '@/components/parties/party-communications-timeline';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',

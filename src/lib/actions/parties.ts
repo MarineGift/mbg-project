@@ -19,7 +19,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 export interface PartyActionResult {
   ok: boolean;
@@ -175,7 +175,7 @@ export async function updateParty(
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
   }
-  const updated = data as { id: string; module: ModuleType };
+  const updated = data as { id: string; module: PartyTypeCode };
 
   revalidatePath(`/${updated.module}/parties/${parsed.data.partyId}`);
   revalidatePath(`/${updated.module}/parties`);
@@ -218,7 +218,7 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
-  const module = (data as { module: ModuleType }).module;
+  const module = (data as { module: PartyTypeCode }).module;
 
   revalidatePath(`/${module}/parties`);
   redirect(`/${module}/parties`);

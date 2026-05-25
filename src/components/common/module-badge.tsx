@@ -7,16 +7,16 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface ModuleBadgeProps {
-  module: ModuleType;
+  module: PartyTypeCode;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-const MODULE_STYLES: Record<ModuleType, string> = {
+const MODULE_STYLES: Record<PartyTypeCode, string> = {
   investor: 'bg-module-investor text-module-investor-foreground',
   paper_mill: 'bg-module-buyer text-module-buyer-foreground',
   partner: 'bg-module-partner text-module-partner-foreground',

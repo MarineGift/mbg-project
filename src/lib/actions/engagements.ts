@@ -63,7 +63,7 @@ const ENGAGEMENT_STATUSES: readonly EngagementStatus[] = [
   'archived',
 ] as const;
 
-// Legacy ModuleType 8 값 — build round 3 에서 PARTY_TYPE_CODES 의 7 값으로 교체.
+// Legacy PartyTypeCode 8 값 — build round 3 에서 PARTY_TYPE_CODES 의 7 값으로 교체.
 // 지금은 caller (UI) 호환 위해 그대로 유지. 어차피 INSERT 에는 안 들어감.
 const LEGACY_MODULE_VALUES = [
   'investor',

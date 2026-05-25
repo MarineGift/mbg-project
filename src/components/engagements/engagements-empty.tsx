@@ -5,10 +5,10 @@ import { Briefcase, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/common/empty-state';
 import { Button } from '@/components/ui/button';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 interface Props {
-  module: ModuleType;
+  module: PartyTypeCode;
 }
 
 export function EngagementsPipelineMissing({ module }: Props) {

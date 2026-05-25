@@ -12,9 +12,9 @@ import {
   EngagementsPipelineMissing,
   EngagementsEmpty,
 } from '@/components/engagements/engagements-empty';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -31,7 +31,7 @@ export default async function KanbanPage({ params }: PageProps) {
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();
   }
-  const module = urlModule as ModuleType;
+  const module = urlModule as PartyTypeCode;
 
   const board = await fetchKanbanBoard(module);
   const t = await getTranslations('engagements');

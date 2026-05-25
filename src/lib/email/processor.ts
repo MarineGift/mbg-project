@@ -42,7 +42,7 @@ import {
 import {
   validateReplyDrafterOutput,
   type Language,
-  type ModuleType,
+  type PartyTypeCode,
   type ProcessedInbound,
   type ReplyDrafterOutput,
 } from '../../types/ai';
@@ -84,7 +84,7 @@ interface CommunicationContext {
   partyId?: string;
   contactId?: string;
   engagementId?: string;
-  module?: ModuleType;
+  module?: PartyTypeCode;
   fromAddress?: string;
   bodyPlain: string;
   subject: string;
@@ -252,7 +252,7 @@ async function fetchCommunicationContext(
     partyId: (data.party_id as string | null) ?? undefined,
     contactId: (data.contact_id as string | null) ?? undefined,
     engagementId: (data.engagement_id as string | null) ?? undefined,
-    module: (data.module as ModuleType | null) ?? undefined,
+    module: (data.module as PartyTypeCode | null) ?? undefined,
     fromAddress: (data.from_address as string | null) ?? undefined,
     bodyPlain: (data.body_plain as string | null) ?? '',
     subject: (data.subject as string | null) ?? '',

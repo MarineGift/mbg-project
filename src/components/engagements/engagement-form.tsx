@@ -54,13 +54,13 @@ import {
   updateEngagement,
   deleteEngagement,
 } from '@/lib/actions/engagements';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { EngagementDetail } from '@/types/engagement';
 
 interface Props {
   mode: 'create' | 'edit';
   /** create + edit 모두에서 module 결정용 */
-  module: ModuleType;
+  module: PartyTypeCode;
   /** create 모드 필수, edit 모드에서는 existing.partyId 사용 */
   partyId?: string;
   /** create 모드 표시용. edit 모드에서는 existing.partyName 사용 */

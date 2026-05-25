@@ -10,9 +10,9 @@
 import { notFound } from 'next/navigation';
 import { PartyForm } from '@/components/parties/party-form';
 import { requireAuthOrRedirect } from '@/lib/auth';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -31,7 +31,7 @@ export default async function NewPartyPage({ params }: PageProps) {
   if (!(PHASE_1_MODULES as readonly string[]).includes(moduleParam)) {
     notFound();
   }
-  const module = moduleParam as ModuleType;
+  const module = moduleParam as PartyTypeCode;
 
   // 인증 검증 (미인증 시 /login으로 redirect)
   await requireAuthOrRedirect();

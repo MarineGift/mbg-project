@@ -14,7 +14,7 @@
  *   - 스레드 매칭 결과
  */
 
-import type { ModuleType, Language } from './ai';
+import type { PartyTypeCode, Language } from './ai';
 
 /* ============================================================
  * 1. 채널·방향 enum
@@ -109,7 +109,7 @@ export interface CommunicationRow {
   partyId?: string;
   contactId?: string;
   engagementId?: string;
-  module?: ModuleType;
+  module?: PartyTypeCode;
   channel: Channel;
   direction: Direction;
   // RFC 5322

@@ -6,16 +6,16 @@
  * Source of truth: urm.party_types (7 rows, seeded 2026-05-22).
  *
  * Migration plan (Stage 29-c P2a Cutover, 2026-05-25):
- *   1. (Step 0) 이 파일 도입. 기존 ModuleType (types/ai.ts) 은 그대로 유지.
+ *   1. (Step 0) 이 파일 도입. 기존 PartyTypeCode (types/ai.ts) 은 그대로 유지.
  *   2. (Step 1+) DB cutover 코드 (queries/pipelines.ts, queries/engagements.ts,
  *      actions/engagements.ts) 에서 PartyTypeCode 를 점진적으로 사용 시작.
- *   3. (Step N) 모든 ModuleType import 를 PartyTypeCode 로 일괄 rename.
+ *   3. (Step N) 모든 PartyTypeCode import 를 PartyTypeCode 로 일괄 rename.
  *      'filler_supplier' literal → 'filler_supplier' 일괄 변환.
  *      'crowdfunding', 'product_launch', 'sales' literal 사용처 제거.
- *   4. (Step N+1) types/ai.ts 의 ModuleType 정의 삭제.
+ *   4. (Step N+1) types/ai.ts 의 PartyTypeCode 정의 삭제.
  *   5. (Step N+2) routing 폴더 [module] → [partyType] rename + params 변경.
  *
- * Value 차이 (ModuleType vs PartyTypeCode):
+ * Value 차이 (PartyTypeCode vs PartyTypeCode):
  *   - 'filler_supplier' → 'filler_supplier' (rename)
  *   - 'crowdfunding', 'product_launch', 'sales' → 제거 (urm.party_types 에 없음)
  *   - 'buyer', 'government_grant' → 추가 (urm 신규)
@@ -95,7 +95,7 @@ export function isPartyTypeCode(v: unknown): v is PartyTypeCode {
 }
 
 /**
- * Legacy ModuleType value → PartyTypeCode 변환.
+ * Legacy PartyTypeCode value → PartyTypeCode 변환.
  *
  * P2a 진행 중 app.engagements.module / app.parties.module 같은 legacy DB column
  * 의 string 을 안전하게 PartyTypeCode 로 변환.
@@ -115,11 +115,11 @@ export function moduleToPartyType(
 }
 
 /**
- * PartyTypeCode → Legacy ModuleType (URL slug 또는 legacy table 호환).
+ * PartyTypeCode → Legacy PartyTypeCode (URL slug 또는 legacy table 호환).
  *
  * - 'filler_supplier' → 'filler_supplier'
  * - 'buyer', 'government_grant' → null (legacy 에 없음)
- * - 매칭되는 ModuleType → 그대로 반환
+ * - 매칭되는 PartyTypeCode → 그대로 반환
  */
 export function partyTypeToModule(code: PartyTypeCode): string | null {
   if (code === 'filler_supplier') return 'filler_supplier';

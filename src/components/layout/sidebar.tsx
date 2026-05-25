@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/lib/stores/ui-store';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 /**
  * Sidebar — 좌측 네비게이션.
@@ -29,7 +29,7 @@ import type { ModuleType } from '@/types/ai';
  *   - 하단: 설정
  */
 
-const PHASE_1_ACTIVE_MODULES: readonly ModuleType[] = [
+const PHASE_1_ACTIVE_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -214,8 +214,8 @@ function NavLink({
   );
 }
 
-function ModuleDot({ module }: { module: ModuleType }) {
-  const cls: Record<ModuleType, string> = {
+function ModuleDot({ module }: { module: PartyTypeCode }) {
+  const cls: Record<PartyTypeCode, string> = {
   investor: 'bg-module-investor',
   paper_mill: 'bg-module-buyer',
   partner: 'bg-module-partner',

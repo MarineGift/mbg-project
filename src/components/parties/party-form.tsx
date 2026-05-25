@@ -36,14 +36,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { createParty, updateParty, deleteParty } from '@/lib/actions/parties';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { PartyDetail, PartyTier } from '@/types/party-detail';
 import { useState } from 'react';
 
 interface Props {
   /** edit 모드면 existing party, create 모드면 null + 초기 module */
   mode: 'create' | 'edit';
-  initialModule: ModuleType;
+  initialModule: PartyTypeCode;
   existing?: PartyDetail | null;
 }
 
@@ -88,7 +88,7 @@ type FormValues = z.infer<typeof schema>;
 
 const PARTY_TYPES = ['company', 'individual', 'organization'] as const;
 const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
-const MODULES_PRIORITY: readonly ModuleType[] = [
+const MODULES_PRIORITY: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -245,7 +245,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
               <Label htmlFor="party-module">{t('module')} *</Label>
               <Select
                 value={selectedModule}
-                onValueChange={(v) => setValue('module', v as ModuleType, { shouldDirty: true })}
+                onValueChange={(v) => setValue('module', v as PartyTypeCode, { shouldDirty: true })}
                 disabled={isPending}
               >
                 <SelectTrigger id="party-module">

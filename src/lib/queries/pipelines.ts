@@ -20,7 +20,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   EngagementStageHistoryItem,
   KanbanStage,
@@ -97,7 +97,7 @@ export function mapStage(r: RawPipelineStage): KanbanStage {
  * ============================================================ */
 
 export async function fetchPipelineForModule(
-  module: ModuleType,
+  module: PartyTypeCode,
 ): Promise<{ id: string; name: string } | null> {
   const supabase = await createSupabaseServerClient();
 
@@ -226,7 +226,7 @@ export async function fetchStageHistory(
  * ============================================================ */
 
 export async function fetchAllPipelinesForModule(
-  module: ModuleType,
+  module: PartyTypeCode,
 ): Promise<
   { id: string; name: string; isDefault: boolean; isActive: boolean }[]
 > {

@@ -18,7 +18,7 @@ import {
   CLASSIFICATION_CATEGORIES,
   type ClassificationCategory,
   type DraftStatus,
-  type ModuleType,
+  type PartyTypeCode,
 } from '@/types/ai';
 import type { DraftQueueFilters, DraftQueueSort } from '@/types/draft-queue';
 
@@ -36,7 +36,7 @@ const STATUS_OPTIONS: readonly DraftStatus[] = [
   'auto_sent',
 ] as const;
 
-const MODULE_OPTIONS: readonly ModuleType[] = [
+const MODULE_OPTIONS: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',

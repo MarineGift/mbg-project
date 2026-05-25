@@ -19,7 +19,7 @@ import type {
   ClassificationCategory,
   DraftStatus,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from '@/types/ai';
 import type {
   DraftAutoSendInfo,
@@ -34,7 +34,7 @@ interface RawDraftRow {
   id: string;
   organization_id: string;
   status: DraftStatus;
-  module: ModuleType | null;
+  module: PartyTypeCode | null;
   language: Language;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
@@ -239,7 +239,7 @@ function mapParty(raw: unknown): DraftPartySummary | null {
   return {
     id: r.id as string,
     name: (r.name as string) ?? '',
-    module: r.module as ModuleType,
+    module: r.module as PartyTypeCode,
     tier: (r.tier as string | null) ?? null,
     countryCode: (r.country_code as string | null) ?? null,
     website: (r.website as string | null) ?? null,
@@ -258,8 +258,8 @@ function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   const party = Array.isArray(partyJoin) ? partyJoin[0] : partyJoin;
   const partyTypeId = party?.party_type_id ?? null;
   const code = partyTypeId != null ? PARTY_TYPE_CODE_BY_ID[partyTypeId] : null;
-  const moduleValue: ModuleType =
-    (code ? (partyTypeToModule(code) ?? 'investor') : 'investor') as ModuleType;
+  const moduleValue: PartyTypeCode =
+    (code ? (partyTypeToModule(code) ?? 'investor') : 'investor') as PartyTypeCode;
   return {
     id: r.id as string,
     name: (r.deal_name as string) ?? '',

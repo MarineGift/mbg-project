@@ -16,7 +16,7 @@ import { PaginationBar } from '@/components/common/pagination-bar';
 import { SavedViewsDropdown } from '@/components/common/saved-views-dropdown';
 import { fetchLeadScoresMany } from '@/lib/queries/lead-score';
 import { fetchSavedViews } from '@/lib/queries/saved-views';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTier, PartyStatus } from '@/types/party-detail';
 import dynamic from 'next/dynamic';
 const CountryFilterBar = dynamic(
@@ -27,11 +27,11 @@ const CountryFilterBar = dynamic(
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier',
 ] as const;
 
-const MODULE_LABELS: Record<ModuleType, string> = {
+const MODULE_LABELS: Record<PartyTypeCode, string> = {
   investor:       'Investors',
   paper_mill:     'Paper Mills',
   partner:        'Partners',
@@ -122,7 +122,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const to   = from + pageSize - 1;
 
   if (!(PHASE_1_MODULES as readonly string[]).includes(moduleParam)) notFound();
-  const module = moduleParam as ModuleType;
+  const module = moduleParam as PartyTypeCode;
 
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();

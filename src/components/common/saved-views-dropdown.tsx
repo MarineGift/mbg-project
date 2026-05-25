@@ -8,12 +8,12 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SavedView } from '@/lib/queries/saved-views';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 interface SavedViewsDropdownProps {
   views: SavedView[];
   entityType: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   className?: string;
 }
 

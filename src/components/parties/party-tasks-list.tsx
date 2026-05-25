@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/common/relative-time';
 import { TaskFormDialog } from '@/components/tasks/task-form-dialog';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTask } from '@/types/party-detail';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ interface Props {
   /** Add Task 다이얼로그에서 자동 연결할 party */
   partyId: string;
   /** Task에 자동 채울 module */
-  module: ModuleType;
+  module: PartyTypeCode;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {

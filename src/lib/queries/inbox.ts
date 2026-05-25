@@ -18,7 +18,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -124,7 +124,7 @@ interface RawInboxRow {
   sent_at: string | null;
   ai_generated: boolean;
   party_id: string | null;
-  parties: { name: string; module: ModuleType } | null;
+  parties: { name: string; module: PartyTypeCode } | null;
 }
 
 export async function fetchInbox(

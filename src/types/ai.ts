@@ -90,7 +90,9 @@ export type RunStatus = 'success' | 'failed' | 'timeout' | 'budget_exceeded';
  * 'filler_supplier' / 'crowdfunding' / 'product_launch' / 'sales' literals now fail
  * type-check. Migrate to PartyTypeCode in a cleanup sprint.
  */
-export type ModuleType = import('./party-type').PartyTypeCode;
+// ModuleType alias removed during P2a-cleanup. Use PartyTypeCode (canonical).
+import type { PartyTypeCode } from './party-type';
+export type { PartyTypeCode };
 
 export type Language = 'ko' | 'en' | 'ja';
 
@@ -108,7 +110,7 @@ export interface AgentRow {
   maxTokens: number;
   outputFormat: 'text' | 'structured';
   systemPrompt: string;
-  applicableModules?: ModuleType[];
+  applicableModules?: PartyTypeCode[];
   applicableLanguages?: Language[];
   requirePiiMasking?: boolean;
   knowledgeCollection?: string;
@@ -122,7 +124,7 @@ export interface AgentRow {
 export interface BrandVoiceRow {
   id: string;
   organizationId: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   language: Language;
   toneGuidelines: string;
   doSay: string[];
@@ -161,7 +163,7 @@ export interface AutoSendRuleRow {
   blockReason?: string;
   minConfidence: number;
   requiresHumanApproval: boolean;
-  allowedModules: ModuleType[];
+  allowedModules: PartyTypeCode[];
   blockedKeywordsInBody: string[];
   dailyLimit: number;
   hourlyLimit: number;

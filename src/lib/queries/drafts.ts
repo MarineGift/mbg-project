@@ -16,7 +16,7 @@ import {
   type ClassificationCategory,
   type DraftStatus,
   type Language,
-  type ModuleType,
+  type PartyTypeCode,
 } from '@/types/ai';
 import {
   DEFAULT_FILTERS,
@@ -30,7 +30,7 @@ import {
   PAGE_SIZE_OPTIONS,
 } from '@/types/draft-queue';
 
-const ALL_MODULES: readonly ModuleType[] = [
+const ALL_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -77,7 +77,7 @@ export function parseFilters(
     status: (status === 'pending_review' || status === 'all') && params.status === undefined
       ? 'pending_review'  // 기본
       : (status as DraftStatus | 'all'),
-    module: module as ModuleType | 'all',
+    module: module as PartyTypeCode | 'all',
     category: category as ClassificationCategory | 'all',
     minConfidence,
     onlyRisky,
@@ -135,7 +135,7 @@ function clamp01(n: number): number {
 interface RawJoinedDraft {
   id: string;
   status: DraftStatus;
-  module: ModuleType | null;
+  module: PartyTypeCode | null;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
   language: Language;

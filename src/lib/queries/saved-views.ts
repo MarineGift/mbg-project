@@ -5,13 +5,13 @@
  */
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 export interface SavedView {
   id: string;
   name: string;
   entity_type: string;
-  module: ModuleType;
+  module: PartyTypeCode;
   filters: Record<string, unknown>;
   is_default?: boolean;
   created_at?: string;
@@ -19,7 +19,7 @@ export interface SavedView {
 
 export async function fetchSavedViews(
   entityType: string,
-  module: ModuleType,
+  module: PartyTypeCode,
 ): Promise<SavedView[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

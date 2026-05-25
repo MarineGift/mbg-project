@@ -12,9 +12,9 @@ import { notFound, redirect } from 'next/navigation';
 import { fetchPartyDetail } from '@/lib/queries/party-detail';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { PartyForm } from '@/components/parties/party-form';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
-const PHASE_1_MODULES: readonly ModuleType[] = [
+const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',

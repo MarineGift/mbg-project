@@ -6,7 +6,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   TaskFilters,
   TaskListResult,
@@ -32,7 +32,7 @@ const ALL_STATUSES: readonly TaskStatus[] = [
 ] as const;
 const OPEN_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'blocked'] as const;
 const ALL_PRIORITIES: readonly TaskPriority[] = ['low', 'medium', 'high', 'urgent'] as const;
-const ALL_MODULES: readonly ModuleType[] = [
+const ALL_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -65,7 +65,7 @@ export function parseTaskFilters(
     | TaskPriority
     | 'all';
   const module = pickEnum(params.module, ALL_MODULES, 'all' as const) as
-    | ModuleType
+    | PartyTypeCode
     | 'all';
   const overdueOnly = single(params.overdue) === '1';
   const partyId =
@@ -122,14 +122,14 @@ interface RawTaskRow {
   priority: TaskPriority;
   due_at: string | null;
   reminder_at: string | null;
-  module: ModuleType | null;
+  module: PartyTypeCode | null;
   party_id: string | null;
   engagement_id: string | null;
   assigned_to_user_id: string | null;
   created_at: string;
   completed_at: string | null;
   linked_strategy_action_id: string | null;
-  parties: { name: string; module: ModuleType } | null;
+  parties: { name: string; module: PartyTypeCode } | null;
   engagements: { name: string } | null;
 }
 

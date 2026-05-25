@@ -4,7 +4,7 @@
  * 단일 communications 행의 상세 화면 모델.
  */
 
-import type { ModuleType } from './ai';
+import type { PartyTypeCode } from './ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -41,7 +41,7 @@ export interface CommunicationDetail {
   party: {
     id: string;
     name: string;
-    module: ModuleType;
+    module: PartyTypeCode;
   } | null;
   /** 컨택트 요약 */
   contact: {
