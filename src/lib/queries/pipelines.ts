@@ -248,3 +248,23 @@ export async function fetchAllPipelinesForModule(
     isActive: r.is_active,
   }));
 }
+
+/* ============================================================
+ * fetchPipelineById -- single lookup by id (fix-round 1)
+ * ============================================================ */
+
+export async function fetchPipelineById(
+  pipelineId: string,
+): Promise<{ id: string; name: string } | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data } = await supabase
+    .schema('urm')
+    .from('pipelines' as never)
+    .select('id, name')
+    .eq('id', pipelineId)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  return (data as RawPipelineDef | null) ?? null;
+}

@@ -38,7 +38,7 @@ export default async function NewEngagementPage({
   searchParams,
 }: PageProps) {
   // 1. URL module 검증
-  const { module: urlModule } = await params;
+  const { partyType: urlModule } = await params;
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();
   }

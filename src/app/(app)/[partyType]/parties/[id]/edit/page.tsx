@@ -27,7 +27,7 @@ interface PageProps {
 }
 
 export default async function EditPartyPage({ params }: PageProps) {
-  const { module: urlModule, id } = await params;
+  const { partyType: urlModule, id } = await params;
 
   // URL의 module 세그먼트 검증
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {

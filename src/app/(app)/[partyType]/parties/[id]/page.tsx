@@ -65,7 +65,7 @@ function getContactDisplayName(contact: any): string | null {
 }
 
 export default async function PartyDetailPage({ params }: PageProps) {
-  const { module: urlModule, id } = await params;
+  const { partyType: urlModule, id } = await params;
 
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();

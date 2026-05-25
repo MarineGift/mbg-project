@@ -48,7 +48,7 @@
     "crowdfunding": "クラウドファンディング",
     "product_launch": "製品ローンチ",
     "sales": "営業",
-    "filler": "充填剤サプライヤー"
+    "filler_supplier": "充填剤サプライヤー"
   },
   "draftStatus": {
     "pending_review": "レビュー待ち",

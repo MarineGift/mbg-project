@@ -14,7 +14,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const MODULE_LABELS: Record<string, string> = {
   paper_mill: 'Paper Mills',
-  filler:     'Filler Suppliers',
+  filler_supplier:     'Filler Suppliers',
   investor:   'Investors',
   partner:    'Partners',
   customer:   'Customers',
@@ -22,7 +22,7 @@ const MODULE_LABELS: Record<string, string> = {
 
 const MODULE_COLORS: Record<string, string> = {
   paper_mill: 'text-blue-600 dark:text-blue-400',
-  filler:     'text-emerald-600 dark:text-emerald-400',
+  filler_supplier:     'text-emerald-600 dark:text-emerald-400',
   investor:   'text-purple-600 dark:text-purple-400',
   partner:    'text-orange-600 dark:text-orange-400',
   customer:   'text-rose-600 dark:text-rose-400',

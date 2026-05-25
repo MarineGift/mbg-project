@@ -29,7 +29,7 @@ const TIER_COLOR: Record<string, string> = {
 
 const MODULE_ROUTE: Record<string, string> = {
   paper_mill: 'paper_mill',
-  filler: 'filler_supplier',
+  filler_supplier: 'filler_supplier',
 };
 
 function PeerRow({ peer }: { peer: CountryPeer }) {

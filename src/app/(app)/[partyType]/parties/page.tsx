@@ -36,7 +36,7 @@ const MODULE_LABELS: Record<ModuleType, string> = {
   paper_mill:     'Paper Mills',
   partner:        'Partners',
   customer:       'Customers',
-  filler:         'Filler Suppliers',
+  filler_supplier:         'Filler Suppliers',
 };
 
 const TIER_LABELS: Record<PartyTier, string> = {
@@ -108,7 +108,7 @@ async function fetchSupplyLinks(
 }
 
 export default async function PartiesListPage({ params, searchParams }: PageProps) {
-  const { module: moduleParam } = await params;
+  const { partyType: moduleParam } = await params;
   const sp = await searchParams;
   const searchQuery  = (sp.q ?? '').trim();
   const countryFilter = (sp.country ?? '').trim().toUpperCase();

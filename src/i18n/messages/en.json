@@ -48,7 +48,7 @@
     "crowdfunding": "Crowdfunding",
     "product_launch": "Product Launch",
     "sales": "Sales",
-    "filler": "Filler Suppliers"
+    "filler_supplier": "Filler Suppliers"
   },
   "draftStatus": {
     "pending_review": "Pending review",

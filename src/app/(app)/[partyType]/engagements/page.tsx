@@ -27,7 +27,7 @@ interface PageProps {
 }
 
 export default async function KanbanPage({ params }: PageProps) {
-  const { module: urlModule } = await params;
+  const { partyType: urlModule } = await params;
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();
   }

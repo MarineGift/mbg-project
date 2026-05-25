@@ -21,7 +21,7 @@ const MODULE_STYLES: Record<ModuleType, string> = {
   paper_mill: 'bg-module-buyer text-module-buyer-foreground',
   partner: 'bg-module-partner text-module-partner-foreground',
   customer: 'bg-module-customer text-module-customer-foreground',
-  filler: 'bg-amber-100 text-amber-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
+  filler_supplier: 'bg-amber-100 text-amber-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
 };
 
 export function ModuleBadge({
