@@ -47,14 +47,14 @@ async function renderWithContext(
   // --- party 컨텍스트 ---
   const { data: party } = await supabase
     .from("parties")
-    .select("name, country, website")
+    .select("name, country_code, website")
     .eq("id", partyId)
     .single();
 
   if (party) {
     result = result
       .replace(/{{party\.name}}/g, party.name ?? "")
-      .replace(/{{party\.country}}/g, party.country ?? "")
+      .replace(/{{party\.country}}/g, party.country_code ?? "")
       .replace(/{{party\.website}}/g, party.website ?? "");
   }
 
