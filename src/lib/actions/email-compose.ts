@@ -65,12 +65,12 @@ async function renderWithContext(
 
   if (!resolvedContactId) {
     const { data: primary } = await supabase
-      .from("party_contacts")
-      .select("contact_id")
+      .from("contacts")
+      .select("id")
       .eq("party_id", partyId)
       .eq("is_primary", true)
       .maybeSingle();
-    resolvedContactId = primary?.contact_id ?? null;
+    resolvedContactId = primary?.id ?? null;
   }
 
   if (resolvedContactId) {
@@ -181,15 +181,9 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
-  // org_id 조회
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .single();
-  if (!member) return { success: false, error: "조직 정보 없음" };
-
-  const orgId = member.organization_id;
+  // org_id from JWT (via requireAuth)
+  const auth = await requireAuth();
+  const orgId = auth.organizationId;
 
   // 화이트리스트 확인
   const domain = payload.to.split("@")[1]?.toLowerCase();
@@ -388,19 +382,15 @@ export async function upsertEmailSignature(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .single();
-  if (!member) return { success: false, error: "조직 없음" };
+  const auth = await requireAuth();
+  const orgId = auth.organizationId;
 
   // isDefault = true 이면 기존 default 해제
   if (input.isDefault) {
     await supabase
       .from("email_signatures")
       .update({ is_default: false })
-      .eq("organization_id", member.organization_id)
+      .eq("organization_id", orgId)
       .eq("is_default", true);
   }
 
@@ -413,11 +403,11 @@ export async function upsertEmailSignature(input: {
         is_default: input.isDefault,
       })
       .eq("id", input.id)
-      .eq("organization_id", member.organization_id);
+      .eq("organization_id", orgId);
     if (error) return { success: false, error: error.message };
   } else {
     const { error } = await supabase.from("email_signatures").insert({
-      organization_id: member.organization_id,
+      organization_id: orgId,
       name: input.name,
       html_content: input.htmlContent,
       is_default: input.isDefault,
@@ -451,19 +441,16 @@ export async function listEmailSignatures(): Promise<{
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .single();
-  if (!member) return { success: false, error: "조직 없음" };
+  const auth = await requireAuth();
+  const orgId = auth.organizationId;
 
   const { data, error } = await supabase
     .from("email_signatures")
     .select("id, name, html_content, is_default")
-    .eq("organization_id", member.organization_id)
+    .eq("organization_id", orgId)
     .order("is_default", { ascending: false });
 
   if (error) return { success: false, error: error.message };
   return { success: true, data: data ?? [] };
+import { requireAuth } from '@/lib/auth';
 }
