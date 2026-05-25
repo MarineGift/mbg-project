@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CalendarView } from '@/components/calendar/calendar-view'
 import { MeetingCreateModal } from '@/components/meetings/meeting-create-modal'
-import { CalendarItem, fetchCalendarItems, createCalendarEvent } from '@/lib/queries/calendar'
+import type { CalendarItem } from '@/lib/queries/calendar'
+import { 
+  fetchCalendarItemsAction as fetchCalendarItems,
+  createCalendarEventAction as createCalendarEvent,
+} from '@/app/actions/calendar'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'

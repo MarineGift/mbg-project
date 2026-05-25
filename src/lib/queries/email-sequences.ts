@@ -1,41 +1,36 @@
 // src/lib/queries/email-sequences.ts
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type {
-  EmailSequence,
-  EmailSequenceWithSteps,
-  PartyEnrollmentSummary,
-} from '@/types/phase21b';
+// Email sequence queries (server-only). Rebuilt 2026-05-24 after encoding corruption.
 
-/** Settings ?òÏù¥ÏßÄ: Ï°∞ÏßÅ???úÌÄÄ??Î™©Î°ù */
-export async function fetchSequences(orgId: string): Promise<EmailSequence[]> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('list_sequences', {
-    p_organization_id: orgId,
-  });
-  if (error) throw new Error(`fetchSequences: ${error.message}`);
-  return (data ?? []) as EmailSequence[];
+import 'server-only'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+
+export async function listSequences(organizationId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await (supabase as any)
+    .schema('app')
+    .rpc('list_sequences', { p_organization_id: organizationId })
+  if (error) throw error
+  return data ?? []
 }
 
-/** ?úÌÄÄ???®Í±¥ + steps ?ÑÏ≤¥ */
-export async function fetchSequenceWithSteps(
-  sequenceId: string,
-): Promise<EmailSequenceWithSteps | null> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('get_sequence_with_steps', {
-    p_sequence_id: sequenceId,
-  });
-  if (error) throw new Error(`fetchSequenceWithSteps: ${error.message}`);
-  return (data as EmailSequenceWithSteps) ?? null;
+export async function getSequenceWithSteps(sequenceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await (supabase as any)
+    .schema('app')
+    .rpc('get_sequence_with_steps', { p_sequence_id: sequenceId })
+  if (error) throw error
+  return data ?? null
 }
 
-/** Party ?ÅÏÑ∏ ?òÏù¥ÏßÄ: ?¥Îãπ ?åÌã∞???±Î°ù Î™©Î°ù */
-export async function fetchPartyEnrollments(
-  partyId: string,
-): Promise<PartyEnrollmentSummary[]> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('get_party_enrollments', {
-    p_party_id: partyId,
-  });
-  if (error) throw new Error(`fetchPartyEnrollments: ${error.message}`);
-  return (data ?? []) as PartyEnrollmentSummary[];
+export async function getPartyEnrollments(partyId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await (supabase as any)
+    .schema('app')
+    .rpc('get_party_enrollments', { p_party_id: partyId })
+  if (error) throw error
+  return data ?? []
 }
+
+// Aliases for legacy import names
+export const fetchSequences = listSequences
+export const fetchPartyEnrollments = getPartyEnrollments

@@ -1,7 +1,7 @@
 'use client'
 // src/components/calendar/calendar-view.tsx
 import { useState, useMemo, useTransition } from 'react'
-import { CalendarItem } from '@/lib/queries/calendar'
+import type { CalendarItem } from '@/lib/queries/calendar'
 import { CalendarEventChip } from './calendar-event-chip'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus } from 'lucide-react'

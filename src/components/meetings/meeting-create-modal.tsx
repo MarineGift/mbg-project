@@ -22,8 +22,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { createMeeting } from '@/lib/queries/meetings'
-import { MeetingType, MeetingChannel } from '@/lib/queries/meetings'
+import { createMeetingAction as createMeeting } from '@/app/actions/create-meeting'
+import type { MeetingType, MeetingChannel } from '@/lib/queries/meetings'
 import {
   loadPartyEngagementsForForm,
   loadStagesForForm,

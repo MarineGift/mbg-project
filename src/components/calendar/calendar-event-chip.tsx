@@ -1,6 +1,6 @@
 'use client'
 // src/components/calendar/calendar-event-chip.tsx
-import { CalendarItem } from '@/lib/queries/calendar'
+import type { CalendarItem } from '@/lib/queries/calendar'
 import { cn } from '@/lib/utils'
 
 interface Props {

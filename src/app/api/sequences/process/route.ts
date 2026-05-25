@@ -11,7 +11,7 @@
 //   → Vercel은 GET으로 호출하므로 GET 핸들러도 제공
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processSequences } from '@/lib/utils/sequence-processor';
+import { processSequence } from '@/lib/utils/sequence-processor';
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await processSequences();
+    const result = await processSequence();
     return NextResponse.json(result);
   } catch (err) {
     console.error('[sequences/process] Error:', err);
