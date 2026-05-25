@@ -198,7 +198,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       .from("email_whitelist")
       .select("id")
       .eq("organization_id", orgId)
-      .or(`value.eq.${domain},value.eq.${payload.to.toLowerCase()}`)
+      .or(`pattern.eq.${domain},pattern.eq.${payload.to.toLowerCase()}`)
       .maybeSingle();
 
     if (!wl) {
@@ -287,7 +287,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       subject: finalSubject,
       body_html: finalBody,
       from_address: process.env.SMTP_USER,
-      to_address: payload.to,
+      to_addresses: [payload.to],
       message_id: smtpMessageId,
       thread_id: payload.threadId ?? smtpMessageId,
       in_reply_to: payload.replyToMessageId ?? null,
