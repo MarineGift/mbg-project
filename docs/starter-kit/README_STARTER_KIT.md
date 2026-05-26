@@ -1,0 +1,187 @@
+# README — URM Platform Starter Kit (2026-05-19 v2)
+
+> **이 파일이 마스터 인덱스.** 새 Claude 세션 시작 시 가장 먼저 본다.
+
+---
+
+## 1. 이 Starter Kit 의 목적
+
+`mbg-project` (URM Platform — Unified Relationship Management) 의 DB 작업을 새 Claude 세션에서 즉시 이어갈 수 있게 하는 자료 묶음.
+
+**URM 의 vision:** 다양한 business module (투자자 / 정부지원사업 / paper mill / filler / sales / 향후 추가) 을 **동일한 통일 포맷**으로 추가/관리/조회/engagement 할 수 있는 B2B CRM 인프라.
+
+**핵심 가치:**
+- 새 세션의 첫 3분 안에 URM vision + DB 구조 + 사업 맥락 + 직전 작업 상태 파악
+- 새 business module 추가 시 30-45분 (URM_MASTER_ARCHITECTURE §4 cookbook 사용)
+- INSERT 작성 전 함정 회피 (NOT NULL / CHECK / FK / UNIQUE / RLS)
+
+---
+
+## 2. 파일 구성 (10개)
+
+### 핵심 문서 (6) — 새 세션 필수 읽기
+
+| 파일 | 버전 | 크기 | 첫 방문자 읽는 시간 |
+|------|------|------|---------------------|
+| **URM_MASTER_ARCHITECTURE.md** ⭐ | v1 | ~14 KB | 7분 (필수, 가장 먼저) |
+| **NEXT_SESSION_KICKOFF.md** | v3 | ~12 KB | 5분 (필수) |
+| **PROJECT_CONTEXT.md** | v2 | ~22 KB | 5분 (필수) |
+| **DB_SCHEMA_REFERENCE.md** | v2.1 | ~38 KB | 10분 (skim) |
+| **SCHEMA_GOTCHAS.md** | v3 | ~21 KB | 5분 (skim) |
+| **safe_insert_templates.sql** | v3 | ~19 KB | 작업 시 lookup |
+
+### Reference / 작업 carryover (4)
+
+| 파일 | 용도 |
+|------|------|
+| **db_schema_introspect_v2.sql** | Phase 2 introspection 재실행 시. 마이그레이션 후 schema 변경 점검 |
+| **migration_subtype_seniority_meta_2026Q2.sql** | ✅ 적용 완료 (참고용 보관) |
+| **migration_person_firm_history_2026Q2.sql** | 🟡 **미적용** — 다음 세션 Phase 2 실행 후보 |
+| **outreach_seed_top30_2026Q2.csv** | 진행 중 outreach 시드 (30명, status 추적) |
+
+### 이 파일
+
+| 파일 | 용도 |
+|------|------|
+| **README_STARTER_KIT.md** (이 파일) | 마스터 인덱스 |
+
+---
+
+## 3. 읽는 순서 (최단 경로)
+
+```
+README (2분)
+    ↓
+URM_MASTER_ARCHITECTURE §1-§4 (5분)    ← URM vision + 통일 패턴 파악
+    ↓
+KICKOFF §1 직전 상태 (2분) → §2 환경 검증 SQL 실행 (3분)
+    ↓
+PROJECT_CONTEXT §1-§3 사업 맥락 (2분)
+    ↓
+작업 시작 — KICKOFF §3 의 Phase 표에서 선택
+       
+[작업 중 lookup]
+    → URM_MASTER_ARCHITECTURE §4 (새 module 추가 시)
+    → URM_MASTER_ARCHITECTURE §3 (6 building blocks 패턴)
+    → SCHEMA_GOTCHAS §0 (helper 표 — 작업 전 항상)
+    → DB_SCHEMA_REFERENCE 해당 테이블 카드
+    → safe_insert_templates 해당 TEMPLATE
+    → SCHEMA_GOTCHAS §1-§10 함정 카테고리
+```
+
+---
+
+## 4. 버전 이력 + Phase 진행 상태
+
+### Phase 0 — 완료 (2026-05-19 세션)
+
+**Phase 1+2 introspection:**
+- ✅ 31 enums + 41 functions + 272 RLS policies + 5 views + 128 triggers + 451 indexes + 14 함수 본문
+
+**🔴 Critical 정정 (3건):**
+
+1. **partner 매핑** — VC 측 partner 는 `module='investor'` + `party_type='individual'` + `parent_party_id=firm.id`
+   - 영향: `PROJECT_CONTEXT §10`, `DB_SCHEMA_REFERENCE §1.4 + parties 카드`, `SCHEMA_GOTCHAS §10.1`, `safe_insert_templates Template 2b + 4`
+
+2. **`ingest.runs.module` vs `parties.module` 두 컨텍스트 분리**
+   - `runs.module` (text): `'investor_partner'` 유효
+   - `parties.module` (enum): 9 값, `investor_partner` 없음
+
+3. **10개 테이블 RLS 비활성** — `investor_partner_profile` (119) 등 multi-tenant 운영 전 ALTER 필요
+
+**🟢 마이그레이션 적용:**
+- `investor_subtype_meta` (10 rows, 트라이링구얼)
+- `partner_seniority_meta` (6 rows, outreach_score_weight 포함)
+- `v_investor_subtype_options`, `v_partner_seniority_options` views
+- Footprint Coalition `direct_fit` 태그
+
+**🟢 작업 산출물:**
+- Outreach Top 30 시드 CSV
+- `migration_person_firm_history_2026Q2.sql` 작성 (실행 대기)
+- **URM Master Architecture v1 작성** — 10 원칙 + 6 phase plan
+
+### Phase 1-6 — 향후 (URM_MASTER_ARCHITECTURE §6 참조)
+
+| Phase | 산출물 | 시간 | 상태 |
+|-------|--------|------|:----:|
+| **2** | `person_firm_history` 적용 | 5분 | 🟡 SQL 있음 |
+| **1** | paper_mill / filler profile | 90-120분 | 🔴 다음 세션 권장 |
+| 4 | activity_status + phone + dedup | 60-90분 | 🔴 |
+| 3 | engagement_participants | 60분 | 🔴 |
+| 5 | 새 module (govt_grant, sales) | 30-45분 each | 🔴 |
+| 6 | Unified reporting views | 60-90분 | 🔴 |
+
+→ 권장 시작: **Phase 2 (5분) → Phase 1 (큰 작업)** 순서.
+
+---
+
+## 5. Quick Reference Card — 자주 헷갈리는 것
+
+### 5.1 VC partner 적재
+```
+parties.module        = 'investor'::app.module_type      ⭐ NOT 'partner'
+parties.party_type    = 'individual'::app.party_type
+parties.parent_party_id = <firm.id>
+```
+
+### 5.2 Ingest run 시작
+```sql
+ingest.start_run(p_module := 'investor_partner', ...)    ⭐ text 리터럴
+ingest.promote_investor_partners(label)                  ⭐ 헬퍼
+```
+
+### 5.3 portfolio_companies 적재
+```sql
+SELECT ingest.upsert_portfolio_company(org, name, web, country, sector)
+-- 직접 INSERT 시 name_normalized 수동 (trigger 없음)
+```
+
+### 5.4 핵심 enum 함정
+- `app.meetings.meeting_type` = text + CHECK, enum `app.meeting_type` 과 별개
+- `parties.module` enum 9 값: investor, paper_mill, partner, customer, crowdfunding, product_launch, sales, filler, filler_supplier
+
+### 5.5 RLS 비활성 테이블 (multi-tenant 운영 전 ALTER 필요)
+- 🔴 `app.investor_partner_profile`, `app.portfolio_companies`, `app.meetings`
+- 🟢 (운영상 OK) `app.email_templates`, `app.email_whitelist`, `app.mailcarrier_state`, `app.saved_views`, `app.plant_supply_links`, `ingest.rows`, `ingest.runs`
+
+### 5.6 ⭐ 새 module 추가 (URM 통일 패턴) — URM_MASTER_ARCHITECTURE §4
+```sql
+-- Step 1: enum 확장
+ALTER TYPE app.module_type ADD VALUE '<new_module>';
+-- Step 2: profile 테이블 2개 (firm + contact) 생성 (cookbook 패턴)
+-- Step 3: helper 함수 (선택)
+```
+
+### 5.7 ⭐ Investor subtype dropdown (Phase 0 완료)
+```sql
+SELECT code, display_name_ko, firm_count 
+  FROM app.v_investor_subtype_options 
+ ORDER BY sort_order;
+-- has_data=false 면 dropdown disable 가능
+```
+
+---
+
+## 6. 작업 종료 시 (이 starter kit 갱신)
+
+작업 끝나면 다음 파일들 새 버전 export:
+
+1. **URM_MASTER_ARCHITECTURE §6** — Phase 표 업데이트 (완료된 Phase 표시)
+2. **변경된 starter kit 파일** — 모든 핵심 문서를 outputs 로 출력
+3. **CSV / 작업 산출물** — `outreach_seed_top30_2026Q2.csv` 처럼 진행 중 작업
+4. **KICKOFF §1 갱신** — "직전 세션 상태" 업데이트
+5. **이 README §4 갱신** — Phase 진행 상태 표
+
+다음 세션은 새 파일들로 즉시 진행 가능.
+
+---
+
+## 7. 비상 시 — Starter Kit 안에서 답 못 찾을 때
+
+- **Schema 신규 정보 필요:** `db_schema_introspect_v2.sql` Section 9-15 재실행
+- **새 마이그레이션 적용된 듯:** KICKOFF §2 Step 4 (enum/table 수 비교)
+- **함수 본문 다시 보고 싶음:** Phase 2 Section 14 SQL 재실행
+- **사용자 본인 적재 우려:** PROJECT_CONTEXT §7.1 (익명 처리 정책)
+- **한국 firm 발견:** PROJECT_CONTEXT §2 (즉시 skip)
+- **새 module 추가 패턴 모르겠음:** URM_MASTER_ARCHITECTURE §4 Cookbook
+- **Phase 작업 순서 모르겠음:** URM_MASTER_ARCHITECTURE §6 + §7 (의존성 그래프)

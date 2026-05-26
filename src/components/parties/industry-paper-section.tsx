@@ -1,19 +1,19 @@
 /**
  * components/parties/industry-paper-section.tsx
  *
- * Phase 6 — Paper company(buyer module) detail 페이지의 "Mill Operations" 섹션.
+ * "Mill Operations" section on the paper-mill detail page (V11.4 master).
  *
- * 표시 내용:
- *   1. 회사 메타 헤더 (HQ, 시장 코드, filler intensity, 알려진 filler 종류)
- *   2. 통계 strip (총 mill 수 / 확정 supplier 매핑 / likely intel만 있음 / unique supplier 수)
- *   3. Mill 테이블 (확정 supplier 매트릭스 + likely_* fallback intel 컬럼)
- *   4. Supplier summary (mill 수 기준 정렬)
+ * Renders:
+ *   1. Company meta header (HQ, market code, filler intensity, known filler types)
+ *   2. Stats strip (total mills / confirmed supplier mappings / likely-only / unique supplier count)
+ *   3. Mill table (confirmed supplier matrix + likely_* fallback intel column)
+ *   4. Supplier summary (sorted by mill count)
  *
- * 핵심 영업 가치:
- *   - "likely intel만 있음" 카운트 = 확정 supplier 미확인이지만 mill 단위 추정 정보가
- *     있는 곳. 영업 우선순위 1순위.
- *   - 같은 mill의 GCC+PCC 같은 multi-filler는 supplier 행이 여러 개로 펼쳐짐
- *     (1 supplier × 여러 filler_type).
+ * Sales value:
+ *   - "Likely intel only" count = mills without confirmed supplier but with
+ *     plant-level inference data. Top sales priority.
+ *   - Multi-filler mills (e.g. GCC+PCC) expand to multiple supplier rows
+ *     (1 supplier x multiple filler_type).
  */
 
 import { getPaperCompanyIntel } from '@/lib/queries/industry-link';
@@ -35,7 +35,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
   if (!intel) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        Industry 데이터를 불러올 수 없습니다 (paper_company_id={paperCompanyId}).
+        Could not load industry data (paper_company_id={paperCompanyId}).
       </div>
     );
   }
@@ -44,26 +44,26 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      {/* ── 헤더: 회사 메타 ─────────────────────────────── */}
+      {/* Header: company meta */}
       <header className="border-b border-gray-200 px-5 py-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-semibold text-gray-900">
             Mill Operations
             <span className="ml-2 text-xs font-normal text-gray-500">
-              V11.4 · industry master
+              V11.4 &middot; industry master
             </span>
           </h2>
           {company.evidenceLevel && <EvidenceBadge level={company.evidenceLevel} />}
         </div>
 
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
-          {company.marketCode && <Meta label="시장 코드" value={company.marketCode} />}
-          {company.headquarters && <Meta label="본사" value={company.headquarters} />}
+          {company.marketCode && <Meta label="Market code" value={company.marketCode} />}
+          {company.headquarters && <Meta label="HQ" value={company.headquarters} />}
           {company.fillerUseIntensity && (
-            <Meta label="Filler 사용 강도" value={company.fillerUseIntensity} />
+            <Meta label="Filler usage intensity" value={company.fillerUseIntensity} />
           )}
           {company.mainProductCategory && (
-            <Meta label="주력 제품군" value={company.mainProductCategory} />
+            <Meta label="Main product line" value={company.mainProductCategory} />
           )}
         </dl>
 
@@ -73,19 +73,19 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
           <div className="mt-3 space-y-1.5 text-xs text-gray-600">
             {company.mainProducts && (
               <p>
-                <span className="font-medium text-gray-700">제품: </span>
+                <span className="font-medium text-gray-700">Products: </span>
                 {company.mainProducts}
               </p>
             )}
             {company.europeMillsFootprint && (
               <p>
-                <span className="font-medium text-gray-700">유럽 mill 분포: </span>
+                <span className="font-medium text-gray-700">EU mill distribution: </span>
                 {company.europeMillsFootprint}
               </p>
             )}
             {company.supplyStructureNote && (
               <p>
-                <span className="font-medium text-gray-700">공급 구조 메모: </span>
+                <span className="font-medium text-gray-700">Supply structure note: </span>
                 {company.supplyStructureNote}
               </p>
             )}
@@ -94,7 +94,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
 
         {company.knownFillerTypes.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-xs text-gray-500">알려진 filler:</span>
+            <span className="mr-1 text-xs text-gray-500">Known fillers:</span>
             {company.knownFillerTypes.map((t) => (
               <span
                 key={t}
@@ -107,26 +107,26 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
         )}
       </header>
 
-      {/* ── 통계 strip ──────────────────────────────────── */}
+      {/* Stats strip */}
       <div className="grid grid-cols-2 divide-x divide-gray-200 border-b border-gray-200 sm:grid-cols-4">
-        <StatCell label="보유 mill" value={stats.totalMills} />
+        <StatCell label="Mill count" value={stats.totalMills} />
         <StatCell
-          label="확정 supplier 매핑"
+          label="Confirmed mappings"
           value={stats.millsWithSuppliers}
           accent="emerald"
         />
         <StatCell
-          label="likely intel만 있음"
+          label="Likely intel only"
           value={stats.millsWithLikelyOnly}
           accent={stats.millsWithLikelyOnly > 0 ? 'amber' : 'gray'}
         />
-        <StatCell label="unique 공급사" value={stats.totalSupplierCount} />
+        <StatCell label="Unique suppliers" value={stats.totalSupplierCount} />
       </div>
 
-      {/* ── Mill 테이블 ─────────────────────────────────── */}
+      {/* Mill table */}
       {mills.length === 0 ? (
         <div className="px-5 py-6 text-center text-sm text-gray-500">
-          이 paper company에 등록된 mill이 없습니다.
+          No mills registered for this paper company.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -134,9 +134,9 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
               <tr>
                 <th className="px-5 py-2 text-left font-medium">Mill</th>
-                <th className="px-3 py-2 text-left font-medium">위치</th>
-                <th className="px-3 py-2 text-left font-medium">제품</th>
-                <th className="px-3 py-2 text-left font-medium">확정 공급사</th>
+                <th className="px-3 py-2 text-left font-medium">Location</th>
+                <th className="px-3 py-2 text-left font-medium">Products</th>
+                <th className="px-3 py-2 text-left font-medium">Confirmed suppliers</th>
                 <th className="px-3 py-2 text-left font-medium">Likely intel</th>
               </tr>
             </thead>
@@ -148,14 +148,14 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
                   </td>
                   <td className="px-3 py-2.5 align-top text-xs text-gray-600">
                     {[m.city, m.region, m.marketCode].filter(Boolean).join(' / ') ||
-                      '—'}
+                      '-'}
                   </td>
                   <td className="px-3 py-2.5 align-top text-xs text-gray-600">
-                    {m.mainProducts ?? m.mainProductCategory ?? '—'}
+                    {m.mainProducts ?? m.mainProductCategory ?? '-'}
                   </td>
                   <td className="px-3 py-2.5 align-top">
                     {m.suppliers.length === 0 ? (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="text-xs text-gray-400">-</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {m.suppliers.map((s, i) => (
@@ -166,7 +166,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
                             <span className="font-medium">{s.supplierName}</span>
                             {s.fillerType && (
                               <span className="text-emerald-700">
-                                ·{s.fillerType}
+                                &middot;{s.fillerType}
                               </span>
                             )}
                             {s.confidenceGrade && (
@@ -181,7 +181,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
                     {m.likelyFillerTypes.length === 0 &&
                     !m.likelySupplierNote &&
                     !m.fillerProbability ? (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400">-</span>
                     ) : (
                       <div className="space-y-0.5">
                         {m.fillerProbability && (
@@ -194,7 +194,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
                         )}
                         {m.likelySupplyStructure && (
                           <div className="text-gray-500">
-                            구조: {m.likelySupplyStructure}
+                            Structure: {m.likelySupplyStructure}
                           </div>
                         )}
                         {m.likelySupplierNote && (
@@ -215,13 +215,13 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
         </div>
       )}
 
-      {/* ── Supplier 요약 ───────────────────────────────── */}
+      {/* Supplier summary */}
       {supplierSummary.length > 0 && (
         <div className="border-t border-gray-200 px-5 py-4">
           <h3 className="mb-2 text-sm font-medium text-gray-900">
-            Supplier 요약
+            Supplier summary
             <span className="ml-2 text-xs font-normal text-gray-500">
-              (mill 수 기준)
+              (by mill count)
             </span>
           </h3>
           <ul className="space-y-1.5">
@@ -233,7 +233,7 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
                 <span className="inline-block h-4 w-1.5 rounded-sm bg-emerald-400" />
                 <span className="font-medium text-gray-900">{s.supplierName}</span>
                 <span className="text-gray-500">
-                  — {s.millCount} mill{s.millCount > 1 ? 's' : ''}
+                  - {s.millCount} mill{s.millCount > 1 ? 's' : ''}
                 </span>
                 {s.topConfidence && (
                   <ConfidenceBadge grade={s.topConfidence} size="xs" />
@@ -244,10 +244,10 @@ export async function IndustryPaperSection({ paperCompanyId }: Props) {
         </div>
       )}
 
-      {/* ── 출처 푸터 ───────────────────────────────────── */}
+      {/* Source footer */}
       {company.sourceUrl && (
         <footer className="border-t border-gray-200 bg-gray-50 px-5 py-2 text-xs text-gray-500">
-          출처:{' '}
+          Source:{' '}
           <a
             href={company.sourceUrl}
             target="_blank"

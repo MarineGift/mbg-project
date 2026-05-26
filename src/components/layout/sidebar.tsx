@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/lib/stores/ui-store';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 /**
  * Sidebar — 좌측 네비게이션.
@@ -29,12 +29,12 @@ import type { ModuleType } from '@/types/ai';
  *   - 하단: 설정
  */
 
-const PHASE_1_ACTIVE_MODULES: readonly ModuleType[] = [
+const PHASE_1_ACTIVE_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
   'customer',
-  'filler',
+  'filler_supplier',
 ] as const;
 
 interface NavItem {
@@ -58,6 +58,8 @@ export function Sidebar() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const pendingDraftCount = useUiStore((s) => s.pendingDraftCount);
+  const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
+  const openTaskCount = useUiStore((s) => s.openTaskCount);
   const tNav = useTranslations('nav');
   const tModules = useTranslations('modules');
   const tCommon = useTranslations('common');
@@ -100,7 +102,7 @@ export function Sidebar() {
               label={tNav(item.labelKey)}
               active={isActive(pathname, item.href)}
               collapsed={collapsed}
-              badge={item.href === '/drafts' ? pendingDraftCount : undefined}
+              badge={item.href === '/drafts' ? pendingDraftCount : item.href === '/inbox' ? inboxUnreadCount : item.href === '/tasks' ? openTaskCount : undefined}
             />
           ))}
         </ul>
@@ -212,16 +214,15 @@ function NavLink({
   );
 }
 
-function ModuleDot({ module }: { module: ModuleType }) {
-  const cls: Record<ModuleType, string> = {
+function ModuleDot({ module }: { module: PartyTypeCode }) {
+  const cls: Record<PartyTypeCode, string> = {
   investor: 'bg-module-investor',
   paper_mill: 'bg-module-buyer',
   partner: 'bg-module-partner',
   customer: 'bg-module-customer',
-  crowdfunding: 'bg-module-crowdfunding',
-  product_launch: 'bg-module-product_launch',
-  sales: 'bg-module-sales',
-  filler: 'bg-amber-500',  // 충전제(광물성) — amber 톤. 추후 tailwind config에 bg-module-filler 추가 가능
+  buyer: 'bg-module-buyer',
+  government_grant: 'bg-gray-500',
+  filler_supplier: 'bg-amber-500',  // 충전제(광물성) — amber 톤. 추후 tailwind config에 bg-module-filler 추가 가능
 };
   return (
     <span

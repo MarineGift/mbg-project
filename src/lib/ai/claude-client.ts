@@ -27,7 +27,7 @@ import type {
   ClaudeCompleteOutput,
   ClaudeModel,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from '../../types/ai';
 import { maskPii, restorePii, type PiiTokenMap } from './pii-masker';
 import { renderPrompt } from './prompt-renderer';
@@ -144,7 +144,7 @@ function dbRowToAgent(row: Record<string, unknown>): AgentRow {
     outputFormat: (row.output_format as 'text' | 'structured') ?? 'text',
     systemPrompt: (row.system_prompt as string) ?? '',
     applicableModules:
-      (row.applicable_modules as ModuleType[] | null) ?? undefined,
+      (row.applicable_modules as PartyTypeCode[] | null) ?? undefined,
     applicableLanguages:
       (row.applicable_languages as Language[] | null) ?? undefined,
     requirePiiMasking: (row.require_pii_masking as boolean | null) ?? true,

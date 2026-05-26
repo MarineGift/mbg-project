@@ -11,7 +11,7 @@
  *                       이제 DB enum app.channel_type과 1:1 매칭.
  */
 
-import type { ModuleType } from './ai';
+import type { PartyTypeCode } from './ai';
 
 /**
  * 통신 채널 — DB enum app.channel_type과 1:1 매칭 (12개).
@@ -65,7 +65,7 @@ export interface InboxRow {
   sentAt: string | null;
   partyId: string | null;
   partyName: string | null;
-  partyModule: ModuleType | null;
+  partyModule: PartyTypeCode | null;
   /** 이 인바운드에서 생성된 AI 초안이 존재하는가 (해당 시) */
   hasDraft: boolean;
   /** 이 아웃바운드가 AI 초안에서 생성되었는가 */

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/common/relative-time';
 import { TaskFormDialog } from '@/components/tasks/task-form-dialog';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTask } from '@/types/party-detail';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ interface Props {
   /** Add Task 다이얼로그에서 자동 연결할 party */
   partyId: string;
   /** Task에 자동 채울 module */
-  module: ModuleType;
+  partyType: PartyTypeCode;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -26,7 +26,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'text-muted-foreground',
 };
 
-export function PartyTasksList({ tasks, partyId, module }: Props) {
+export function PartyTasksList({ tasks, partyId, partyType: module }: Props) {
   const t = useTranslations('partyDetail.tasks');
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -36,9 +36,8 @@ export function PartyTasksList({ tasks, partyId, module }: Props) {
         <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-sm">{t('title')}</CardTitle>
           <Button
-            variant="ghost"
             size="sm"
-            className="h-7 px-2"
+            className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() => setDialogOpen(true)}
             aria-label={t('addTask')}
           >
@@ -98,7 +97,7 @@ export function PartyTasksList({ tasks, partyId, module }: Props) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         partyId={partyId}
-        module={module}
+        partyType={module}
       />
     </>
   );

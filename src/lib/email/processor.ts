@@ -42,7 +42,7 @@ import {
 import {
   validateReplyDrafterOutput,
   type Language,
-  type ModuleType,
+  type PartyTypeCode,
   type ProcessedInbound,
   type ReplyDrafterOutput,
 } from '../../types/ai';
@@ -84,7 +84,7 @@ interface CommunicationContext {
   partyId?: string;
   contactId?: string;
   engagementId?: string;
-  module?: ModuleType;
+  partyType?: PartyTypeCode;
   fromAddress?: string;
   bodyPlain: string;
   subject: string;
@@ -139,7 +139,7 @@ export async function processInbound(
     // [5] 자동발송 게이트
     const gate = await evaluateAutoSend(supabase, {
       organizationId,
-      module: ctx.module,
+      partyType: ctx.partyType,
       partyId: ctx.partyId,
       classification,
       draftBody: replyResult.reply.bodyPlain,
@@ -252,7 +252,7 @@ async function fetchCommunicationContext(
     partyId: (data.party_id as string | null) ?? undefined,
     contactId: (data.contact_id as string | null) ?? undefined,
     engagementId: (data.engagement_id as string | null) ?? undefined,
-    module: (data.module as ModuleType | null) ?? undefined,
+    partyType: (data.module as PartyTypeCode | null) ?? undefined,
     fromAddress: (data.from_address as string | null) ?? undefined,
     bodyPlain: (data.body_plain as string | null) ?? '',
     subject: (data.subject as string | null) ?? '',
@@ -457,7 +457,7 @@ async function insertDraft(
       inbound_communication_id: input.ctx.id,
       party_id: input.ctx.partyId ?? null,
       engagement_id: input.ctx.engagementId ?? null,
-      module: input.ctx.module ?? null,
+      partyType: input.ctx.partyType ?? null,
       classification_category: input.classification.category,
       confidence_score: input.classification.confidence,
       risk_flags: input.classification.riskFlags,

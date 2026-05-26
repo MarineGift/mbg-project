@@ -4,7 +4,7 @@
  * 태스크 목록 + 상세의 데이터 모델.
  */
 
-import type { ModuleType } from './ai';
+import type { PartyTypeCode } from './ai';
 
 /** app.task_status enum. */
 export type TaskStatus =
@@ -26,10 +26,10 @@ export interface TaskRow {
   priority: TaskPriority;
   dueAt: string | null;
   reminderAt: string | null;
-  module: ModuleType | null;
+  partyType: PartyTypeCode | null;
   partyId: string | null;
   partyName: string | null;
-  partyModule: ModuleType | null;
+  partyModule: PartyTypeCode | null;
   engagementId: string | null;
   engagementName: string | null;
   assignedToUserId: string | null;
@@ -42,7 +42,7 @@ export interface TaskRow {
 export interface TaskFilters {
   status: TaskStatus | 'all' | 'open'; // 'open' = todo + in_progress + blocked
   priority: TaskPriority | 'all';
-  module: ModuleType | 'all';
+  partyType: PartyTypeCode | 'all';
   /** true이면 due_at <= now 이면서 status가 done/cancelled 아닌 것만 */
   overdueOnly: boolean;
   /** 특정 거래처 */
@@ -71,7 +71,7 @@ export interface TaskListResult {
 export const DEFAULT_TASK_FILTERS: TaskFilters = {
   status: 'open',
   priority: 'all',
-  module: 'all',
+  partyType: 'all',
   overdueOnly: false,
   partyId: null,
 };

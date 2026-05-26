@@ -14,10 +14,14 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@/types/database';
 
-// Database 타입이 multi-schema(public/app/ai)이므로 SchemaName을 명시.
+// Stage 28-a: schema generic을 'app'으로 변경 (server.ts와 일치).
+// 운영 테이블은 app schema 거주, public은 RPC functions 전용.
 // SupabaseClient 제네릭은 라이브러리 버전에 따라 인자 수가 다름 →
 // createBrowserClient의 반환 타입을 그대로 사용 (single source of truth).
-type SupabaseDb = ReturnType<typeof createBrowserClient<Database, 'public'>>;
+type SupabaseDb = ReturnType<typeof createBrowserClient<Database, 'app'>>;
+
+/** Stage 28-a: caller가 type annotation 가능하도록 export. */
+export type SbBrowserClient = SupabaseDb;
 
 let browserClient: SupabaseDb | null = null;
 
@@ -34,6 +38,6 @@ export function createSupabaseBrowserClient(): SupabaseDb {
     );
   }
 
-  browserClient = createBrowserClient<Database, 'public'>(url, anonKey);
+  browserClient = createBrowserClient<Database, 'app'>(url, anonKey);
   return browserClient;
 }

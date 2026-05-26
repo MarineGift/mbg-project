@@ -13,12 +13,13 @@
  */
 
 import 'server-only';
+import { PARTY_TYPE_CODE_BY_ID, partyTypeToModule } from '@/types/party-type';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   ClassificationCategory,
   DraftStatus,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from '@/types/ai';
 import type {
   DraftAutoSendInfo,
@@ -33,7 +34,7 @@ interface RawDraftRow {
   id: string;
   organization_id: string;
   status: DraftStatus;
-  module: ModuleType | null;
+  partyType: PartyTypeCode | null;
   language: Language;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
@@ -109,16 +110,18 @@ export async function fetchDraftDetail(
       ? supabase
           .schema('app')
           .from('parties' as never)
-          .select('id, name, module, tier, country_code, website')
+          .select('id, name, party_type, tier, country_code, website')
           .eq('id', d.party_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
 
     d.engagement_id
       ? supabase
-          .schema('app')
-          .from('engagements' as never)
-          .select('id, name, module, status, value_amount, value_currency')
+          .schema('urm')
+          .from('deals' as never)
+          .select(
+            'id, deal_name, status, value_amount, value_currency, parties:party_id ( party_type_id )',
+          )
           .eq('id', d.engagement_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -175,7 +178,7 @@ export async function fetchDraftDetail(
     id: d.id,
     organizationId: d.organization_id,
     status: d.status,
-    module: d.module,
+    partyType: d.partyType,
     language: d.language,
     classificationCategory: d.classification_category,
     confidenceScore: d.confidence_score,
@@ -236,7 +239,7 @@ function mapParty(raw: unknown): DraftPartySummary | null {
   return {
     id: r.id as string,
     name: (r.name as string) ?? '',
-    module: r.module as ModuleType,
+    partyType: r.partyType as PartyTypeCode,
     tier: (r.tier as string | null) ?? null,
     countryCode: (r.country_code as string | null) ?? null,
     website: (r.website as string | null) ?? null,
@@ -246,10 +249,21 @@ function mapParty(raw: unknown): DraftPartySummary | null {
 function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
+  // urm.deals ??module ?놁쓬 - parties join ??party_type_id 濡?derive.
+  const partyJoin = r.parties as
+    | { party_type_id?: number | null }
+    | Array<{ party_type_id?: number | null }>
+    | null
+    | undefined;
+  const party = Array.isArray(partyJoin) ? partyJoin[0] : partyJoin;
+  const partyTypeId = party?.party_type_id ?? null;
+  const code = partyTypeId != null ? PARTY_TYPE_CODE_BY_ID[partyTypeId] : null;
+  const moduleValue: PartyTypeCode =
+    (code ? (partyTypeToModule(code) ?? 'investor') : 'investor') as PartyTypeCode;
   return {
     id: r.id as string,
-    name: (r.name as string) ?? '',
-    module: r.module as ModuleType,
+    name: (r.deal_name as string) ?? '',
+    partyType: moduleValue,
     status: (r.status as string) ?? 'open',
     valueAmount:
       typeof r.value_amount === 'number'

@@ -27,7 +27,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
   const isFiltered =
     filters.status !== DEFAULT_TASK_FILTERS.status ||
     filters.priority !== DEFAULT_TASK_FILTERS.priority ||
-    filters.module !== DEFAULT_TASK_FILTERS.module ||
+    filters.partyType !== DEFAULT_TASK_FILTERS.partyType ||
     filters.overdueOnly ||
     filters.partyId !== null;
 

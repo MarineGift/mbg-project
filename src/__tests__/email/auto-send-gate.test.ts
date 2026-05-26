@@ -120,7 +120,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'thanks',
     });
@@ -135,7 +135,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'partner', // not in ['investor','paper_mill']
+      partyType: 'partner', // not in ['investor','paper_mill']
       classification: baseClassification,
       draftBody: 'thanks',
     });
@@ -151,7 +151,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: { ...baseClassification, confidence: 0.85 },
       draftBody: 'thanks',
     });
@@ -165,7 +165,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: { ...baseClassification, requiresHuman: true },
       draftBody: 'thanks',
     });
@@ -179,7 +179,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'thanks',
       drafterRequiresHuman: true,
@@ -194,7 +194,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: { ...baseClassification, riskFlags: ['valuation_topic'] },
       draftBody: 'thanks',
     });
@@ -212,7 +212,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'Our valuation is around $5M.',
     });
@@ -229,7 +229,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'thanks',
     });
@@ -246,7 +246,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'thanks',
     });
@@ -263,7 +263,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       partyId: 'party-x',
       classification: baseClassification,
       draftBody: 'thanks',
@@ -289,7 +289,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: { ...baseClassification, category: 'meeting_scheduling' },
       draftBody: 'I can meet on Tuesday at 14:00 KST',
     });
@@ -304,7 +304,7 @@ describe('evaluateAutoSend (with AI_AUTO_SEND_ENABLED=true)', () => {
     });
     const result = await evaluateAutoSend(supabase as never, {
       organizationId: 'org-1',
-      module: 'investor',
+      partyType: 'investor',
       classification: baseClassification,
       draftBody: 'thanks for the info',
     });

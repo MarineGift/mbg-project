@@ -7,14 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/common/relative-time';
 import type { PartyEngagement } from '@/types/party-detail';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface Props {
   engagements: readonly PartyEngagement[];
   /** "+ Add Engagement" 딥링크용 */
   partyId: string;
-  module: ModuleType;
+  partyType: PartyTypeCode;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -29,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
   archived: 'text-muted-foreground',
 };
 
-export function PartyEngagementsList({ engagements, partyId, module }: Props) {
+export function PartyEngagementsList({ engagements, partyId, partyType: module }: Props) {
   const t = useTranslations('partyDetail.engagements');
 
   return (
@@ -38,9 +38,8 @@ export function PartyEngagementsList({ engagements, partyId, module }: Props) {
         <CardTitle className="text-sm">{t('title')}</CardTitle>
         <Button
           asChild
-          variant="ghost"
           size="sm"
-          className="h-7 px-2"
+          className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
           aria-label={t('addEngagement')}
         >
           <Link href={`/${module}/engagements/new?partyId=${partyId}`}>

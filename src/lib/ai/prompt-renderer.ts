@@ -25,7 +25,7 @@ import type {
   BrandVoiceRow,
   KnowledgeChunkSearchResult,
   Language,
-  ModuleType,
+  PartyTypeCode,
 } from '../../types/ai';
 
 /* ============================================================
@@ -60,7 +60,7 @@ export interface RenderedPrompt {
 interface PartyContextSummary {
   id: string;
   name: string;
-  module?: ModuleType;
+  partyType?: PartyTypeCode;
   tier?: string;
   countryCode?: string;
   industryTags?: string[];
@@ -137,7 +137,7 @@ export async function embedQuery(
 async function loadBrandVoice(
   supabase: SupabaseClient,
   organizationId: string,
-  module: ModuleType | undefined,
+  partyType: PartyTypeCode | undefined,
   language: Language | undefined,
 ): Promise<BrandVoiceRow | null> {
   if (!module || !language) return null;
@@ -148,7 +148,7 @@ async function loadBrandVoice(
       'id, organization_id, module, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version',
     )
     .eq('organization_id', organizationId)
-    .eq('module', module)
+    .eq('party_type', module)
     .eq('language', language)
     .eq('is_active', true)
     .order('version', { ascending: false })
@@ -164,7 +164,7 @@ async function loadBrandVoice(
   return {
     id: data.id,
     organizationId: data.organization_id,
-    module: data.module,
+    partyType: data.module,
     language: data.language,
     toneGuidelines: data.tone_guidelines ?? '',
     doSay: data.do_say ?? [],
@@ -183,14 +183,14 @@ async function loadParty(
   const { data, error } = await supabase
     .schema('app')
     .from('parties')
-    .select('id, name, module, tier, country_code, industry_tags, module_data')
+    .select('id, name, party_type, tier, country_code, industry_tags, module_data')
     .eq('id', partyId)
     .maybeSingle();
   if (error || !data) return null;
   return {
     id: data.id,
     name: data.name,
-    module: data.module ?? undefined,
+    partyType: data.party_type ?? undefined,
     tier: data.tier ?? undefined,
     countryCode: data.country_code ?? undefined,
     industryTags: data.industry_tags ?? [],
@@ -287,11 +287,11 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
   } = input;
 
   // 1. brand_voice (agent.applicableModules[0]을 우선 사용)
-  const moduleType = agent.applicableModules?.[0];
+  const PartyTypeCode = agent.applicableModules?.[0];
   const brandVoice = await loadBrandVoice(
     supabase,
     organizationId,
-    moduleType,
+    PartyTypeCode,
     language,
   );
 

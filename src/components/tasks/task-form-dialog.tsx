@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createTask, updateTaskDetails } from '@/lib/actions/tasks';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type { TaskPriority, TaskRow } from '@/types/task';
 
 interface Props {
@@ -37,7 +37,7 @@ interface Props {
   /** create 컨텍스트 — 빈 폼이지만 partyId/engagementId 자동 연결 */
   partyId?: string | null;
   engagementId?: string | null;
-  module?: ModuleType | null;
+  partyType?: PartyTypeCode | null;
   /** edit 모드면 기존 task */
   existing?: TaskRow | null;
 }
@@ -58,7 +58,7 @@ export function TaskFormDialog({
   onOpenChange,
   partyId,
   engagementId,
-  module,
+  partyType: module,
   existing,
 }: Props) {
   const router = useRouter();
@@ -102,7 +102,7 @@ export function TaskFormDialog({
         dueAt: dueAtIso,
         partyId: existing?.partyId ?? partyId ?? null,
         engagementId: existing?.engagementId ?? engagementId ?? null,
-        module: existing?.module ?? module ?? null,
+        partyType: existing?.partyType ?? module ?? null,
       };
 
       const result = existing
