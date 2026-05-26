@@ -57,9 +57,9 @@ export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
     fetchSequences(orgId),
   ]);
 
-  const active    = enrollments.filter(e => e.status === 'active');
-  const completed = enrollments.filter(e => e.status === 'completed');
-  const other     = enrollments.filter(e => e.status !== 'active' && e.status !== 'completed');
+  const active    = enrollments.filter((e: any) => e.status === 'active');
+  const completed = enrollments.filter((e: any) => e.status === 'completed');
+  const other     = enrollments.filter((e: any) => e.status !== 'active' && e.status !== 'completed');
 
   return (
     <section className="mt-8">
@@ -88,8 +88,8 @@ export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
       ) : (
         <div className="space-y-2">
           {/* Active enrollments */}
-          {active.map(e => {
-            const cfg = STATUS_CONFIG[e.status];
+          {active.map((e: any) => {
+            const cfg = STATUS_CONFIG[e.status as EnrollmentStatus];
             return (
               <div
                 key={e.id}
@@ -127,8 +127,8 @@ export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
           })}
 
           {/* Completed enrollments (collapsed) */}
-          {completed.map(e => {
-            const cfg = STATUS_CONFIG[e.status];
+          {completed.map((e: any) => {
+            const cfg = STATUS_CONFIG[e.status as EnrollmentStatus];
             return (
               <div
                 key={e.id}
@@ -148,8 +148,8 @@ export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
           })}
 
           {/* Cancelled */}
-          {other.map(e => {
-            const cfg = STATUS_CONFIG[e.status];
+          {other.map((e: any) => {
+            const cfg = STATUS_CONFIG[e.status as EnrollmentStatus];
             return (
               <div
                 key={e.id}

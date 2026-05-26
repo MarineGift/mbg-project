@@ -208,13 +208,13 @@ function ThreadGroup({
   onReply: (item: CommunicationTimelineItem) => void;
 }) {
   const [expanded, setExpanded] = useState(items.length <= 3);
-  const latest = items[items.length - 1];
-  const firstItem = items[0];
+  const latest = items[items.length - 1]!;
+  const firstItem = items[0]!;
 
   if (items.length === 1) {
     return (
       <div className="px-6 py-3">
-        <MessageRow item={items[0]} onReply={onReply} />
+        <MessageRow item={items[0]!} onReply={onReply} />
       </div>
     );
   }
