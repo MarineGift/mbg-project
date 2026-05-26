@@ -180,12 +180,12 @@ export default async function PartyDetailPage({ params }: PageProps) {
               <PartyEngagementsList
                 engagements={full.engagements}
                 partyId={full.party.id}
-                module={full.party.partyType}
+                partyType={full.party.partyType}
               />
               <PartyTasksList
                 tasks={full.tasks}
                 partyId={full.party.id}
-                module={full.party.partyType}
+                partyType={full.party.partyType}
               />
               {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
                 <CountryPeersPanel
