@@ -190,7 +190,7 @@ export async function fetchKanbanBoard(
 
   if (!pipeline) {
     return {
-      module,
+      partyType: module as never,
       pipelineDefinitionId: null,
       pipelineName: null,
       stages: [],
@@ -233,7 +233,7 @@ export async function fetchKanbanBoard(
   }
 
   return {
-    module,
+    partyType: module as never,
     pipelineDefinitionId: pipeline.id,
     pipelineName: pipeline.name,
     stages,
@@ -294,7 +294,7 @@ export async function fetchEngagementDetail(
 
       e.pipeline_id
         ? fetchStages(e.pipeline_id)
-        : Promise.resolve([] as KanbanStage[]),
+        : Promise.resolve([] as never[]),
 
       fetchStageHistory(engagementId, e.pipeline_id, 50),
     ]);

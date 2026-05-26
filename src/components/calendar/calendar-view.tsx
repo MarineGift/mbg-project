@@ -121,7 +121,7 @@ function MonthGrid({
                   key={item.id}
                   item={item}
                   compact
-                  onClick={e => { (e as any).stopPropagation?.(); onItemClick(item) }}
+                  onClick={((e: any) => { (e as any).stopPropagation?.(); onItemClick(item) }) as never}
                 />
               ))}
               {overflow > 0 && (

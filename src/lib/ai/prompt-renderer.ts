@@ -164,7 +164,7 @@ async function loadBrandVoice(
   return {
     id: data.id,
     organizationId: data.organization_id,
-    partyType: data.partyType,
+    partyType: data.module,
     language: data.language,
     toneGuidelines: data.tone_guidelines ?? '',
     doSay: data.do_say ?? [],
@@ -190,7 +190,7 @@ async function loadParty(
   return {
     id: data.id,
     name: data.name,
-    partyType: data.partyType ?? undefined,
+    partyType: data.party_type ?? undefined,
     tier: data.tier ?? undefined,
     countryCode: data.country_code ?? undefined,
     industryTags: data.industry_tags ?? [],

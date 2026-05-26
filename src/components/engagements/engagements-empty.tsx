@@ -11,7 +11,7 @@ interface Props {
   partyType: PartyTypeCode;
 }
 
-export function EngagementsPipelineMissing({ module }: Props) {
+export function EngagementsPipelineMissing({ partyType: module }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState
@@ -30,7 +30,7 @@ export function EngagementsPipelineMissing({ module }: Props) {
   );
 }
 
-export function EngagementsEmpty({ module }: Props) {
+export function EngagementsEmpty({ partyType: module }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState

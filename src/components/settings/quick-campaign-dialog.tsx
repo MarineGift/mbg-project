@@ -298,7 +298,7 @@ export function QuickCampaignDialog({ open, onClose, orgId }: Props) {
                 <div className="h-px bg-gray-200 my-2" />
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Will send to</span>
-                  <span className="font-semibold text-emerald-600">{preview.with_email}</span>
+                  <span className="font-semibold text-emerald-600">{preview!.with_email}</span>
                 </div>
               </div>
 
@@ -358,10 +358,10 @@ export function QuickCampaignDialog({ open, onClose, orgId }: Props) {
                 className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">← Back</button>
               <button
                 onClick={handleSend}
-                disabled={isPending || preview.with_email === 0}
+                disabled={isPending || preview!.with_email === 0}
                 className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
               >
-                {isPending ? 'Launching…' : `Launch — Send to ${preview.with_email}`}
+                {isPending ? 'Launching…' : `Launch — Send to ${preview!.with_email}`}
               </button>
             </>
           )}

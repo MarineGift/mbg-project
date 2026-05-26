@@ -63,7 +63,7 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
     if (next < 0 || next >= steps.length) return;
     setSteps(prev => {
       const arr = [...prev];
-      [arr[index], arr[next]] = [arr[next], arr[index]];
+      [arr[index], arr[next]] = [arr[next]!, arr[index]!];
       return arr.map((s, i) => ({ ...s, step_order: i }));
     });
   }

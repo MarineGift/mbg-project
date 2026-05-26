@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 // src/app/actions/calendar-sync.ts
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
@@ -21,7 +21,7 @@ export async function triggerCalendarSync(): Promise<{
     if (!user) throw new Error('Not authenticated')
 
     const token = (await (await createSupabaseServerClient()).auth.getSession()).data.session?.access_token
-    const payload = token ? JSON.parse(Buffer.from(token.split(`.`)[1], `base64`).toString()) : {}
+    const payload = token ? JSON.parse(Buffer.from(token.split(`.`)[1]!, `base64`).toString()) : {}
     const orgId = payload.organization_id ?? payload.app_metadata?.organization_id ?? payload.user_metadata?.organization_id
     if (!orgId) throw new Error('No organization')
 
@@ -55,7 +55,7 @@ export async function getCalendarConnections(): Promise<ConnectionSummary[]> {
   if (!user) return []
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
-  const payload = token ? JSON.parse(Buffer.from(token.split(`.`)[1], `base64`).toString()) : {}
+  const payload = token ? JSON.parse(Buffer.from(token.split(`.`)[1]!, `base64`).toString()) : {}
   const orgId = payload.organization_id ?? payload.app_metadata?.organization_id ?? user.app_metadata?.organization_id
 
   const sb = createClient(
@@ -75,7 +75,7 @@ export async function getCalendarConnections(): Promise<ConnectionSummary[]> {
     .order('created_at')
 
   if (error) throw error
-  return (data ?? []) as ConnectionSummary[]
+  return (data ?? []) as unknown as ConnectionSummary[]
 }
 
 // ?????????????????????????????????????????????

@@ -129,9 +129,9 @@ export default async function PartyDetailPage({ params }: PageProps) {
               fillerSupplierId={full.party.industryFillerSupplierId}
             />
           )}
-          {full.party.industryPaperMillId != null && (
+          {(full.party as any).industryPaperMillId != null && (
             <LinkedMillSection
-              industryPaperMillId={full.party.industryPaperMillId}
+              industryPaperMillId={(full.party as any).industryPaperMillId}
             />
           )}
 
@@ -155,7 +155,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
               )}
 
               <PartyNotesCard notes={full.party.notes} />
-              <PartyMeetingsList partyId={full.party.id} meetings={meetings} />
+              <PartyMeetingsList partyId={full.party.id} meetings={meetings as never} />
 
               {/* Phase 21b — Email Sequences */}
               {orgId && (

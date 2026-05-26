@@ -120,8 +120,8 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
                       {lk.linked_country && (
                         <span className="text-xs text-muted-foreground shrink-0">{lk.linked_country}</span>
                       )}
-                      <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', typeInfo.color)}>
-                        {typeInfo.label}
+                      <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', typeInfo!.color)}>
+                        {typeInfo!.label}
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
