@@ -183,8 +183,8 @@ export type Database = {
           id: string
           is_active: boolean
           language: string
-          module: Database["app"]["Enums"]["party_type"]
           organization_id: string
+          party_type: Database["app"]["Enums"]["party_type"]
           tone_guidelines: string
           updated_at: string
           updated_by: string | null
@@ -202,8 +202,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           language?: string
-          module: Database["app"]["Enums"]["party_type"]
           organization_id: string
+          party_type: Database["app"]["Enums"]["party_type"]
           tone_guidelines: string
           updated_at?: string
           updated_by?: string | null
@@ -221,8 +221,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           language?: string
-          module?: Database["app"]["Enums"]["party_type"]
           organization_id?: string
+          party_type?: Database["app"]["Enums"]["party_type"]
           tone_guidelines?: string
           updated_at?: string
           updated_by?: string | null
@@ -255,9 +255,9 @@ export type Database = {
           id: string
           inbound_communication_id: string | null
           language: string
-          module: Database["app"]["Enums"]["party_type"] | null
           organization_id: string
           party_id: string | null
+          party_type: Database["app"]["Enums"]["party_type"] | null
           rationale: string | null
           requires_human_approval: boolean
           review_notes: string | null
@@ -294,9 +294,9 @@ export type Database = {
           id?: string
           inbound_communication_id?: string | null
           language?: string
-          module?: Database["app"]["Enums"]["party_type"] | null
           organization_id: string
           party_id?: string | null
+          party_type?: Database["app"]["Enums"]["party_type"] | null
           rationale?: string | null
           requires_human_approval?: boolean
           review_notes?: string | null
@@ -333,9 +333,9 @@ export type Database = {
           id?: string
           inbound_communication_id?: string | null
           language?: string
-          module?: Database["app"]["Enums"]["party_type"] | null
           organization_id?: string
           party_id?: string | null
+          party_type?: Database["app"]["Enums"]["party_type"] | null
           rationale?: string | null
           requires_human_approval?: boolean
           review_notes?: string | null
