@@ -253,7 +253,7 @@ export async function syncAllConnections(organizationId: string): Promise<SyncRe
   )
 
   return results.map((r, i) => {
-    const conn = connections[i]
+    const conn = connections[i]!
     if (r.status === 'fulfilled') return r.value
     // Update DB on failure
     updateSyncState(conn.id, {
