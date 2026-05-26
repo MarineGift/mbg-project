@@ -22,7 +22,7 @@ export function extractLinks(html: string): string[] {
   const re = /href=["']([^"']+)["']/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
-    const url = m[1];
+    const url = m[1]!;
     if (
       !seen.has(url) &&
       (url.startsWith('http://') || url.startsWith('https://')) &&

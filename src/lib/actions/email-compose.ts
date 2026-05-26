@@ -215,7 +215,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
         supabase,
         tmpl.body_html,
         payload.partyId,
-        payload.contactId
+        payload.contactId ?? undefined
       );
     }
   }
