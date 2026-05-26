@@ -34,7 +34,7 @@ export async function upsertSignature(
 ): Promise<EmailSignature> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from('email_signatures').upsert(sig, { onConflict: 'id' }).select().single();
+    .from('email_signatures').upsert(sig as unknown as never, { onConflict: 'id' }).select().single();
   if (error) throw error;
   return data;
 }

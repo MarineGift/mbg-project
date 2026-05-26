@@ -1,5 +1,6 @@
 // src/lib/queries/email-history.ts
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpc } from '@/lib/rpc/typed-rpc';
 
 export interface EmailHistoryRow {
   send_id:            string;
@@ -25,18 +26,18 @@ export async function fetchEmailHistory(
   offset: number = 0,
 ): Promise<EmailHistoryRow[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('get_email_history', {
+  const { data, error } = await rpc(supabase, 'get_email_history', {
     p_organization_id: orgId,
     p_limit:  limit,
     p_offset: offset,
   });
   if (error) throw new Error(error.message);
-  return (data ?? []) as EmailHistoryRow[];
+  return (data ?? []) as unknown as EmailHistoryRow[];
 }
 
 export async function countEmailHistory(orgId: string): Promise<number> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('count_email_history', {
+  const { data, error } = await rpc(supabase, 'count_email_history', {
     p_organization_id: orgId,
   });
   if (error) throw new Error(error.message);
