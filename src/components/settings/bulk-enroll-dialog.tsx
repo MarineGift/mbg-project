@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 // src/components/settings/bulk-enroll-dialog.tsx
 
 import { useState, useTransition } from 'react';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 const MODULES = [
-  { value: '',            label: 'All modules' },
+  { value: '',            label: 'All' },
   { value: 'paper_mill',  label: 'Paper Mills' },
   { value: 'investor',    label: 'Investors' },
   { value: 'partner',     label: 'Partners' },
@@ -131,7 +131,7 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
               </p>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Module</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Party type</label>
                 <select
                   value={module}
                   onChange={e => setModule(e.target.value)}

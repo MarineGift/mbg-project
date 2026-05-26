@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useTransition } from 'react';
 import type { EmailTemplate } from '@/lib/queries/email-templates';
@@ -126,7 +126,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Module</label>
+              <label className="block text-sm font-medium text-gray-700">Party type</label>
               <select
                 value={moduleVal}
                 onChange={(e) => setModuleVal(e.target.value as ModuleValue)}
