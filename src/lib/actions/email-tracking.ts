@@ -61,11 +61,11 @@ export async function createEmailTracking(
 
   const { data, error } = await rpc(supabase, 'create_email_tracking', {
     p_org_id:           input.orgId,
-    p_communication_id: input.communicationId ?? null,
-    p_draft_id:         input.draftId         ?? null,
-    p_party_id:         input.partyId         ?? null,
-    p_contact_id:       input.contactId       ?? null,
-    p_subject:          input.subject         ?? null,
+    p_communication_id: input.communicationId ?? undefined,
+    p_draft_id:         input.draftId         ?? undefined,
+    p_party_id:         input.partyId         ?? undefined,
+    p_contact_id:       input.contactId       ?? undefined,
+    p_subject:          input.subject         ?? undefined,
     p_sent_to:          input.sentTo,
     p_links:            links,
   });

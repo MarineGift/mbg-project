@@ -528,7 +528,7 @@ function AIClassificationBadge({
     },
   };
 
-  const meta = intentMeta[intent] || intentMeta.question;
+  const meta = (intentMeta[intent] || intentMeta.question)!;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">

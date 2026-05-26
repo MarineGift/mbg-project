@@ -41,7 +41,7 @@ const PHASE_1_MODULES: readonly PartyTypeCode[] = [
 ] as const;
 
 interface PageProps {
-  params: Promise<{ module: string; id: string }>;
+  params: Promise<{ partyType: string; id: string }>;
 }
 
 /**
