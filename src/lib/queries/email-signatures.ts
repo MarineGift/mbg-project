@@ -6,9 +6,10 @@ export interface EmailSignature {
   id: string;
   organization_id: string;
   name: string;
-  html: string;
-  plain_text: string;
+  html_content: string;
   is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export async function getSignatures(orgId: string): Promise<EmailSignature[]> {

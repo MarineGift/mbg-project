@@ -186,7 +186,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
 export async function fetchKanbanBoard(
   partyType: PartyTypeCode,
 ): Promise<KanbanBoard> {
-  const pipeline = await fetchPipelineForModule(module);
+  const pipeline = await fetchPipelineForModule(partyType);
 
   if (!pipeline) {
     return {

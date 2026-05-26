@@ -3,7 +3,7 @@
 
 export interface EmailTracking {
   id: string;
-  organization_id: string;
+  org_id: string;
   draft_id: string | null;
   party_id: string | null;
   contact_id: string | null;
