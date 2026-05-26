@@ -66,7 +66,7 @@ export async function createParty(input: CreatePartyInput) {
     party_level = input.party_level ?? tierRoleToPartyLevel(input.tier_role)
   } else if (input.parent_party_id) {
     const { data: parent } = await supabase
-      .schema('app' as never)
+      .schema('app')
       .from('parties')
       .select('tier, party_level')
       .eq('id', input.parent_party_id)
@@ -80,13 +80,13 @@ export async function createParty(input: CreatePartyInput) {
   }
 
   const { data, error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .insert({
       organization_id:             ORG_ID,
       name:                        input.name,
       legal_name:                  input.legal_name ?? null,
-      party_type:                  input.party_type ?? 'company',
+      party_type:                  (input.party_type ?? 'partner') as never,
       module:                      input.module,
       country_code:                input.country_code ?? null,
       region:                      input.region ?? null,
@@ -125,7 +125,7 @@ export async function updateParty(
   if ('parent_party_id' in input) {
     if (input.parent_party_id) {
       const { data: parent } = await supabase
-        .schema('app' as never)
+        .schema('app')
         .from('parties')
         .select('tier, party_level')
         .eq('id', input.parent_party_id)
@@ -143,7 +143,7 @@ export async function updateParty(
   }
 
   const { data, error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .update(updates)
     .eq('id', partyId)
@@ -165,10 +165,10 @@ export async function promoteMillToParty(millId: number) {
 
   // 중복 확인
   const { data: existing } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .select('id, name')
-    .eq('industry_paper_mill_id', millId)
+    .eq('industry_paper_mill_id' as never, millId)
     .maybeSingle()
 
   if (existing) {
@@ -200,10 +200,10 @@ export async function promoteMillToParty(millId: number) {
 
   if (m.paper_company_id) {
     const { data: parentParty } = await supabase
-      .schema('app' as never)
+      .schema('app')
       .from('parties')
       .select('id, tier')
-      .eq('industry_paper_company_id', m.paper_company_id)
+      .eq('industry_paper_company_id' as never, m.paper_company_id)
       .maybeSingle()
 
     if (parentParty) {
@@ -216,12 +216,12 @@ export async function promoteMillToParty(millId: number) {
   const tier: TierLevel = parent_tier ? cascadeTier(parent_tier) : 'tier_4'
 
   const { data: party, error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .insert({
       organization_id:        ORG_ID,
       name:                   m.mill_name,
-      party_type:             'company',
+      party_type:             'paper_mill',
       module:                 'paper_mill',
       city:                   m.city ?? null,
       country_code:           null,       // market_code는 ISO 형식 아님
@@ -249,10 +249,10 @@ export async function promoteCompanyToParty(companyId: number) {
 
   // 중복 확인
   const { data: existing } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .select('id, name')
-    .eq('industry_paper_company_id', companyId)
+    .eq('industry_paper_company_id' as never, companyId)
     .maybeSingle()
 
   if (existing) {
@@ -277,12 +277,12 @@ export async function promoteCompanyToParty(companyId: number) {
   const party_level = tierRoleToPartyLevel(role)
 
   const { data: party, error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .insert({
       organization_id:           ORG_ID,
       name:                      c.name,
-      party_type:                'company',
+      party_type:                'paper_mill',
       module:                    'paper_mill',
       country_code:              null,
       tier,
@@ -305,10 +305,10 @@ export async function promoteCompanyToParty(companyId: number) {
 export async function getPartyByMillId(millId: number) {
   const supabase = await createSupabaseServerClient()
   const { data } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .select('id, name, tier, party_level, status, parent_party_id')
-    .eq('industry_paper_mill_id', millId)
+    .eq('industry_paper_mill_id' as never, millId)
     .maybeSingle()
   return (data as { id: string; name: string; tier: string; party_level: string; status: string; parent_party_id: string | null } | null) ?? null
 }
@@ -316,10 +316,10 @@ export async function getPartyByMillId(millId: number) {
 export async function getPartyByCompanyId(companyId: number) {
   const supabase = await createSupabaseServerClient()
   const { data } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .select('id, name, tier, party_level, status, parent_party_id')
-    .eq('industry_paper_company_id', companyId)
+    .eq('industry_paper_company_id' as never, companyId)
     .maybeSingle()
   return (data as { id: string; name: string; tier: string; party_level: string; status: string; parent_party_id: string | null } | null) ?? null
 }
@@ -327,13 +327,13 @@ export async function getPartyByCompanyId(companyId: number) {
 export async function getChildParties(parentPartyId: string) {
   const supabase = await createSupabaseServerClient()
   const { data } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('parties')
     .select('id, name, tier, party_level, party_type, country_code, status')
     .eq('parent_party_id', parentPartyId)
     .is('deleted_at', null)
     .order('name')
-  return (data ?? []) as Array<{
+  return (data ?? []) as unknown as Array<{
     id: string
     name: string
     tier: string

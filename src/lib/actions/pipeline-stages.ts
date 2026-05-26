@@ -28,8 +28,8 @@ export async function createStage(
 
   // organization_id를 definition에서 lookup
   const { data: defn, error: defnErr } = await supabase
-    .schema('app' as never)
-    .from('pipeline_definitions')
+    .schema('app')
+    .from('pipeline_definitions' as never)
     .select('organization_id')
     .eq('id', input.pipeline_definition_id)
     .single()
@@ -39,7 +39,7 @@ export async function createStage(
   }
 
   const { error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .insert({
       organization_id: (defn as any).organization_id,
@@ -47,7 +47,7 @@ export async function createStage(
       code: input.code,
       name: input.name,
       description: input.description || null,
-      stage_type: input.stage_type,
+      stage_type: input.stage_type as never,
       sort_order: input.sort_order,
       default_probability_pct: input.default_probability_pct,
       is_terminal: input.is_terminal,
@@ -72,13 +72,13 @@ export async function updateStage(stageId: string, input: StageInput) {
   const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .update({
       code: input.code,
       name: input.name,
       description: input.description || null,
-      stage_type: input.stage_type,
+      stage_type: input.stage_type as never,
       sort_order: input.sort_order,
       default_probability_pct: input.default_probability_pct,
       is_terminal: input.is_terminal,
@@ -104,7 +104,7 @@ export async function deleteStage(stageId: string) {
   const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', stageId)
@@ -126,7 +126,7 @@ export async function moveStageUp(stageId: string) {
 
   // 1) 현재 stage 정보
   const { data: current, error: currentErr } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .select('id, pipeline_definition_id, sort_order')
     .eq('id', stageId)
@@ -137,7 +137,7 @@ export async function moveStageUp(stageId: string) {
 
   // 2) 바로 위 stage 찾기 (sort_order < 현재값 중 최대)
   const { data: above } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .select('id, sort_order')
     .eq('pipeline_definition_id', c.pipeline_definition_id)
@@ -163,7 +163,7 @@ export async function moveStageDown(stageId: string) {
   const supabase = await createSupabaseServerClient()
 
   const { data: current, error: currentErr } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .select('id, pipeline_definition_id, sort_order')
     .eq('id', stageId)
@@ -173,7 +173,7 @@ export async function moveStageDown(stageId: string) {
   const c = current as any
 
   const { data: below } = await supabase
-    .schema('app' as never)
+    .schema('app')
     .from('pipeline_stages')
     .select('id, sort_order')
     .eq('pipeline_definition_id', c.pipeline_definition_id)
