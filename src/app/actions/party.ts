@@ -87,7 +87,6 @@ export async function createParty(input: CreatePartyInput) {
       name:                        input.name,
       legal_name:                  input.legal_name ?? null,
       party_type:                  (input.party_type ?? 'partner') as never,
-      module:                      input.module,
       country_code:                input.country_code ?? null,
       region:                      input.region ?? null,
       city:                        input.city ?? null,
@@ -145,7 +144,7 @@ export async function updateParty(
   const { data, error } = await supabase
     .schema('app')
     .from('parties')
-    .update(updates)
+    .update(updates as never)
     .eq('id', partyId)
     .select()
     .single()
@@ -222,14 +221,13 @@ export async function promoteMillToParty(millId: number) {
       organization_id:        ORG_ID,
       name:                   m.mill_name,
       party_type:             'paper_mill',
-      module:                 'paper_mill',
       city:                   m.city ?? null,
       country_code:           null,       // market_code는 ISO 형식 아님
       parent_party_id,
       tier,
       party_level:            'plant' satisfies PartyLevel,
       industry_paper_mill_id: millId,
-    })
+    } as never)
     .select()
     .single()
 
@@ -283,12 +281,11 @@ export async function promoteCompanyToParty(companyId: number) {
       organization_id:           ORG_ID,
       name:                      c.name,
       party_type:                'paper_mill',
-      module:                    'paper_mill',
       country_code:              null,
       tier,
       party_level,
       industry_paper_company_id: companyId,
-    })
+    } as never)
     .select()
     .single()
 
