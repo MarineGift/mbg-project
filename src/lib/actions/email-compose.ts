@@ -286,7 +286,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       message_id: smtpMessageId,
       thread_id: payload.threadId ?? smtpMessageId,
       in_reply_to: payload.replyToMessageId ?? null,
-      attachment_paths: payload.attachmentPaths ?? [],
+      // attachment_paths: payload.attachmentPaths ?? [], // column not in communications - add via migration
       status: "sent",
       sent_at: new Date().toISOString(),
     })
@@ -312,7 +312,7 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
 
   const { data: comm } = await supabase
     .from("communications")
-    .select("subject, body_html, body_plain, from_address, to_address, sent_at")
+    .select("subject, body_html, body_plain, from_address, to_addresses, sent_at")
     .eq("id", payload.communicationId)
     .single();
 

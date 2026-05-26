@@ -10,6 +10,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpc } from '@/lib/rpc/typed-rpc';
 import { extractLinks, injectTracking } from '@/lib/utils/email-tracking';
 import type { TrackingPayload } from '@/types/phase21';
 
@@ -58,7 +59,7 @@ export async function createEmailTracking(
 
   const links = extractLinks(input.htmlBody).map((url) => ({ url }));
 
-  const { data, error } = await supabase.rpc('create_email_tracking', {
+  const { data, error } = await rpc(supabase, 'create_email_tracking', {
     p_org_id:           input.orgId,
     p_communication_id: input.communicationId ?? null,
     p_draft_id:         input.draftId         ?? null,
@@ -73,7 +74,7 @@ export async function createEmailTracking(
     throw new Error(`createEmailTracking RPC failed: ${error.message}`);
   }
 
-  const payload = data as TrackingPayload;
+  const payload = data as unknown as TrackingPayload;
   const injectedHtml = injectTracking(input.htmlBody, payload);
 
   return { payload, injectedHtml };

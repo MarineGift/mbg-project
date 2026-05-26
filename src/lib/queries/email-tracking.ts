@@ -5,6 +5,7 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpc } from '@/lib/rpc/typed-rpc';
 import type {
   EmailTracking,
   EmailTrackingEvent,
@@ -94,7 +95,7 @@ export async function fetchTrackingMapForCommunications(
   if (!communicationIds.length) return new Map();
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc(
+  const { data, error } = await rpc(supabase, 
     'get_tracking_for_communications',
     { p_communication_ids: communicationIds },
   );
@@ -130,13 +131,13 @@ export async function fetchTrackingMapForDrafts(
   if (!draftIds.length) return new Map();
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc('get_tracking_for_drafts', {
+  const { data, error } = await rpc(supabase, 'get_tracking_for_drafts', {
     p_draft_ids: draftIds,
   });
   if (error) throw error;
 
   const map = new Map<string, DraftTrackingSummary>();
-  for (const row of (data ?? []) as DraftTrackingSummary[]) {
+  for (const row of (data ?? []) as unknown as DraftTrackingSummary[]) {
     if (row.draft_id) map.set(row.draft_id, row);
   }
   return map;
