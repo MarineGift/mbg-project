@@ -90,7 +90,7 @@ export async function enrollParty(
     p_organization_id: orgId,
     p_sequence_id: sequenceId,
     p_party_id:    partyId,
-    p_contact_id:  contactId,
+    p_contact_id:  contactId ?? '',
     p_enrolled_by: user.id,
   });
 
@@ -158,7 +158,7 @@ export async function getSequenceForEdit(
     p_sequence_id: sequenceId,
   });
   if (error) return { error: error.message };
-  return { data: data as EmailSequenceWithSteps };
+  return { data: data as unknown as EmailSequenceWithSteps };
 }
 
 // ?�?� Bulk enrollment ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
@@ -191,13 +191,13 @@ async function callBulkEnrollRpc(
   const { data, error } = await rpc(supabase, 'bulk_enroll_filtered', {
     p_organization_id: orgId,
     p_sequence_id:   sequenceId,
-    p_module:        filters.module       || null,
-    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : null,
-    p_status:        filters.status       || null,
-    p_country_code:  filters.countryCode  || null,
-    p_industry_tag:  filters.industryTag  || null,
-    p_name_contains: filters.nameContains || null,
-    p_enrolled_by:   enrolledBy,
+    p_module:        filters.module       ?? undefined,
+    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : undefined,
+    p_status:        filters.status       ?? undefined,
+    p_country_code:  filters.countryCode  ?? undefined,
+    p_industry_tag:  filters.industryTag  ?? undefined,
+    p_name_contains: filters.nameContains ?? undefined,
+    p_enrolled_by:   enrolledBy ?? undefined,
     p_dry_run:       dryRun,
   });
   if (error) return { error: error.message };
@@ -282,12 +282,12 @@ export async function previewCampaignFilter(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await rpc(supabase, 'preview_campaign_filter', {
     p_org_id:        orgId,
-    p_module:        filters.module       || null,
-    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : null,
-    p_status:        filters.status       || null,
-    p_country_code:  filters.countryCode  || null,
-    p_industry_tag:  filters.industryTag  || null,
-    p_name_contains: filters.nameContains || null,
+    p_module:        filters.module       ?? undefined,
+    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : undefined,
+    p_status:        filters.status       ?? undefined,
+    p_country_code:  filters.countryCode  ?? undefined,
+    p_industry_tag:  filters.industryTag  ?? undefined,
+    p_name_contains: filters.nameContains ?? undefined,
   });
   if (error) return { error: error.message };
   const row = (data ?? [])[0];
@@ -315,12 +315,12 @@ export async function createCampaignFromTemplate(
     p_organization_id: orgId,
     p_template_id:   templateId,
     p_campaign_name: campaignName,
-    p_module:        filters.module       || null,
-    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : null,
-    p_status:        filters.status       || null,
-    p_country_code:  filters.countryCode  || null,
-    p_industry_tag:  filters.industryTag  || null,
-    p_name_contains: filters.nameContains || null,
+    p_module:        filters.module       ?? undefined,
+    p_tiers:         filters.tiers && filters.tiers.length > 0 ? filters.tiers : undefined,
+    p_status:        filters.status       ?? undefined,
+    p_country_code:  filters.countryCode  ?? undefined,
+    p_industry_tag:  filters.industryTag  ?? undefined,
+    p_name_contains: filters.nameContains ?? undefined,
     p_enrolled_by:   user.id,
   });
 
