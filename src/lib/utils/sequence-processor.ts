@@ -47,13 +47,13 @@ export async function processSequence(): Promise<{
   const supabase = await createSupabaseServerClient();
 
   // Get due enrollments
-  const { data: due, error: dueErr } = await rpc(supabase, "get_due_enrollments");
+  const { data: due, error: dueErr } = await rpc(supabase, "get_due_enrollments", {} as never);
   if (dueErr || !due) {
     console.error("[processSequence] get_due_enrollments error", dueErr);
     return { processed: 0, sent: 0, failed: 0, skipped: 0 };
   }
 
-  const enrollments = (due as DueEnrollment[]) || [];
+  const enrollments = (due as unknown as DueEnrollment[]) || [];
   let sent = 0,
     failed = 0,
     skipped = 0;
@@ -72,9 +72,9 @@ export async function processSequence(): Promise<{
   for (const e of enrollments) {
     try {
       if (!e.contact_email) {
-        await rpc(supabase, "advance_enrollment", {
+        await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
-          p_status: "skipped_no_email",
+          p_status: "skipped",
         });
         skipped++;
         continue;
@@ -89,12 +89,12 @@ export async function processSequence(): Promise<{
         },
         party: { name: e.party_name },
       };
-      const subjectResult = renderMergeFields(e.step_subject || "", ctx);
-      const bodyResult = renderMergeFields(e.step_body || "", ctx);
+      const subjectResult = renderMergeFields(e.step_subject || "", ctx as never);
+      const bodyResult = renderMergeFields(e.step_body || "", ctx as never);
       const subject = unwrapMerge(subjectResult);
       const bodyPlain = unwrapMerge(bodyResult);
       const bodyHtml = e.step_body_html
-        ? unwrapMerge(renderMergeFields(e.step_body_html, ctx))
+        ? unwrapMerge(renderMergeFields(e.step_body_html, ctx as never))
         : plainToHtml(bodyPlain);
 
       // Generate communication id + Message-ID
@@ -149,7 +149,7 @@ export async function processSequence(): Promise<{
 
       if (insErr) {
         console.error("[processSequence] insert error", insErr);
-        await rpc(supabase, "advance_enrollment", {
+        await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
           p_status: "failed",
         });
@@ -188,7 +188,7 @@ export async function processSequence(): Promise<{
               updated_at: new Date().toISOString(),
             })
             .eq("id", commId);
-          await rpc(supabase, "advance_enrollment", {
+          await (rpc as any)(supabase, "advance_enrollment", {
             p_enrollment_id: e.enrollment_id,
             p_status: "failed",
           });
@@ -220,10 +220,10 @@ export async function processSequence(): Promise<{
           communication_id: commId,
           sent_at: sentAt,
           status: "sent",
-        });
+        } as never);
 
       // Advance enrollment
-      await rpc(supabase, "advance_enrollment", {
+      await (rpc as any)(supabase, "advance_enrollment", {
         p_enrollment_id: e.enrollment_id,
         p_status: "sent",
       });
