@@ -7,6 +7,7 @@ export interface EmailTracking {
   draft_id: string | null;
   party_id: string | null;
   contact_id: string | null;
+  communication_id: string | null;
   subject: string | null;
   sent_to: string;
   open_token: string;
@@ -29,7 +30,7 @@ export interface EmailTrackingEvent {
   id: string;
   tracking_id: string;
   link_id: string | null;
-  event_type: 'open' | 'click';
+  event_type: string;
   url: string | null;
   ip: string | null;
   user_agent: string | null;
