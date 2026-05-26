@@ -166,7 +166,7 @@ export function EngagementForm({
         probabilityPct: Number(values.probabilityPct),
         expectedCloseDate: values.expectedCloseDate || null,
         source: values.source?.trim() || null,
-      } as never;
+      } as any;
 
       if (mode === 'create') {
         const result = await createEngagement(payload);
