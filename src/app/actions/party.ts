@@ -100,7 +100,7 @@ export async function createParty(input: CreatePartyInput) {
       industry_paper_company_id:   input.industry_paper_company_id ?? null,
       industry_paper_mill_id:      input.industry_paper_mill_id ?? null,
       industry_filler_supplier_id: input.industry_filler_supplier_id ?? null,
-    })
+    } as never)
     .select()
     .single()
 
