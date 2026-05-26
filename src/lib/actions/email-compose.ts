@@ -2,6 +2,7 @@
 // Phase 22b: contact_id 치환 수정 + 이메일 서명 + 첨부파일 지원
 "use server";
 
+import { requireAuth } from '@/lib/auth';
 import { createSupabaseServerClient, type SbClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
@@ -452,5 +453,4 @@ export async function listEmailSignatures(): Promise<{
 
   if (error) return { success: false, error: error.message };
   return { success: true, data: data ?? [] };
-import { requireAuth } from '@/lib/auth';
 }

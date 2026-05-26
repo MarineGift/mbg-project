@@ -1,27 +1,29 @@
 /**
  * types/party-type.ts
  *
- * URM 표준 PartyTypeCode — urm.party_types.code 의 union type.
+ * 두 차원의 party 분류:
  *
- * Source of truth: urm.party_types (7 rows, seeded 2026-05-22).
+ *   PartyType  - 비즈니스 카테고리 (urm.party_types 기반)
+ *     investor, paper_mill, filler_supplier, buyer, customer, partner, government_grant
  *
- * Migration plan (Stage 29-c P2a Cutover, 2026-05-25):
- *   1. (Step 0) 이 파일 도입. 기존 PartyTypeCode (types/ai.ts) 은 그대로 유지.
- *   2. (Step 1+) DB cutover 코드 (queries/pipelines.ts, queries/engagements.ts,
- *      actions/engagements.ts) 에서 PartyTypeCode 를 점진적으로 사용 시작.
- *   3. (Step N) 모든 PartyTypeCode import 를 PartyTypeCode 로 일괄 rename.
- *      'filler_supplier' literal → 'filler_supplier' 일괄 변환.
- *      'crowdfunding', 'product_launch', 'sales' literal 사용처 제거.
- *   4. (Step N+1) types/ai.ts 의 PartyTypeCode 정의 삭제.
- *   5. (Step N+2) routing 폴더 [module] → [partyType] rename + params 변경.
+ *   PartyKind  - 법인 형태 (app.party_kind enum 기반)
+ *     company, organization, individual, fund, government
  *
- * Value 차이 (PartyTypeCode vs PartyTypeCode):
- *   - 'filler_supplier' → 'filler_supplier' (rename)
- *   - 'crowdfunding', 'product_launch', 'sales' → 제거 (urm.party_types 에 없음)
- *   - 'buyer', 'government_grant' → 추가 (urm 신규)
+ * Naming policy (2026-05-25 Phase C):
+ *   - TS type 이름: PartyType, PartyKind (PascalCase)
+ *   - TS property / variable / form field: partyType, partyKind (camelCase, React/Next.js 컨벤션)
+ *   - DB column: party_type, party_kind (snake_case)
+ *
+ * Source of truth:
+ *   - urm.party_types (7 rows) ← PartyType
+ *   - app.party_kind enum (5 values) ← PartyKind
  */
 
-export type PartyTypeCode =
+// ============================================================
+// PartyType - 비즈니스 카테고리
+// ============================================================
+
+export type PartyType =
   | 'investor'
   | 'paper_mill'
   | 'filler_supplier'
@@ -30,8 +32,11 @@ export type PartyTypeCode =
   | 'partner'
   | 'government_grant';
 
-/** 전체 PartyTypeCode 배열 (UI 드롭다운, zod enum, 테스트 등에서 사용). */
-export const PARTY_TYPE_CODES: readonly PartyTypeCode[] = [
+/** Legacy alias. 새 코드는 PartyType 직접 사용. */
+export type PartyTypeCode = PartyType;
+
+/** 전체 PartyType 배열. */
+export const PARTY_TYPES: readonly PartyType[] = [
   'investor',
   'paper_mill',
   'filler_supplier',
@@ -41,11 +46,13 @@ export const PARTY_TYPE_CODES: readonly PartyTypeCode[] = [
   'government_grant',
 ] as const;
 
+/** Legacy alias. */
+export const PARTY_TYPE_CODES: readonly PartyType[] = PARTY_TYPES;
+
 /**
  * urm.party_types.id (smallint) ↔ code 매핑.
- * urm.parties.party_type_id (smallint) 와 join 할 때 사용.
  */
-export const PARTY_TYPE_ID_BY_CODE: Record<PartyTypeCode, number> = {
+export const PARTY_TYPE_ID_BY_CODE: Record<PartyType, number> = {
   investor: 1,
   paper_mill: 2,
   filler_supplier: 3,
@@ -55,7 +62,7 @@ export const PARTY_TYPE_ID_BY_CODE: Record<PartyTypeCode, number> = {
   government_grant: 7,
 };
 
-export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyTypeCode> = {
+export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
   1: 'investor',
   2: 'paper_mill',
   3: 'filler_supplier',
@@ -65,9 +72,9 @@ export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyTypeCode> = {
   7: 'government_grant',
 };
 
-/** 다국어 표시명 (i18n 미통합 환경에서 직접 사용). */
+/** 다국어 표시명. */
 export const PARTY_TYPE_DISPLAY: Record<
-  PartyTypeCode,
+  PartyType,
   { en: string; ko: string; ja: string }
 > = {
   investor: { en: 'Investor', ko: '투자자', ja: '投資家' },
@@ -75,7 +82,7 @@ export const PARTY_TYPE_DISPLAY: Record<
   filler_supplier: {
     en: 'Filler Supplier',
     ko: '광물공급사',
-    ja: 'フィラー会社',
+    ja: 'フィラーサプライヤー',
   },
   buyer: { en: 'Buyer', ko: '구매사', ja: '購買会社' },
   customer: { en: 'Customer', ko: '고객사', ja: '顧客' },
@@ -87,42 +94,56 @@ export const PARTY_TYPE_DISPLAY: Record<
   },
 };
 
-/** Type guard. unknown 값을 PartyTypeCode 로 narrowing. */
-export function isPartyTypeCode(v: unknown): v is PartyTypeCode {
-  return (
-    typeof v === 'string' && PARTY_TYPE_CODES.includes(v as PartyTypeCode)
-  );
+/** Type guard. */
+export function isPartyType(v: unknown): v is PartyType {
+  return typeof v === 'string' && PARTY_TYPES.includes(v as PartyType);
 }
 
-/**
- * Legacy PartyTypeCode value → PartyTypeCode 변환.
- *
- * P2a 진행 중 app.engagements.module / app.parties.module 같은 legacy DB column
- * 의 string 을 안전하게 PartyTypeCode 로 변환.
- *
- * - 'filler_supplier' → 'filler_supplier' (rename)
- * - Deprecated values ('crowdfunding', 'product_launch', 'sales') → null
- * - 매칭되는 PartyTypeCode → 그대로 반환
- * - null/undefined/unknown → null
- */
+export const isPartyTypeCode = isPartyType;
+
 export function moduleToPartyType(
   legacy: string | null | undefined,
-): PartyTypeCode | null {
+): PartyType | null {
   if (!legacy) return null;
-  if (isPartyTypeCode(legacy)) return legacy;
-  if (legacy === 'filler_supplier') return 'filler_supplier';
+  if (isPartyType(legacy)) return legacy;
   return null;
 }
 
-/**
- * PartyTypeCode → Legacy PartyTypeCode (URL slug 또는 legacy table 호환).
- *
- * - 'filler_supplier' → 'filler_supplier'
- * - 'buyer', 'government_grant' → null (legacy 에 없음)
- * - 매칭되는 PartyTypeCode → 그대로 반환
- */
-export function partyTypeToModule(code: PartyTypeCode): string | null {
-  if (code === 'filler_supplier') return 'filler_supplier';
+export function partyTypeToModule(code: PartyType): string | null {
   if (code === 'buyer' || code === 'government_grant') return null;
   return code;
+}
+
+// ============================================================
+// PartyKind - 법인 형태
+// ============================================================
+
+export type PartyKind =
+  | 'company'
+  | 'organization'
+  | 'individual'
+  | 'fund'
+  | 'government';
+
+export const PARTY_KINDS: readonly PartyKind[] = [
+  'company',
+  'organization',
+  'individual',
+  'fund',
+  'government',
+] as const;
+
+export const PARTY_KIND_DISPLAY: Record<
+  PartyKind,
+  { en: string; ko: string; ja: string }
+> = {
+  company: { en: 'Company', ko: '회사', ja: '会社' },
+  organization: { en: 'Organization', ko: '단체', ja: '団体' },
+  individual: { en: 'Individual', ko: '개인', ja: '個人' },
+  fund: { en: 'Fund', ko: '펀드', ja: 'ファンド' },
+  government: { en: 'Government', ko: '정부', ja: '政府' },
+};
+
+export function isPartyKind(v: unknown): v is PartyKind {
+  return typeof v === 'string' && PARTY_KINDS.includes(v as PartyKind);
 }

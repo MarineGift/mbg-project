@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,14 +36,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { createParty, updateParty, deleteParty } from '@/lib/actions/parties';
-import type { PartyTypeCode } from '@/types/ai';
+import type { PartyType, PartyKind } from '@/types/party-type';
 import type { PartyDetail, PartyTier } from '@/types/party-detail';
-import { useState } from 'react';
 
 interface Props {
-  /** edit 모드면 existing party, create 모드면 null + 초기 module */
+  /** edit 모드면 existing party, create 모드면 null + 초기 partyType */
   mode: 'create' | 'edit';
-  initialModule: PartyTypeCode;
+  initialPartyType: PartyType;
   existing?: PartyDetail | null;
 }
 
@@ -53,11 +52,13 @@ const schema = z.object({
   partyType: z.enum([
     'investor',
     'paper_mill',
-    'partner',
-    'customer',
     'filler_supplier',
+    'buyer',
+    'customer',
+    'partner',
+    'government_grant',
   ]),
-  partyType: z.enum(['company', 'individual', 'organization']),
+  partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),
   countryCode: z
     .string()
@@ -76,9 +77,7 @@ const schema = z.object({
       (s) => !s || /^https?:\/\/.+/.test(s),
       'Must start with http:// or https://',
     ),
-  // 산업 태그 — 콤마 구분 텍스트로 입력받아 배열로 변환
   industryTags: z.string().max(500).optional().or(z.literal('')),
-  // 관심 태그 — 콤마 구분 텍스트로 입력받아 배열로 변환
   interestTags: z.string().max(500).optional().or(z.literal('')),
   source: z.string().max(120).optional().or(z.literal('')),
   notes: z.string().max(10_000).optional().or(z.literal('')),
@@ -86,16 +85,26 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const PARTY_TYPES = ['company', 'individual', 'organization'] as const;
-const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
-const MODULES_PRIORITY: readonly PartyTypeCode[] = [
+const PARTY_TYPES: readonly PartyType[] = [
   'investor',
   'paper_mill',
-  'partner',
+  'filler_supplier',
+  'buyer',
   'customer',
+  'partner',
+  'government_grant',
 ] as const;
 
-/** 콤마 구분 텍스트 → trim된 unique 태그 배열 */
+const PARTY_KINDS: readonly PartyKind[] = [
+  'company',
+  'organization',
+  'individual',
+  'fund',
+  'government',
+] as const;
+
+const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
+
 function parseTagsInput(raw: string | undefined): string[] {
   if (!raw) return [];
   const seen = new Set<string>();
@@ -110,10 +119,11 @@ function parseTagsInput(raw: string | undefined): string[] {
   return out;
 }
 
-export function PartyForm({ mode, initialModule, existing }: Props) {
+export function PartyForm({ mode, initialPartyType, existing }: Props) {
   const router = useRouter();
   const t = useTranslations('partyForm');
-  const tModules = useTranslations('modules');
+  const tPartyTypes = useTranslations('partyTypes');
+  const tPartyKinds = useTranslations('partyKinds');
   const [isPending, startTransition] = useTransition();
   const [showDelete, setShowDelete] = useState(false);
 
@@ -130,7 +140,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
           name: existing.name,
           legalName: '',
           partyType: existing.partyType,
-          partyType: 'company',
+          partyKind: 'company',
           tier: existing.tier ?? 'tier_3',
           countryCode: existing.countryCode ?? '',
           region: '',
@@ -144,8 +154,8 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
       : {
           name: '',
           legalName: '',
-          partyType: initialModule,
-          partyType: 'company',
+          partyType: initialPartyType,
+          partyKind: 'company',
           tier: 'tier_3',
           countryCode: '',
           region: '',
@@ -158,9 +168,9 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
         },
   });
 
-  const selectedModule = watch('module');
-  const selectedTier = watch('tier');
   const selectedPartyType = watch('partyType');
+  const selectedPartyKind = watch('partyKind');
+  const selectedTier = watch('tier');
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -171,7 +181,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
         name: values.name,
         legalName: values.legalName || null,
         partyType: values.partyType,
-        partyType: values.partyType,
+        partyKind: values.partyKind,
         tier: values.tier,
         countryCode: values.countryCode || null,
         region: values.region || null,
@@ -207,7 +217,6 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
     if (!existing) return;
     startTransition(async () => {
       const result = await deleteParty({ partyId: existing.id });
-      // deleteParty가 성공 시 redirect를 호출하므로 도달 안 함
       if (!result.ok) {
         toast.error(result.errorMessage ?? t('deleteFailed'));
         setShowDelete(false);
@@ -239,34 +248,13 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
             )}
           </div>
 
-          {/* Module + Type + Tier 그리드 */}
+          {/* PartyType + PartyKind + Tier */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="party-module">{t('module')} *</Label>
-              <Select
-                value={selectedModule}
-                onValueChange={(v) => setValue('module', v as PartyTypeCode, { shouldDirty: true })}
-                disabled={isPending}
-              >
-                <SelectTrigger id="party-module">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODULES_PRIORITY.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {tModules(m)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="party-type">{t('partyType')}</Label>
+              <Label htmlFor="party-type">{t('partyType')} *</Label>
               <Select
                 value={selectedPartyType}
-                onValueChange={(v) =>
-                  setValue('partyType', v as FormValues['partyType'], { shouldDirty: true })
-                }
+                onValueChange={(v) => setValue('partyType', v as PartyType, { shouldDirty: true })}
                 disabled={isPending}
               >
                 <SelectTrigger id="party-type">
@@ -275,7 +263,26 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
                 <SelectContent>
                   {PARTY_TYPES.map((pt) => (
                     <SelectItem key={pt} value={pt}>
-                      {t(`partyTypes.${pt}`)}
+                      {tPartyTypes(pt)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="party-kind">{t('partyKind')}</Label>
+              <Select
+                value={selectedPartyKind}
+                onValueChange={(v) => setValue('partyKind', v as PartyKind, { shouldDirty: true })}
+                disabled={isPending}
+              >
+                <SelectTrigger id="party-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PARTY_KINDS.map((pk) => (
+                    <SelectItem key={pk} value={pk}>
+                      {tPartyKinds(pk)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,9 +292,7 @@ export function PartyForm({ mode, initialModule, existing }: Props) {
               <Label htmlFor="party-tier">{t('tier')}</Label>
               <Select
                 value={selectedTier}
-                onValueChange={(v) =>
-                  setValue('tier', v as PartyTier, { shouldDirty: true })
-                }
+                onValueChange={(v) => setValue('tier', v as PartyTier, { shouldDirty: true })}
                 disabled={isPending}
               >
                 <SelectTrigger id="party-tier">

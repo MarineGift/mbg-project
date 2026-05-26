@@ -6,10 +6,10 @@
  * 삭제는 soft delete (deleted_at = now()). 트리거가 audit log 자동.
  *
  * 변경 이력:
- *   - 2026-05-11: DB 스키마와 정합 — 존재하지 않는 industry 컬럼 제거.
- *                 industry_tags / interest_tags 두 배열만 사용.
- *   - 2026-05-12: deleteParty에서 존재하지 않는 deleted_by 컬럼 참조 제거.
- *                 (삭제 actor 추적은 audit log 트리거에 위임)
+ *   - 2026-05-11: industry 컬럼 제거, industry_tags / interest_tags 배열만 사용.
+ *   - 2026-05-12: deleteParty에서 미존재 deleted_by 컬럼 참조 제거.
+ *   - 2026-05-25 (Phase C): module → party_type, party_type → party_kind rename.
+ *                 TS schema 는 camelCase (partyType, partyKind), DB column 은 snake_case.
  */
 
 'use server';
@@ -19,7 +19,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { PartyTypeCode } from '@/types/ai';
+import type { PartyType } from '@/types/party-type';
 
 export interface PartyActionResult {
   ok: boolean;
@@ -32,14 +32,20 @@ export interface PartyActionResult {
 const partySchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   legalName: z.string().max(200).optional().nullable(),
-  module: z.enum([
+  // 비즈니스 카테고리
+  partyType: z.enum([
     'investor',
     'paper_mill',
-    'partner',
-    'customer',
     'filler_supplier',
+    'buyer',
+    'customer',
+    'partner',
+    'government_grant',
   ]),
-  partyType: z.enum(['company', 'individual', 'organization']).default('company'),
+  // 법인 형태
+  partyKind: z
+    .enum(['company', 'organization', 'individual', 'fund', 'government'])
+    .default('company'),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']).optional().nullable(),
   countryCode: z
     .string()
@@ -83,8 +89,8 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     organization_id: auth.organizationId,
     name: parsed.data.name.trim(),
     legal_name: parsed.data.legalName?.trim() || null,
-    module: parsed.data.module,
     party_type: parsed.data.partyType,
+    party_kind: parsed.data.partyKind,
     tier: parsed.data.tier ?? 'tier_3',
     country_code: parsed.data.countryCode || null,
     region: parsed.data.region?.trim() || null,
@@ -114,7 +120,7 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
   }
   const partyId = (data as { id: string }).id;
 
-  revalidatePath(`/${parsed.data.module}/parties`);
+  revalidatePath(`/${parsed.data.partyType}/parties`);
   return { ok: true, partyId };
 }
 
@@ -144,8 +150,8 @@ export async function updateParty(
   const updates: Record<string, unknown> = {
     name: parsed.data.name.trim(),
     legal_name: parsed.data.legalName?.trim() || null,
-    module: parsed.data.module,
     party_type: parsed.data.partyType,
+    party_kind: parsed.data.partyKind,
     tier: parsed.data.tier ?? 'tier_3',
     country_code: parsed.data.countryCode || null,
     region: parsed.data.region?.trim() || null,
@@ -165,7 +171,7 @@ export async function updateParty(
     .eq('id', parsed.data.partyId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, module')
+    .select('id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -175,10 +181,10 @@ export async function updateParty(
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
   }
-  const updated = data as { id: string; module: PartyTypeCode };
+  const updated = data as { id: string; party_type: PartyType };
 
-  revalidatePath(`/${updated.module}/parties/${parsed.data.partyId}`);
-  revalidatePath(`/${updated.module}/parties`);
+  revalidatePath(`/${updated.party_type}/parties/${parsed.data.partyId}`);
+  revalidatePath(`/${updated.party_type}/parties`);
   return { ok: true, partyId: parsed.data.partyId };
 }
 
@@ -199,8 +205,6 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
   }
 
   const supabase = await createSupabaseServerClient();
-  // soft delete — audit log 트리거가 actor (auth.uid()) 자동 기록.
-  // deleted_by 컬럼은 app.parties 스키마에 존재하지 않음.
   const { error, data } = await supabase
     .schema('app')
     .from('parties' as never)
@@ -210,7 +214,7 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
     .eq('id', parsed.data.partyId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('module')
+    .select('party_type')
     .maybeSingle();
 
   if (error) {
@@ -218,8 +222,8 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
-  const module = (data as { module: PartyTypeCode }).module;
+  const partyType = (data as { party_type: PartyType }).party_type;
 
-  revalidatePath(`/${module}/parties`);
-  redirect(`/${module}/parties`);
+  revalidatePath(`/${partyType}/parties`);
+  redirect(`/${partyType}/parties`);
 }
