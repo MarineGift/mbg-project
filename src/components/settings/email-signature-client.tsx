@@ -105,15 +105,15 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
                 <TabsTrigger value="plain" className="text-xs h-7">텍스트</TabsTrigger>
               </TabsList>
               <TabsContent value="html">
-                <Textarea value={cur.html} onChange={(e) => upd('html', e.target.value)}
+                <Textarea value={cur.html_content} onChange={(e) => upd('html_content', e.target.value)}
                   className="font-mono text-xs min-h-[220px] resize-none" placeholder="<p>서명 HTML...</p>" />
               </TabsContent>
               <TabsContent value="preview">
                 <div className="border rounded-md p-4 min-h-[220px] text-sm bg-white"
-                  dangerouslySetInnerHTML={{ __html: cur.html }} />
+                  dangerouslySetInnerHTML={{ __html: cur.html_content }} />
               </TabsContent>
               <TabsContent value="plain">
-                <Textarea value={cur.plain_text} onChange={(e) => upd('plain_text', e.target.value)}
+                <Textarea value={(cur as any).plain_text ?? ''} onChange={(e) => upd('plain_text' as any, e.target.value)}
                   className="font-mono text-xs min-h-[220px] resize-none" />
               </TabsContent>
             </Tabs>

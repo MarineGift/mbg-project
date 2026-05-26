@@ -28,7 +28,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
 const PHASE_1_MODULES: readonly PartyTypeCode[] = [
-  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier',
+  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier', 'buyer', 'government_grant',
 ] as const;
 
 const MODULE_LABELS: Record<PartyTypeCode, string> = {
@@ -37,6 +37,8 @@ const MODULE_LABELS: Record<PartyTypeCode, string> = {
   partner:        'Partners',
   customer:       'Customers',
   filler_supplier:         'Filler Suppliers',
+  buyer:                   'Buyers',
+  government_grant:        'Government Grants',
 };
 
 const TIER_LABELS: Record<PartyTier, string> = {
@@ -376,7 +378,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             totalCount={totalCount}
             pageSize={pageSize}
             currentPage={page}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
           />
         </Card>
       )}
