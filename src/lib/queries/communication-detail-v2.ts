@@ -19,7 +19,7 @@ export async function fetchCommunicationDetailV2(
       'message_id, thread_id, in_reply_to, ' +
       'occurred_at, sent_at, received_at, ai_generated, ' +
       'external_data, ' +
-      'parties:party_id ( id, name, module ), ' +
+      'parties:party_id ( id, name, party_type ), ' +
       'contacts:contact_id ( id, given_name, family_name, email )',
     )
     .eq('id', id)
@@ -73,7 +73,7 @@ export async function fetchCommunicationDetailV2(
     attachmentCount:  0,
     aiGenerated:      r.ai_generated    ?? false,
     aiDraftId:        r.ai_draft_id     ?? null,
-    party:   party   ? { id: party.id,   name: party.name,   partyType: party.module } : null,
+    party:   party   ? { id: party.id,   name: party.name,   partyType: party.party_type } : null,
     contact: contact ? {
       id:       contact.id,
       fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,

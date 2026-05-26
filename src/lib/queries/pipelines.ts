@@ -105,7 +105,7 @@ export async function fetchPipelineForModule(
     .schema('app')
     .from('pipeline_definitions' as never)
     .select('id, name')
-    .eq('module', module)
+    .eq('party_type', module)
     .eq('is_default', true)
     .eq('is_active', true)
     .is('deleted_at', null)
@@ -236,7 +236,7 @@ export async function fetchAllPipelinesForModule(
     .schema('app')
     .from('pipeline_definitions' as never)
     .select('id, name, is_default, is_active')
-    .eq('module', module)
+    .eq('party_type', module)
     .is('deleted_at', null)
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: true });

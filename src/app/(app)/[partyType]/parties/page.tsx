@@ -139,7 +139,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       'id, name, tier, status, party_level, parent_party_id, country_code, city, industry_tags, website, created_at',
       { count: 'exact' },
     )
-    .eq('module', module)
+    .eq('party_type', module)
     .is('deleted_at', null)
     .ilike('name' as never, searchQuery ? `%${searchQuery}%` : '%');
 
@@ -181,7 +181,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select('country_code')
-    .eq('module' as never, module)
+    .eq('party_type' as never, module)
     .is('deleted_at' as never, null)
     .not('country_code' as never, 'is', null);
   const distinctCountries: string[] = [...new Set(

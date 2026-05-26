@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.schema('app')
     .from('parties' as never)
-    .select('id, name, module, country_code, tier')
-    .eq('module' as never, module)
+    .select('id, name, party_type, country_code, tier')
+    .eq('party_type' as never, module)
     .ilike('name' as never, `%${q}%`)
     .is('deleted_at' as never, null)
     .order('name')

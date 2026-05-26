@@ -103,7 +103,7 @@ export async function fetchCommunicationDetail(id: string) {
     .from("communications")
     .select(`
       *,
-      party:parties(id, name, module),
+      party:parties(id, name, party_type),
       contact:contacts(id, given_name, family_name, email, role_title)
     `)
     .eq("id", id)

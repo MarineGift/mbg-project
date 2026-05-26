@@ -57,7 +57,7 @@ export async function markTaskComplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, module')
+    .select('id, party_id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -66,11 +66,11 @@ export async function markTaskComplete(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; module: string | null };
+  const updated = data as { id: string; party_id: string | null; party_type: string | null };
   revalidatePath('/tasks');
   // task에 module이 있으면 그 모듈 경로로 revalidate (이전에 임시로 'investor' 하드코딩)
-  if (updated.party_id && updated.module) {
-    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  if (updated.party_id && updated.party_type) {
+    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }
@@ -97,7 +97,7 @@ export async function markTaskIncomplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, module')
+    .select('id, party_id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -106,10 +106,10 @@ export async function markTaskIncomplete(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; module: string | null };
+  const updated = data as { id: string; party_id: string | null; party_type: string | null };
   revalidatePath('/tasks');
-  if (updated.party_id && updated.module) {
-    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  if (updated.party_id && updated.party_type) {
+    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }
@@ -236,7 +236,7 @@ export async function updateTaskDetails(
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, module')
+    .select('id, party_id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -245,10 +245,10 @@ export async function updateTaskDetails(
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; module: string | null };
+  const updated = data as { id: string; party_id: string | null; party_type: string | null };
   revalidatePath('/tasks');
-  if (updated.party_id && updated.module) {
-    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  if (updated.party_id && updated.party_type) {
+    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }
@@ -275,7 +275,7 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, module')
+    .select('id, party_id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -284,10 +284,10 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; module: string | null };
+  const updated = data as { id: string; party_id: string | null; party_type: string | null };
   revalidatePath('/tasks');
-  if (updated.party_id && updated.module) {
-    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  if (updated.party_id && updated.party_type) {
+    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }
@@ -322,7 +322,7 @@ export async function updateTaskStatus(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, module')
+    .select('id, party_id, party_type')
     .maybeSingle();
 
   if (error) {
@@ -331,10 +331,10 @@ export async function updateTaskStatus(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; module: string | null };
+  const updated = data as { id: string; party_id: string | null; party_type: string | null };
   revalidatePath('/tasks');
-  if (updated.party_id && updated.module) {
-    revalidatePath(`/${updated.module}/parties/${updated.party_id}`);
+  if (updated.party_id && updated.party_type) {
+    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
   }
   return { ok: true };
 }

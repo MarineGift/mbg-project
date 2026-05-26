@@ -329,7 +329,7 @@ export async function getChildParties(parentPartyId: string) {
   const { data } = await supabase
     .schema('app' as never)
     .from('parties')
-    .select('id, name, tier, party_level, module, country_code, status')
+    .select('id, name, tier, party_level, party_type, country_code, status')
     .eq('parent_party_id', parentPartyId)
     .is('deleted_at', null)
     .order('name')

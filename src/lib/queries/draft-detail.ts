@@ -110,7 +110,7 @@ export async function fetchDraftDetail(
       ? supabase
           .schema('app')
           .from('parties' as never)
-          .select('id, name, module, tier, country_code, website')
+          .select('id, name, party_type, tier, country_code, website')
           .eq('id', d.party_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),

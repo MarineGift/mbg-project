@@ -27,7 +27,7 @@ export async function fetchSavedViews(
     .from('saved_views' as never)
     .select('*')
     .eq('entity_type' as never, entityType)
-    .eq('module' as never, module)
+    .eq('party_type' as never, module)
     .order('name');
 
   if (error) {

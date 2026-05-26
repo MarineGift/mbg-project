@@ -148,7 +148,7 @@ async function loadBrandVoice(
       'id, organization_id, module, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version',
     )
     .eq('organization_id', organizationId)
-    .eq('module', module)
+    .eq('party_type', module)
     .eq('language', language)
     .eq('is_active', true)
     .order('version', { ascending: false })
@@ -183,7 +183,7 @@ async function loadParty(
   const { data, error } = await supabase
     .schema('app')
     .from('parties')
-    .select('id, name, module, tier, country_code, industry_tags, module_data')
+    .select('id, name, party_type, tier, country_code, industry_tags, module_data')
     .eq('id', partyId)
     .maybeSingle();
   if (error || !data) return null;

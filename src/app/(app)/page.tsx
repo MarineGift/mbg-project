@@ -65,7 +65,7 @@ export default async function DashboardPage() {
         .schema('app')
         .from('parties' as never)
         .select('id', { count: 'exact', head: true })
-        .eq('module' as never, m)
+        .eq('party_type' as never, m)
         .is('deleted_at' as never, null),
     ),
   );

@@ -28,14 +28,14 @@ export async function CountryPeersPanel({ partyId, country, currentModule }: Pro
   const [millsRes, fillersRes] = await Promise.all([
     supabase.schema('app').from('parties' as never)
       .select('id, name, city, tier, party_level')
-      .eq('module' as never, 'paper_mill')
+      .eq('party_type' as never, 'paper_mill')
       .eq('country_code' as never, country)
       .is('deleted_at' as never, null)
       .order('name')
       .limit(20),
     supabase.schema('app').from('parties' as never)
       .select('id, name, city, tier, party_level')
-      .eq('module' as never, 'filler_supplier')
+      .eq('party_type' as never, 'filler_supplier')
       .eq('country_code' as never, country)
       .is('deleted_at' as never, null)
       .order('name')

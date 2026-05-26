@@ -129,7 +129,7 @@ interface RawTaskRow {
   created_at: string;
   completed_at: string | null;
   linked_strategy_action_id: string | null;
-  parties: { name: string; module: PartyTypeCode } | null;
+  parties: { name: string; party_type: PartyTypeCode } | null;
   engagements: { name: string } | null;
 }
 
@@ -144,10 +144,10 @@ export async function fetchTasks(
     .schema('app')
     .from('tasks' as never)
     .select(
-      `id, title, description, status, priority, due_at, reminder_at, module,
+      `id, title, description, status, priority, due_at, reminder_at, party_type,
        party_id, engagement_id, assigned_to_user_id, created_at, completed_at,
        linked_strategy_action_id,
-       parties:party_id ( name, module ),
+       parties:party_id ( name, party_type ),
        engagements:engagement_id ( name )`,
       { count: 'exact' },
     )
@@ -231,7 +231,7 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     partyType: r.partyType,
     partyId: r.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.partyType ?? null,
+    partyModule: party?.party_type ?? null,
     engagementId: r.engagement_id,
     engagementName: engagement?.name ?? null,
     assignedToUserId: r.assigned_to_user_id,
@@ -250,10 +250,10 @@ function toTaskRow(r: RawTaskRow): TaskRow {
 export async function fetchTaskById(id: string): Promise<TaskRow | null> {
   const supabase = await createSupabaseServerClient();
   const selectCols =
-    'id, title, description, status, priority, due_at, reminder_at, module, ' +
+    'id, title, description, status, priority, due_at, reminder_at, party_type, ' +
     'party_id, engagement_id, assigned_to_user_id, created_at, completed_at, ' +
     'linked_strategy_action_id, ' +
-    'parties:party_id ( name, module ), ' +
+    'parties:party_id ( name, party_type ), ' +
     'engagements:engagement_id ( name )';
   const { data, error } = await supabase
     .schema('app')

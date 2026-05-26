@@ -47,7 +47,7 @@ interface RawPartyRow {
   id: string;
   organization_id: string;
   name: string;
-  partyType: PartyTypeCode;
+  party_type: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   country_code: string | null;
@@ -140,7 +140,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
+      'id, organization_id, name, party_type, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -256,7 +256,7 @@ export async function fetchPartyDetail(
     id: p.id,
     organizationId: p.organization_id,
     name: p.name,
-    partyType: p.partyType,
+    partyType: p.party_type,
     tier: p.tier,
     status: p.status,
     countryCode: p.country_code,

@@ -21,8 +21,8 @@ export async function getCountryPeers(
   const { data, error } = await supabase
     .schema('app')
     .from('parties' as never)
-    .select('id, name, module, country_code, status, tier, industry_tags, notes')
-    .eq('module' as never, module)
+    .select('id, name, party_type, country_code, status, tier, industry_tags, notes')
+    .eq('party_type' as never, module)
     .eq('country_code' as never, countryCode)
     .neq('id' as never, excludeId)
     .is('deleted_at' as never, null)
@@ -37,7 +37,7 @@ export async function getCountryPeers(
   return ((data ?? []) as any[]).map((row) => ({
     id: row.id,
     name: row.name,
-    module: row.module,
+    module: row.party_type,
     country: row.country_code ?? null,
     status: row.status ?? null,
     tier: row.tier ?? null,
