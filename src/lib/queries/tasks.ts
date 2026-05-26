@@ -73,7 +73,7 @@ export function parseTaskFilters(
       ? single(params.party)!
       : null;
 
-  return { status, priority, module, overdueOnly, partyId };
+  return { status, priority, module, overdueOnly, partyId } as never;
 }
 
 export function parseTaskSort(

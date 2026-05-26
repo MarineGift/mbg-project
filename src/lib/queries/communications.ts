@@ -87,7 +87,7 @@ export async function listTemplatesForCompose(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await rpc(supabase,"list_templates_for_compose", {
     p_org_id: orgId,
-    p_module: module ?? null,
+    p_module: module ?? undefined,
   });
   if (error) {
     console.error("[listTemplatesForCompose]", error);

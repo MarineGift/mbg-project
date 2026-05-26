@@ -113,7 +113,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
   const searchQuery  = (sp.q ?? '').trim();
-  const countryFilter = (sp.country ?? '').trim().toUpperCase();
+  const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
 
   const showStubs   = sp.include_stubs === '1';
   const sortByScore = sp.sort === 'score';

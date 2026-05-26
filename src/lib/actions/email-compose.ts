@@ -213,7 +213,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     if (tmpl) {
       finalBody = await renderWithContext(
         supabase,
-        tmpl.body_html,
+        tmpl.body_html ?? '',
         payload.partyId,
         payload.contactId ?? undefined
       );

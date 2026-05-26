@@ -21,7 +21,7 @@ export async function fetchLeadScoresMany(
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .rpc('get_lead_scores_many', { p_party_ids: partyIds });
+    .rpc('get_lead_scores_many' as never, { p_party_ids: partyIds });
 
   if (error) {
     console.warn('[fetchLeadScoresMany] error:', error.message);

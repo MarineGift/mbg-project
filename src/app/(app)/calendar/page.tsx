@@ -226,7 +226,7 @@ export default function CalendarPage() {
           items={items}
           onCreateEvent={handleCreateEvent}
           onItemClick={setDetailItem}
-          onRangeChange={loadItems}
+          onRangeChange={loadItems as never}
         />
       )}
 

@@ -29,8 +29,7 @@ export async function GET(
   // Fire-and-forget — don't block the pixel response
   supabase
     .rpc('record_email_open', { p_token: token, p_ip: ip, p_ua: ua })
-    .then(() => {})
-    .catch(() => {});
+    .then(() => {}, () => {});
 
   return new NextResponse(PIXEL, {
     status: 200,

@@ -53,7 +53,7 @@ export async function CountryPeersPanel({ partyId, country, currentModule }: Pro
       partyId={partyId}
       country={country}
       countryName={countryName}
-      currentModule={currentModule}
+      currentModule={currentModule as never}
       mills={mills}
       fillers={fillers}
     />
