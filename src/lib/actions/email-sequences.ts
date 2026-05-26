@@ -20,7 +20,7 @@ export async function createSequence(
     step_order: i,
     day_offset: s.day_offset,
     subject:    s.subject,
-    body_text:  s.body_text,
+    body_plain:  s.body_plain,
   }));
 
   const { data, error } = await rpc(supabase, 'create_sequence', {
@@ -45,7 +45,7 @@ export async function updateSequence(
     step_order: i,
     day_offset: s.day_offset,
     subject:    s.subject,
-    body_text:  s.body_text,
+    body_plain:  s.body_plain,
   }));
 
   const { error } = await rpc(supabase, 'update_sequence', {

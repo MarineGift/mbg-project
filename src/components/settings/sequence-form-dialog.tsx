@@ -13,9 +13,9 @@ interface Props {
 }
 
 const DEFAULT_STEPS: StepDraft[] = [
-  { step_order: 0, day_offset: 0, subject: '', body_text: '' },
-  { step_order: 1, day_offset: 3, subject: '', body_text: '' },
-  { step_order: 2, day_offset: 7, subject: '', body_text: '' },
+  { step_order: 0, day_offset: 0, subject: '', body_plain: '' },
+  { step_order: 1, day_offset: 3, subject: '', body_plain: '' },
+  { step_order: 2, day_offset: 7, subject: '', body_plain: '' },
 ];
 
 const MERGE_FIELDS = [
@@ -42,7 +42,7 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
     const lastOffset = steps.at(-1)?.day_offset ?? 0;
     setSteps(prev => [
       ...prev,
-      { step_order: prev.length, day_offset: lastOffset + 3, subject: '', body_text: '' },
+      { step_order: prev.length, day_offset: lastOffset + 3, subject: '', body_plain: '' },
     ]);
   }
 
@@ -72,7 +72,7 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
   function handleSubmit() {
     if (!name.trim())         { setError('Sequence name is required.');       return; }
     if (steps.length === 0)   { setError('Add at least one step.');           return; }
-    const hasEmpty = steps.some(s => !s.subject.trim() || !s.body_text.trim());
+    const hasEmpty = steps.some(s => !s.subject.trim() || !s.body_plain.trim());
     if (hasEmpty)             { setError('All steps need a subject and body.'); return; }
 
     setError(null);
@@ -210,8 +210,8 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
                         className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <textarea
-                        value={step.body_text}
-                        onChange={e => updateStep(i, 'body_text', e.target.value)}
+                        value={step.body_plain}
+                        onChange={e => updateStep(i, 'body_plain', e.target.value)}
                         placeholder={`Hi {{contact.firstName}},\n\nI wanted to reach out about...`}
                         rows={4}
                         className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"

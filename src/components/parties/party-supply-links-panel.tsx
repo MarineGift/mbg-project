@@ -15,9 +15,9 @@ interface SupplyLink {
   linked_module: string;
   linked_country: string | null;
   linked_tier: string | null;
-  supply_type: string;
+  link_type: string;
   product_grade: string | null;
-  volume_tpy: number | null;
+  volume_estimate: number | null;
   notes: string | null;
 }
 
@@ -109,7 +109,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
           <div className="divide-y max-h-[380px] overflow-y-auto">
             {links.map(lk => {
               const route    = lk.linked_module === 'paper_mill' ? 'paper_mill' : 'filler_supplier';
-              const typeInfo = SUPPLY_TYPES.find(t => t.value === lk.supply_type) ?? SUPPLY_TYPES[0];
+              const typeInfo = SUPPLY_TYPES.find(t => t.value === lk.link_type) ?? SUPPLY_TYPES[0];
               return (
                 <div key={lk.id} className="flex items-start gap-2 px-4 py-3 hover:bg-muted/30 group">
                   <Link href={`/${route}/parties/${lk.linked_id}`} className="flex-1 min-w-0">
@@ -130,9 +130,9 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
                           <Package className="h-3 w-3" />{lk.product_grade}
                         </span>
                       )}
-                      {lk.volume_tpy && (
+                      {lk.volume_estimate && (
                         <span className="flex items-center gap-0.5">
-                          <TrendingUp className="h-3 w-3" />{lk.volume_tpy.toLocaleString()} t/yr
+                          <TrendingUp className="h-3 w-3" />{lk.volume_estimate.toLocaleString()} t/yr
                         </span>
                       )}
                       {lk.notes && <span className="truncate max-w-[180px] italic">{lk.notes}</span>}
@@ -205,9 +205,9 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
           organization_id: orgId,
           filler_party_id: isFillerPage ? partyId : selected.id,
           mill_party_id:   isFillerPage ? selected.id : partyId,
-          supply_type:     supplyType,
+          link_type:     supplyType,
           product_grade:   grade || null,
-          volume_tpy:      volume ? parseInt(volume) : null,
+          volume_estimate:      volume ? parseInt(volume) : null,
           notes:           notes || null,
         }),
       });

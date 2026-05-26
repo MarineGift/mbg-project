@@ -84,7 +84,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
     redirect(`/${full.party.partyType}/parties/${id}`);
   }
 
-  // org_id: env 변수 (단일 조직 앱)
+  // organization_id: env 변수 (단일 조직 앱)
   const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID ?? '';
   const partyCountry = full.party.countryCode ?? null;  // DB: country_code
 
