@@ -95,7 +95,7 @@ type Augmentation = {
 // v2: direct lookup (no conditional `infer`) for reliable narrowing
 // ---------------------------------------------------------------
 
-type Fns = Database['public']['Functions'] & Augmentation;
+type Fns = Database['public']['Functions'] & Database['app']['Functions'] & Database['ai']['Functions'] & Augmentation;
 export type FnName = keyof Fns;
 export type FnArgs<N extends FnName> = Fns[N]['Args'];
 export type FnReturns<N extends FnName> = Fns[N]['Returns'];

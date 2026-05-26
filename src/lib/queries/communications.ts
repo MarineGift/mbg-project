@@ -3,6 +3,7 @@
 // Phase 22a  Communications data access
 // ============================================================
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { rpc } from "@/lib/rpc/typed-rpc";
 import type {
   CommunicationTimelineItem,
   PartyCommunicationStats,
@@ -15,7 +16,7 @@ export async function getPartyCommunicationsTimeline(
   limit = 100
 ): Promise<CommunicationTimelineItem[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc(
+  const { data, error } = await rpc(supabase,
     "get_party_communications_timeline",
     { p_party_id: partyId, p_limit: limit }
   );
@@ -23,7 +24,7 @@ export async function getPartyCommunicationsTimeline(
     console.error("[getPartyCommunicationsTimeline]", error);
     return [];
   }
-  return (data || []) as CommunicationTimelineItem[];
+  return (data || []) as unknown as CommunicationTimelineItem[];
 }
 
 export async function getContactCommunicationsTimeline(
@@ -31,7 +32,7 @@ export async function getContactCommunicationsTimeline(
   limit = 100
 ): Promise<CommunicationTimelineItem[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc(
+  const { data, error } = await rpc(supabase,
     "get_contact_communications_timeline",
     { p_contact_id: contactId, p_limit: limit }
   );
@@ -39,14 +40,14 @@ export async function getContactCommunicationsTimeline(
     console.error("[getContactCommunicationsTimeline]", error);
     return [];
   }
-  return (data || []) as CommunicationTimelineItem[];
+  return (data || []) as unknown as CommunicationTimelineItem[];
 }
 
 export async function getPartyCommunicationStats(
   partyId: string
 ): Promise<PartyCommunicationStats> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc(
+  const { data, error } = await rpc(supabase,
     "get_communications_stats_per_party",
     { p_party_id: partyId }
   );
@@ -69,14 +70,14 @@ export async function getThreadContext(
   communicationId: string
 ): Promise<ThreadContext | null> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("get_thread_context", {
+  const { data, error } = await rpc(supabase,"get_thread_context", {
     p_communication_id: communicationId,
   });
   if (error) {
     console.error("[getThreadContext]", error);
     return null;
   }
-  return data as ThreadContext;
+  return data as unknown as ThreadContext;
 }
 
 export async function listTemplatesForCompose(
@@ -84,7 +85,7 @@ export async function listTemplatesForCompose(
   module?: string
 ): Promise<TemplateForCompose[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("list_templates_for_compose", {
+  const { data, error } = await rpc(supabase,"list_templates_for_compose", {
     p_org_id: orgId,
     p_module: module ?? null,
   });
