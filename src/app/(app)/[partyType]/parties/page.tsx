@@ -1,5 +1,5 @@
 /**
- * app/(app)/[module]/parties/page.tsx
+ * app/(app)/[partyType]/parties/page.tsx
  * Phase 8 + responsive + Phase 20d (lead score) + pagination + Phase 20f (saved views)
  * Phase 23: supply links column (connected mills / fillers)
  */
@@ -144,10 +144,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .eq('party_type', module)
     .is('deleted_at', null)
     .ilike('name' as never, searchQuery ? `%${searchQuery}%` : '%');
-
-  if (countryFilter) {
-    query = query.eq('country_code' as never, countryFilter);
-  }
 
   if (countryFilter) {
     query = query.eq('country_code' as never, countryFilter);
