@@ -220,6 +220,8 @@ function ModuleDot({ module }: { module: PartyTypeCode }) {
   paper_mill: 'bg-module-buyer',
   partner: 'bg-module-partner',
   customer: 'bg-module-customer',
+  buyer: 'bg-module-buyer',
+  government_grant: 'bg-gray-500',
   filler_supplier: 'bg-amber-500',  // 충전제(광물성) — amber 톤. 추후 tailwind config에 bg-module-filler 추가 가능
 };
   return (

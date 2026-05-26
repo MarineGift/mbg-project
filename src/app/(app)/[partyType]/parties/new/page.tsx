@@ -38,7 +38,7 @@ export default async function NewPartyPage({ params }: PageProps) {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <PartyForm mode="create" initialModule={module} />
+      <PartyForm mode="create" initialPartyType={module} />
     </div>
   );
 }

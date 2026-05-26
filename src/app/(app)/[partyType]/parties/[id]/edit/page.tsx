@@ -27,7 +27,7 @@ interface PageProps {
 }
 
 export default async function EditPartyPage({ params }: PageProps) {
-  const { partyType: urlModule, id } = (await params) as { partyType: string; id: string };
+  const { partyType: urlModule, id } = (await params) as unknown as { partyType: string; id: string };
 
   // URL의 module 세그먼트 검증
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
@@ -52,7 +52,7 @@ export default async function EditPartyPage({ params }: PageProps) {
     <div className="p-6 max-w-3xl mx-auto">
       <PartyForm
         mode="edit"
-        initialModule={full.party.partyType}
+        initialPartyType={full.party.partyType}
         existing={full.party}
       />
     </div>

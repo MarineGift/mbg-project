@@ -252,7 +252,7 @@ async function fetchCommunicationContext(
     partyId: (data.party_id as string | null) ?? undefined,
     contactId: (data.contact_id as string | null) ?? undefined,
     engagementId: (data.engagement_id as string | null) ?? undefined,
-    partyType: (data.partyType as PartyTypeCode | null) ?? undefined,
+    partyType: (data.module as PartyTypeCode | null) ?? undefined,
     fromAddress: (data.from_address as string | null) ?? undefined,
     bodyPlain: (data.body_plain as string | null) ?? '',
     subject: (data.subject as string | null) ?? '',
