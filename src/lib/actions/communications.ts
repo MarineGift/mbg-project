@@ -7,9 +7,10 @@
  * 흐름:
  *   1. user의 sending_email 확인
  *   2. communications INSERT (status='sending')
- *   3. tabs-mailer.sendOne() 호출 → message-id 획득
- *   4. communications UPDATE (status='sent', message_id, sent_at)
- *   5. 실패 시 status='failed' + error_message
+ *   3. createEmailTracking() → injectedHtml 획득 (픽셀 + 추적 링크)
+ *   4. tabs-mailer.sendOne(bodyHtml: injectedHtml) → message-id 획득
+ *   5. communications UPDATE (status='sent', message_id, sent_at)
+ *   6. 실패 시 status='failed' + error_message
  */
 
 'use server';
@@ -19,6 +20,47 @@ import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
+import { createEmailTracking } from '@/lib/actions/email-tracking';
+
+/* ──────────────────────────────────────────────────────────
+ * Plain text → HTML 변환 (픽셀 삽입을 위한 최소 변환)
+ * ────────────────────────────────────────────────────────── */
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * plain text를 최소한의 HTML로 변환.
+ * 빈 줄은 단락 구분, 일반 줄은 <p> 태그로 감싼다.
+ */
+function plainToHtml(text: string): string {
+  const lines = text.split('\n');
+  const parts: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      parts.push('<br>');
+    } else {
+      parts.push(
+        `<p style="margin:0 0 8px 0">${escapeHtml(trimmed)}</p>`,
+      );
+    }
+  }
+  return (
+    `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">` +
+    parts.join('\n') +
+    `</div>`
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * 결과 타입 + 입력 스키마
+ * ────────────────────────────────────────────────────────── */
 
 export interface ComposeResult {
   ok: boolean;
@@ -39,6 +81,8 @@ const composeSchema = z.object({
   cc: z.string().max(2000).optional().or(z.literal('')),
   subject: z.string().min(1, 'Subject is required').max(500),
   bodyPlain: z.string().min(1, 'Body is required').max(50_000),
+  /** 리치 텍스트 에디터가 있는 경우 HTML 직접 전달 가능 (없으면 bodyPlain → 자동 변환) */
+  bodyHtml: z.string().max(200_000).optional().nullable(),
   /** 거래처 연결 (있으면 communications.party_id에 저장) */
   partyId: z.string().uuid().optional().nullable(),
   contactId: z.string().uuid().optional().nullable(),
@@ -46,6 +90,10 @@ const composeSchema = z.object({
   inReplyTo: z.string().max(500).optional().nullable(),
   threadId: z.string().max(500).optional().nullable(),
 });
+
+/* ──────────────────────────────────────────────────────────
+ * sendOutboundManual
+ * ────────────────────────────────────────────────────────── */
 
 export async function sendOutboundManual(
   input: z.input<typeof composeSchema>,
@@ -56,6 +104,7 @@ export async function sendOutboundManual(
   } catch {
     return { ok: false, errorCode: 'unauthorized' };
   }
+
   const parsed = composeSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -127,6 +176,30 @@ export async function sendOutboundManual(
 
   // [B] TABS Mailer 발송
   try {
+    // ── [B-1] 이메일 추적 레코드 생성 + HTML 픽셀 주입 ──────────────
+    // bodyHtml이 직접 전달되면 그것을 사용, 없으면 bodyPlain → HTML 변환
+    const baseHtml = parsed.data.bodyHtml?.trim()
+      ? parsed.data.bodyHtml
+      : plainToHtml(parsed.data.bodyPlain);
+
+    let injectedHtml: string = baseHtml;
+    try {
+      const trackingResult = await createEmailTracking({
+        orgId:           auth.organizationId,
+        communicationId: outboundId,
+        partyId:         parsed.data.partyId  ?? undefined,
+        contactId:       parsed.data.contactId ?? undefined,
+        subject:         parsed.data.subject,
+        sentTo:          parsed.data.to,
+        htmlBody:        baseHtml,
+      });
+      injectedHtml = trackingResult.injectedHtml;
+    } catch (trackingErr) {
+      // 추적 실패 시 발송은 계속 진행 (non-blocking)
+      console.warn('[communications] tracking setup failed:', trackingErr);
+    }
+
+    // ── [B-2] TABS Mailer 발송 ──────────────────────────────────────
     const mailer = await createTabsMailer();
     const sendResult = await mailer.sendOne({
       to: { address: parsed.data.to },
@@ -134,7 +207,8 @@ export async function sendOutboundManual(
       fromName,
       fromAddress,
       subject: parsed.data.subject,
-      bodyText: parsed.data.bodyPlain,
+      bodyText: parsed.data.bodyPlain,   // plain text (fallback)
+      bodyHtml: injectedHtml,            // HTML with tracking pixel ← NEW
       urmHeaders: {
         communicationId: outboundId,
         autoSend: false,
@@ -156,7 +230,7 @@ export async function sendOutboundManual(
 
     revalidatePath('/inbox');
     if (parsed.data.partyId) {
-      revalidatePath(`/`, 'layout'); // module을 모르므로 광범위 revalidate
+      revalidatePath(`/`, 'layout');
     }
     return { ok: true, communicationId: outboundId };
   } catch (e) {

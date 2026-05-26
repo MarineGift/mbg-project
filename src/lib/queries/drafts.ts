@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/queries/drafts.ts
  *
  * Server-side fetcher for AI 초안 큐.
@@ -16,7 +16,7 @@ import {
   type ClassificationCategory,
   type DraftStatus,
   type Language,
-  type ModuleType,
+  type PartyTypeCode,
 } from '@/types/ai';
 import {
   DEFAULT_FILTERS,
@@ -30,14 +30,12 @@ import {
   PAGE_SIZE_OPTIONS,
 } from '@/types/draft-queue';
 
-const ALL_MODULES: readonly ModuleType[] = [
+const ALL_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
   'customer',
-  'crowdfunding',
-  'product_launch',
-  'sales', 'filler',
+  'filler_supplier',
 ] as const;
 
 const ALL_STATUSES: readonly DraftStatus[] = [
@@ -65,7 +63,7 @@ export function parseFilters(
   params: Record<string, string | string[] | undefined>,
 ): DraftQueueFilters {
   const status = pickEnum(params.status, ALL_STATUSES, 'pending_review' as const);
-  const module = pickEnum(params.module, ALL_MODULES, 'all' as const);
+  const module = pickEnum(params.partyType, ALL_MODULES, 'all' as const);
   const category = pickEnum(
     params.category,
     CLASSIFICATION_CATEGORIES,
@@ -79,7 +77,7 @@ export function parseFilters(
     status: (status === 'pending_review' || status === 'all') && params.status === undefined
       ? 'pending_review'  // 기본
       : (status as DraftStatus | 'all'),
-    module: module as ModuleType | 'all',
+    partyType: module as PartyTypeCode | 'all',
     category: category as ClassificationCategory | 'all',
     minConfidence,
     onlyRisky,
@@ -137,7 +135,7 @@ function clamp01(n: number): number {
 interface RawJoinedDraft {
   id: string;
   status: DraftStatus;
-  module: ModuleType | null;
+  partyType: PartyTypeCode | null;
   classification_category: ClassificationCategory | null;
   confidence_score: number | null;
   language: Language;
@@ -223,8 +221,8 @@ export async function fetchDraftQueue(
   if (filters.status !== 'all') {
     query = query.eq('status', filters.status);
   }
-  if (filters.module !== 'all') {
-    query = query.eq('module', filters.module);
+  if (filters.partyType !== 'all') {
+    query = query.eq('module', filters.partyType);
   }
   if (filters.category !== 'all') {
     query = query.eq('classification_category', filters.category);
@@ -268,7 +266,7 @@ export async function fetchDraftQueue(
   const draftRows = (data ?? []) as Array<{
     id: string;
     status: string;
-    module: string | null;
+    partyType: string | null;
     classification_category: string;
     confidence_score: number;
     language: string;
@@ -321,9 +319,9 @@ export async function fetchDraftQueue(
       : Promise.resolve({ data: [], error: null }),
     engagementIds.length > 0
       ? supabase
-          .schema('app')
-          .from('engagements' as never)
-          .select('id, name')
+          .schema('urm')
+          .from('deals' as never)
+          .select('id, deal_name')
           .in('id', engagementIds)
       : Promise.resolve({ data: [], error: null }),
     communicationIds.length > 0
@@ -355,8 +353,8 @@ export async function fetchDraftQueue(
     partyMap.set(p.id, { name: p.name });
   }
   const engagementMap = new Map<string, { name: string }>();
-  for (const e of (engagementsRes.data ?? []) as Array<{ id: string; name: string }>) {
-    engagementMap.set(e.id, { name: e.name });
+  for (const e of (engagementsRes.data ?? []) as Array<{ id: string; deal_name: string }>) {
+    engagementMap.set(e.id, { name: e.deal_name });
   }
   const commMap = new Map<string, { from_address: string | null; subject: string | null }>();
   for (const c of (commsRes.data ?? []) as Array<{
@@ -404,7 +402,7 @@ function toQueueRow(raw: RawJoinedDraft): DraftQueueRow {
   return {
     id: raw.id,
     status: raw.status,
-    module: raw.module,
+    partyType: raw.partyType,
     classificationCategory: raw.classification_category,
     confidenceScore: raw.confidence_score,
     language: raw.language,

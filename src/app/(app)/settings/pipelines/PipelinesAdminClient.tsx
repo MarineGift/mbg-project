@@ -44,13 +44,10 @@ export type ModuleGroup = {
 // 사이드바 라벨과 일치 (영어 기본)
 const MODULE_NAMES: Record<string, string> = {
   investor: 'Investors',
-  paper_mill: 'Paper Companies',
+  paper_mill: 'Paper Mills',
   partner: 'Partners',
   customer: 'Customers',
   filler_supplier: 'Filler Suppliers',
-  crowdfunding: 'Crowdfunding',
-  product_launch: 'Product Launch',
-  sales: 'Sales',
 }
 
 function moduleDisplayName(module: string): string {
@@ -95,7 +92,7 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
       {moduleGroups.map((group) => {
         // 다음 stage의 sort_order 계산 (마지막 + 10)
         const lastSort =
-          group.stages.length > 0 ? group.stages[group.stages.length - 1].sort_order : 0
+          group.stages.length > 0 ? group.stages[group.stages.length - 1]!.sort_order : 0
         const nextSortOrder = lastSort + 10
 
         return (

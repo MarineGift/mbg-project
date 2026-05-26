@@ -24,7 +24,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -47,7 +47,7 @@ interface RawPartyRow {
   id: string;
   organization_id: string;
   name: string;
-  module: ModuleType;
+  party_type: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   country_code: string | null;
@@ -59,12 +59,11 @@ interface RawPartyRow {
   created_at: string;
   updated_at: string;
   // ▼ Phase 6 (2026-05-14)
-  industry_paper_company_id: number | null;
-  industry_filler_supplier_id: number | null;
 }
 
 const TIMELINE_LIMIT = 30;
 const SIDEBAR_LIMIT = 10;
+const MEETINGS_LIMIT = 100;  // 2026-05-19
 
 /**
  * "Open" engagement로 카운트할 때 제외할 status 값.
@@ -77,6 +76,60 @@ const TERMINAL_ENGAGEMENT_STATUSES = new Set([
   'archived',
 ]);
 
+// ============================================================
+// 2026-05-19: 미팅 관련 타입 (app.meetings)
+// 주: meeting_mode 컬럼은 DB 에 존재하지 않음.
+// Stage 24 에서 channel enum 으로 정리 예정.
+// ============================================================
+
+export type MeetingStatus =
+  | 'scheduled'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show'
+  | 'rescheduled';
+
+export interface MeetingAttendeeRef {
+  name?: string;
+  email?: string;
+  role?: string;
+  party_id?: string;
+  response?: 'no_response' | 'accepted' | 'declined' | 'tentative';
+}
+
+export interface PartyMeeting {
+  id: string;
+  partyId: string;
+  engagementId: string | null;
+  meetingType: string;
+  title: string;
+  agenda: string | null;
+  notes: string | null;
+  aiSummary: string | null;
+  outcome: string | null;
+  nextSteps: string | null;
+  occurredAt: string;
+  scheduledAt: string | null;
+  actualStartedAt: string | null;
+  actualEndedAt: string | null;
+  durationMin: number | null;
+  attendees: MeetingAttendeeRef[] | null;
+  status: MeetingStatus;
+  location: string | null;
+  meetingUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartyMeetingStats {
+  total: number;
+  completed: number;
+  scheduled: number;
+  upcoming: number;
+  lastOccurredAt: string | null;
+  nextScheduledAt: string | null;
+}
+
 export async function fetchPartyDetail(
   partyId: string,
 ): Promise<PartyDetailFull | null> {
@@ -87,7 +140,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, name, module, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at, industry_paper_company_id, industry_filler_supplier_id',
+      'id, organization_id, name, party_type, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -124,12 +177,12 @@ export async function fetchPartyDetail(
 
     // engagements (10개) — pipeline_stages JOIN으로 stage 이름 함께 fetch
     supabase
-      .schema('app')
-      .from('engagements' as never)
+      .schema('urm')
+      .from('deals' as never)
       .select(
-        `id, name, status, current_stage_id, value_amount, value_currency,
+        `id, deal_name, status, current_stage_id, value_amount, value_currency,
          expected_close_date, updated_at,
-         pipeline_stages:current_stage_id ( name )`,
+         stages:current_stage_id ( name )`,
         { count: 'exact' },
       )
       .eq('party_id', partyId)
@@ -203,7 +256,7 @@ export async function fetchPartyDetail(
     id: p.id,
     organizationId: p.organization_id,
     name: p.name,
-    module: p.module,
+    partyType: p.party_type,
     tier: p.tier,
     status: p.status,
     countryCode: p.country_code,
@@ -215,8 +268,8 @@ export async function fetchPartyDetail(
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     // ▼ Phase 6 (2026-05-14)
-    industryPaperCompanyId: p.industry_paper_company_id,
-    industryFillerSupplierId: p.industry_filler_supplier_id,
+    industryPaperCompanyId: null,
+    industryFillerSupplierId: null,
     counts: {
       contacts: contactsRes.count ?? 0,
       communications: commsRes.count ?? 0,
@@ -265,7 +318,7 @@ function mapContact(raw: unknown): PartyContact {
 function mapEngagement(raw: unknown): PartyEngagement {
   const r = raw as Record<string, unknown>;
   // Supabase가 nested join을 객체 또는 배열로 반환할 수 있음 — 둘 다 처리
-  const stageJoin = r.pipeline_stages;
+  const stageJoin = r.stages;
   let stageName: string | null = null;
   if (stageJoin) {
     if (Array.isArray(stageJoin) && stageJoin.length > 0) {
@@ -277,7 +330,7 @@ function mapEngagement(raw: unknown): PartyEngagement {
 
   return {
     id: r.id as string,
-    name: (r.name as string) ?? '',
+    name: (r.deal_name as string) ?? '',
     status: (r.status as string) ?? '',
     stage: stageName,
     valueAmount:
@@ -349,4 +402,160 @@ function buildTimeline(
   });
 
   return items.slice(0, TIMELINE_LIMIT);
+}
+
+// ============================================================
+// 2026-05-19: 미팅 query 함수 (방향 Y - meeting_mode 컬럼 미사용)
+// ============================================================
+
+const MEETING_SELECT_COLS = [
+  'id', 'party_id', 'engagement_id', 'meeting_type', 'title',
+  'agenda', 'notes', 'ai_summary', 'outcome', 'next_steps',
+  'occurred_at', 'scheduled_at', 'actual_started_at', 'actual_ended_at',
+  'duration_min', 'status', 'location', 'meeting_url',
+  'created_at', 'updated_at',
+].join(', ');
+
+export async function fetchPartyMeetings(
+  partyId: string,
+  limit: number = MEETINGS_LIMIT,
+): Promise<PartyMeeting[]> {
+  if (!partyId) return [];
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select(MEETING_SELECT_COLS)
+    .eq('party_id', partyId)
+    .order('occurred_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('[party-detail] meetings fetch error:', error);
+    return [];
+  }
+  return ((data ?? []) as unknown[]).map(mapMeeting);
+}
+
+export async function fetchUpcomingPartyMeetings(
+  partyId: string,
+): Promise<PartyMeeting[]> {
+  if (!partyId) return [];
+  const supabase = await createSupabaseServerClient();
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select(MEETING_SELECT_COLS)
+    .eq('party_id', partyId)
+    .eq('status', 'scheduled')
+    .gte('scheduled_at', nowIso)
+    .order('scheduled_at', { ascending: true })
+    .limit(SIDEBAR_LIMIT);
+
+  if (error) {
+    console.error('[party-detail] upcoming meetings error:', error);
+    return [];
+  }
+  return ((data ?? []) as unknown[]).map(mapMeeting);
+}
+
+export async function fetchPartyMeetingStats(
+  partyId: string,
+): Promise<PartyMeetingStats> {
+  const empty: PartyMeetingStats = {
+    total: 0,
+    completed: 0,
+    scheduled: 0,
+    upcoming: 0,
+    lastOccurredAt: null,
+    nextScheduledAt: null,
+  };
+  if (!partyId) return empty;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('meetings' as never)
+    .select('status, occurred_at, scheduled_at')
+    .eq('party_id', partyId);
+
+  if (error) {
+    console.error('[party-detail] meeting stats error:', error);
+    return empty;
+  }
+
+  const rows = (data ?? []) as Array<{
+    status: MeetingStatus;
+    occurred_at: string | null;
+    scheduled_at: string | null;
+  }>;
+  const nowMs = Date.now();
+
+  const occurredTimes = rows
+    .map((r) => r.occurred_at)
+    .filter((v): v is string => !!v)
+    .sort();
+  const upcomingTimes = rows
+    .filter(
+      (r) =>
+        r.status === 'scheduled' &&
+        r.scheduled_at &&
+        new Date(r.scheduled_at).getTime() >= nowMs,
+    )
+    .map((r) => r.scheduled_at as string)
+    .sort();
+
+  return {
+    total: rows.length,
+    completed: rows.filter((r) => r.status === 'completed').length,
+    scheduled: rows.filter((r) => r.status === 'scheduled').length,
+    upcoming: upcomingTimes.length,
+    lastOccurredAt: occurredTimes.length
+      ? (occurredTimes[occurredTimes.length - 1] ?? null)
+      : null,
+    nextScheduledAt: upcomingTimes.length ? (upcomingTimes[0] ?? null) : null,
+  };
+}
+
+function mapMeeting(raw: unknown): PartyMeeting {
+  const r = raw as Record<string, unknown>;
+  const rawAttendees = r.attendees;
+  let attendees: MeetingAttendeeRef[] | null = null;
+  if (Array.isArray(rawAttendees)) {
+    attendees = rawAttendees as MeetingAttendeeRef[];
+  } else if (rawAttendees && typeof rawAttendees === 'object') {
+    attendees = [rawAttendees as MeetingAttendeeRef];
+  }
+
+  return {
+    id: r.id as string,
+    partyId: r.party_id as string,
+    engagementId: (r.engagement_id as string | null) ?? null,
+    meetingType: (r.meeting_type as string) ?? '',
+    title: (r.title as string) ?? '',
+    agenda: (r.agenda as string | null) ?? null,
+    notes: (r.notes as string | null) ?? null,
+    aiSummary: (r.ai_summary as string | null) ?? null,
+    outcome: (r.outcome as string | null) ?? null,
+    nextSteps: (r.next_steps as string | null) ?? null,
+    occurredAt: r.occurred_at as string,
+    scheduledAt: (r.scheduled_at as string | null) ?? null,
+    actualStartedAt: (r.actual_started_at as string | null) ?? null,
+    actualEndedAt: (r.actual_ended_at as string | null) ?? null,
+    durationMin:
+      typeof r.duration_min === 'number'
+        ? r.duration_min
+        : r.duration_min != null
+          ? Number(r.duration_min)
+          : null,
+    attendees,
+    status: r.status as MeetingStatus,
+    location: (r.location as string | null) ?? null,
+    meetingUrl: (r.meeting_url as string | null) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
 }

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -94,7 +94,7 @@ export function DraftQueueTable({ rows }: DraftQueueTableProps) {
                 <StatusBadge status={row.status} size="sm" />
               </td>
               <td className="px-3 py-3 align-top">
-                {row.module ? <ModuleBadge module={row.module} size="sm" /> : null}
+                {row.partyType ? <ModuleBadge partyType={row.partyType} size="sm" /> : null}
               </td>
               <td className="px-3 py-3 align-top">
                 <div className="space-y-0.5 min-w-0">

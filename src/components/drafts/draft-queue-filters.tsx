@@ -18,7 +18,7 @@ import {
   CLASSIFICATION_CATEGORIES,
   type ClassificationCategory,
   type DraftStatus,
-  type ModuleType,
+  type PartyTypeCode,
 } from '@/types/ai';
 import type { DraftQueueFilters, DraftQueueSort } from '@/types/draft-queue';
 
@@ -36,7 +36,7 @@ const STATUS_OPTIONS: readonly DraftStatus[] = [
   'auto_sent',
 ] as const;
 
-const MODULE_OPTIONS: readonly ModuleType[] = [
+const MODULE_OPTIONS: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
@@ -94,7 +94,7 @@ export function DraftQueueFilters({
 
   const isDirty =
     filters.status !== 'pending_review' ||
-    filters.module !== 'all' ||
+    filters.partyType !== 'all' ||
     filters.category !== 'all' ||
     filters.minConfidence > 0 ||
     filters.onlyRisky ||
@@ -130,7 +130,7 @@ export function DraftQueueFilters({
       <div className="space-y-1 min-w-[140px]">
         <Label className="text-xs text-muted-foreground">{t('module')}</Label>
         <Select
-          value={filters.module}
+          value={filters.partyType}
           onValueChange={(v) => setParam('module', v)}
         >
           <SelectTrigger>

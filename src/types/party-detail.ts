@@ -12,7 +12,7 @@
  *                 industryFillerSupplierId FK 필드 추가.
  */
 
-import type { ModuleType } from './ai';
+import type { PartyTypeCode } from './ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -29,7 +29,7 @@ export interface PartyDetail {
   id: string;
   organizationId: string;
   name: string;
-  module: ModuleType;
+  partyType: PartyTypeCode;
   tier: PartyTier | null;
   status: PartyStatus;
   countryCode: string | null;

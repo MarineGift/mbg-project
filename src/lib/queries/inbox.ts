@@ -18,7 +18,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   CommunicationChannel,
   CommunicationDirection,
@@ -124,7 +124,7 @@ interface RawInboxRow {
   sent_at: string | null;
   ai_generated: boolean;
   party_id: string | null;
-  parties: { name: string; module: ModuleType } | null;
+  parties: { name: string; party_type: PartyTypeCode } | null;
 }
 
 export async function fetchInbox(
@@ -140,11 +140,13 @@ export async function fetchInbox(
       `id, channel, direction, status, from_address, from_name, to_addresses,
        subject, body_plain, occurred_at, sent_at, ai_generated,
        party_id,
-       parties:party_id ( name, module )`,
+       parties:party_id ( name, party_type )`,
       { count: 'exact' },
     );
 
   // 필터
+  query = query.is('deleted_at', null); // soft-delete 제외
+
   if (filters.channel !== 'all') {
     query = query.eq('channel', filters.channel);
   }
@@ -237,7 +239,7 @@ function toInboxRow(
     sentAt: raw.sent_at,
     partyId: raw.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.module ?? null,
+    partyModule: party?.party_type ?? null,
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,

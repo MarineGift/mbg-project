@@ -7,28 +7,27 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import { cn } from '@/lib/utils';
 
 interface ModuleBadgeProps {
-  module: ModuleType;
+  partyType: PartyTypeCode;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-const MODULE_STYLES: Record<ModuleType, string> = {
+const MODULE_STYLES: Record<PartyTypeCode, string> = {
   investor: 'bg-module-investor text-module-investor-foreground',
   paper_mill: 'bg-module-buyer text-module-buyer-foreground',
   partner: 'bg-module-partner text-module-partner-foreground',
   customer: 'bg-module-customer text-module-customer-foreground',
-  crowdfunding: 'bg-module-crowdfunding text-module-crowdfunding-foreground',
-  product_launch: 'bg-module-product_launch text-module-product_launch-foreground',
-  sales: 'bg-module-sales text-module-sales-foreground',
-  filler: 'bg-amber-100 text-amber-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
+  filler_supplier: 'bg-amber-100 text-amber-700',
+  buyer: 'bg-yellow-100 text-yellow-700',
+  government_grant: 'bg-gray-100 text-gray-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
 };
 
 export function ModuleBadge({
-  module,
+  partyType,
   size = 'md',
   className,
 }: ModuleBadgeProps) {
@@ -38,11 +37,11 @@ export function ModuleBadge({
       className={cn(
         'inline-flex items-center rounded-full font-medium',
         size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
-        MODULE_STYLES[module],
+        MODULE_STYLES[partyType],
         className,
       )}
     >
-      {t(module)}
+      {t(partyType)}
     </span>
   );
 }

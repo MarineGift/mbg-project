@@ -1,38 +1,38 @@
 /**
  * lib/email/auto-send-gate.ts
  *
- * AI가 생성한 회신 초안의 자동발송 가능 여부를 평가한다.
- * 어느 단계든 통과하지 못하면 reasons[]에 사유를 누적하고 allowed=false.
+ * AI       .
+ *     reasons[]   allowed=false.
  *
- * 평가 순서 (마스터 §4.4 + 가이드 §7.3):
- *   [1] 글로벌 플래그(env.AI_AUTO_SEND_ENABLED)
- *   [2] auto_send_rules 행 조회 (carrier×category)
+ *   ( 4.4 +  7.3):
+ *   [1]  (env.AI_AUTO_SEND_ENABLED)
+ *   [2] auto_send_rules   (carriercategory)
  *   [3] rule.is_blocked
- *   [4] rule.allowed_modules에 module 포함 여부
- *   [5] classification.confidence ≥ rule.min_confidence
- *   [6] rule.requires_human_approval 또는 classification.requiresHuman
- *   [7] classification.riskFlags 비어있음
- *   [8] blocked_keywords_in_body 정규식 매칭 없음
- *   [9] daily_limit / hourly_limit / per_party_daily_limit 미달성
- *  [10] rule.requires_calendar_data 시 미팅 가용성 확인 (meeting_scheduling)
+ *   [4] rule.allowed_modules module  
+ *   [5] classification.confidence  rule.min_confidence
+ *   [6] rule.requires_human_approval  classification.requiresHuman
+ *   [7] classification.riskFlags 
+ *   [8] blocked_keywords_in_body   
+ *   [9] daily_limit / hourly_limit / per_party_daily_limit 
+ *  [10] rule.requires_calendar_data     (meeting_scheduling)
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../env';
-import type { AutoSendRuleRow, ModuleType } from '../../types/ai';
+import type { AutoSendRuleRow, PartyTypeCode } from '../../types/ai';
 import type { ClassificationOutput } from '../../types/classification';
 
 /* ============================================================
- * 1. 입출력 타입
+ * 1.  
  * ============================================================ */
 
 export interface GateInput {
   organizationId: string;
-  module?: ModuleType;
+  partyType?: PartyTypeCode;
   partyId?: string;
   classification: ClassificationOutput;
   draftBody: string;
-  /** 회신가가 자체 판단한 사람 검토 필요 플래그(별도 강제). */
+  /**       ( ). */
   drafterRequiresHuman?: boolean;
 }
 
@@ -55,14 +55,14 @@ export type GateBlockReason =
 export interface GateResult {
   allowed: boolean;
   reasons: GateBlockReason[];
-  /** 차단을 트리거한 룰 ID(있으면). */
+  /**    ID(). */
   ruleId?: string;
-  /** 디버깅·감사용 평가 로그. */
+  /**   . */
   evaluationLog: Record<string, unknown>;
 }
 
 /* ============================================================
- * 2. 메인 진입점
+ * 2.  
  * ============================================================ */
 
 export async function evaluateAutoSend(
@@ -72,7 +72,7 @@ export async function evaluateAutoSend(
   const reasons: GateBlockReason[] = [];
   const log: Record<string, unknown> = {};
 
-  // [1] 글로벌 플래그
+  // [1]  
   if (!env.AI_AUTO_SEND_ENABLED) {
     return {
       allowed: false,
@@ -81,7 +81,7 @@ export async function evaluateAutoSend(
     };
   }
 
-  // [2] 룰 조회
+  // [2]  
   const rule = await loadAutoSendRule(
     supabase,
     input.organizationId,
@@ -114,13 +114,13 @@ export async function evaluateAutoSend(
   }
 
   // [4] applicable_modules
-  if (input.module) {
+  if (input.partyType) {
     const allowed = rule.allowedModules ?? [];
-    if (allowed.length === 0 || !allowed.includes(input.module)) {
+    if (allowed.length === 0 || !allowed.includes(input.partyType)) {
       reasons.push('module_not_allowed');
       log.module_check = {
         allowedModules: allowed,
-        requestedModule: input.module,
+        requestedModule: input.partyType,
       };
     }
   }
@@ -175,7 +175,7 @@ export async function evaluateAutoSend(
     Object.assign(log, limitVerdict.log);
   }
 
-  // [10] calendar (meeting_scheduling 카테고리만 의미 있음)
+  // [10] calendar (meeting_scheduling   )
   if (
     rule.requiresCalendarData &&
     input.classification.category === 'meeting_scheduling'
@@ -199,7 +199,7 @@ export async function evaluateAutoSend(
 }
 
 /* ============================================================
- * 3. 룰 조회
+ * 3.  
  * ============================================================ */
 
 async function loadAutoSendRule(
@@ -233,7 +233,7 @@ async function loadAutoSendRule(
     blockReason: (data.block_reason as string | null) ?? undefined,
     minConfidence: Number(data.min_confidence ?? 0.95),
     requiresHumanApproval: Boolean(data.requires_human_approval),
-    allowedModules: (data.allowed_modules as ModuleType[] | null) ?? [],
+    allowedModules: (data.allowed_modules as PartyTypeCode[] | null) ?? [],
     blockedKeywordsInBody:
       (data.blocked_keywords_in_body as string[] | null) ?? [],
     dailyLimit: Number(data.daily_limit ?? 0),
@@ -245,12 +245,12 @@ async function loadAutoSendRule(
 }
 
 /* ============================================================
- * 4. 키워드 매칭
+ * 4.  
  * ============================================================ */
 
 /**
- * 차단 키워드 배열 중 회신 본문에 매칭되는 첫 항목을 반환.
- * 각 키워드는 정규식으로 시도 (잘못된 정규식은 단순 substring으로 fallback).
+ *          .
+ *     (   substring fallback).
  */
 export function matchBlockedKeyword(
   body: string,
@@ -263,7 +263,7 @@ export function matchBlockedKeyword(
       const regex = new RegExp(kw, 'i');
       matched = regex.test(body);
     } catch {
-      // 잘못된 정규식 → 대소문자 무시 substring
+      //      substring
       matched = body.toLowerCase().includes(kw.toLowerCase());
     }
     if (matched) return kw;
@@ -272,7 +272,7 @@ export function matchBlockedKeyword(
 }
 
 /* ============================================================
- * 5. Sending limit 검증
+ * 5. Sending limit 
  * ============================================================ */
 
 interface LimitVerdict {
@@ -293,7 +293,7 @@ async function checkSendingLimits(
   startOfDay.setHours(0, 0, 0, 0);
   const oneHourAgo = new Date(Date.now() - 3_600_000);
 
-  // 일일 한도 — 자동발송된 communications 카운트
+  //     communications 
   if (rule.dailyLimit > 0) {
     const dailyCount = await countAutoSent(
       supabase,
@@ -306,7 +306,7 @@ async function checkSendingLimits(
     }
   }
 
-  // 시간당 한도
+  //  
   if (rule.hourlyLimit > 0) {
     const hourCount = await countAutoSent(
       supabase,
@@ -319,7 +319,7 @@ async function checkSendingLimits(
     }
   }
 
-  // 거래처별 24시간 한도
+  //  24 
   if (rule.perPartyDailyLimit > 0 && partyId) {
     const partyCount = await countAutoSentForParty(
       supabase,
@@ -344,7 +344,7 @@ async function countAutoSent(
   organizationId: string,
   sinceIso: string,
 ): Promise<number> {
-  // ai_generated=true 이고 자동발송된(external_data.auto_send=true) 메일만 카운트
+  // ai_generated=true  (external_data.auto_send=true)  
   const { count, error } = await supabase
     .schema('app')
     .from('communications')
@@ -359,7 +359,7 @@ async function countAutoSent(
   if (error) {
     // eslint-disable-next-line no-console
     console.error('[auto-send-gate.countAutoSent]', error);
-    return Number.MAX_SAFE_INTEGER; // 보수적: 실패 시 한도 초과로 간주
+    return Number.MAX_SAFE_INTEGER; // :     
   }
   return count ?? 0;
 }
@@ -391,11 +391,11 @@ async function countAutoSentForParty(
 }
 
 /* ============================================================
- * 6. Calendar 가용성
+ * 6. Calendar 
  * ----------------------------------------------------------
- * 운영 시점에 google calendar / outlook 통합 후 정확한 가용성 평가.
- * 본 STEP 3에서는 organization_settings.calendar_connected 플래그만 확인.
- * 미연결이면 미팅 자동 회신 차단.
+ *   google calendar / outlook     .
+ *  STEP 3 organization_settings.calendar_connected  .
+ *     .
  * ============================================================ */
 async function hasCalendarAvailability(
   supabase: SupabaseClient,

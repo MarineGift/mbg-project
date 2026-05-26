@@ -42,7 +42,7 @@ export default async function DraftQueuePage({
 
   const isFiltered =
     filters.status !== DEFAULT_FILTERS.status ||
-    filters.module !== DEFAULT_FILTERS.module ||
+    filters.partyType !== DEFAULT_FILTERS.partyType ||
     filters.category !== DEFAULT_FILTERS.category ||
     filters.minConfidence !== DEFAULT_FILTERS.minConfidence ||
     filters.onlyRisky !== DEFAULT_FILTERS.onlyRisky;

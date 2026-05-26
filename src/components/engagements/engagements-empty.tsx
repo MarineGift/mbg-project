@@ -5,13 +5,13 @@ import { Briefcase, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/common/empty-state';
 import { Button } from '@/components/ui/button';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 
 interface Props {
-  module: ModuleType;
+  partyType: PartyTypeCode;
 }
 
-export function EngagementsPipelineMissing({ module }: Props) {
+export function EngagementsPipelineMissing({ partyType: module }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState
@@ -30,7 +30,7 @@ export function EngagementsPipelineMissing({ module }: Props) {
   );
 }
 
-export function EngagementsEmpty({ module }: Props) {
+export function EngagementsEmpty({ partyType: module }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState

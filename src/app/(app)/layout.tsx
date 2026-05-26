@@ -1,10 +1,6 @@
 /**
  * app/(app)/layout.tsx
- *
- * 인증된 사용자 전용 route group의 레이아웃.
- *   - middleware가 1차 인증 가드
- *   - 본 레이아웃에서 2차 검증
- *   - Realtime 구독 mount (pending draft 카운트 라이브 갱신)
+ * Phase 22b: inbox unread + open tasks badges
  */
 
 import { requireAuthOrRedirect } from '@/lib/auth';
@@ -20,7 +16,7 @@ export default async function AppGroupLayout({
   const auth = await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
-  const [userRes, pendingCountRes] = await Promise.all([
+  const [userRes, pendingCountRes, inboxUnreadRes, openTaskRes] = await Promise.all([
     supabase
       .schema('app')
       .from('users' as never)
@@ -32,6 +28,19 @@ export default async function AppGroupLayout({
       .from('drafts' as never)
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending_review'),
+    supabase
+      .schema('app')
+      .from('communications' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('direction', 'inbound')
+      .is('read_at' as never, null)
+      .is('deleted_at' as never, null),
+    supabase
+      .schema('app')
+      .from('tasks' as never)
+      .select('id', { count: 'exact', head: true })
+      .not('status' as never, 'in', '("done","cancelled")')
+      .is('deleted_at' as never, null),
   ]);
 
   const userRow = (userRes.data ?? null) as
@@ -39,12 +48,16 @@ export default async function AppGroupLayout({
     | null;
   const displayName = userRow?.display_name ?? userRow?.full_name ?? null;
   const initialPendingCount = pendingCountRes.count ?? 0;
+  const initialInboxUnreadCount = (inboxUnreadRes as any).count ?? 0;
+  const initialOpenTaskCount = (openTaskRes as any).count ?? 0;
 
   return (
     <>
       <RealtimeProvider
         organizationId={auth.organizationId}
         initialPendingCount={initialPendingCount}
+        initialInboxUnreadCount={initialInboxUnreadCount}
+        initialOpenTaskCount={initialOpenTaskCount}
       />
       <AppShell email={auth.email} displayName={displayName}>
         {children}

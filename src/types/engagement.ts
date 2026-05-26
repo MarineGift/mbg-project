@@ -9,7 +9,7 @@
  *         └─ engagements   (각 stage에 속한 카드들)
  */
 
-import type { ModuleType } from './ai';
+import type { PartyTypeCode } from './ai';
 
 /** app.engagement_status enum. */
 export type EngagementStatus =
@@ -49,9 +49,10 @@ export interface KanbanStage {
 export interface KanbanCard {
   id: string;
   name: string;
-  module: ModuleType;
+  partyType: PartyTypeCode;
   status: EngagementStatus;
   currentStageId: string | null;
+  pipelineDefinitionId: string | null;
   partyId: string;
   partyName: string;
   valueAmount: number | null;
@@ -65,7 +66,7 @@ export interface KanbanCard {
 
 /** Kanban 보드 — 한 모듈의 default pipeline + stages + cards. */
 export interface KanbanBoard {
-  module: ModuleType;
+  partyType: PartyTypeCode;
   /** module에 default pipeline이 없을 경우 null — 사용자에게 안내 표시 */
   pipelineDefinitionId: string | null;
   pipelineName: string | null;
@@ -99,10 +100,9 @@ export interface EngagementDetail {
   organizationId: string;
   partyId: string;
   partyName: string;
-  partyModule: ModuleType;
   primaryContactId: string | null;
   primaryContactName: string | null;
-  module: ModuleType;
+  partyType: PartyTypeCode;
   name: string;
   description: string | null;
   pipelineDefinitionId: string | null;

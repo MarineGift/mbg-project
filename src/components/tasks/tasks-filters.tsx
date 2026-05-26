@@ -61,7 +61,7 @@ export function TasksFilters({ filters, sort }: Props) {
   const isDirty =
     filters.status !== 'open' ||
     filters.priority !== 'all' ||
-    filters.module !== 'all' ||
+    filters.partyType !== 'all' ||
     filters.overdueOnly ||
     filters.partyId !== null ||
     sort !== 'due_soonest';

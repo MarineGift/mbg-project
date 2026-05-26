@@ -1,4 +1,4 @@
-﻿/**
+/**
  * lib/queries/tasks.ts
  *
  * 태스크 목록 fetch + 필터 + 정렬 + 페이지네이션.
@@ -6,7 +6,7 @@
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { ModuleType } from '@/types/ai';
+import type { PartyTypeCode } from '@/types/ai';
 import type {
   TaskFilters,
   TaskListResult,
@@ -32,14 +32,12 @@ const ALL_STATUSES: readonly TaskStatus[] = [
 ] as const;
 const OPEN_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'blocked'] as const;
 const ALL_PRIORITIES: readonly TaskPriority[] = ['low', 'medium', 'high', 'urgent'] as const;
-const ALL_MODULES: readonly ModuleType[] = [
+const ALL_MODULES: readonly PartyTypeCode[] = [
   'investor',
   'paper_mill',
   'partner',
   'customer',
-  'crowdfunding',
-  'product_launch',
-  'sales', 'filler',
+  'filler_supplier',
 ] as const;
 const ALL_SORTS: readonly TaskSort[] = [
   'due_soonest',
@@ -66,8 +64,8 @@ export function parseTaskFilters(
   const priority = pickEnum(params.priority, ALL_PRIORITIES, 'all' as const) as
     | TaskPriority
     | 'all';
-  const module = pickEnum(params.module, ALL_MODULES, 'all' as const) as
-    | ModuleType
+  const module = pickEnum(params.partyType, ALL_MODULES, 'all' as const) as
+    | PartyTypeCode
     | 'all';
   const overdueOnly = single(params.overdue) === '1';
   const partyId =
@@ -75,7 +73,7 @@ export function parseTaskFilters(
       ? single(params.party)!
       : null;
 
-  return { status, priority, module, overdueOnly, partyId };
+  return { status, priority, module, overdueOnly, partyId } as never;
 }
 
 export function parseTaskSort(
@@ -124,14 +122,14 @@ interface RawTaskRow {
   priority: TaskPriority;
   due_at: string | null;
   reminder_at: string | null;
-  module: ModuleType | null;
+  partyType: PartyTypeCode | null;
   party_id: string | null;
   engagement_id: string | null;
   assigned_to_user_id: string | null;
   created_at: string;
   completed_at: string | null;
   linked_strategy_action_id: string | null;
-  parties: { name: string; module: ModuleType } | null;
+  parties: { name: string; party_type: PartyTypeCode } | null;
   engagements: { name: string } | null;
 }
 
@@ -146,10 +144,10 @@ export async function fetchTasks(
     .schema('app')
     .from('tasks' as never)
     .select(
-      `id, title, description, status, priority, due_at, reminder_at, module,
+      `id, title, description, status, priority, due_at, reminder_at, party_type,
        party_id, engagement_id, assigned_to_user_id, created_at, completed_at,
        linked_strategy_action_id,
-       parties:party_id ( name, module ),
+       parties:party_id ( name, party_type ),
        engagements:engagement_id ( name )`,
       { count: 'exact' },
     )
@@ -164,8 +162,8 @@ export async function fetchTasks(
   if (filters.priority !== 'all') {
     query = query.eq('priority', filters.priority);
   }
-  if (filters.module !== 'all') {
-    query = query.eq('module', filters.module);
+  if (filters.partyType !== 'all') {
+    query = query.eq('module', filters.partyType);
   }
   if (filters.overdueOnly) {
     query = query
@@ -230,10 +228,10 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     priority: r.priority,
     dueAt: r.due_at,
     reminderAt: r.reminder_at,
-    module: r.module,
+    partyType: r.partyType,
     partyId: r.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.module ?? null,
+    partyModule: party?.party_type ?? null,
     engagementId: r.engagement_id,
     engagementName: engagement?.name ?? null,
     assignedToUserId: r.assigned_to_user_id,
@@ -241,4 +239,29 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     completedAt: r.completed_at,
     aiSuggested: r.linked_strategy_action_id != null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// fetchTaskById
+
+// ---------------------------------------------------------------------------
+// fetchTaskById
+// ---------------------------------------------------------------------------
+export async function fetchTaskById(id: string): Promise<TaskRow | null> {
+  const supabase = await createSupabaseServerClient();
+  const selectCols =
+    'id, title, description, status, priority, due_at, reminder_at, party_type, ' +
+    'party_id, engagement_id, assigned_to_user_id, created_at, completed_at, ' +
+    'linked_strategy_action_id, ' +
+    'parties:party_id ( name, party_type ), ' +
+    'engagements:engagement_id ( name )';
+  const { data, error } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .select(selectCols)
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error || !data) return null;
+  return toTaskRow(data as unknown as RawTaskRow);
 }

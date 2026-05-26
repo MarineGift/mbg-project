@@ -13,9 +13,9 @@ export default async function PipelinesAdminPage() {
   const { data: definitions, error: defnErr } = await supabase
     .schema('app' as never)
     .from('pipeline_definitions')
-    .select('id, organization_id, module, name, description, is_default, is_active')
+    .select('id, organization_id, party_type, name, description, is_default, is_active')
     .is('deleted_at', null)
-    .order('module', { ascending: true })
+    .order('party_type', { ascending: true })
 
   if (defnErr) {
     console.error('[PipelinesAdminPage] definitions fetch error:', defnErr)
@@ -51,7 +51,7 @@ export default async function PipelinesAdminPage() {
     if (!stagesByDef[s.pipeline_definition_id]) {
       stagesByDef[s.pipeline_definition_id] = []
     }
-    stagesByDef[s.pipeline_definition_id].push(s)
+    stagesByDef[s.pipeline_definition_id]!.push(s)
   }
 
   const moduleGroups = defns.map((d) => ({

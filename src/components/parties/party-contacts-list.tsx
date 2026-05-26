@@ -24,9 +24,8 @@ export function PartyContactsList({ contacts, partyId }: Props) {
         <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-sm">{t('title')}</CardTitle>
           <Button
-            variant="ghost"
             size="sm"
-            className="h-7 px-2"
+            className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() => setDialogOpen(true)}
             aria-label={t('addContact')}
           >
