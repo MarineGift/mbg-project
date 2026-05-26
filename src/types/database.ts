@@ -2356,7 +2356,7 @@ export type Database = {
       }
       email_sequence_steps: {
         Row: {
-          body_text: string
+          body_plain: string
           created_at: string
           day_offset: number
           id: string
@@ -2367,7 +2367,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          body_text: string
+          body_plain: string
           created_at?: string
           day_offset?: number
           id?: string
@@ -2378,7 +2378,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          body_text?: string
+          body_plain?: string
           created_at?: string
           day_offset?: number
           id?: string
@@ -2545,7 +2545,7 @@ export type Database = {
           id: string
           open_count: number
           open_token: string
-          org_id: string
+          organization_id: string
           party_id: string | null
           sent_at: string
           sent_to: string
@@ -2561,7 +2561,7 @@ export type Database = {
           id?: string
           open_count?: number
           open_token?: string
-          org_id: string
+          organization_id: string
           party_id?: string | null
           sent_at?: string
           sent_to?: string
@@ -2577,7 +2577,7 @@ export type Database = {
           id?: string
           open_count?: number
           open_token?: string
-          org_id?: string
+          organization_id?: string
           party_id?: string | null
           sent_at?: string
           sent_to?: string
@@ -2642,7 +2642,7 @@ export type Database = {
           },
           {
             foreignKeyName: "email_tracking_org_id_fkey"
-            columns: ["org_id"]
+            columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -5473,9 +5473,9 @@ export type Database = {
           notes: string | null
           organization_id: string
           product_grade: string | null
-          supply_type: Database["app"]["Enums"]["supply_link_type"]
+          link_type: Database["app"]["Enums"]["supply_link_type"]
           updated_at: string
-          volume_tpy: number | null
+          volume_estimate: number | null
         }
         Insert: {
           created_at?: string
@@ -5487,9 +5487,9 @@ export type Database = {
           notes?: string | null
           organization_id: string
           product_grade?: string | null
-          supply_type?: Database["app"]["Enums"]["supply_link_type"]
+          link_type?: Database["app"]["Enums"]["supply_link_type"]
           updated_at?: string
-          volume_tpy?: number | null
+          volume_estimate?: number | null
         }
         Update: {
           created_at?: string
@@ -5501,9 +5501,9 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           product_grade?: string | null
-          supply_type?: Database["app"]["Enums"]["supply_link_type"]
+          link_type?: Database["app"]["Enums"]["supply_link_type"]
           updated_at?: string
-          volume_tpy?: number | null
+          volume_estimate?: number | null
         }
         Relationships: [
           {
@@ -7295,7 +7295,7 @@ export type Database = {
           body_hash_sha256: string | null
           body_size_bytes: number | null
           body_storage_path: string | null
-          body_text: string | null
+          body_plain: string | null
           content_encoding: string | null
           content_type: string | null
           created_at: string
@@ -7317,7 +7317,7 @@ export type Database = {
           body_hash_sha256?: string | null
           body_size_bytes?: number | null
           body_storage_path?: string | null
-          body_text?: string | null
+          body_plain?: string | null
           content_encoding?: string | null
           content_type?: string | null
           created_at?: string
@@ -7339,7 +7339,7 @@ export type Database = {
           body_hash_sha256?: string | null
           body_size_bytes?: number | null
           body_storage_path?: string | null
-          body_text?: string | null
+          body_plain?: string | null
           content_encoding?: string | null
           content_type?: string | null
           created_at?: string

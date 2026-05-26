@@ -182,7 +182,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "인증 필요" };
 
-  // org_id from JWT (via requireAuth)
+  // organization_id from JWT (via requireAuth)
   const auth = await requireAuth();
   const orgId = auth.organizationId;
 

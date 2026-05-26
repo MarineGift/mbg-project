@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase.schema('app')
     .from('party_supply_links' as never)
-    .select(`id, supply_type, product_grade, volume_tpy, notes,
+    .select(`id, link_type, product_grade, volume_estimate, notes,
       linked_filler:filler_party_id(id,name,module,country_code,tier),
       linked_mill:mill_party_id(id,name,module,country_code,tier)`)
     .eq(selfCol as never, partyId);
@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
       linked_module:  linked?.module ?? '',
       linked_country: linked?.country_code ?? null,
       linked_tier:    linked?.tier ?? null,
-      supply_type:    row.supply_type,
+      link_type:    row.link_type,
       product_grade:  row.product_grade,
-      volume_tpy:     row.volume_tpy,
+      volume_estimate:     row.volume_estimate,
       notes:          row.notes,
     };
   });
