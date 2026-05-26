@@ -62,9 +62,9 @@ export default async function KanbanPage({ params }: PageProps) {
 
       <div className="flex-1 overflow-hidden">
         {board.pipelineDefinitionId == null ? (
-          <EngagementsPipelineMissing module={module} />
+          <EngagementsPipelineMissing partyType={module} />
         ) : board.totalCount === 0 ? (
-          <EngagementsEmpty module={module} />
+          <EngagementsEmpty partyType={module} />
         ) : (
           <KanbanBoardClient board={board} />
         )}

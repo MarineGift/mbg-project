@@ -63,7 +63,7 @@ export default async function NewEngagementPage({
     <div className="p-6 max-w-3xl mx-auto">
       <EngagementForm
         mode="create"
-        module={module}
+        partyType={module}
         partyId={full.party.id}
         partyName={full.party.name}
         existing={null}

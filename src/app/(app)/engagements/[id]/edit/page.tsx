@@ -37,7 +37,7 @@ export default async function EditEngagementPage({ params }: PageProps) {
     <div className="p-6 max-w-3xl mx-auto">
       <EngagementForm
         mode="edit"
-        module={engagement.partyType}
+        partyType={engagement.partyType}
         existing={engagement}
       />
     </div>

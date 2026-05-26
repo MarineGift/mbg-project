@@ -24,7 +24,7 @@ export function TopbarSearchInput() {
     if (!q) return;
     // Detect module from current pathname
     const segments = pathname.split('/').filter(Boolean);
-    const mod = VALID_MODULES.includes(segments[0]) ? segments[0] : 'filler_supplier';
+    const mod = VALID_MODULES.includes(segments[0]!) ? segments[0] : 'filler_supplier';
     const url = '/' + mod + '/parties?q=' + encodeURIComponent(q);
     window.location.href = url;  // hard navigate to ensure page reload with new params
   }

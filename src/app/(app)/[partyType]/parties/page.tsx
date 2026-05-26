@@ -228,7 +228,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
           <CountryFilterBar countries={distinctCountries} current={countryFilter} />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <SavedViewsDropdown views={savedViews} entityType="party" module={module} />
+          <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
           <Button asChild variant={sortByScore ? 'default' : 'outline'} size="sm">
             <Link href={sortHref}>{sortByScore ? 'By name' : 'Sort by score'}</Link>
           </Button>

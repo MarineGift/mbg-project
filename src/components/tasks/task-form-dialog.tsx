@@ -58,7 +58,7 @@ export function TaskFormDialog({
   onOpenChange,
   partyId,
   engagementId,
-  module,
+  partyType: module,
   existing,
 }: Props) {
   const router = useRouter();

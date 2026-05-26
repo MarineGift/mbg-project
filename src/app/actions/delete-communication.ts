@@ -79,7 +79,7 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
   let orgId: string | undefined;
   try {
     const payload = JSON.parse(
-      Buffer.from(session.access_token.split('.')[1], 'base64url').toString()
+      Buffer.from(session.access_token.split('.')[1]!!, 'base64url').toString()
     );
     console.log('[deleteComm] JWT keys=', Object.keys(payload).join(','));
     orgId =

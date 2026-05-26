@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   const [nonce] = state.split('.')
   const expected = createHmac('sha256', process.env.CALENDAR_TOKEN_ENCRYPTION_KEY!)
-    .update(nonce)
+    .update(nonce!)
     .digest('hex')
   if (expected !== state.split('.')[1]) {
     return NextResponse.redirect(`${APP_URL}/settings/calendar?error=invalid_state`)

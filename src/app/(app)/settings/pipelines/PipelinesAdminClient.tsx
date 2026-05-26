@@ -92,7 +92,7 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
       {moduleGroups.map((group) => {
         // 다음 stage의 sort_order 계산 (마지막 + 10)
         const lastSort =
-          group.stages.length > 0 ? group.stages[group.stages.length - 1].sort_order : 0
+          group.stages.length > 0 ? group.stages[group.stages.length - 1]!.sort_order : 0
         const nextSortOrder = lastSort + 10
 
         return (

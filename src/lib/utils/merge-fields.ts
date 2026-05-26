@@ -36,7 +36,7 @@ export function extractMergeFields(template: string): string[] {
   const re = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(template)) !== null) {
-    out.add(m[1]);
+    out.add(m[1]!);
   }
   return Array.from(out);
 }

@@ -107,7 +107,7 @@ const CURRENCIES = ['USD', 'EUR', 'JPY', 'KRW', 'GBP', 'CNY'] as const;
 
 export function EngagementForm({
   mode,
-  module,
+  partyType: module,
   partyId,
   partyName,
   existing,

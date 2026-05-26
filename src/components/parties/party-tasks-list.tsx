@@ -26,7 +26,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'text-muted-foreground',
 };
 
-export function PartyTasksList({ tasks, partyId, module }: Props) {
+export function PartyTasksList({ tasks, partyId, partyType: module }: Props) {
   const t = useTranslations('partyDetail.tasks');
   const [dialogOpen, setDialogOpen] = useState(false);
 

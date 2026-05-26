@@ -39,7 +39,7 @@ const TYPE_ICON: Record<string, string> = {
 
 function chipStyle(item: CalendarItem): string {
   if (item.type === 'event') {
-    return CHIP_STYLES[`event_${item.source ?? 'internal'}`] ?? CHIP_STYLES.event_internal
+    return CHIP_STYLES[`event_${item.source ?? 'internal'}`] ?? CHIP_STYLES.event_internal!!
   }
   return CHIP_STYLES[item.type] ?? 'bg-gray-400 text-white'
 }

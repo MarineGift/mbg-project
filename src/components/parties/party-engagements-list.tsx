@@ -29,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
   archived: 'text-muted-foreground',
 };
 
-export function PartyEngagementsList({ engagements, partyId, module }: Props) {
+export function PartyEngagementsList({ engagements, partyId, partyType: module }: Props) {
   const t = useTranslations('partyDetail.engagements');
 
   return (

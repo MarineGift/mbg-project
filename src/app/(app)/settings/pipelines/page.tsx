@@ -51,7 +51,7 @@ export default async function PipelinesAdminPage() {
     if (!stagesByDef[s.pipeline_definition_id]) {
       stagesByDef[s.pipeline_definition_id] = []
     }
-    stagesByDef[s.pipeline_definition_id].push(s)
+    stagesByDef[s.pipeline_definition_id]!.push(s)
   }
 
   const moduleGroups = defns.map((d) => ({
