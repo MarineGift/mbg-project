@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
+import type { SendingAddressKind } from '@/types/email';
 import { createEmailTracking } from '@/lib/actions/email-tracking';
 
 /* ──────────────────────────────────────────────────────────
@@ -89,12 +90,40 @@ const composeSchema = z.object({
   /** 새로운 thread 시작 — null이면 자동 생성된 message-id가 thread 시작 */
   inReplyTo: z.string().max(500).optional().nullable(),
   threadId: z.string().max(500).optional().nullable(),
+  /** D6-7b-2: which sending account to send from (default: shared = contact@) */
+  fromKind: z.enum(['personal', 'role', 'shared']).optional().default('shared'),
 });
 
 /* ──────────────────────────────────────────────────────────
  * sendOutboundManual
  * ────────────────────────────────────────────────────────── */
 
+
+/* ============================================================
+ * D6-7b-2: kind-aware sender info resolution
+ * ============================================================ */
+type SenderInfo = { username: string; displayName: string };
+
+function resolveSenderInfoForKind(kind: SendingAddressKind): SenderInfo {
+  switch (kind) {
+    case 'personal':
+      return {
+        username:    process.env.MAIL_PERSONAL_USERNAME ?? '',
+        displayName: process.env.MAIL_PERSONAL_DISPLAY_NAME ?? 'YunYoung Heo',
+      };
+    case 'role':
+      return {
+        username:    process.env.MAIL_ROLE_USERNAME ?? '',
+        displayName: process.env.MAIL_ROLE_DISPLAY_NAME ?? 'CEO',
+      };
+    case 'shared':
+    default:
+      return {
+        username:    process.env.MAIL_SHARED_USERNAME ?? '',
+        displayName: process.env.MAIL_SHARED_DISPLAY_NAME ?? 'Marinebio Group',
+      };
+  }
+}
 export async function sendOutboundManual(
   input: z.input<typeof composeSchema>,
 ): Promise<ComposeResult> {
@@ -127,9 +156,11 @@ export async function sendOutboundManual(
   const userRow = userRaw as
     | { sending_email: string | null; full_name: string; email: string }
     | null;
-
-  const fromAddress = userRow?.sending_email ?? userRow?.email ?? auth.email;
-  const fromName = userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender';
+  // D6-7b-2: kind-aware From determination
+  const kind: SendingAddressKind = parsed.data.fromKind ?? 'shared';
+  const senderInfo = resolveSenderInfoForKind(kind);
+  const fromAddress = senderInfo.username    || (userRow?.sending_email ?? userRow?.email ?? auth.email);
+  const fromName    = senderInfo.displayName || (userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender');
 
   // cc 파싱
   const ccAddresses = (parsed.data.cc ?? '')
@@ -145,6 +176,7 @@ export async function sendOutboundManual(
     party_id: parsed.data.partyId || null,
     contact_id: parsed.data.contactId || null,
     from_address: fromAddress,
+      sendingAddressKind: kind,  // D6-7b-2: kind-aware SMTP credential selection
     from_name: fromName,
     to_addresses: [parsed.data.to],
     cc_addresses: ccAddresses,

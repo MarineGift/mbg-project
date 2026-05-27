@@ -34,6 +34,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "inbox": "Inbox",
+    "sent": "Sent",
     "drafts": "AI Drafts",
     "parties": "Parties",
     "engagements": "Engagements",
@@ -245,7 +246,7 @@
   },
   "inbox": {
     "queueTitle": "Inbox",
-    "queueDescription": "All communications (inbound + outbound)",
+    "queueDescription": "Received messages. Switch to outbound via the filter.",
     "search": "Search",
     "searchPlaceholder": "Search subject, body...",
     "noSubject": "(no subject)",

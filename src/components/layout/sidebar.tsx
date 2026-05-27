@@ -11,7 +11,7 @@ import {
   CheckSquare,
   Settings as SettingsIcon,
   LayoutDashboard,
-  Menu,
+  Menu, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -47,6 +47,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/', labelKey: 'dashboard', icon: LayoutDashboard },
   { href: '/drafts', labelKey: 'drafts', icon: Sparkles },
   { href: '/inbox', labelKey: 'inbox', icon: Inbox },
+  { href: '/sent', labelKey: 'sent', icon: Send },
   { href: '/tasks', labelKey: 'tasks', icon: CheckSquare },
 ] as const;
 

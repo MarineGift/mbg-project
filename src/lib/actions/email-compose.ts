@@ -11,6 +11,7 @@ import { requireAuth } from '@/lib/auth';
 import { createSupabaseServerClient, type SbClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
+import type { SendingAddressKind } from '@/types/email';
 import Anthropic from "@anthropic-ai/sdk";
 
 // ─────────────────────────────────────────────
@@ -30,6 +31,7 @@ export interface ComposePayload {
   threadId?: string;
   attachmentPaths?: string[];      // Supabase Storage paths
   useSignature?: boolean;          // 서명 첨부 여부 (기본 true)
+  fromKind?: SendingAddressKind;  // D6-7b: kind-aware SMTP sender selection
 }
 
 export interface AIReplyPayload {
@@ -160,14 +162,55 @@ async function resolveAttachments(
 // ─────────────────────────────────────────────
 // SMTP 트랜스포터 생성
 // ─────────────────────────────────────────────
-function createTransporter() {
+// D6-7b: kind-aware SMTP sender resolution
+type SenderInfo = { username: string; displayName: string };
+
+function resolveSenderInfo(kind: SendingAddressKind = 'shared'): SenderInfo {
+  switch (kind) {
+    case 'personal':
+      return {
+        username:    process.env.MAIL_PERSONAL_USERNAME ?? process.env.TABS_MAILER_USERNAME ?? '',
+        displayName: process.env.MAIL_PERSONAL_DISPLAY_NAME ?? 'YunYoung Heo',
+      };
+    case 'role':
+      return {
+        username:    process.env.MAIL_ROLE_USERNAME ?? process.env.TABS_MAILER_USERNAME ?? '',
+        displayName: process.env.MAIL_ROLE_DISPLAY_NAME ?? 'CEO',
+      };
+    case 'shared':
+    default:
+      return {
+        username:    process.env.MAIL_SHARED_USERNAME ?? process.env.TABS_MAILER_USERNAME ?? '',
+        displayName: process.env.MAIL_SHARED_DISPLAY_NAME ?? 'Marinebio Group',
+      };
+  }
+}
+
+function createTransporter(kind: SendingAddressKind = 'shared') {
+  let user: string | undefined;
+  let pass: string | undefined;
+  switch (kind) {
+    case 'personal':
+      user = process.env.MAIL_PERSONAL_USERNAME;
+      pass = process.env.MAIL_PERSONAL_PASSWORD;
+      break;
+    case 'role':
+      user = process.env.MAIL_ROLE_USERNAME;
+      pass = process.env.MAIL_ROLE_PASSWORD;
+      break;
+    case 'shared':
+    default:
+      user = process.env.MAIL_SHARED_USERNAME;
+      pass = process.env.MAIL_SHARED_PASSWORD;
+      break;
+  }
   return nodemailer.createTransport({
-    host: process.env.TABS_MAILER_HOST!,
-    port: parseInt(process.env.TABS_MAILER_PORT ?? "587"),
-    secure: process.env.TABS_MAILER_USE_TLS === "true",
+    host:   process.env.TABS_MAILER_HOST!,
+    port:   parseInt(process.env.TABS_MAILER_PORT ?? '587'),
+    secure: process.env.TABS_MAILER_USE_TLS === 'true',
     auth: {
-      user: process.env.TABS_MAILER_USERNAME!,
-      pass: process.env.TABS_MAILER_PASSWORD!,
+      user: (user || process.env.TABS_MAILER_USERNAME)!,
+      pass: (pass || process.env.TABS_MAILER_PASSWORD)!,
     },
   });
 }
@@ -259,8 +302,10 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   );
 
   // SMTP 발송
-  const transporter = createTransporter();
-  const fromAddress = `${process.env.TABS_MAILER_FROM_NAME ?? "URM Platform"} <${process.env.TABS_MAILER_USERNAME}>`;
+  const kind: SendingAddressKind = payload.fromKind ?? 'shared';
+  const transporter = createTransporter(kind);
+  const senderInfo = resolveSenderInfo(kind);
+  const fromAddress = `${senderInfo.displayName} <${senderInfo.username}>`;
 
   let mailOptions: nodemailer.SendMailOptions = {
     from: fromAddress,
@@ -296,7 +341,8 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       channel: "email",
       subject: finalSubject,
       body_html: finalBody,
-      from_address: process.env.TABS_MAILER_USERNAME,
+      from_address: senderInfo.username,
+      from_name:    senderInfo.displayName,
       to_addresses: [payload.to],
       message_id: smtpMessageId,
       thread_id: payload.threadId ?? smtpMessageId,
@@ -349,22 +395,23 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const systemPrompt = `당신은 B2B 영업 이메일 전문가입니다.
-주어진 수신 이메일에 대한 ${tone === "professional" ? "전문적이고 정중한" : tone === "friendly" ? "친근하고 따뜻한" : "간결하고 명확한"} 답장 초안을 작성하세요.
-- 수신자 이름이 있으면 호칭을 사용하세요.
-- HTML 형식으로 작성하세요 (<p> 태그 사용).
-- 서명 부분은 포함하지 마세요 (자동으로 추가됩니다).
-- 한국어 또는 원본 언어에 맞게 작성하세요.`;
+  const systemPrompt = `You are a B2B sales email professional.
+Write a ${tone === "professional" ? "professional and courteous" : tone === "friendly" ? "warm and friendly" : "concise and clear"} reply draft for the incoming email.
+- If the recipient name is provided, use proper salutation.
+- Write in PLAIN TEXT only. Do NOT use HTML tags (<p>, <br>, <div>, etc.).
+- Separate paragraphs with empty lines (double newline).
+- Do NOT include a signature block (will be auto-appended).
+- Respond in Korean, or in the original message language if not Korean.`;
 
-  const userPrompt = `원본 이메일:
-발신: ${comm.from_address}
-제목: ${comm.subject}
-내용:
+  const userPrompt = `Original email:
+From: ${comm.from_address}
+Subject: ${comm.subject}
+Body:
 ${originalBody}
 
-${contactName ? `수신자 이름: ${contactName}` : ""}
+${contactName ? `Recipient name: ${contactName}` : ""}
 
-이 이메일에 대한 답장 초안을 HTML로 작성해주세요.`;
+Write a plain text reply draft for this email. Do not use any HTML tags.`;
 
   try {
     const response = await anthropic.messages.create({

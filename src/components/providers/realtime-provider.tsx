@@ -6,6 +6,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -40,6 +41,21 @@ export function RealtimeProvider({
   const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
   const setOpenTaskCount = useUiStore((s) => s.setOpenTaskCount);
   const t = useTranslations('realtime');
+  const router = useRouter();
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
+  // Server-component refresh helper - only refresh on relevant routes
+  // inbox events: /inbox, /sent, /inbox/[id]
+  // drafts events: /drafts, /drafts/[id], or inbox-detail (which embeds drafts)
+  const refreshIfRelevant = (target: 'inbox' | 'drafts') => {
+    const p = pathnameRef.current;
+    const onInbox = p === '/inbox' || p === '/sent' || p.startsWith('/inbox/');
+    const onDrafts = p === '/drafts' || p.startsWith('/drafts/');
+    if (target === 'inbox' && onInbox) router.refresh();
+    if (target === 'drafts' && (onDrafts || onInbox)) router.refresh();
+  };
 
   const setRef = useRef(setCount);
   setRef.current = setCount;
@@ -76,6 +92,7 @@ export function RealtimeProvider({
           } else if (wasRestored) {
             setInboxUnreadCount(inboxCountRef.current + 1);
           }
+          if (wasDeleted || wasRestored) refreshIfRelevant('inbox');
         },
       )
       .on('postgres_changes' as never,
@@ -87,6 +104,7 @@ export function RealtimeProvider({
         },
         () => {
           setInboxUnreadCount(inboxCountRef.current + 1);
+          refreshIfRelevant('inbox');
         },
       )
       .subscribe();
@@ -110,6 +128,7 @@ export function RealtimeProvider({
               try { new Notification(t('newDraftTitle'), { body: t('newDraftBody'), tag: `draft-${next.id}` }); } catch { /* ignore */ }
             }
           }
+          refreshIfRelevant('drafts');
         },
       )
       .on('postgres_changes' as never,
@@ -119,6 +138,7 @@ export function RealtimeProvider({
           const after = payload.new?.status;
           if (before === 'pending_review' && after !== 'pending_review') decrement();
           if (before !== 'pending_review' && after === 'pending_review') increment();
+          refreshIfRelevant('drafts');
         },
       )
       .subscribe();

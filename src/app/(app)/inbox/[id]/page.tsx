@@ -1,9 +1,10 @@
-// src/app/(app)/inbox/[id]/page.tsx
+// t9c: thread merged view
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { fetchCommunicationDetailV2 } from '@/lib/queries/communication-detail-v2';
+import { fetchCommunicationDetailV2, fetchMessagesInThread } from '@/lib/queries/communication-detail-v2';
+import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { CommunicationDetailView } from '@/components/inbox/communication-detail-view';
 
 interface PageProps {
@@ -12,8 +13,19 @@ interface PageProps {
 
 export default async function InboxDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const comm = await fetchCommunicationDetailV2(id);
-  if (!comm) notFound();
+  const root = await fetchCommunicationDetailV2(id);
+  if (!root) notFound();
+
+  // t9c: fetch all messages in the same thread (if threaded). Falls back to [root] if no thread_id.
+  const thread = root.threadId
+    ? await fetchMessagesInThread(root.threadId)
+    : [root];
+
+  // Defensive: if thread fetch returned empty (shouldn't happen, but be safe), use [root].
+  const messages = thread.length > 0 ? thread : [root];
+
+  const templates = await listEmailTemplates();
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <Button variant="ghost" size="sm" asChild>
@@ -22,7 +34,7 @@ export default async function InboxDetailPage({ params }: PageProps) {
           Back
         </Link>
       </Button>
-      <CommunicationDetailView comm={comm} />
+      <CommunicationDetailView thread={messages} rootId={id} templates={templates} />
     </div>
   );
 }

@@ -79,6 +79,8 @@ interface ComposeEmailDialogProps {
 
   templates?: unknown[];
   orgId?: string;
+  /** Initial tab to show when dialog opens (default: "direct") */
+  initialTab?: "direct" | "template" | "ai";
 }
 
 interface AttachmentItem {
@@ -109,7 +111,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const supabase = createSupabaseBrowserClient();
 
   // ?? Common form state ???????????????????????????????????
-  const [activeTab, setActiveTab] = useState<TabId>("direct");
+  const [activeTab, setActiveTab] = useState<TabId>(props.initialTab ?? "direct");
   const [to, setTo] = useState(effectiveTo);
   const [subject, setSubject] = useState(props.defaultSubject ?? "");
   const [body, setBody] = useState(props.defaultBody ?? "");

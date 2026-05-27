@@ -457,7 +457,7 @@ async function insertDraft(
       inbound_communication_id: input.ctx.id,
       party_id: input.ctx.partyId ?? null,
       engagement_id: input.ctx.engagementId ?? null,
-      partyType: input.ctx.partyType ?? null,
+      party_type: input.ctx.partyType ?? null,
       classification_category: input.classification.category,
       confidence_score: input.classification.confidence,
       risk_flags: input.classification.riskFlags,
