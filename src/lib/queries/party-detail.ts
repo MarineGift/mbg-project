@@ -46,13 +46,11 @@ import type {
 interface RawPartyRow {
   id: string;
   organization_id: string;
-  name: string;
-  party_type: PartyTypeCode;
-  tier: PartyTier | null;
+  party_name: string;
+  party_type_id: string;
   status: PartyStatus;
   country_code: string | null;
   website: string | null;
-  industry_tags: string[];   // NOT NULL in DB
   interest_tags: string[];   // NOT NULL in DB
   notes: string | null;
   source: string | null;
@@ -140,7 +138,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, name, party_type, tier, status, country_code, website, industry_tags, interest_tags, notes, source, created_at, updated_at',
+      'id, organization_id, party_name, party_type_id, status, country_code, website, interest_tags, notes, source, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -167,10 +165,10 @@ export async function fetchPartyDetail(
     supabase
       .schema('app')
       .from('contacts' as never)
-      .select('id, full_name, email, title, phone, is_primary', {
+      .select('id, full_name, email, title_text, phone_e164, is_primary', {
         count: 'exact',
       })
-      .eq('party_id', partyId)
+      .eq('firm_party_id', partyId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
@@ -191,15 +189,9 @@ export async function fetchPartyDetail(
       .limit(SIDEBAR_LIMIT),
 
     // tasks (10개)
-    supabase
-      .schema('app')
-      .from('tasks' as never)
-      .select('id, title, status, priority, due_at, created_at', {
-        count: 'exact',
-      })
-      .eq('party_id', partyId)
-      .order('created_at', { ascending: false })
-      .limit(SIDEBAR_LIMIT),
+    // D6-5e stub: tasks.party_id removed; tasks now FK to app.deals.
+    // Re-implement via deal_id JOIN once deals exist. For now: empty result.
+    Promise.resolve({ data: [] as unknown[], error: null, count: 0 } as any),
 
     // communications (30개) — 타임라인용
     supabase
@@ -252,16 +244,25 @@ export async function fetchPartyDetail(
   const tasks: PartyTask[] = ((tasksRes.data ?? []) as unknown[]).map(mapTask);
 
   // PartyDetail 매핑 — DB 컬럼과 1:1 대응
+  // D6-5e: party_type code via party_types lookup (col is now party_type_id FK)
+  const { data: ptCodeRow } = await supabase
+    .schema('app')
+    .from('party_types' as never)
+    .select('code')
+    .eq('id', p.party_type_id)
+    .maybeSingle();
+  const partyTypeCode = ((ptCodeRow as { code?: string } | null)?.code ?? 'paper_mill') as PartyTypeCode;
+
   const detail: PartyDetail = {
     id: p.id,
     organizationId: p.organization_id,
-    name: p.name,
-    partyType: p.party_type,
-    tier: p.tier,
+    name: p.party_name,
+    partyType: partyTypeCode,
+    tier: null,
     status: p.status,
     countryCode: p.country_code,
     website: p.website,
-    industryTags: p.industry_tags,
+    industryTags: [],
     interestTags: p.interest_tags,
     notes: p.notes,
     source: p.source,
@@ -309,8 +310,8 @@ function mapContact(raw: unknown): PartyContact {
     id: r.id as string,
     fullName: (r.full_name as string | null) ?? null,
     email: (r.email as string | null) ?? null,
-    jobTitle: (r.title as string | null) ?? null,
-    phone: (r.phone as string | null) ?? null,
+    jobTitle: (r.title_text as string | null) ?? null,
+    phone: (r.phone_e164 as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
   };
 }
