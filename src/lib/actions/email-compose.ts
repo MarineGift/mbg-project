@@ -48,13 +48,13 @@ async function renderWithContext(
   // --- party 컨텍스트 ---
   const { data: party } = await supabase
     .from("parties")
-    .select("name, country_code, website")
+    .select("party_name, country_code, website")
     .eq("id", partyId)
     .single();
 
   if (party) {
     result = result
-      .replace(/{{party\.name}}/g, party.name ?? "")
+      .replace(/{{party\.name}}/g, party.party_name ?? "")
       .replace(/{{party\.country}}/g, party.country_code ?? "")
       .replace(/{{party\.website}}/g, party.website ?? "");
   }
@@ -68,7 +68,7 @@ async function renderWithContext(
     const { data: primary } = await supabase
       .from("contacts")
       .select("id")
-      .eq("party_id", partyId)
+      .eq("firm_party_id", partyId)
       .eq("is_primary", true)
       .maybeSingle();
     resolvedContactId = primary?.id ?? null;
@@ -77,7 +77,7 @@ async function renderWithContext(
   if (resolvedContactId) {
     const { data: contact } = await supabase
       .from("contacts")
-      .select("given_name, family_name, email, title, department, phone")
+      .select("given_name, family_name, email, title_text, department, phone_e164")
       .eq("id", resolvedContactId)
       .single();
 
@@ -90,9 +90,9 @@ async function renderWithContext(
         .replace(/{{contact\.family_name}}/g, contact.family_name ?? "")
         .replace(/{{contact\.full_name}}/g, fullName)
         .replace(/{{contact\.email}}/g, contact.email ?? "")
-        .replace(/{{contact\.title}}/g, contact.title ?? "")
+        .replace(/{{contact\.title}}/g, contact.title_text ?? "")
         .replace(/{{contact\.department}}/g, contact.department ?? "")
-        .replace(/{{contact\.phone}}/g, contact.phone ?? "");
+        .replace(/{{contact\.phone}}/g, contact.phone_e164 ?? "");
     }
   }
 
