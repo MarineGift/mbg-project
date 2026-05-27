@@ -42,7 +42,7 @@ interface RawEmailTemplate {
 }
 
 const SELECT_COLS =
-  'id, organization_id, name, category, subject, body_plain, body_html, module, is_active, created_by, created_at, updated_at';
+  'id, organization_id, name, category, subject, body_plain, body_html, module:party_type, is_active, created_by, created_at, updated_at';
 
 function mapTemplate(row: RawEmailTemplate): EmailTemplate {
   return {

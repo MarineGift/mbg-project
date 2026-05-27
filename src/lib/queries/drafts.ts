@@ -209,7 +209,7 @@ export async function fetchDraftQueue(
     .schema('ai')
     .from('drafts' as never)
     .select(
-      `id, status, module, classification_category, confidence_score, language,
+      `id, status, partyType:party_type, classification_category, confidence_score, language,
        subject, body_plain, final_body_plain,
        risk_flags, requires_human_approval, auto_send_eligible,
        expires_at, created_at,
@@ -222,7 +222,7 @@ export async function fetchDraftQueue(
     query = query.eq('status', filters.status);
   }
   if (filters.partyType !== 'all') {
-    query = query.eq('module', filters.partyType);
+    query = query.eq('party_type', filters.partyType);
   }
   if (filters.category !== 'all') {
     query = query.eq('classification_category', filters.category);
@@ -314,7 +314,7 @@ export async function fetchDraftQueue(
       ? supabase
           .schema('app')
           .from('parties' as never)
-          .select('id, name')
+          .select('id, name:party_name')
           .in('id', partyIds)
       : Promise.resolve({ data: [], error: null }),
     engagementIds.length > 0
