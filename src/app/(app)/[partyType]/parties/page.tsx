@@ -62,7 +62,7 @@ const PARTY_LEVEL_COLORS: Record<PartyLevel, string> = {
 };
 
 interface PartyRow {
-  id: string; name: string; tier: PartyTier | null; status: PartyStatus;
+  id: string; party_name: string; tier: PartyTier | null; status: PartyStatus;
   party_level: PartyLevel | null; parent_party_id: string | null;
   country_code: string | null; city: string | null;
   industry_tags: string[] | null; website: string | null; created_at: string;
@@ -90,7 +90,7 @@ async function fetchSupplyLinks(
     const { data, error } = await supabase
       .schema('app')
       .from('party_supply_links' as never)
-      .select(`${selfCol}, linked:${linkedCol}(name)`)
+      .select(`${selfCol}, linked:${linkedCol}(party_name)`)
       .in(selfCol as never, partyIds);
 
     if (error) return {}; // table may not exist yet → silent fallback
@@ -98,7 +98,7 @@ async function fetchSupplyLinks(
     const map: Record<string, string[]> = {};
     for (const row of (data ?? []) as any[]) {
       const selfId = row[selfCol] as string;
-      const name   = row.linked?.name as string | undefined;
+      const name   = row.linked?.party_name as string | undefined;
       if (!selfId || !name) continue;
       if (!map[selfId]) map[selfId] = [];
       map[selfId].push(name);
@@ -129,6 +129,16 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
+  // D6-5e: resolve party_type code -> party_type_id (app.party_types lookup)
+  const { data: ptRow } = await supabase
+    .schema('app')
+    .from('party_types' as never)
+    .select('id')
+    .eq('code' as never, module)
+    .maybeSingle();
+  if (!ptRow) notFound();
+  const partyTypeId = (ptRow as { id: string }).id;
+
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
   const linkRole  = module === 'filler_supplier' ? 'filler_supplier' : 'paper_mill';
@@ -138,12 +148,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, name, tier, status, party_level, parent_party_id, country_code, city, industry_tags, website, created_at',
+      'id, party_name, status, country_code, city, website, created_at',
       { count: 'exact' },
     )
-    .eq('party_type', module)
+    .eq('party_type_id' as never, partyTypeId)
     .is('deleted_at', null)
-    .ilike('name' as never, searchQuery ? `%${searchQuery}%` : '%');
+    .ilike('party_name' as never, searchQuery ? `%${searchQuery}%` : '%');
 
   if (countryFilter) {
     query = query.eq('country_code' as never, countryFilter);
@@ -165,7 +175,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     parties = sorted.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
-      .order('name', { ascending: true })
+      .order('party_name' as never, { ascending: true })
       .range(from, to);
     if (error) throw error;
     totalCount = count ?? 0;
@@ -179,7 +189,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select('country_code')
-    .eq('party_type' as never, module)
+    .eq('party_type_id' as never, partyTypeId)
     .is('deleted_at' as never, null)
     .not('country_code' as never, 'is', null);
   const distinctCountries: string[] = [...new Set(
@@ -290,7 +300,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                     >
                       <td className="px-4 py-3">
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
-                          {p.name}
+                          {p.party_name}
                         </Link>
                       </td>
                       <td className="px-3 py-3 text-center">
