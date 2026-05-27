@@ -50,7 +50,7 @@ import {
  * ============================================================ */
 
 interface RawPartyJoin {
-  name: string;
+  party_name: string;
   party_type_id: number | null;
 }
 
@@ -101,7 +101,7 @@ const DEAL_LIST_SELECT = `
   id, deal_name, status, current_stage_id, pipeline_id, party_id,
   value_amount, value_currency, probability_pct,
   expected_close_date, owner_user_id, updated_at,
-  parties:party_id ( name, party_type_id )
+  parties:party_id ( party_name, party_type_id )
 ` as const;
 
 /* ============================================================
@@ -161,7 +161,7 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
     currentStageId: r.current_stage_id,
     pipelineDefinitionId: r.pipeline_id ?? null,
     partyId: r.party_id,
-    partyName: party?.name ?? '(unknown party)',
+    partyName: party?.party_name ?? '(unknown party)',
     valueAmount,
     valueCurrency: r.value_currency,
     probabilityPct,
@@ -190,7 +190,7 @@ export async function fetchKanbanBoard(
 
   if (!pipeline) {
     return {
-      partyType: module as never,
+      partyType: partyType as never,
       pipelineDefinitionId: null,
       pipelineName: null,
       stages: [],
@@ -233,7 +233,7 @@ export async function fetchKanbanBoard(
   }
 
   return {
-    partyType: module as never,
+    partyType: partyType as never,
     pipelineDefinitionId: pipeline.id,
     pipelineName: pipeline.name,
     stages,
@@ -275,7 +275,7 @@ export async function fetchEngagementDetail(
       supabase
         .schema('app')
         .from('parties' as never)
-        .select('id, name, party_type_id')
+        .select('id, party_name, party_type_id')
         .eq('id', e.party_id)
         .maybeSingle(),
 
@@ -300,7 +300,7 @@ export async function fetchEngagementDetail(
     ]);
 
   const party = partyRes?.data as
-    | { id: string; name: string; party_type_id: number | null }
+    | { id: string; party_name: string; party_type_id: number | null }
     | null;
   const contact = contactRes?.data as
     | { id: string; full_name: string | null }
@@ -318,7 +318,7 @@ export async function fetchEngagementDetail(
     // organization_id 는 urm.deals 에 없음 → 빈 string (도메인 type 호환)
     organizationId: '',
     partyId: e.party_id,
-    partyName: party?.name ?? '(unknown party)',
+    partyName: party?.party_name ?? '(unknown party)',
     primaryContactId: e.primary_contact_id,
     primaryContactName: contact?.full_name ?? null,
     partyType: moduleValue,
