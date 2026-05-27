@@ -125,7 +125,7 @@ export async function fetchStages(
 
   const { data } = await supabase
     .schema('app')
-    .from('pipeline_stages' as never)
+    .from('stages' as never)
     .select(
       'id, pipeline_definition_id, code, name, stage_type, sort_order, default_probability_pct, is_terminal, is_won, is_lost, color_hex',
     )
@@ -147,7 +147,7 @@ export async function fetchFirstStage(
 
   const { data } = await supabase
     .schema('app')
-    .from('pipeline_stages' as never)
+    .from('stages' as never)
     .select('id')
     .eq('pipeline_definition_id', pipelineDefinitionId)
     .is('deleted_at', null)
@@ -175,7 +175,7 @@ export async function fetchStageHistory(
   const [historyRes, stagesRes] = await Promise.all([
     supabase
       .schema('app')
-      .from('engagement_stage_history' as never)
+      .from('deal_stage_history' as never)
       .select(
         'id, from_stage_id, to_stage_id, moved_at, moved_by_user_id, duration_in_previous_stage_seconds, reason',
       )
@@ -186,7 +186,7 @@ export async function fetchStageHistory(
     pipelineDefinitionId
       ? supabase
           .schema('app')
-          .from('pipeline_stages' as never)
+          .from('stages' as never)
           .select('id, name')
           .eq('pipeline_definition_id', pipelineDefinitionId)
           .is('deleted_at', null)
