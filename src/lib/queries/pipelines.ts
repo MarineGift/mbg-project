@@ -259,7 +259,7 @@ export async function fetchPipelineById(
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('pipelines' as never)
     .select('id, name')
     .eq('id', pipelineId)

@@ -124,7 +124,7 @@ export async function moveEngagementStage(input: {
   // [1] deal + target stage 병렬 검증
   const [dealRes, stageRes] = await Promise.all([
     supabase
-      .schema('urm')
+      .schema('app')
       .from('deals' as never)
       .select('id, pipeline_id, current_stage_id, status')
       .eq('id', parsed.data.engagementId)
@@ -132,7 +132,7 @@ export async function moveEngagementStage(input: {
       .maybeSingle(),
 
     supabase
-      .schema('urm')
+      .schema('app')
       .from('stages' as never)
       .select('id, pipeline_id, is_won, is_lost, default_probability_pct')
       .eq('id', parsed.data.toStageId)
@@ -203,7 +203,7 @@ export async function moveEngagementStage(input: {
   updates.updated_by = auth.userId;
 
   const { error: updateErr } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .update(updates as never)
     .eq('id', parsed.data.engagementId);
@@ -270,7 +270,7 @@ export async function updateEngagementStatus(input: {
   }
 
   const { error, data } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .update(updates as never)
     .eq('id', parsed.data.engagementId)
@@ -373,7 +373,7 @@ export async function createEngagement(
   };
 
   const { data, error } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .insert(insertRow as never)
     .select('id')
@@ -427,7 +427,7 @@ export async function updateEngagement(
   };
 
   const { error, data } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .update(updates as never)
     .eq('id', parsed.data.engagementId)
@@ -462,7 +462,7 @@ export async function deleteEngagement(input: {
 
   const supabase = await createSupabaseServerClient();
   const { error, data } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .update({
       deleted_at: new Date().toISOString(),

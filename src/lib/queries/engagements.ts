@@ -204,7 +204,7 @@ export async function fetchKanbanBoard(
   const [stages, cardsRes] = await Promise.all([
     fetchStages(pipeline.id),
     supabase
-      .schema('urm')
+      .schema('app')
       .from('deals' as never)
       .select(DEAL_LIST_SELECT, { count: 'exact' })
       .neq('status', 'archived')
@@ -253,7 +253,7 @@ export async function fetchEngagementDetail(
   const supabase = await createSupabaseServerClient();
 
   const { data: rawDetail, error } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .select(
       `id, party_id, primary_contact_id,
@@ -273,7 +273,7 @@ export async function fetchEngagementDetail(
   const [partyRes, contactRes, pipeline, availableStages, stageHistory] =
     await Promise.all([
       supabase
-        .schema('urm')
+        .schema('app')
         .from('parties' as never)
         .select('id, name, party_type_id')
         .eq('id', e.party_id)
@@ -281,7 +281,7 @@ export async function fetchEngagementDetail(
 
       e.primary_contact_id
         ? supabase
-            .schema('urm')
+            .schema('app')
             .from('contacts' as never)
             .select('id, full_name')
             .eq('id', e.primary_contact_id)
@@ -358,7 +358,7 @@ export async function fetchPartyEngagements(
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .select(DEAL_LIST_SELECT)
     .eq('party_id', partyId)

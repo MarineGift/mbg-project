@@ -117,7 +117,7 @@ export async function fetchDraftDetail(
 
     d.engagement_id
       ? supabase
-          .schema('urm')
+          .schema('app')
           .from('deals' as never)
           .select(
             'id, deal_name, status, value_amount, value_currency, parties:party_id ( party_type_id )',
