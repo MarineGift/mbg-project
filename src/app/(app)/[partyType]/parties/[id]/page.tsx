@@ -5,6 +5,7 @@
  *   - 2026-05-17: Phase 21b — PartySequencePanel integrated
  *   - 2026-05-17: Phase 22a — PartyCommunicationsTimeline integrated
  *   - 2026-05-17: Phase 22a fix — parens around ?? / || mix
+ *   - 2026-05-26: D6-5c-2b — Industry sections removed (industry schema deleted)
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -23,9 +24,6 @@ import { PartyTasksList } from '@/components/parties/party-tasks-list';
 import { PartyNotesCard } from '@/components/parties/party-notes-card';
 import { PartyMeetingsList } from '@/components/parties/party-meetings-list';
 import { ActivityTimeline } from '@/components/parties/activity-timeline';
-import { IndustryPaperSection } from '@/components/parties/industry-paper-section';
-import { IndustryFillerSection } from '@/components/parties/industry-filler-section';
-import { LinkedMillSection } from '@/components/industry/LinkedMillSection';
 import { PartySequencePanel } from '@/components/parties/party-sequence-panel';
 import { CountryPeersPanel } from '@/components/parties/country-peers-panel';
 import { PartyCommunicationsTimeline } from '@/components/parties/party-communications-timeline';
@@ -118,22 +116,6 @@ export default async function PartyDetailPage({ params }: PageProps) {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <PartyStatsGrid party={full.party} />
-
-          {full.party.industryPaperCompanyId != null && (
-            <IndustryPaperSection
-              paperCompanyId={full.party.industryPaperCompanyId}
-            />
-          )}
-          {full.party.industryFillerSupplierId != null && (
-            <IndustryFillerSection
-              fillerSupplierId={full.party.industryFillerSupplierId}
-            />
-          )}
-          {(full.party as any).industryPaperMillId != null && (
-            <LinkedMillSection
-              industryPaperMillId={(full.party as any).industryPaperMillId}
-            />
-          )}
 
           <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <div className="space-y-4">
