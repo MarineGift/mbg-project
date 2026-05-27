@@ -198,7 +198,7 @@ async function fetchCommunicationContext(
     .schema('app')
     .from('communications')
     .select(
-      'id, organization_id, party_id, contact_id, engagement_id, module, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
+      'id, organization_id, party_id, contact_id, engagement_id, module:party_type, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
     )
     .eq('id', communicationId)
     .eq('organization_id', organizationId)

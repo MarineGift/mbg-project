@@ -19,14 +19,14 @@ export async function fetchCommunicationDetailV2(
       'message_id, thread_id, in_reply_to, ' +
       'occurred_at, sent_at, received_at, ai_generated, ' +
       'external_data, ' +
-      'parties:party_id ( id, name, party_type ), ' +
+      'parties:party_id ( id, name:party_name, party_types(code) ), ' +
       'contacts:contact_id ( id, given_name, family_name, email )',
     )
     .eq('id', id)
     .is('deleted_at', null)
     .maybeSingle();
 
-  if (error || !raw) return null;
+  if (error) { console.error('[fetchCommunicationDetailV2] query error:', error); return null; } if (!raw) return null;
 
   const r = raw as any;
   const party   = Array.isArray(r.parties)  ? r.parties[0]  : r.parties;
@@ -40,7 +40,7 @@ export async function fetchCommunicationDetailV2(
       .schema('ai')
       .from('drafts' as never)
       .select('id, status, classification_category, confidence_score')
-      .eq('source_communication_id' as never, id)
+      .eq('inbound_communication_id' as never, id)
       .order('created_at', { ascending: false })
       .limit(10);
     drafts = data ?? [];
@@ -73,7 +73,7 @@ export async function fetchCommunicationDetailV2(
     attachmentCount:  0,
     aiGenerated:      r.ai_generated    ?? false,
     aiDraftId:        r.ai_draft_id     ?? null,
-    party:   party   ? { id: party.id,   name: party.name,   partyType: party.party_type } : null,
+    party:   party   ? { id: party.id,   name: party.name,   partyType: (Array.isArray(party.party_types) ? party.party_types[0]?.code : party.party_types?.code) ?? null } : null,
     contact: contact ? {
       id:       contact.id,
       fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,
