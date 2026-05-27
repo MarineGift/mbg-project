@@ -85,18 +85,42 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // D6-5e: lookup party_type code -> party_type_id (smallint FK)
+  const { data: ptRow } = await supabase
+    .schema('app')
+    .from('party_types' as never)
+    .select('id')
+    .eq('code' as never, parsed.data.partyType)
+    .maybeSingle();
+  if (!ptRow) {
+    return { ok: false, errorCode: 'database', errorMessage: `Unknown party_type: ${parsed.data.partyType}` };
+  }
+  const partyTypeId = (ptRow as { id: number }).id;
+
+  // D6-5e: lookup party_kind code -> entity_type_id (smallint FK)
+  const { data: etRow } = await supabase
+    .schema('app')
+    .from('entity_types' as never)
+    .select('id')
+    .eq('code' as never, parsed.data.partyKind)
+    .maybeSingle();
+  if (!etRow) {
+    return { ok: false, errorCode: 'database', errorMessage: `Unknown party_kind: ${parsed.data.partyKind}` };
+  }
+  const entityTypeId = (etRow as { id: number }).id;
+
+  // D6-5e: dropped from INSERT (not in app.parties): legal_name, tier, industry_tags(array).
+  // industry_tag_id is a single FK; form-array -> FK mapping deferred to T4b.
   const insertRow: Record<string, unknown> = {
     organization_id: auth.organizationId,
-    name: parsed.data.name.trim(),
-    legal_name: parsed.data.legalName?.trim() || null,
-    party_type: parsed.data.partyType,
-    party_kind: parsed.data.partyKind,
-    tier: parsed.data.tier ?? 'tier_3',
+    party_name: parsed.data.name.trim(),
+    party_type_id: partyTypeId,
+    entity_type_id: entityTypeId,
     country_code: parsed.data.countryCode || null,
     region: parsed.data.region?.trim() || null,
     city: parsed.data.city?.trim() || null,
     website: parsed.data.website || null,
-    industry_tags: parsed.data.industryTags ?? [],
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
@@ -147,17 +171,40 @@ export async function updateParty(
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // D6-5e: lookup party_type code -> party_type_id
+  const { data: ptRow } = await supabase
+    .schema('app')
+    .from('party_types' as never)
+    .select('id')
+    .eq('code' as never, parsed.data.partyType)
+    .maybeSingle();
+  if (!ptRow) {
+    return { ok: false, errorCode: 'database', errorMessage: `Unknown party_type: ${parsed.data.partyType}` };
+  }
+  const partyTypeId = (ptRow as { id: number }).id;
+
+  // D6-5e: lookup party_kind code -> entity_type_id
+  const { data: etRow } = await supabase
+    .schema('app')
+    .from('entity_types' as never)
+    .select('id')
+    .eq('code' as never, parsed.data.partyKind)
+    .maybeSingle();
+  if (!etRow) {
+    return { ok: false, errorCode: 'database', errorMessage: `Unknown party_kind: ${parsed.data.partyKind}` };
+  }
+  const entityTypeId = (etRow as { id: number }).id;
+
+  // D6-5e: dropped: legal_name, tier, industry_tags(array). See createParty notes.
   const updates: Record<string, unknown> = {
-    name: parsed.data.name.trim(),
-    legal_name: parsed.data.legalName?.trim() || null,
-    party_type: parsed.data.partyType,
-    party_kind: parsed.data.partyKind,
-    tier: parsed.data.tier ?? 'tier_3',
+    party_name: parsed.data.name.trim(),
+    party_type_id: partyTypeId,
+    entity_type_id: entityTypeId,
     country_code: parsed.data.countryCode || null,
     region: parsed.data.region?.trim() || null,
     city: parsed.data.city?.trim() || null,
     website: parsed.data.website || null,
-    industry_tags: parsed.data.industryTags ?? [],
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
@@ -171,7 +218,7 @@ export async function updateParty(
     .eq('id', parsed.data.partyId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_type')
+    .select('id')
     .maybeSingle();
 
   if (error) {
@@ -181,10 +228,10 @@ export async function updateParty(
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
   }
-  const updated = data as { id: string; party_type: PartyType };
 
-  revalidatePath(`/${updated.party_type}/parties/${parsed.data.partyId}`);
-  revalidatePath(`/${updated.party_type}/parties`);
+  // D6-5e: use input party_type code for revalidation (was reading removed DB col).
+  revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);
+  revalidatePath(`/${parsed.data.partyType}/parties`);
   return { ok: true, partyId: parsed.data.partyId };
 }
 
@@ -214,7 +261,7 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
     .eq('id', parsed.data.partyId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('party_type')
+    .select('party_type_id, party_types(code)')
     .maybeSingle();
 
   if (error) {
@@ -222,7 +269,12 @@ export async function deleteParty(input: { partyId: string }): Promise<PartyActi
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
-  const partyType = (data as { party_type: PartyType }).party_type;
+
+  // D6-5e: party_type column gone; resolve via party_types(code) FK join.
+  const ptJoin = (data as { party_types?: { code?: string } | { code?: string }[] }).party_types;
+  const partyType = (
+    (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?? 'paper_mill'
+  ) as PartyType;
 
   revalidatePath(`/${partyType}/parties`);
   redirect(`/${partyType}/parties`);
