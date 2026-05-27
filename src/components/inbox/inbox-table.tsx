@@ -158,6 +158,9 @@ export function InboxTable({ rows }: Props) {
                     </div>
                     <p className={cn('text-sm truncate', row.subject ? 'font-medium' : 'text-muted-foreground italic')}>
                       {row.subject ?? t('noSubject')}
+                      {row.threadCount > 1 && (
+                        <span className="ml-1.5 text-xs text-muted-foreground font-normal">({row.threadCount})</span>
+                      )}
                     </p>
                     {row.bodyPreview && (
                       <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{row.bodyPreview}</p>

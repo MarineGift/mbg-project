@@ -34,6 +34,7 @@
   "nav": {
     "dashboard": "대시보드",
     "inbox": "수신함",
+    "sent": "보낸 메일함",
     "drafts": "AI 초안",
     "parties": "거래처",
     "engagements": "딜",

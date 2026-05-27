@@ -60,9 +60,10 @@ const ALL_DIRECTIONS: readonly CommunicationDirection[] = [
 
 export function parseInboxFilters(
   params: Record<string, string | string[] | undefined>,
+  defaults: InboxFilters = DEFAULT_INBOX_FILTERS,
 ): InboxFilters {
-  const channel = pickEnum(params.channel, ALL_CHANNELS, 'all' as const);
-  const direction = pickEnum(params.direction, ALL_DIRECTIONS, 'all' as const);
+  const channel = pickEnum(params.channel, ALL_CHANNELS, defaults.channel);
+  const direction = pickEnum(params.direction, ALL_DIRECTIONS, defaults.direction);
   const queryRaw = single(params.q);
   const query = queryRaw?.trim() ?? '';
   const hasDraft = single(params.hasDraft) === '1';
@@ -125,6 +126,7 @@ interface RawInboxRow {
   ai_generated: boolean;
   party_id: string | null;
   parties: { name: string; party_types: { code: string } | Array<{ code: string }> | null } | null;
+  thread_id: string | null;
 }
 
 export async function fetchInbox(
@@ -139,6 +141,7 @@ export async function fetchInbox(
     .select(
       `id, channel, direction, status, from_address, from_name, to_addresses,
        subject, body_plain, occurred_at, sent_at, ai_generated,
+       thread_id,
        party_id,
        parties:party_id ( name:party_name, party_types(code) )`,
       { count: 'exact' },
@@ -167,11 +170,11 @@ export async function fetchInbox(
     .order('id', { ascending: true });
 
   // 페이지네이션
-  const from = (pagination.page - 1) * pagination.pageSize;
-  const to = from + pagination.pageSize - 1;
-  query = query.range(from, to);
+  // t9a: fetch all matching messages (no server-side pagination);
+  // JS-side group by thread, then paginate. TODO: server-side RPC if msg count > 1000.
+  query = query.range(0, 999);
 
-  const { data, error, count } = await query;
+  const { data, error } = await query;
   if (error) {
     // eslint-disable-next-line no-console
     console.error('[queries/inbox.fetchInbox] failed:', error);
@@ -198,16 +201,40 @@ export async function fetchInbox(
     draftsByInboundId = new Set(ids.map((r) => r.inbound_communication_id));
   }
 
-  let rows: InboxRow[] = rawRows.map((r) => toInboxRow(r, draftsByInboundId));
+  const allRows: InboxRow[] = rawRows.map((r) => toInboxRow(r, draftsByInboundId));
+
+  // t9a: group by threadId, pick latest representative + count + OR-aggregate hasDraft.
+  // allRows is sorted by occurred_at desc, so first seen per thread IS the latest message.
+  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean }>();
+  for (const row of allRows) {
+    const existing = threadMap.get(row.threadId);
+    if (existing) {
+      existing.count += 1;
+      if (row.hasDraft) existing.anyHasDraft = true;
+    } else {
+      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft });
+    }
+  }
+
+  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft }) => ({
+    ...latest,
+    threadCount: count,
+    hasDraft: anyHasDraft,
+  }));
 
   // hasDraft 필터는 위 단계에서 모든 행 가져온 후 사후 필터 (성능상 ok — 페이지당 최대 100)
   if (filters.hasDraft) {
     rows = rows.filter((r) => r.hasDraft);
   }
 
+  // t9a: JS-side pagination on threads (rows already thread-grouped above).
+  const totalThreads = rows.length;
+  const fromIdx = (pagination.page - 1) * pagination.pageSize;
+  const pagedRows = rows.slice(fromIdx, fromIdx + pagination.pageSize);
+
   return {
-    rows,
-    totalCount: count ?? 0,
+    rows: pagedRows,
+    totalCount: totalThreads,
     filters,
     pagination,
   };
@@ -250,6 +277,8 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     aiGenerated: raw.ai_generated,
     // Phase 1: 첨부파일 기능 미구현 — DB에 attachment_count 컬럼 없음
     attachmentCount: 0,
+    threadId: raw.thread_id ?? raw.id,
+    threadCount: 1,
   };
 }
 

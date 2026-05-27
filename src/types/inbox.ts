@@ -72,6 +72,10 @@ export interface InboxRow {
   aiGenerated: boolean;
   /** 첨부 파일 개수 — Phase 1 미구현, 항상 0 (DB 컬럼 없음) */
   attachmentCount: number;
+  /** Thread group: id of conversation thread (= self id if standalone) */
+  threadId: string;
+  /** Thread group: total message count in this thread */
+  threadCount: number;
 }
 
 /**
@@ -102,10 +106,17 @@ export interface InboxResult {
 
 export const DEFAULT_INBOX_FILTERS: InboxFilters = {
   channel: 'all',
-  direction: 'all',
+  // D6-5e: default to inbound only so list count matches sidebar/dashboard
+  // "Unread inbound" indicator. Users can still toggle to outbound via UI dropdown.
+  direction: 'inbound',
   query: '',
   hasDraft: false,
   partyId: null,
+};
+
+export const DEFAULT_SENT_FILTERS: InboxFilters = {
+  ...DEFAULT_INBOX_FILTERS,
+  direction: 'outbound',
 };
 
 export const INBOX_DEFAULT_PAGE_SIZE = 25;

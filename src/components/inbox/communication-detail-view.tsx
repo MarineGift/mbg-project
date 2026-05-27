@@ -1,164 +1,330 @@
+// t9c: thread merged view
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Sparkles, ArrowRight, AlertCircle } from 'lucide-react';
+import {
+  Sparkles, ArrowRight, AlertCircle,
+  PenLine, FileText, ChevronDown, ChevronRight,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ChannelDirectionIcon } from './channel-direction-icon';
 import { ModuleBadge } from '@/components/common/module-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { StatusBadge } from '@/components/common/status-badge';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
+import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import type { CommunicationDetail } from '@/types/communication-detail';
 import type { DraftStatus } from '@/types/ai';
 
 interface Props {
-  comm: CommunicationDetail;
+  /** All messages in the thread, sorted by occurredAt ASC. */
+  thread: CommunicationDetail[];
+  /** ID of the originally clicked message (default-expanded along with latest). */
+  rootId: string;
+  templates?: unknown[];
 }
 
-export function CommunicationDetailView({ comm }: Props) {
+export function CommunicationDetailView({ thread, rootId, templates }: Props) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
 
+  // Latest message (last in ASC-sorted list)
+  const latest = thread[thread.length - 1];
+  const root = thread[0];
+
+  // Default-expand: rootId (clicked entry) + latest message
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    if (rootId) s.add(rootId);
+    if (latest) s.add(latest.id);
+    return s;
+  });
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Reply dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'direct' | 'template' | 'ai'>('direct');
+  function openReply(tab: 'direct' | 'template' | 'ai') {
+    setInitialTab(tab);
+    setDialogOpen(true);
+  }
+
+  // Thread-level context
+  const partyContext = root?.party ?? latest?.party ?? null;
+  const threadSubject = root?.subject ?? latest?.subject ?? '';
+  const isReplyable = latest && latest.direction === 'inbound';
+
   return (
-    <div className="space-y-4">
-      {/* Header card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3 mb-2">
-            <ChannelDirectionIcon channel={comm.channel} direction={comm.direction} />
-            <span className="text-xs text-muted-foreground uppercase tracking-wide">
-              {comm.channel} · {comm.direction}
-            </span>
-            {comm.party && <ModuleBadge partyType={comm.party.partyType} size="sm" />}
-            {comm.status === 'failed' && (
-              <span className="inline-flex items-center gap-1 text-xs text-destructive">
-                <AlertCircle className="h-3 w-3" />
-                {t('failed')}
-              </span>
-            )}
-          </div>
-          <CardTitle className="text-base">
-            {comm.subject ?? <span className="italic text-muted-foreground">{t('noSubject')}</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <span className="text-muted-foreground">{t('from')}</span>
-            <span className="font-mono truncate">
-              {comm.fromName ? `${comm.fromName} <${comm.fromAddress ?? ''}>` : comm.fromAddress ?? '—'}
-            </span>
-            <span className="text-muted-foreground">{t('to')}</span>
-            <span className="font-mono truncate">{comm.toAddresses.join(', ') || '—'}</span>
-            {comm.ccAddresses.length > 0 && (
+    <div className="space-y-3">
+      {/* Thread header */}
+      <div className="px-1 pb-1">
+        <h1 className="text-lg font-semibold truncate">
+          {threadSubject || <span className="italic text-muted-foreground">{t('noSubject')}</span>}
+        </h1>
+        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+          {partyContext && <ModuleBadge partyType={partyContext.partyType} size="sm" />}
+          {partyContext && (
+            <Link
+              href={`/${partyContext.partyType}/parties/${partyContext.id}`}
+              className="hover:underline truncate text-primary"
+            >
+              {partyContext.name}
+            </Link>
+          )}
+          <span className="ml-auto">
+            {thread.length} {thread.length === 1 ? 'message' : 'messages'}
+          </span>
+        </div>
+      </div>
+
+      {/* Messages */}
+      {thread.map((msg) => (
+        <ThreadMessageCard
+          key={msg.id}
+          msg={msg}
+          expanded={expanded.has(msg.id)}
+          onToggle={() => toggle(msg.id)}
+        />
+      ))}
+
+      {/* Reply card (inbound latest only) */}
+      {isReplyable && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Reply</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2 items-center">
+            {latest.party ? (
               <>
-                <span className="text-muted-foreground">{t('cc')}</span>
-                <span className="font-mono truncate">{comm.ccAddresses.join(', ')}</span>
+                <Button onClick={() => openReply('direct')} variant="default" size="sm">
+                  <PenLine className="h-4 w-4 mr-1" />
+                  Write manually
+                </Button>
+                <Button onClick={() => openReply('ai')} variant="secondary" size="sm">
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Use AI draft
+                </Button>
+                <Button onClick={() => openReply('template')} variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-1" />
+                  Use template
+                </Button>
               </>
-            )}
-            <span className="text-muted-foreground">{t('when')}</span>
-            <RelativeTime date={comm.occurredAt} className="font-medium" live={false} />
-            {comm.party && (
+            ) : (
               <>
-                <span className="text-muted-foreground">{t('party')}</span>
-                <Link
-                  href={`/${comm.party.partyType}/parties/${comm.party.id}`}
-                  className="text-primary hover:underline truncate"
-                >
-                  {comm.party.name}
-                </Link>
-              </>
-            )}
-            {comm.messageId && (
-              <>
-                <span className="text-muted-foreground">{t('messageId')}</span>
-                <span className="font-mono text-[10px] truncate" title={comm.messageId}>
-                  {comm.messageId}
+                <Button asChild variant="default" size="sm">
+                  <Link
+                    href={
+                      '/compose?' +
+                      new URLSearchParams({
+                        to: latest.fromAddress ?? '',
+                        subject: latest.subject
+                          ? (latest.subject.toLowerCase().startsWith('re:')
+                              ? latest.subject
+                              : 'Re: ' + latest.subject)
+                          : '',
+                        inReplyTo: latest.messageId ?? '',
+                        threadId: latest.threadId ?? '',
+                      }).toString()
+                    }
+                  >
+                    <PenLine className="h-4 w-4 mr-1" />
+                    Write manually
+                  </Link>
+                </Button>
+                <span className="text-xs text-muted-foreground ml-1">
+                  No party registered - AI / Template disabled.
                 </span>
               </>
             )}
-            {comm.threadId && (
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reply dialog mount (only when party present) */}
+      {isReplyable && latest.party && (
+        <ComposeEmailDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          mode="reply"
+          initialTab={initialTab}
+          partyId={latest.party.id}
+          defaultTo={latest.fromAddress ?? ''}
+          defaultSubject={
+            latest.subject
+              ? latest.subject.toLowerCase().startsWith('re:')
+                ? latest.subject
+                : `Re: ${latest.subject}`
+              : ''
+          }
+          replyToMessageId={latest.messageId ?? undefined}
+          threadId={latest.threadId ?? undefined}
+          originalCommunicationId={latest.id}
+          templates={templates ?? []}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * ThreadMessageCard - single collapsible message in the thread
+ * ============================================================ */
+
+interface ThreadMessageCardProps {
+  msg: CommunicationDetail;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function ThreadMessageCard({ msg, expanded, onToggle }: ThreadMessageCardProps) {
+  const t = useTranslations('inbox.detail');
+  const tCat = useTranslations('classificationCategory');
+  const hasDrafts = msg.generatedDrafts && msg.generatedDrafts.length > 0;
+
+  const previewText = (msg.bodyPlain ?? '').replace(/\s+/g, ' ').slice(0, 180);
+
+  return (
+    <Card className={cn(!expanded && 'hover:bg-muted/20 transition-colors')}>
+      {/* Always-visible header (clickable to toggle) */}
+      <button type="button" onClick={onToggle} className="w-full text-left block">
+        <CardHeader className="pb-3">
+          <div className="flex items-start gap-2">
+            {expanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            )}
+            <ChannelDirectionIcon channel={msg.channel} direction={msg.direction} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
+                <span>{msg.direction}</span>
+                {msg.status === 'failed' && (
+                  <span className="inline-flex items-center gap-1 text-destructive normal-case tracking-normal">
+                    <AlertCircle className="h-3 w-3" />
+                    {t('failed')}
+                  </span>
+                )}
+                <span className="ml-auto normal-case tracking-normal">
+                  <RelativeTime date={msg.occurredAt} live={false} />
+                </span>
+              </div>
+              <div className="text-sm truncate mt-0.5">
+                <span className="text-muted-foreground">
+                  {msg.direction === 'inbound' ? t('from') : t('to')}:
+                </span>{' '}
+                <span className="font-mono">
+                  {msg.direction === 'inbound'
+                    ? (msg.fromName ? `${msg.fromName} <${msg.fromAddress ?? ''}>` : msg.fromAddress ?? '?')
+                    : (msg.toAddresses.join(', ') || '?')}
+                </span>
+              </div>
+              {!expanded && previewText && (
+                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                  {previewText}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <CardContent className="space-y-3 pt-0">
+          {/* Metadata grid */}
+          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            {msg.toAddresses.length > 0 && (
               <>
-                <span className="text-muted-foreground">{t('threadId')}</span>
-                <span className="font-mono text-[10px] truncate">{comm.threadId}</span>
+                <span className="text-muted-foreground">{t('to')}</span>
+                <span className="font-mono truncate">{msg.toAddresses.join(', ')}</span>
               </>
             )}
-            {comm.errorMessage && (
+            {msg.ccAddresses.length > 0 && (
+              <>
+                <span className="text-muted-foreground">{t('cc')}</span>
+                <span className="font-mono truncate">{msg.ccAddresses.join(', ')}</span>
+              </>
+            )}
+            {msg.messageId && (
+              <>
+                <span className="text-muted-foreground">{t('messageId')}</span>
+                <span className="font-mono text-[10px] truncate" title={msg.messageId}>{msg.messageId}</span>
+              </>
+            )}
+            {msg.errorMessage && (
               <>
                 <span className="text-muted-foreground">Error</span>
-                <span className="text-destructive">{comm.errorMessage}</span>
+                <span className="text-destructive">{msg.errorMessage}</span>
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Body */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">{t('body')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {comm.bodyPlain ? (
+          {/* Body */}
+          {msg.bodyPlain ? (
             <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap font-mono leading-relaxed max-h-[500px] overflow-y-auto scrollbar-thin">
-              {comm.bodyPlain}
+              {msg.bodyPlain}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground italic">{t('noBody')}</p>
           )}
+
+          {/* AI Drafts (inbound only) */}
+          {msg.direction === 'inbound' && hasDrafts && (
+            <div className="pt-2 border-t">
+              <div className="text-xs font-medium mb-2 flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                {t('generatedDrafts')}
+              </div>
+              <ul className="space-y-1">
+                {msg.generatedDrafts.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      href={`/drafts/${d.id}`}
+                      className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/40 transition-colors text-xs"
+                    >
+                      <StatusBadge status={d.status as DraftStatus} size="sm" />
+                      {d.classificationCategory && (
+                        <span className="text-muted-foreground">
+                          {tCat(d.classificationCategory as Parameters<typeof tCat>[0])}
+                        </span>
+                      )}
+                      {d.confidenceScore != null && (
+                        <ConfidenceBar value={d.confidenceScore} className="w-24" />
+                      )}
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Outbound source draft link */}
+          {msg.direction === 'outbound' && msg.aiDraftId && (
+            <div className="pt-2 border-t">
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/drafts/${msg.aiDraftId}`}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  {t('viewSourceDraft')}
+                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Link>
+              </Button>
+            </div>
+          )}
         </CardContent>
-      </Card>
-
-      {/* Related AI drafts (inbound case) */}
-      {comm.direction === 'inbound' && comm.generatedDrafts.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-600" />
-              {t('generatedDrafts')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {comm.generatedDrafts.map((d) => (
-                <li key={d.id}>
-                  <Link
-                    href={`/drafts/${d.id}`}
-                    className="flex items-center gap-2 p-2 rounded hover:bg-muted/40 transition-colors"
-                  >
-                    <StatusBadge status={d.status as DraftStatus} size="sm" />
-                    {d.classificationCategory && (
-                      <span className="text-xs text-muted-foreground">
-                        {tCat(d.classificationCategory as Parameters<typeof tCat>[0])}
-                      </span>
-                    )}
-                    {d.confidenceScore != null && (
-                      <ConfidenceBar value={d.confidenceScore} className="w-24" />
-                    )}
-                    <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
       )}
-
-      {/* AI-generated outbound info */}
-      {comm.direction === 'outbound' && comm.aiDraftId && (
-        <Card>
-          <CardContent className="pt-6">
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/drafts/${comm.aiDraftId}`}>
-                <Sparkles className="h-4 w-4" />
-                {t('viewSourceDraft')}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </Card>
   );
 }

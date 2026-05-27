@@ -87,3 +87,112 @@ export async function fetchCommunicationDetailV2(
     })),
   };
 }
+
+// ============================================================
+// t9c: fetch ALL messages in a thread (sorted occurredAt ASC)
+// Used by /inbox/[id] page for thread-merged detail view.
+// ============================================================
+export async function fetchMessagesInThread(
+  threadId: string,
+): Promise<CommunicationDetail[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: rawMessages, error } = await supabase
+    .schema('app')
+    .from('communications' as never)
+    .select(
+      'id, organization_id, channel, direction, status, ' +
+      'from_address, from_name, to_addresses, cc_addresses, ' +
+      'subject, body_plain, body_html, ' +
+      'message_id, thread_id, in_reply_to, ' +
+      'occurred_at, sent_at, received_at, ai_generated, ' +
+      'ai_draft_id, external_data, ' +
+      'parties:party_id ( id, name:party_name, party_types(code) ), ' +
+      'contacts:contact_id ( id, given_name, family_name, email )',
+    )
+    .eq('thread_id' as never, threadId)
+    .is('deleted_at' as never, null)
+    .order('occurred_at', { ascending: true });
+
+  if (error) {
+    console.error('[fetchMessagesInThread] query error:', error);
+    return [];
+  }
+  if (!rawMessages || (rawMessages as unknown[]).length === 0) return [];
+
+  // Batch-fetch drafts for all inbound message IDs
+  const rows = rawMessages as unknown as Array<Record<string, unknown>>;
+  const inboundIds = rows
+    .filter((r) => r.direction === 'inbound')
+    .map((r) => r.id as string);
+
+  const draftsByMsg: Record<string, Array<Record<string, unknown>>> = {};
+  if (inboundIds.length > 0) {
+    const { data: draftRows } = await supabase
+      .schema('ai')
+      .from('drafts' as never)
+      .select('id, status, classification_category, confidence_score, inbound_communication_id')
+      .in('inbound_communication_id' as never, inboundIds);
+
+    for (const d of ((draftRows as unknown as Array<Record<string, unknown>>) ?? [])) {
+      const key = d.inbound_communication_id as string;
+      if (!draftsByMsg[key]) draftsByMsg[key] = [];
+      draftsByMsg[key].push(d);
+    }
+  }
+
+  return rows.map((raw): CommunicationDetail => {
+    const r = raw as Record<string, unknown>;
+    const partiesField = r.parties;
+    const party = (Array.isArray(partiesField) ? partiesField[0] : partiesField) as Record<string, unknown> | null | undefined;
+    const contactsField = r.contacts;
+    const contact = (Array.isArray(contactsField) ? contactsField[0] : contactsField) as Record<string, unknown> | null | undefined;
+    const ext = (r.external_data as Record<string, unknown> | null) ?? {};
+    const drafts = draftsByMsg[r.id as string] ?? [];
+
+    return {
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      channel: r.channel as CommunicationDetail['channel'],
+      direction: r.direction as CommunicationDetail['direction'],
+      status: r.status as CommunicationDetail['status'],
+      fromAddress: (r.from_address as string | null) ?? null,
+      fromName: (r.from_name as string | null) ?? null,
+      toAddresses: (r.to_addresses as string[] | null) ?? [],
+      ccAddresses: (r.cc_addresses as string[] | null) ?? [],
+      bccAddresses: [],
+      subject: (r.subject as string | null) ?? null,
+      bodyPlain: (r.body_plain as string | null) ?? null,
+      bodyHtml: (r.body_html as string | null) ?? null,
+      messageId: (r.message_id as string | null) ?? null,
+      threadId: (r.thread_id as string | null) ?? null,
+      inReplyTo: (r.in_reply_to as string | null) ?? null,
+      references: (ext.references as string[] | undefined) ?? [],
+      occurredAt: (r.occurred_at as string) ?? (r.received_at as string) ?? '',
+      sentAt: (r.sent_at as string | null) ?? null,
+      receivedAt: (r.received_at as string | null) ?? null,
+      errorMessage: ((r.error_message as string | null) ?? (ext.error_message as string | null)) ?? null,
+      attachmentCount: 0,
+      aiGenerated: (r.ai_generated as boolean | null) ?? false,
+      aiDraftId: (r.ai_draft_id as string | null) ?? null,
+      party: party ? {
+        id: party.id as string,
+        name: party.name as string,
+        partyType: (Array.isArray(party.party_types)
+          ? (party.party_types[0] as { code: string } | undefined)?.code
+          : (party.party_types as { code: string } | null)?.code) as CommunicationDetail['party']['partyType'],
+      } : null,
+      contact: contact ? {
+        id: contact.id as string,
+        fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,
+        email: (contact.email as string | null) ?? null,
+      } : null,
+      generatedDrafts: drafts.map((d) => ({
+        id: d.id as string,
+        status: d.status as string,
+        classificationCategory: (d.classification_category as string | null) ?? null,
+        confidenceScore: (d.confidence_score as number | null) ?? null,
+      })),
+    };
+  });
+}
