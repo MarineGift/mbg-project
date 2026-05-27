@@ -110,7 +110,7 @@ export async function fetchDraftDetail(
       ? supabase
           .schema('app')
           .from('parties' as never)
-          .select('id, name, party_type, tier, country_code, website')
+          .select('id, name:party_name, country_code, website, party_types(code)')
           .eq('id', d.party_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -236,11 +236,14 @@ function mapInbound(raw: unknown): DraftInboundSummary | null {
 function mapParty(raw: unknown): DraftPartySummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
+  // D6-5e: name aliased from party_name; party_type code via party_types(code) FK embed
+  const ptJoin = r.party_types as { code?: string } | Array<{ code?: string }> | null | undefined;
+  const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?? 'paper_mill';
   return {
     id: r.id as string,
     name: (r.name as string) ?? '',
-    partyType: r.partyType as PartyTypeCode,
-    tier: (r.tier as string | null) ?? null,
+    partyType: partyTypeCode as PartyTypeCode,
+    tier: null,                                                  // tier column dropped from app.parties
     countryCode: (r.country_code as string | null) ?? null,
     website: (r.website as string | null) ?? null,
   };

@@ -104,8 +104,8 @@ export async function fetchCommunicationDetail(id: string) {
     .from("communications")
     .select(`
       *,
-      party:parties(id, name, party_type),
-      contact:contacts(id, given_name, family_name, email, role_title)
+      party:parties(id, name:party_name),
+      contact:contacts(id, given_name, family_name, email, role_title:title_text)
     `)
     .eq("id", id)
     .is("deleted_at", null)
