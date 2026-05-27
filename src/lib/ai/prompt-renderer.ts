@@ -140,15 +140,15 @@ async function loadBrandVoice(
   partyType: PartyTypeCode | undefined,
   language: Language | undefined,
 ): Promise<BrandVoiceRow | null> {
-  if (!module || !language) return null;
+  if (!partyType || !language) return null;
   const { data, error } = await supabase
     .schema('ai')
     .from('brand_voice')
     .select(
-      'id, organization_id, module, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version',
+      'id, organization_id, module:party_type, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version',
     )
     .eq('organization_id', organizationId)
-    .eq('party_type', module)
+    .eq('party_type', partyType)
     .eq('language', language)
     .eq('is_active', true)
     .order('version', { ascending: false })
@@ -183,17 +183,17 @@ async function loadParty(
   const { data, error } = await supabase
     .schema('app')
     .from('parties')
-    .select('id, name, party_type, tier, country_code, industry_tags, module_data')
+    .select('id, name:party_name, country_code, module_data, party_types(code)')
     .eq('id', partyId)
     .maybeSingle();
   if (error || !data) return null;
   return {
     id: data.id,
     name: data.name,
-    partyType: data.party_type ?? undefined,
-    tier: data.tier ?? undefined,
+    partyType: (Array.isArray(data.party_types) ? data.party_types[0]?.code : (data.party_types as { code?: string } | null)?.code) ?? undefined,
+    tier: undefined,  // D6-5e: parties.tier column dropped
     countryCode: data.country_code ?? undefined,
-    industryTags: data.industry_tags ?? [],
+    industryTags: [],  // D6-5e: parties.industry_tags array dropped (single industry_tag_id FK now)
     moduleData: data.module_data ?? {},
   };
 }

@@ -124,7 +124,7 @@ interface RawInboxRow {
   sent_at: string | null;
   ai_generated: boolean;
   party_id: string | null;
-  parties: { name: string; party_type: PartyTypeCode } | null;
+  parties: { name: string; party_types: { code: string } | Array<{ code: string }> | null } | null;
 }
 
 export async function fetchInbox(
@@ -140,7 +140,7 @@ export async function fetchInbox(
       `id, channel, direction, status, from_address, from_name, to_addresses,
        subject, body_plain, occurred_at, sent_at, ai_generated,
        party_id,
-       parties:party_id ( name, party_type )`,
+       parties:party_id ( name:party_name, party_types(code) )`,
       { count: 'exact' },
     );
 
@@ -219,6 +219,11 @@ function toInboxRow(
 ): InboxRow {
   const partyArr = Array.isArray(raw.parties) ? raw.parties[0] : raw.parties;
   const party = partyArr ?? null;
+  // D6-5e: party_type now via party_types(code) FK embed (parties.party_type dropped)
+  
+const ptJoin = party?.party_types;
+  
+const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?? null;
 
   const bodyPreview = (raw.body_plain ?? '')
     .replace(/\s+/g, ' ')
@@ -239,7 +244,7 @@ function toInboxRow(
     sentAt: raw.sent_at,
     partyId: raw.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.party_type ?? null,
+    partyModule: (partyTypeCode as PartyTypeCode | null) ?? null,
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,
