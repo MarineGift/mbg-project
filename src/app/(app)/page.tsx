@@ -76,7 +76,7 @@ export default async function DashboardPage() {
 
   // ── Row 2b: engagements by module ──────────────────────────────────────────
   const dealsTotalRes = await supabase
-    .schema('urm')
+    .schema('app')
     .from('deals' as never)
     .select('id', { count: 'exact', head: true })
     .is('deleted_at' as never, null);

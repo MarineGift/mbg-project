@@ -319,7 +319,7 @@ export async function fetchDraftQueue(
       : Promise.resolve({ data: [], error: null }),
     engagementIds.length > 0
       ? supabase
-          .schema('urm')
+          .schema('app')
           .from('deals' as never)
           .select('id, deal_name')
           .in('id', engagementIds)

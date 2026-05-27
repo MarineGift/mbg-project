@@ -177,7 +177,7 @@ export async function fetchPartyDetail(
 
     // engagements (10개) — pipeline_stages JOIN으로 stage 이름 함께 fetch
     supabase
-      .schema('urm')
+      .schema('app')
       .from('deals' as never)
       .select(
         `id, deal_name, status, current_stage_id, value_amount, value_currency,

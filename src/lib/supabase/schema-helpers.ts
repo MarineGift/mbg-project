@@ -83,7 +83,7 @@ export function sbApp(client: SupabaseClient<Database>) {
  *   reads with JOINs via the P1-P7 patterns (see D5-3f).
  */
 export function sbUrm(client: SupabaseClient<Database>) {
-  return client.schema('urm');
+  return client.schema('app');
 }
 
 /**
