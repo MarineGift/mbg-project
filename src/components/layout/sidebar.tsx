@@ -11,7 +11,7 @@ import {
   CheckSquare,
   Settings as SettingsIcon,
   LayoutDashboard,
-  Menu, Send
+  Menu, Send, CalendarDays
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -49,6 +49,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/inbox', labelKey: 'inbox', icon: Inbox },
   { href: '/sent', labelKey: 'sent', icon: Send },
   { href: '/tasks', labelKey: 'tasks', icon: CheckSquare },
+  { href: '/calendar', labelKey: 'calendar', icon: CalendarDays },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [
