@@ -40,6 +40,8 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
+import type { SendingAddressKind } from '@/types/email';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Template shape (matches src/types/phase22a.ts > TemplateForCompose)
 interface TemplateLite {
@@ -54,6 +56,14 @@ interface TemplateLite {
 
 // Tabs
 type TabId = "direct" | "template" | "ai";
+
+// D6-7c-2: From kind selector options (same labels as compose-form.tsx)
+// Display labels are user-facing; actual email resolved server-side from env.MAIL_<KIND>_*.
+const SENDER_OPTIONS: Array<{ kind: SendingAddressKind; label: string }> = [
+  { kind: 'shared',   label: 'Marinebio Group <contact@marinebiogroup.com>' },
+  { kind: 'role',     label: 'CEO <ceo@marinebiogroup.com>' },
+  { kind: 'personal', label: 'YunYoung Heo <yunyoung.heo@marinebiogroup.com>' },
+];
 
 interface ComposeEmailDialogProps {
   open: boolean;
@@ -116,6 +126,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [subject, setSubject] = useState(props.defaultSubject ?? "");
   const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
+  const [fromKind, setFromKind] = useState<SendingAddressKind>('shared');
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
 
@@ -269,6 +280,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         threadId: props.threadId,
         attachmentPaths,
         useSignature,
+        fromKind,
       };
 
       const result = await sendEmail(payload);
@@ -324,6 +336,23 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             )}
           </DialogTitle>
         </DialogHeader>
+
+        {/* D6-7c-2: From kind selector (shared across all tabs) */}
+        <div className="space-y-1">
+          <Label htmlFor="fromKind">From</Label>
+          <Select value={fromKind} onValueChange={(v) => setFromKind(v as SendingAddressKind)}>
+            <SelectTrigger id="fromKind">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SENDER_OPTIONS.map((opt) => (
+                <SelectItem key={opt.kind} value={opt.kind}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Tabs */}
         <div className="flex border-b -mx-6 px-6">
