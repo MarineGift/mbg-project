@@ -176,7 +176,6 @@ export async function sendOutboundManual(
     party_id: parsed.data.partyId || null,
     contact_id: parsed.data.contactId || null,
     from_address: fromAddress,
-      sendingAddressKind: kind,  // D6-7b-2: kind-aware SMTP credential selection
     from_name: fromName,
     to_addresses: [parsed.data.to],
     cc_addresses: ccAddresses,
@@ -245,6 +244,7 @@ export async function sendOutboundManual(
         communicationId: outboundId,
         autoSend: false,
       },
+      sendingAddressKind: kind,  // D6-7b-2: kind-aware SMTP credential selection
       traceLabel: `manual-compose:${auth.userId}`,
     });
 
