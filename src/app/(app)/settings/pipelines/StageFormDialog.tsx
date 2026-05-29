@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { createStage, updateStage } from '@/lib/actions/pipeline-stages'
 import type { Stage } from './PipelinesAdminClient'
 
-const STAGE_TYPES = ['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost']
 
 // 일반적인 색상 팔레트 (klein 클릭 가능)
 const COLOR_PRESETS = [
@@ -47,7 +46,6 @@ export function StageFormDialog({
     code: stage?.code ?? '',
     name: stage?.name ?? '',
     description: stage?.description ?? '',
-    stage_type: stage?.stage_type ?? 'lead',
     sort_order: stage?.sort_order ?? defaultSortOrder,
     default_probability_pct: stage?.default_probability_pct ?? 50,
     is_terminal: stage?.is_terminal ?? false,
@@ -83,7 +81,7 @@ export function StageFormDialog({
     try {
       const result = isEditing
         ? await updateStage(stage!.id, formData)
-        : await createStage({ pipeline_definition_id: definitionId, ...formData })
+        : await createStage({ pipeline_id: definitionId, ...formData })
 
       if (result?.error) {
         setError(result.error)
@@ -164,20 +162,9 @@ export function StageFormDialog({
               />
             </div>
 
-            {/* Type / Step / Prob% */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-sm font-medium">Type *</label>
-                <select
-                  value={formData.stage_type}
-                  onChange={(e) => setFormData({ ...formData, stage_type: e.target.value })}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {STAGE_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Step / Prob% */}
+            <div className="grid grid-cols-2 gap-3">
+
               <div>
                 <label className="text-sm font-medium" htmlFor="sort_order">Step *</label>
                 <Input

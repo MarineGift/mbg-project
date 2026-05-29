@@ -13,11 +13,10 @@ import { deleteStage, moveStageUp, moveStageDown } from '@/lib/actions/pipeline-
 
 export type Stage = {
   id: string
-  pipeline_definition_id: string
+  pipeline_id: string
   code: string
   name: string
   description: string | null
-  stage_type: string
   sort_order: number
   default_probability_pct: number
   is_terminal: boolean
@@ -146,8 +145,7 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
                         <TableHead className="w-12 text-center">Step</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead className="w-28">Code</TableHead>
-                        <TableHead className="w-28">Type</TableHead>
-                        <TableHead className="w-20 text-center">Prob %</TableHead>
+                                <TableHead className="w-20 text-center">Prob %</TableHead>
                         <TableHead className="w-20">Color</TableHead>
                         <TableHead className="w-28">Status</TableHead>
                         <TableHead className="w-32 text-right">Actions</TableHead>
@@ -163,11 +161,7 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
                           <TableCell>
                             <code className="text-xs text-muted-foreground">{stage.code}</code>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="text-xs">
-                              {stage.stage_type}
-                            </Badge>
-                          </TableCell>
+
                           <TableCell className="text-center">
                             {stage.default_probability_pct}%
                           </TableCell>
