@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   const { data: party, error: pErr } = await supabase
     .schema('app')
     .from('parties')
-    .select('id, name, country_code, module')
+    .select('id, name, country_code')
     .eq('organization_id', ORG_ID)
     .eq('name', TEST_PARTY_NAME)
     .maybeSingle();
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       `'${TEST_PARTY_NAME}' party 없음 — supabase/seed/01-parties-paper-industry.sql 적용했나요?`,
     );
   }
-  console.log(`      ✓ ${party.name} (${party.country_code}, module=${party.module})`);
+  console.log(`      ✓ ${party.name} (${party.country_code})`);
   console.log(`        id: ${party.id}\n`);
 
   // ── [2] Communication INSERT ────────────────────────────────
@@ -99,7 +99,6 @@ async function main(): Promise<void> {
       party_id: party.id,
       direction: 'inbound',
       channel: 'email',
-      module: party.module ?? 'paper_mill',
       subject,
       body_plain: bodyPlain,
       from_address: 'mika.lehtinen@upm.com',

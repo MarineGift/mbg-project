@@ -92,10 +92,7 @@ export interface ThreadContext {
   party: {
     id: string;
     name: string;
-    country_code: string | null;
-    industry_tags: string[] | null;
-    tier: string | null;
-    module: string | null;
+    country_code: string | null;
     party_type: string | null;
   } | null;
   contact: {
@@ -115,7 +112,6 @@ export interface TemplateForCompose {
   subject: string | null;
   body_plain: string | null;
   body_html: string | null;
-  module: string | null;
 }
 
 export interface ComposeEmailInput {

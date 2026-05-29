@@ -32,9 +32,9 @@ import { createShutdownController, isMainEntry } from './runtime';
 export interface ConsultationNotification {
   consultation_id: string;
   organization_id: string;
-  module?: string;
   priority?: string;
   urgency?: string;
+  party_type?: string | null;
 }
 
 export interface ProcessConsultationResult {
@@ -93,7 +93,7 @@ export async function processConsultation(
     .schema('app')
     .from('consultations')
     .select(
-      'id, organization_id, party_id, engagement_id, module, content_raw, content_processed, language, priority, urgency, ai_processing_status',
+      'id, organization_id, party_id, engagement_id, party_type, content_raw, content_processed, language, priority, urgency, ai_processing_status',
     )
     .eq('id', consultationId)
     .eq('organization_id', orgId)
@@ -164,7 +164,7 @@ export async function processConsultation(
         consultation_id: consultationId,
         engagement_id: consultation.engagement_id ?? null,
         party_id: consultation.party_id ?? null,
-        module: consultation.module ?? null,
+        party_type: consultation.party_type ?? null,
         run_id: result.runId,
         ai_generated: true,
         situation_analysis: strategyData.situation_analysis,
@@ -241,7 +241,7 @@ export async function processConsultation(
             organization_id: orgId,
             party_id: consultation.party_id ?? null,
             engagement_id: consultation.engagement_id ?? null,
-            module: consultation.module ?? null,
+            party_type: consultation.party_type ?? null,
             title: action.title,
             description: action.description,
             priority: action.priority ?? 'high',
