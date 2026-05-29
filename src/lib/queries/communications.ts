@@ -82,18 +82,24 @@ export async function getThreadContext(
 
 export async function listTemplatesForCompose(
   orgId: string,
-  module?: string
+  partyType?: string
 ): Promise<TemplateForCompose[]> {
+  void orgId; // org auto-filtered by RLS (JWT app_metadata)
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await rpc(supabase,"list_templates_for_compose", {
-    p_org_id: orgId,
-    p_module: module ?? undefined,
-  });
+  let q = supabase
+    .schema('app')
+    .from('email_templates' as never)
+    .select('id, name, category, subject, body_plain, body_html')
+    .eq('is_active' as never, true as never);
+  if (partyType) {
+    q = q.eq('party_type' as never, partyType as never);
+  }
+  const { data, error } = await q.order('updated_at' as never, { ascending: false });
   if (error) {
     console.error("[listTemplatesForCompose]", error);
     return [];
   }
-  return (data || []) as TemplateForCompose[];
+  return (data || []) as unknown as TemplateForCompose[];
 }
 
 //  Inbox detail page 

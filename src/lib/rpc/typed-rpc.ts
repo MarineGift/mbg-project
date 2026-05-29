@@ -48,46 +48,7 @@ type Augmentation = {
     }[];
   };
 
-  preview_campaign_filter: {
-    Args: {
-      p_org_id: string;
-      p_module?: string | null;
-      p_tiers?: string[] | null;
-      p_status?: string | null;
-      p_country_code?: string | null;
-      p_industry_tag?: string | null;
-      p_name_contains?: string | null;
-    };
-    Returns: {
-      total_matching: number | null;
-      with_email: number | null;
-      no_email: number | null;
-      sample_names: string[] | null;
-    }[];
-  };
 
-  create_campaign_from_template: {
-    Args: {
-      p_organization_id: string;
-      p_template_id: string;
-      p_campaign_name: string;
-      p_module?: string | null;
-      p_tiers?: string[] | null;
-      p_status?: string | null;
-      p_country_code?: string | null;
-      p_enrolled_by?: string | null;
-      p_industry_tag?: string | null;
-      p_name_contains?: string | null;
-    };
-    Returns: {
-      sequence_id: string | null;
-      total_matching: number | null;
-      enrolled_count: number | null;
-      skipped_already_enrolled: number | null;
-      skipped_no_email: number | null;
-      sample_names: string[] | null;
-    }[];
-  };
 };
 
 // ---------------------------------------------------------------

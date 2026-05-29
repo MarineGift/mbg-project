@@ -5,7 +5,6 @@ import { useState, useTransition } from 'react';
 import { archiveSequence, triggerSequenceProcessor, getSequenceForEdit } from '@/lib/actions/email-sequences';
 import { SequenceFormDialog } from './sequence-form-dialog';
 import { BulkEnrollDialog } from './bulk-enroll-dialog';
-import { QuickCampaignDialog } from './quick-campaign-dialog';
 import type { EmailSequence, EmailSequenceWithSteps } from '@/types/phase21b';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -24,7 +23,6 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
   const [editTarget,    setEditTarget]    = useState<EmailSequenceWithSteps | undefined>();
   const [runResult,     setRunResult]     = useState<string | null>(null);
   const [bulkTarget,    setBulkTarget]    = useState<EmailSequence | null>(null);
-  const [campaignOpen,  setCampaignOpen]  = useState(false);
   const [isPending,     startTransition]  = useTransition();
 
   function handleCreate() {
@@ -83,13 +81,6 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCampaignOpen(true)}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
-            title="Send a one-off bulk email from an existing template"
-          >
-            🚀 Send Campaign
-          </button>
           <button
             onClick={handleRunNow}
             disabled={isPending}
@@ -208,13 +199,6 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
           sequenceName={bulkTarget.name}
         />
       )}
-
-      {/* Quick Campaign Dialog */}
-      <QuickCampaignDialog
-        open={campaignOpen}
-        onClose={() => setCampaignOpen(false)}
-        orgId={orgId}
-      />
     </>
   );
 }
