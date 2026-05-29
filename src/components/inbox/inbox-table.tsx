@@ -150,7 +150,7 @@ export function InboxTable({ rows }: Props) {
                       <p className="font-medium text-sm truncate flex-1">
                         {row.partyName ?? row.fromName ?? row.fromAddress ?? tPreview('noParty')}
                       </p>
-                      {row.partyModule && <ModuleBadge partyType={row.partyModule} size="sm" />}
+                      {row.partyTypeCode && <ModuleBadge partyType={row.partyTypeCode} size="sm" />}
                       <RelativeTime
                         date={row.occurredAt}
                         className="text-xs text-muted-foreground whitespace-nowrap"

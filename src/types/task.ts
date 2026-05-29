@@ -29,7 +29,7 @@ export interface TaskRow {
   partyType: PartyTypeCode | null;
   partyId: string | null;
   partyName: string | null;
-  partyModule: PartyTypeCode | null;
+  partyTypeCode: PartyTypeCode | null;
   engagementId: string | null;
   engagementName: string | null;
   assignedToUserId: string | null;

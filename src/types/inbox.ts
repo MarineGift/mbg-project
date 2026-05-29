@@ -65,7 +65,7 @@ export interface InboxRow {
   sentAt: string | null;
   partyId: string | null;
   partyName: string | null;
-  partyModule: PartyTypeCode | null;
+  partyTypeCode: PartyTypeCode | null;
   /** 이 인바운드에서 생성된 AI 초안이 존재하는가 (해당 시) */
   hasDraft: boolean;
   /** 이 아웃바운드가 AI 초안에서 생성되었는가 */
