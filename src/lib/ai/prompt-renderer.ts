@@ -287,7 +287,7 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
   } = input;
 
   // 1. brand_voice (agent.applicableModules[0]을 우선 사용)
-  const PartyTypeCode = agent.applicableModules?.[0];
+  const PartyTypeCode = agent.applicablePartyTypes?.[0];
   const brandVoice = await loadBrandVoice(
     supabase,
     organizationId,

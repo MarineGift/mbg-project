@@ -101,19 +101,6 @@ export function isPartyType(v: unknown): v is PartyType {
 
 export const isPartyTypeCode = isPartyType;
 
-export function moduleToPartyType(
-  legacy: string | null | undefined,
-): PartyType | null {
-  if (!legacy) return null;
-  if (isPartyType(legacy)) return legacy;
-  return null;
-}
-
-export function partyTypeToModule(code: PartyType): string | null {
-  if (code === 'buyer' || code === 'government_grant') return null;
-  return code;
-}
-
 // ============================================================
 // PartyKind - 법인 형태
 // ============================================================

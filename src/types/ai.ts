@@ -110,7 +110,7 @@ export interface AgentRow {
   maxTokens: number;
   outputFormat: 'text' | 'structured';
   systemPrompt: string;
-  applicableModules?: PartyTypeCode[];
+  applicablePartyTypes?: PartyTypeCode[];
   applicableLanguages?: Language[];
   requirePiiMasking?: boolean;
   knowledgeCollection?: string;
@@ -163,7 +163,7 @@ export interface AutoSendRuleRow {
   blockReason?: string;
   minConfidence: number;
   requiresHumanApproval: boolean;
-  allowedModules: PartyTypeCode[];
+  allowedPartyTypes: PartyTypeCode[];
   blockedKeywordsInBody: string[];
   dailyLimit: number;
   hourlyLimit: number;
