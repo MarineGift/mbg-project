@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { CalendarView } from '@/components/calendar/calendar-view'
 import { MeetingCreateModal } from '@/components/meetings/meeting-create-modal'
 import type { CalendarItem } from '@/lib/queries/calendar'
-import { 
+import {
   fetchCalendarItemsAction as fetchCalendarItems,
   createCalendarEventAction as createCalendarEvent,
 } from '@/app/actions/calendar'
@@ -17,9 +17,9 @@ import { Label }  from '@/components/ui/label'
 import { ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 // Quick Event Create (non-meeting)
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 
 function QuickEventModal({
   open, defaultDate, onClose,
@@ -62,13 +62,13 @@ function QuickEventModal({
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>빠른 이벤트 추가</DialogTitle>
+          <DialogTitle>Quick add event</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-1">
-            <Label>제목</Label>
+            <Label>Title</Label>
             <Input
-              placeholder="이벤트 제목"
+              placeholder="Event title"
               value={title}
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSave()}
@@ -77,24 +77,24 @@ function QuickEventModal({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label>시작</Label>
+              <Label>Start</Label>
               <Input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>종료</Label>
+              <Label>End</Label>
               <Input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} />
             </div>
           </div>
         </div>
         <div className="flex justify-between gap-2 pt-1">
-          <Button variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white"
             onClick={handleSave}
             disabled={saving || !title.trim()}
           >
-            {saving ? '저장 중…' : '저장'}
+            {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </DialogContent>
@@ -102,9 +102,9 @@ function QuickEventModal({
   )
 }
 
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 // Item Detail Popup
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 
 function ItemDetailPopup({
   item, onClose,
@@ -112,7 +112,7 @@ function ItemDetailPopup({
   if (!item) return null
 
   const typeLabel: Record<string, string> = {
-    meeting: '미팅', event: '이벤트', task: '할일', communication: '커뮤니케이션',
+    meeting: 'Meeting', event: 'Event', task: 'Task', communication: 'Communication',
   }
 
   return (
@@ -124,17 +124,17 @@ function ItemDetailPopup({
         <div className="space-y-2 text-sm">
           <div className="text-muted-foreground">
             {typeLabel[item.type]}
-            {item.source && ` · ${item.source}`}
+            {item.source && ` ${'\u00b7'} ${item.source}`}
           </div>
           <div>
-            {new Date(item.start_at).toLocaleString('ko-KR')}
-            {!item.is_all_day && ` – ${new Date(item.end_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`}
+            {new Date(item.start_at).toLocaleString('en-US')}
+            {!item.is_all_day && ` - ${new Date(item.end_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
           </div>
           {item.party_name && (
             <div className="text-muted-foreground">Party: {item.party_name}</div>
           )}
           {item.location && (
-            <div className="text-muted-foreground">📍 {item.location}</div>
+            <div className="text-muted-foreground">Location: {item.location}</div>
           )}
           {item.meeting_url && (
             <a
@@ -144,26 +144,26 @@ function ItemDetailPopup({
               className="flex items-center gap-1 text-blue-600 hover:underline"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              미팅 링크
+              Meeting link
             </a>
           )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           {item.type === 'meeting' && (
             <Button variant="outline" size="sm" asChild>
-              <a href={`/meetings/${item.id}`}>상세 보기</a>
+              <a href={`/meetings/${item.id}`}>View details</a>
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={onClose}>닫기</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
       </DialogContent>
     </Dialog>
   )
 }
 
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 // Page
-// ─────────────────────────────────────────────
+// --------------------------------------------------
 
 export default function CalendarPage() {
   const [items,       setItems]       = useState<CalendarItem[]>([])
@@ -172,7 +172,7 @@ export default function CalendarPage() {
   const [createMode,  setCreateMode]  = useState<'event' | 'meeting'>('event')
   const [detailItem,  setDetailItem]  = useState<CalendarItem | null>(null)
 
-  // Initial load — current month
+  // Initial load - current month
   useEffect(() => {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
@@ -199,27 +199,27 @@ export default function CalendarPage() {
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
-        <h1 className="text-lg font-semibold">캘린더</h1>
+        <h1 className="text-lg font-semibold">Calendar</h1>
         <div className="flex gap-2">
           <Button
             variant="outline" size="sm"
             onClick={() => { setCreateDate(new Date()); setCreateMode('meeting') }}
           >
-            + 미팅
+            + Meeting
           </Button>
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() => { setCreateDate(new Date()); setCreateMode('event') }}
           >
-            + 이벤트
+            + Event
           </Button>
         </div>
       </div>
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          불러오는 중…
+          Loading...
         </div>
       ) : (
         <CalendarView
