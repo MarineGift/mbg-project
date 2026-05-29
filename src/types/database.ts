@@ -17,7 +17,7 @@ export type Database = {
       agents: {
         Row: {
           applicable_languages: string[]
-          applicable_modules: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types: Database["app"]["Enums"]["party_type"][]
           blocked_keywords: string[]
           created_at: string
           created_by: string | null
@@ -46,7 +46,7 @@ export type Database = {
         }
         Insert: {
           applicable_languages?: string[]
-          applicable_modules: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types: Database["app"]["Enums"]["party_type"][]
           blocked_keywords?: string[]
           created_at?: string
           created_by?: string | null
@@ -75,7 +75,7 @@ export type Database = {
         }
         Update: {
           applicable_languages?: string[]
-          applicable_modules?: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types?: Database["app"]["Enums"]["party_type"][]
           blocked_keywords?: string[]
           created_at?: string
           created_by?: string | null
@@ -107,7 +107,7 @@ export type Database = {
       auto_send_rules: {
         Row: {
           allowed_languages: string[]
-          allowed_modules: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types: Database["app"]["Enums"]["party_type"][]
           block_reason: string | null
           blocked_keywords_in_body: string[]
           classification_category: string
@@ -128,7 +128,7 @@ export type Database = {
         }
         Insert: {
           allowed_languages?: string[]
-          allowed_modules: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types: Database["app"]["Enums"]["party_type"][]
           block_reason?: string | null
           blocked_keywords_in_body?: string[]
           classification_category: string
@@ -149,7 +149,7 @@ export type Database = {
         }
         Update: {
           allowed_languages?: string[]
-          allowed_modules?: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types?: Database["app"]["Enums"]["party_type"][]
           block_reason?: string | null
           blocked_keywords_in_body?: string[]
           classification_category?: string
@@ -1556,6 +1556,7 @@ export type Database = {
           education: string | null
           email: string | null
           email_secondary: string | null
+          extra_data: Json
           family_name: string | null
           focus_areas: string[] | null
           full_name: string | null
@@ -1568,7 +1569,6 @@ export type Database = {
           last_contacted_at: string | null
           left_at: string | null
           linkedin_url: string | null
-          module_data: Json
           notes: string | null
           organization_id: string
           party_id: string
@@ -1591,6 +1591,7 @@ export type Database = {
           education?: string | null
           email?: string | null
           email_secondary?: string | null
+          extra_data?: Json
           family_name?: string | null
           focus_areas?: string[] | null
           full_name?: string | null
@@ -1603,7 +1604,6 @@ export type Database = {
           last_contacted_at?: string | null
           left_at?: string | null
           linkedin_url?: string | null
-          module_data?: Json
           notes?: string | null
           organization_id: string
           party_id: string
@@ -1626,6 +1626,7 @@ export type Database = {
           education?: string | null
           email?: string | null
           email_secondary?: string | null
+          extra_data?: Json
           family_name?: string | null
           focus_areas?: string[] | null
           full_name?: string | null
@@ -1638,7 +1639,6 @@ export type Database = {
           last_contacted_at?: string | null
           left_at?: string | null
           linkedin_url?: string | null
-          module_data?: Json
           notes?: string | null
           organization_id?: string
           party_id?: string
@@ -2066,9 +2066,9 @@ export type Database = {
           created_by: string | null
           deal_id: string
           deleted_at: string | null
+          extra_data: Json | null
           id: string
           is_complete: boolean | null
-          module_data: Json | null
           notes: string | null
           organization_id: string | null
           sort_order: number | null
@@ -2083,9 +2083,9 @@ export type Database = {
           created_by?: string | null
           deal_id: string
           deleted_at?: string | null
+          extra_data?: Json | null
           id?: string
           is_complete?: boolean | null
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           sort_order?: number | null
@@ -2100,9 +2100,9 @@ export type Database = {
           created_by?: string | null
           deal_id?: string
           deleted_at?: string | null
+          extra_data?: Json | null
           id?: string
           is_complete?: boolean | null
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           sort_order?: number | null
@@ -2133,9 +2133,9 @@ export type Database = {
           changed_by: string | null
           created_at: string | null
           deal_id: string
+          extra_data: Json | null
           from_stage_id: string | null
           id: string
-          module_data: Json | null
           notes: string | null
           organization_id: string | null
           to_stage_id: string
@@ -2145,9 +2145,9 @@ export type Database = {
           changed_by?: string | null
           created_at?: string | null
           deal_id: string
+          extra_data?: Json | null
           from_stage_id?: string | null
           id?: string
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           to_stage_id: string
@@ -2157,9 +2157,9 @@ export type Database = {
           changed_by?: string | null
           created_at?: string | null
           deal_id?: string
+          extra_data?: Json | null
           from_stage_id?: string | null
           id?: string
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           to_stage_id?: string
@@ -2205,9 +2205,9 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           expected_close_date: string | null
+          extra_data: Json
           id: string
           last_activity_at: string | null
-          module_data: Json
           notes: string | null
           organization_id: string | null
           owner_user_id: string | null
@@ -2234,9 +2234,9 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           expected_close_date?: string | null
+          extra_data?: Json
           id?: string
           last_activity_at?: string | null
-          module_data?: Json
           notes?: string | null
           organization_id?: string | null
           owner_user_id?: string | null
@@ -2263,9 +2263,9 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           expected_close_date?: string | null
+          extra_data?: Json
           id?: string
           last_activity_at?: string | null
-          module_data?: Json
           notes?: string | null
           organization_id?: string | null
           owner_user_id?: string | null
@@ -3151,13 +3151,13 @@ export type Database = {
           description: string | null
           display_order: number
           engagement_kind: string
+          extra_data: Json
           id: string
           is_active: boolean
-          is_default_for_module: boolean
+          is_default_for_party_type: boolean
           label_en: string
           label_ja: string | null
           label_ko: string
-          module_data: Json
           organization_id: string
           party_kind: Database["app"]["Enums"]["party_kind"]
           updated_at: string
@@ -3168,13 +3168,13 @@ export type Database = {
           description?: string | null
           display_order?: number
           engagement_kind: string
+          extra_data?: Json
           id?: string
           is_active?: boolean
-          is_default_for_module?: boolean
+          is_default_for_party_type?: boolean
           label_en: string
           label_ja?: string | null
           label_ko: string
-          module_data?: Json
           organization_id: string
           party_kind: Database["app"]["Enums"]["party_kind"]
           updated_at?: string
@@ -3185,13 +3185,13 @@ export type Database = {
           description?: string | null
           display_order?: number
           engagement_kind?: string
+          extra_data?: Json
           id?: string
           is_active?: boolean
-          is_default_for_module?: boolean
+          is_default_for_party_type?: boolean
           label_en?: string
           label_ja?: string | null
           label_ko?: string
-          module_data?: Json
           organization_id?: string
           party_kind?: Database["app"]["Enums"]["party_kind"]
           updated_at?: string
@@ -3256,8 +3256,8 @@ export type Database = {
           direction: string | null
           duration_min: number | null
           engagement_type_id: number
+          extra_data: Json
           id: string
-          module_data: Json
           next_steps: string | null
           notes: string | null
           occurred_at: string
@@ -3284,8 +3284,8 @@ export type Database = {
           direction?: string | null
           duration_min?: number | null
           engagement_type_id: number
+          extra_data?: Json
           id?: string
-          module_data?: Json
           next_steps?: string | null
           notes?: string | null
           occurred_at: string
@@ -3312,8 +3312,8 @@ export type Database = {
           direction?: string | null
           duration_min?: number | null
           engagement_type_id?: number
+          extra_data?: Json
           id?: string
-          module_data?: Json
           next_steps?: string | null
           notes?: string | null
           occurred_at?: string
@@ -3459,10 +3459,10 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           evidence_level: string | null
+          extra_data: Json
           id: string
           industry_source: string
           market_role: string | null
-          module_data: Json
           notes: string | null
           onsite_pcc_evidence: string | null
           organization_id: string
@@ -3478,10 +3478,10 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           evidence_level?: string | null
+          extra_data?: Json
           id?: string
           industry_source?: string
           market_role?: string | null
-          module_data?: Json
           notes?: string | null
           onsite_pcc_evidence?: string | null
           organization_id: string
@@ -3497,10 +3497,10 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           evidence_level?: string | null
+          extra_data?: Json
           id?: string
           industry_source?: string
           market_role?: string | null
-          module_data?: Json
           notes?: string | null
           onsite_pcc_evidence?: string | null
           organization_id?: string
@@ -3783,6 +3783,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          extra_data: Json
           id: string
           investment_amount_usd: number | null
           investment_stage: string | null
@@ -3790,7 +3791,6 @@ export type Database = {
           investor_party_id: string
           is_active: boolean
           is_lead: boolean
-          module_data: Json
           notes: string | null
           organization_id: string
           portfolio_company_country: string | null
@@ -3804,6 +3804,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          extra_data?: Json
           id?: string
           investment_amount_usd?: number | null
           investment_stage?: string | null
@@ -3811,7 +3812,6 @@ export type Database = {
           investor_party_id: string
           is_active?: boolean
           is_lead?: boolean
-          module_data?: Json
           notes?: string | null
           organization_id: string
           portfolio_company_country?: string | null
@@ -3825,6 +3825,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          extra_data?: Json
           id?: string
           investment_amount_usd?: number | null
           investment_stage?: string | null
@@ -3832,7 +3833,6 @@ export type Database = {
           investor_party_id?: string
           is_active?: boolean
           is_lead?: boolean
-          module_data?: Json
           notes?: string | null
           organization_id?: string
           portfolio_company_country?: string | null
@@ -4584,7 +4584,7 @@ export type Database = {
       }
       organizations: {
         Row: {
-          allowed_modules: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types: Database["app"]["Enums"]["party_type"][]
           country_code: string | null
           created_at: string
           default_currency: string
@@ -4602,7 +4602,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          allowed_modules: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types: Database["app"]["Enums"]["party_type"][]
           country_code?: string | null
           created_at?: string
           default_currency?: string
@@ -4620,7 +4620,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          allowed_modules?: Database["app"]["Enums"]["party_type"][]
+          allowed_party_types?: Database["app"]["Enums"]["party_type"][]
           country_code?: string | null
           created_at?: string
           default_currency?: string
@@ -4646,13 +4646,13 @@ export type Database = {
           deleted_at: string | null
           europe_mills_footprint: string | null
           evidence_level: string | null
+          extra_data: Json
           filler_use_intensity: string | null
           headquarters: string | null
           id: string
           industry_source: string | null
           main_product_category: string | null
           main_products: string | null
-          module_data: Json
           organization_id: string
           party_id: string
           updated_at: string
@@ -4663,13 +4663,13 @@ export type Database = {
           deleted_at?: string | null
           europe_mills_footprint?: string | null
           evidence_level?: string | null
+          extra_data?: Json
           filler_use_intensity?: string | null
           headquarters?: string | null
           id?: string
           industry_source?: string | null
           main_product_category?: string | null
           main_products?: string | null
-          module_data?: Json
           organization_id: string
           party_id: string
           updated_at?: string
@@ -4680,13 +4680,13 @@ export type Database = {
           deleted_at?: string | null
           europe_mills_footprint?: string | null
           evidence_level?: string | null
+          extra_data?: Json
           filler_use_intensity?: string | null
           headquarters?: string | null
           id?: string
           industry_source?: string | null
           main_product_category?: string | null
           main_products?: string | null
-          module_data?: Json
           organization_id?: string
           party_id?: string
           updated_at?: string
@@ -4894,11 +4894,11 @@ export type Database = {
           confidence: string | null
           created_at: string | null
           deleted_at: string | null
+          extra_data: Json | null
           filler_party_id: string
           id: string
           link_type: string | null
           mill_party_id: string
-          module_data: Json | null
           notes: string | null
           organization_id: string
           updated_at: string | null
@@ -4910,11 +4910,11 @@ export type Database = {
           confidence?: string | null
           created_at?: string | null
           deleted_at?: string | null
+          extra_data?: Json | null
           filler_party_id: string
           id?: string
           link_type?: string | null
           mill_party_id: string
-          module_data?: Json | null
           notes?: string | null
           organization_id: string
           updated_at?: string | null
@@ -4926,11 +4926,11 @@ export type Database = {
           confidence?: string | null
           created_at?: string | null
           deleted_at?: string | null
+          extra_data?: Json | null
           filler_party_id?: string
           id?: string
           link_type?: string | null
           mill_party_id?: string
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string
           updated_at?: string | null
@@ -5158,11 +5158,11 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           deleted_at: string | null
+          extra_data: Json | null
           filler_party_id: string
           id: string
           link_type: string | null
           mill_party_id: string
-          module_data: Json | null
           notes: string | null
           organization_id: string | null
           plant_country_code: string | null
@@ -5179,11 +5179,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
+          extra_data?: Json | null
           filler_party_id: string
           id?: string
           link_type?: string | null
           mill_party_id: string
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           plant_country_code?: string | null
@@ -5200,11 +5200,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
+          extra_data?: Json | null
           filler_party_id?: string
           id?: string
           link_type?: string | null
           mill_party_id?: string
-          module_data?: Json | null
           notes?: string | null
           organization_id?: string | null
           plant_country_code?: string | null
@@ -6879,8 +6879,8 @@ export type Database = {
           description: string | null
           due_at: string | null
           estimated_minutes: number | null
+          extra_data: Json
           id: string
-          module_data: Json
           notes: string | null
           organization_id: string
           priority: string
@@ -6903,8 +6903,8 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           estimated_minutes?: number | null
+          extra_data?: Json
           id?: string
-          module_data?: Json
           notes?: string | null
           organization_id?: string
           priority?: string
@@ -6927,8 +6927,8 @@ export type Database = {
           description?: string | null
           due_at?: string | null
           estimated_minutes?: number | null
+          extra_data?: Json
           id?: string
-          module_data?: Json
           notes?: string | null
           organization_id?: string
           priority?: string
@@ -7045,7 +7045,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
-          focus_modules: Database["app"]["Enums"]["party_type"][]
+          focus_party_types: Database["app"]["Enums"]["party_type"][]
           id: string
           is_active: boolean
           name: string
@@ -7060,7 +7060,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
-          focus_modules: Database["app"]["Enums"]["party_type"][]
+          focus_party_types: Database["app"]["Enums"]["party_type"][]
           id?: string
           is_active?: boolean
           name: string
@@ -7075,7 +7075,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
-          focus_modules?: Database["app"]["Enums"]["party_type"][]
+          focus_party_types?: Database["app"]["Enums"]["party_type"][]
           id?: string
           is_active?: boolean
           name?: string
@@ -7221,7 +7221,7 @@ export type Database = {
       }
       template_categories: {
         Row: {
-          applicable_modules: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types: Database["app"]["Enums"]["party_type"][]
           code: string
           color_hex: string | null
           created_at: string
@@ -7239,7 +7239,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
-          applicable_modules: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types: Database["app"]["Enums"]["party_type"][]
           code: string
           color_hex?: string | null
           created_at?: string
@@ -7257,7 +7257,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
-          applicable_modules?: Database["app"]["Enums"]["party_type"][]
+          applicable_party_types?: Database["app"]["Enums"]["party_type"][]
           code?: string
           color_hex?: string | null
           created_at?: string
@@ -7952,274 +7952,6 @@ export type Database = {
       task_status: "todo" | "in_progress" | "blocked" | "done" | "cancelled"
       template_status: "draft" | "active" | "archived" | "deprecated"
       tier_level: "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-  ingest: {
-    Tables: {
-      rows: {
-        Row: {
-          created_at: string
-          dedup_key: string | null
-          error_message: string | null
-          id: string
-          module: string
-          name: string
-          payload: Json
-          promoted_party_id: string | null
-          run_id: string
-          seq: number | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          dedup_key?: string | null
-          error_message?: string | null
-          id?: string
-          module: string
-          name: string
-          payload: Json
-          promoted_party_id?: string | null
-          run_id: string
-          seq?: number | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          dedup_key?: string | null
-          error_message?: string | null
-          id?: string
-          module?: string
-          name?: string
-          payload?: Json
-          promoted_party_id?: string | null
-          run_id?: string
-          seq?: number | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rows_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      runs: {
-        Row: {
-          actor: string
-          description: string | null
-          finished_at: string | null
-          id: string
-          label: string
-          module: string
-          notes: string | null
-          organization_id: string
-          rows_failed: number
-          rows_merged: number
-          rows_promoted: number
-          rows_skipped: number
-          rows_staged: number
-          sources: string[]
-          started_at: string
-        }
-        Insert: {
-          actor?: string
-          description?: string | null
-          finished_at?: string | null
-          id?: string
-          label: string
-          module: string
-          notes?: string | null
-          organization_id: string
-          rows_failed?: number
-          rows_merged?: number
-          rows_promoted?: number
-          rows_skipped?: number
-          rows_staged?: number
-          sources?: string[]
-          started_at?: string
-        }
-        Update: {
-          actor?: string
-          description?: string | null
-          finished_at?: string | null
-          id?: string
-          label?: string
-          module?: string
-          notes?: string | null
-          organization_id?: string
-          rows_failed?: number
-          rows_merged?: number
-          rows_promoted?: number
-          rows_skipped?: number
-          rows_staged?: number
-          sources?: string[]
-          started_at?: string
-        }
-        Relationships: []
-      }
-    }
-    Views: {
-      failed_rows: {
-        Row: {
-          created_at: string | null
-          dedup_key: string | null
-          error_message: string | null
-          name: string | null
-          payload: Json | null
-          run_label: string | null
-          seq: number | null
-        }
-        Relationships: []
-      }
-      run_summary: {
-        Row: {
-          actor: string | null
-          description: string | null
-          finished_at: string | null
-          label: string | null
-          module: string | null
-          organization_id: string | null
-          rows_failed: number | null
-          rows_merged: number | null
-          rows_promoted: number | null
-          rows_skipped: number | null
-          rows_staged: number | null
-          started_at: string | null
-          status: string | null
-        }
-        Insert: {
-          actor?: string | null
-          description?: string | null
-          finished_at?: string | null
-          label?: string | null
-          module?: string | null
-          organization_id?: string | null
-          rows_failed?: number | null
-          rows_merged?: number | null
-          rows_promoted?: number | null
-          rows_skipped?: number | null
-          rows_staged?: number | null
-          started_at?: string | null
-          status?: never
-        }
-        Update: {
-          actor?: string | null
-          description?: string | null
-          finished_at?: string | null
-          label?: string | null
-          module?: string | null
-          organization_id?: string | null
-          rows_failed?: number | null
-          rows_merged?: number | null
-          rows_promoted?: number | null
-          rows_skipped?: number | null
-          rows_staged?: number | null
-          started_at?: string | null
-          status?: never
-        }
-        Relationships: []
-      }
-    }
-    Functions: {
-      coerce_investor_subtype: {
-        Args: { p_raw: string }
-        Returns: Database["app"]["Enums"]["investor_subtype"]
-      }
-      coerce_text_array: { Args: { p_value: Json }; Returns: string[] }
-      finish_run: { Args: { p_run_label: string }; Returns: undefined }
-      infer_is_decision_maker: { Args: { p_title: string }; Returns: boolean }
-      infer_seniority: {
-        Args: { p_title: string }
-        Returns: Database["app"]["Enums"]["partner_seniority"]
-      }
-      normalize_domain: { Args: { p_url: string }; Returns: string }
-      normalize_linkedin: { Args: { p_url: string }; Returns: string }
-      promote_investors: {
-        Args: { p_run_label: string }
-        Returns: {
-          action: string
-          n: number
-        }[]
-      }
-      rollback_run: {
-        Args: { p_confirm?: boolean; p_run_label: string }
-        Returns: {
-          deleted_table: string
-          n: number
-        }[]
-      }
-      stage_row: {
-        Args: { p_payload: Json; p_run_label: string }
-        Returns: string
-      }
-      stage_rows_bulk: {
-        Args: { p_payloads: Json; p_run_label: string }
-        Returns: number
-      }
-      start_run: {
-        Args: {
-          p_description?: string
-          p_label: string
-          p_module: string
-          p_organization_id: string
-          p_sources?: string[]
-        }
-        Returns: string
-      }
-      upsert_govt_grant_contact: {
-        Args: {
-          p_is_decision_maker?: boolean
-          p_name: string
-          p_organization_id: string
-          p_parent_party_id?: string
-          p_preferred_channel?: string
-          p_role_category?: string
-          p_source?: string
-          p_specialty_areas?: string[]
-        }
-        Returns: string
-      }
-      upsert_govt_grant_program: {
-        Args: {
-          p_agency_code: string
-          p_agency_country_code: string
-          p_application_status?: string
-          p_budget_total_usd?: number
-          p_eligible_sectors?: string[]
-          p_fiscal_year?: number
-          p_funding_mechanism?: string
-          p_name: string
-          p_next_deadline?: string
-          p_organization_id: string
-          p_program_category?: string
-          p_program_name?: string
-          p_program_url?: string
-          p_source?: string
-        }
-        Returns: string
-      }
-      upsert_portfolio_company: {
-        Args: {
-          p_country: string
-          p_name: string
-          p_org_id: string
-          p_sector?: string
-          p_website: string
-        }
-        Returns: string
-      }
-    }
-    Enums: {
-      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -8993,9 +8725,6 @@ export const Constants = {
       template_status: ["draft", "active", "archived", "deprecated"],
       tier_level: ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5"],
     },
-  },
-  ingest: {
-    Enums: {},
   },
   public: {
     Enums: {

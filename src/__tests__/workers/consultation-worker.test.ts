@@ -97,7 +97,7 @@ const consultationRow = {
   organization_id: orgId,
   party_id: 'party-1',
   engagement_id: 'eng-1',
-  module: 'investor',
+  party_type: 'investor',
   content_raw: '안녕하세요, 데모 잘 봤습니다…',
   content_processed: '안녕하세요, 데모 잘 봤습니다… [요약]',
   language: 'ko',
@@ -110,7 +110,7 @@ function makeBaseNotification(): ConsultationNotification {
   return {
     consultation_id: consultationId,
     organization_id: orgId,
-    module: 'investor',
+    party_type: 'investor',
     priority: 'high',
     urgency: 'high',
   };
