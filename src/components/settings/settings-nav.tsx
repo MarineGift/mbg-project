@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   User, Languages, Bell, Building2, Workflow,
-  FileText, Send, History, ShieldCheck,
+  FileText, Send, History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,7 +25,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/settings/email-templates', label: 'Email Templates',  icon: FileText },
   { href: '/settings/email-sequences', label: 'Email Sequences',  icon: Send },
   { href: '/settings/email-history',   label: 'Email History',    icon: History },
-  { href: '/settings/email-whitelist', label: 'Email Whitelist',  icon: ShieldCheck },
 ];
 
 export function SettingsNav() {
