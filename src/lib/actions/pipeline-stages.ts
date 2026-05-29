@@ -1,5 +1,8 @@
 // src/lib/actions/pipeline-stages.ts
-// v5.9 Step C-3: Pipeline Stages admin CRUD server actions
+// Pipeline stage admin CRUD server actions. Rewritten for the normalized
+// `stages` model (D9 cleanup): stages.pipeline_id -> pipelines.id.
+// Notes: `stages` has no `stage_type` column and no `deleted_at`
+// (soft-delete uses is_active=false).
 'use server'
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
@@ -9,7 +12,6 @@ export type StageInput = {
   code: string
   name: string
   description: string
-  stage_type: string
   sort_order: number
   default_probability_pct: number
   is_terminal: boolean
@@ -18,43 +20,42 @@ export type StageInput = {
   color_hex: string
 }
 
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 // CREATE
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 export async function createStage(
-  input: StageInput & { pipeline_definition_id: string },
+  input: StageInput & { pipeline_id: string },
 ) {
   const supabase = await createSupabaseServerClient()
 
-  // organization_id를 definition에서 lookup
-  const { data: defn, error: defnErr } = await supabase
+  // look up organization_id from the parent pipeline
+  const { data: pipeline, error: pipelineErr } = await supabase
     .schema('app')
-    .from('pipeline_definitions' as never)
+    .from('pipelines' as never)
     .select('organization_id')
-    .eq('id', input.pipeline_definition_id)
+    .eq('id', input.pipeline_id)
     .single()
 
-  if (defnErr || !defn) {
-    return { error: 'Pipeline definition not found' }
+  if (pipelineErr || !pipeline) {
+    return { error: 'Pipeline not found' }
   }
 
   const { error } = await supabase
     .schema('app')
-    .from('pipeline_stages')
+    .from('stages' as never)
     .insert({
-      organization_id: (defn as any).organization_id,
-      pipeline_definition_id: input.pipeline_definition_id,
+      organization_id: (pipeline as { organization_id: string }).organization_id,
+      pipeline_id: input.pipeline_id,
       code: input.code,
       name: input.name,
       description: input.description || null,
-      stage_type: input.stage_type as never,
       sort_order: input.sort_order,
       default_probability_pct: input.default_probability_pct,
       is_terminal: input.is_terminal,
       is_won: input.is_won,
       is_lost: input.is_lost,
       color_hex: input.color_hex,
-    })
+    } as never)
 
   if (error) {
     console.error('[createStage]', error)
@@ -65,27 +66,26 @@ export async function createStage(
   return { success: true }
 }
 
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 // UPDATE
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 export async function updateStage(stageId: string, input: StageInput) {
   const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase
     .schema('app')
-    .from('pipeline_stages')
+    .from('stages' as never)
     .update({
       code: input.code,
       name: input.name,
       description: input.description || null,
-      stage_type: input.stage_type as never,
       sort_order: input.sort_order,
       default_probability_pct: input.default_probability_pct,
       is_terminal: input.is_terminal,
       is_won: input.is_won,
       is_lost: input.is_lost,
       color_hex: input.color_hex,
-    })
+    } as never)
     .eq('id', stageId)
 
   if (error) {
@@ -97,16 +97,16 @@ export async function updateStage(stageId: string, input: StageInput) {
   return { success: true }
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// DELETE (soft)
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// DELETE (soft) -- stages has no deleted_at; use is_active = false
+// ---------------------------------------------------------------------------
 export async function deleteStage(stageId: string) {
   const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase
     .schema('app')
-    .from('pipeline_stages')
-    .update({ deleted_at: new Date().toISOString() })
+    .from('stages' as never)
+    .update({ is_active: false } as never)
     .eq('id', stageId)
 
   if (error) {
@@ -118,66 +118,65 @@ export async function deleteStage(stageId: string) {
   return { success: true }
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// REORDER — Move stage up
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// REORDER -- move stage up
+// ---------------------------------------------------------------------------
 export async function moveStageUp(stageId: string) {
   const supabase = await createSupabaseServerClient()
 
-  // 1) 현재 stage 정보
   const { data: current, error: currentErr } = await supabase
     .schema('app')
-    .from('pipeline_stages')
-    .select('id, pipeline_definition_id, sort_order')
+    .from('stages' as never)
+    .select('id, pipeline_id, sort_order')
     .eq('id', stageId)
     .single()
 
   if (currentErr || !current) return { error: 'Stage not found' }
-  const c = current as any
+  const c = current as { id: string; pipeline_id: string; sort_order: number }
 
-  // 2) 바로 위 stage 찾기 (sort_order < 현재값 중 최대)
+  // find the nearest active stage above (largest sort_order < current)
   const { data: above } = await supabase
     .schema('app')
-    .from('pipeline_stages')
+    .from('stages' as never)
     .select('id, sort_order')
-    .eq('pipeline_definition_id', c.pipeline_definition_id)
-    .is('deleted_at', null)
+    .eq('pipeline_id', c.pipeline_id)
+    .eq('is_active', true)
     .lt('sort_order', c.sort_order)
     .order('sort_order', { ascending: false })
     .limit(1)
     .single()
 
-  if (!above) return { success: true } // 이미 맨 위
+  if (!above) return { success: true } // already first
 
-  const a = above as any
+  const a = above as { id: string; sort_order: number }
   await swapSortOrder(supabase, c.id, c.sort_order, a.id, a.sort_order)
 
   revalidatePath('/settings/pipelines')
   return { success: true }
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// REORDER — Move stage down
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// REORDER -- move stage down
+// ---------------------------------------------------------------------------
 export async function moveStageDown(stageId: string) {
   const supabase = await createSupabaseServerClient()
 
   const { data: current, error: currentErr } = await supabase
     .schema('app')
-    .from('pipeline_stages')
-    .select('id, pipeline_definition_id, sort_order')
+    .from('stages' as never)
+    .select('id, pipeline_id, sort_order')
     .eq('id', stageId)
     .single()
 
   if (currentErr || !current) return { error: 'Stage not found' }
-  const c = current as any
+  const c = current as { id: string; pipeline_id: string; sort_order: number }
 
   const { data: below } = await supabase
     .schema('app')
-    .from('pipeline_stages')
+    .from('stages' as never)
     .select('id, sort_order')
-    .eq('pipeline_definition_id', c.pipeline_definition_id)
-    .is('deleted_at', null)
+    .eq('pipeline_id', c.pipeline_id)
+    .eq('is_active', true)
     .gt('sort_order', c.sort_order)
     .order('sort_order', { ascending: true })
     .limit(1)
@@ -185,41 +184,27 @@ export async function moveStageDown(stageId: string) {
 
   if (!below) return { success: true }
 
-  const b = below as any
+  const b = below as { id: string; sort_order: number }
   await swapSortOrder(supabase, c.id, c.sort_order, b.id, b.sort_order)
 
   revalidatePath('/settings/pipelines')
   return { success: true }
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Helper: 두 stage의 sort_order swap (unique constraint 가능성 대비 temp 사용)
-// ────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Helper: swap sort_order of two stages (temp -1 to avoid unique collisions)
+// ---------------------------------------------------------------------------
 async function swapSortOrder(
-  supabase: any,
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   idA: string,
   orderA: number,
   idB: string,
   orderB: number,
 ) {
-  // A를 임시 값으로
-  await supabase
-    .schema('app')
-    .from('pipeline_stages')
-    .update({ sort_order: -1 })
-    .eq('id', idA)
-
-  // B를 A의 원래 값으로
-  await supabase
-    .schema('app')
-    .from('pipeline_stages')
-    .update({ sort_order: orderA })
-    .eq('id', idB)
-
-  // A를 B의 원래 값으로
-  await supabase
-    .schema('app')
-    .from('pipeline_stages')
-    .update({ sort_order: orderB })
-    .eq('id', idA)
+  await supabase.schema('app').from('stages' as never)
+    .update({ sort_order: -1 } as never).eq('id', idA)
+  await supabase.schema('app').from('stages' as never)
+    .update({ sort_order: orderA } as never).eq('id', idB)
+  await supabase.schema('app').from('stages' as never)
+    .update({ sort_order: orderB } as never).eq('id', idA)
 }
