@@ -7710,14 +7710,6 @@ export type Database = {
         }
         Returns: string
       }
-      sync_calendar_match_party: {
-        Args: { p_event_id: string }
-        Returns: string
-      }
-      sync_calendar_promote_to_meeting: {
-        Args: { p_engagement_id?: string; p_event_id: string }
-        Returns: string
-      }
       sync_calendar_pull: {
         Args: { p_connection_id: string; p_events: Json }
         Returns: {
@@ -7754,7 +7746,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_party_lead_score: { Args: { p_party_id: string }; Returns: number }
       upsert_calendar_connection: {
         Args: {
           p_access_token: string
@@ -7994,49 +7985,6 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: number
       }
-      create_campaign_from_template:
-        | {
-            Args: {
-              p_campaign_name: string
-              p_country_code?: string
-              p_enrolled_by?: string
-              p_module?: string
-              p_organization_id: string
-              p_status?: string
-              p_template_id: string
-              p_tiers?: string[]
-            }
-            Returns: {
-              enrolled_count: number
-              sample_names: string[]
-              sequence_id: string
-              skipped_already_enrolled: number
-              skipped_no_email: number
-              total_matching: number
-            }[]
-          }
-        | {
-            Args: {
-              p_campaign_name: string
-              p_country_code?: string
-              p_enrolled_by?: string
-              p_industry_tag?: string
-              p_module?: string
-              p_name_contains?: string
-              p_organization_id: string
-              p_status?: string
-              p_template_id: string
-              p_tiers?: string[]
-            }
-            Returns: {
-              enrolled_count: number
-              sample_names: string[]
-              sequence_id: string
-              skipped_already_enrolled: number
-              skipped_no_email: number
-              total_matching: number
-            }[]
-          }
       create_email_tracking: {
         Args: {
           p_communication_id?: string
@@ -8255,17 +8203,6 @@ export type Database = {
           title: string
         }[]
       }
-      list_active_templates: {
-        Args: { p_org_id: string }
-        Returns: {
-          body_plain: string
-          category: string
-          id: string
-          module: string
-          name: string
-          subject: string
-        }[]
-      }
       list_email_whitelist: {
         Args: { p_org_id: string }
         Returns: {
@@ -8288,18 +8225,6 @@ export type Database = {
           status: Database["app"]["Enums"]["email_sequence_status"]
           step_count: number
           total_sends: number
-        }[]
-      }
-      list_templates_for_compose: {
-        Args: { p_module?: string; p_org_id: string }
-        Returns: {
-          body_html: string
-          body_plain: string
-          category: string
-          id: string
-          module: string
-          name: string
-          subject: string
         }[]
       }
       record_email_click: {

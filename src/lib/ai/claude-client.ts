@@ -144,7 +144,7 @@ function dbRowToAgent(row: Record<string, unknown>): AgentRow {
     outputFormat: (row.output_format as 'text' | 'structured') ?? 'text',
     systemPrompt: (row.system_prompt as string) ?? '',
     applicableModules:
-      (row.applicable_modules as PartyTypeCode[] | null) ?? undefined,
+      (row.applicable_party_types as PartyTypeCode[] | null) ?? undefined,
     applicableLanguages:
       (row.applicable_languages as Language[] | null) ?? undefined,
     requirePiiMasking: (row.require_pii_masking as boolean | null) ?? true,
@@ -431,7 +431,7 @@ export class ClaudeClient {
       .schema('ai')
       .from('agents')
       .select(
-        'id, organization_id, role, name, model, fallback_model, temperature, max_tokens, output_format, system_prompt, applicable_modules, applicable_languages, require_pii_masking, knowledge_collection, is_active, version',
+        'id, organization_id, role, name, model, fallback_model, temperature, max_tokens, output_format, system_prompt, applicable_party_types, applicable_languages, require_pii_masking, knowledge_collection, is_active, version',
       )
       .eq('organization_id', this.organizationId)
       .eq('role', role)

@@ -8,7 +8,7 @@
  *   [1]  (env.AI_AUTO_SEND_ENABLED)
  *   [2] auto_send_rules   (carriercategory)
  *   [3] rule.is_blocked
- *   [4] rule.allowed_modules module  
+ *   [4] rule.allowed_party_types module  
  *   [5] classification.confidence  rule.min_confidence
  *   [6] rule.requires_human_approval  classification.requiresHuman
  *   [7] classification.riskFlags 
@@ -211,7 +211,7 @@ async function loadAutoSendRule(
     .schema('ai')
     .from('auto_send_rules')
     .select(
-      'id, organization_id, classification_category, is_blocked, block_reason, min_confidence, requires_human_approval, allowed_modules, blocked_keywords_in_body, daily_limit, hourly_limit, per_party_daily_limit, requires_calendar_data, is_active',
+      'id, organization_id, classification_category, is_blocked, block_reason, min_confidence, requires_human_approval, allowed_party_types, blocked_keywords_in_body, daily_limit, hourly_limit, per_party_daily_limit, requires_calendar_data, is_active',
     )
     .eq('organization_id', organizationId)
     .eq('classification_category', category)
@@ -233,7 +233,7 @@ async function loadAutoSendRule(
     blockReason: (data.block_reason as string | null) ?? undefined,
     minConfidence: Number(data.min_confidence ?? 0.95),
     requiresHumanApproval: Boolean(data.requires_human_approval),
-    allowedModules: (data.allowed_modules as PartyTypeCode[] | null) ?? [],
+    allowedModules: (data.allowed_party_types as PartyTypeCode[] | null) ?? [],
     blockedKeywordsInBody:
       (data.blocked_keywords_in_body as string[] | null) ?? [],
     dailyLimit: Number(data.daily_limit ?? 0),
