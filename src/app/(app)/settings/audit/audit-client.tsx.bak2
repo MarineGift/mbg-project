@@ -103,7 +103,6 @@ export default function AuditClient({ rows, users }: { rows: AuditRow[]; users: 
         <ul className="divide-y rounded-lg border">
           {filtered.map((r) => {
             const meta = OP_META[r.operation]
-            if (!meta) return null
             const open = expanded.has(r.id)
             const diffs = changedFields(r.old_data, r.new_data)
             return (

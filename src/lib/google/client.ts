@@ -57,7 +57,7 @@ export async function getCalendarForUser(userId: string) {
         access_token: t.access_token,
         expiry: t.expiry_date ? new Date(t.expiry_date).toISOString() : null,
         updated_at: new Date().toISOString(),
-      } as any)
+      } as never)
       .eq('user_id', userId)
   })
 
