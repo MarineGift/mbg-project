@@ -13,7 +13,7 @@
  */
 
 import 'server-only';
-import { PARTY_TYPE_CODE_BY_ID, partyTypeToModule } from '@/types/party-type';
+import { PARTY_TYPE_CODE_BY_ID } from '@/types/party-type';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   ClassificationCategory,
@@ -262,7 +262,7 @@ function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   const partyTypeId = party?.party_type_id ?? null;
   const code = partyTypeId != null ? PARTY_TYPE_CODE_BY_ID[partyTypeId] : null;
   const moduleValue: PartyTypeCode =
-    (code ? (partyTypeToModule(code) ?? 'investor') : 'investor') as PartyTypeCode;
+    (code ?? 'investor') as PartyTypeCode;
   return {
     id: r.id as string,
     name: (r.deal_name as string) ?? '',

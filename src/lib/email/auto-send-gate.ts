@@ -115,11 +115,11 @@ export async function evaluateAutoSend(
 
   // [4] applicable_modules
   if (input.partyType) {
-    const allowed = rule.allowedModules ?? [];
+    const allowed = rule.allowedPartyTypes ?? [];
     if (allowed.length === 0 || !allowed.includes(input.partyType)) {
       reasons.push('module_not_allowed');
       log.module_check = {
-        allowedModules: allowed,
+        allowedPartyTypes: allowed,
         requestedModule: input.partyType,
       };
     }
@@ -233,7 +233,7 @@ async function loadAutoSendRule(
     blockReason: (data.block_reason as string | null) ?? undefined,
     minConfidence: Number(data.min_confidence ?? 0.95),
     requiresHumanApproval: Boolean(data.requires_human_approval),
-    allowedModules: (data.allowed_party_types as PartyTypeCode[] | null) ?? [],
+    allowedPartyTypes: (data.allowed_party_types as PartyTypeCode[] | null) ?? [],
     blockedKeywordsInBody:
       (data.blocked_keywords_in_body as string[] | null) ?? [],
     dailyLimit: Number(data.daily_limit ?? 0),

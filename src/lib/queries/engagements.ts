@@ -35,7 +35,6 @@ import type {
 } from '@/types/engagement';
 import {
   PARTY_TYPE_CODE_BY_ID,
-  partyTypeToModule,
   type PartyTypeCode,
 } from '@/types/party-type';
 import {
@@ -133,8 +132,7 @@ function partyTypeIdToModule(
   if (partyTypeId == null) return 'investor';
   const code: PartyTypeCode | undefined = PARTY_TYPE_CODE_BY_ID[partyTypeId];
   if (!code) return 'investor';
-  const legacy = partyTypeToModule(code);
-  return (legacy ?? 'investor') as PartyTypeCode;
+  return (code ?? 'investor') as PartyTypeCode;
 }
 
 function computeWeightedAmount(

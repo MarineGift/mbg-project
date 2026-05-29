@@ -143,7 +143,7 @@ function dbRowToAgent(row: Record<string, unknown>): AgentRow {
     maxTokens: Number(row.max_tokens ?? DEFAULT_MAX_TOKENS),
     outputFormat: (row.output_format as 'text' | 'structured') ?? 'text',
     systemPrompt: (row.system_prompt as string) ?? '',
-    applicableModules:
+    applicablePartyTypes:
       (row.applicable_party_types as PartyTypeCode[] | null) ?? undefined,
     applicableLanguages:
       (row.applicable_languages as Language[] | null) ?? undefined,
