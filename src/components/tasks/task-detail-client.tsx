@@ -236,12 +236,12 @@ export function TaskDetailClient({ task: initial }: Props) {
               Details
             </p>
             <dl className="rounded-lg border divide-y text-sm">
-              {task.partyId && task.partyName && task.partyModule && (
+              {task.partyId && task.partyName && task.partyTypeCode && (
                 <div className="flex items-center px-4 py-2.5 gap-3">
                   <dt className="w-28 shrink-0 text-muted-foreground">Party</dt>
                   <dd>
                     <Link
-                      href={`/${task.partyModule}/parties/${task.partyId}`}
+                      href={`/${task.partyTypeCode}/parties/${task.partyId}`}
                       className="inline-flex items-center gap-1.5 text-primary hover:underline"
                     >
                       <Briefcase className="h-3.5 w-3.5" />

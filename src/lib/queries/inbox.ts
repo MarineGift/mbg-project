@@ -271,7 +271,7 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     sentAt: raw.sent_at,
     partyId: raw.party_id,
     partyName: party?.name ?? null,
-    partyModule: (partyTypeCode as PartyTypeCode | null) ?? null,
+    partyTypeCode: (partyTypeCode as PartyTypeCode | null) ?? null,
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,

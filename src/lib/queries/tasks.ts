@@ -231,7 +231,7 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     partyType: r.partyType,
     partyId: r.party_id,
     partyName: party?.name ?? null,
-    partyModule: party?.party_type ?? null,
+    partyTypeCode: party?.party_type ?? null,
     engagementId: r.engagement_id,
     engagementName: engagement?.name ?? null,
     assignedToUserId: r.assigned_to_user_id,

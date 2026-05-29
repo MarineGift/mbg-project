@@ -186,9 +186,9 @@ export function TasksTable({ rows }: Props) {
                   )}
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs">
-                    {row.partyId && row.partyName && row.partyModule && (
+                    {row.partyId && row.partyName && row.partyTypeCode && (
                       <Link
-                        href={`/${row.partyModule}/parties/${row.partyId}`}
+                        href={`/${row.partyTypeCode}/parties/${row.partyId}`}
                         className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
