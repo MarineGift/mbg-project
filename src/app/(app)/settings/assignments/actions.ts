@@ -49,7 +49,7 @@ export async function assignParties(
   const { error, count } = await supabase
     .schema('app')
     .from('parties' as never)
-    .update({ owner_user_id: ownerUserId } as any, { count: 'exact' })
+    .update({ owner_user_id: ownerUserId } as never, { count: 'exact' })
     .in('id', partyIds)
 
   if (error) return { ok: false, error: error.message }

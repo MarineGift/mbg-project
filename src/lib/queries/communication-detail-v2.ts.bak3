@@ -180,7 +180,7 @@ export async function fetchMessagesInThread(
         name: party.name as string,
         partyType: (Array.isArray(party.party_types)
           ? (party.party_types[0] as { code: string } | undefined)?.code
-          : (party.party_types as { code: string } | null)?.code) as NonNullable<CommunicationDetail['party']>['partyType'],
+          : (party.party_types as { code: string } | null)?.code) as unknown as CommunicationDetail['party']['partyType'],
       } : null,
       contact: contact ? {
         id: contact.id as string,

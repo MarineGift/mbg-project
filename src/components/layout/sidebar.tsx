@@ -114,7 +114,7 @@ export function Sidebar() {
                 code: p.code,
                 name: p.name,
                 sort_order: p.sort_order,
-                dealCount: p.deals && p.deals.length > 0 ? p.deals[0].count : 0,
+                dealCount: p.deals && p.deals.length > 0 ? p.deals[0]!.count : 0,
               })
             )
           );

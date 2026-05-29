@@ -48,12 +48,12 @@ function displayName(c: Contact): string | null {
 // Returns 2-letter initials, or null if no name (caller renders an icon instead).
 function initials(c: Contact): string | null {
   if (c.given_name && c.family_name) {
-    return (c.given_name[0] + c.family_name[0]).toUpperCase();
+    return (c.given_name[0]! + c.family_name[0]!).toUpperCase();
   }
   const n = displayName(c);
   if (!n) return null;
   const parts = n.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length >= 2) return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
   return n.slice(0, 2).toUpperCase();
 }
 

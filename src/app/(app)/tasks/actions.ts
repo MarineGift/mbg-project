@@ -31,7 +31,7 @@ export async function toggleTaskStatus(
     .update({
       status: newStatus,
       completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
-    } as any)
+    } as never)
     .eq('id', taskId)
 
   if (error) return { ok: false, error: error.message }
