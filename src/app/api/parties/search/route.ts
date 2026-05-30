@@ -9,15 +9,32 @@ export async function GET(req: NextRequest) {
   const limit  = parseInt(searchParams.get('limit') ?? '10');
 
   const supabase = await createSupabaseServerClient();
+
+  // resolve party_type code -> id (parties has party_type_id FK, not a text column)
+  const { data: ptRow } = await supabase.schema('app')
+    .from('party_types' as never)
+    .select('id, code')
+    .eq('code' as never, module)
+    .maybeSingle();
+  const partyTypeId = (ptRow as { id?: number } | null)?.id ?? null;
+  if (partyTypeId == null) return NextResponse.json([]);
+
   const { data, error } = await supabase.schema('app')
     .from('parties' as never)
-    .select('id, name, party_type, country_code, tier')
-    .eq('party_type' as never, module)
-    .ilike('name' as never, `%${q}%`)
+    .select('id, party_name, country_code, party_type_id')
+    .eq('party_type_id' as never, partyTypeId as never)
+    .ilike('party_name' as never, `%${q}%`)
     .is('deleted_at' as never, null)
-    .order('name')
+    .order('party_name' as never)
     .limit(limit);
 
   if (error) return NextResponse.json([], { status: 500 });
-  return NextResponse.json(data ?? []);
+
+  const result = ((data ?? []) as any[]).map(row => ({
+    id:           row.id,
+    name:         row.party_name ?? '',
+    country_code: row.country_code ?? null,
+    module:       module,
+  }));
+  return NextResponse.json(result);
 }

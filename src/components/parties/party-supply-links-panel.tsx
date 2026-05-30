@@ -14,7 +14,6 @@ interface SupplyLink {
   linked_name: string;
   linked_module: string;
   linked_country: string | null;
-  linked_tier: string | null;
   link_type: string;
   product_grade: string | null;
   volume_estimate: number | null;
@@ -25,7 +24,6 @@ interface SearchParty {
   id: string;
   name: string;
   country_code: string | null;
-  tier: string | null;
   module: string;
 }
 
@@ -219,11 +217,11 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
     setSaving(true);
     try {
       // Search for placeholder [Unregistered] or legacy [Korean-encoded] party in DB
-      const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&module=filler&limit=1');
+      const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&module=filler_supplier&limit=1');
       let list = res.ok ? await res.json() : [];
       if (list.length === 0) {
         // Fallback: legacy Korean placeholder [誘몃벑濡? (URL-encoded)
-        const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&module=filler&limit=1');
+        const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&module=filler_supplier&limit=1');
         list = res2.ok ? await res2.json() : [];
       }
       if (list.length === 0) {
@@ -277,7 +275,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{p.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {p.country_code} &middot; {p.tier}
+                          {p.country_code}
                         </div>
                       </div>
                     </button>
@@ -293,7 +291,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
             <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{selected.name}</p>
-                <p className="text-xs text-muted-foreground">{selected.country_code} &middot; {selected.tier}</p>
+                <p className="text-xs text-muted-foreground">{selected.country_code}</p>
               </div>
               <button onClick={() => setSelected(null)} className="p-1 hover:bg-muted rounded">
                 <X className="h-3.5 w-3.5" />
