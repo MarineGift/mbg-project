@@ -35,13 +35,13 @@ export type Definition = {
   is_active: boolean
 }
 
-export type ModuleGroup = {
+export type PartyTypeGroup = {
   definition: Definition
   stages: Stage[]
 }
 
 // 사이드바 라벨과 일치 (영어 기본)
-const MODULE_NAMES: Record<string, string> = {
+const PARTY_TYPE_NAMES: Record<string, string> = {
   investor: 'Investors',
   paper_mill: 'Paper Mills',
   partner: 'Partners',
@@ -49,11 +49,11 @@ const MODULE_NAMES: Record<string, string> = {
   filler_supplier: 'Filler Suppliers',
 }
 
-function moduleDisplayName(module: string): string {
-  return MODULE_NAMES[module] || module
+function partyTypeDisplayName(module: string): string {
+  return PARTY_TYPE_NAMES[module] || module
 }
 
-export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGroup[] }) {
+export function PipelinesAdminClient({ partyTypeGroups }: { partyTypeGroups: PartyTypeGroup[] }) {
   const [editing, setEditing] = useState<
     | { stage: Stage | null; definitionId: string; nextSortOrder: number }
     | null
@@ -82,13 +82,13 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
 
   return (
     <div className="space-y-6">
-      {moduleGroups.length === 0 && (
+      {partyTypeGroups.length === 0 && (
         <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
           No pipeline definitions found. Pipeline definitions are created automatically per module.
         </div>
       )}
 
-      {moduleGroups.map((group) => {
+      {partyTypeGroups.map((group) => {
         // 다음 stage의 sort_order 계산 (마지막 + 10)
         const lastSort =
           group.stages.length > 0 ? group.stages[group.stages.length - 1]!.sort_order : 0
@@ -100,7 +100,7 @@ export function PipelinesAdminClient({ moduleGroups }: { moduleGroups: ModuleGro
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    {moduleDisplayName(group.definition.module)}
+                    {partyTypeDisplayName(group.definition.module)}
                     <Badge variant="outline" className="text-xs font-mono">
                       {group.definition.module}
                     </Badge>
