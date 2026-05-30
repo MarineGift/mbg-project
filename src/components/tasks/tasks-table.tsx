@@ -8,7 +8,7 @@ import { Sparkles, Clock, AlertTriangle, Briefcase, Trash2, Loader2 } from 'luci
 import { toast } from 'sonner';
 import { TaskCheckbox } from './task-checkbox';
 import { TaskDeleteButton } from './task-delete-button';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -205,7 +205,7 @@ export function TasksTable({ rows }: Props) {
                         {row.engagementName}
                       </Link>
                     )}
-                    {row.partyType && <ModuleBadge partyType={row.partyType} size="sm" />}
+                    {row.partyType && <PartyTypeBadge partyType={row.partyType} size="sm" />}
                     {row.dueAt && (
                       <span className={cn('inline-flex items-center gap-1', isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground')}>
                         <Clock className="h-3 w-3" />

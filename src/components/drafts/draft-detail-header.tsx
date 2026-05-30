@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/common/status-badge';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { ExpiryCountdown } from './expiry-countdown';
 import type { DraftDetail } from '@/types/draft-detail';
 
@@ -27,7 +27,7 @@ export function DraftDetailHeader({ draft }: Props) {
         </Button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <StatusBadge status={draft.status} size="sm" />
-          {draft.partyType && <ModuleBadge partyType={draft.partyType} size="sm" />}
+          {draft.partyType && <PartyTypeBadge partyType={draft.partyType} size="sm" />}
           {draft.status === 'pending_review' && (
             <ExpiryCountdown expiresAt={draft.expiresAt} />
           )}

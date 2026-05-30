@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Globe, MapPin, Building2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import type { PartyDetail } from '@/types/party-detail';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +47,7 @@ export function PartyHeader({ party }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <ModuleBadge partyType={party.partyType} size="sm" />
+        <PartyTypeBadge partyType={party.partyType} size="sm" />
         {party.tier && (
           <span
             className={cn(

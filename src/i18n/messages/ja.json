@@ -43,7 +43,7 @@
     "calendar": "カレンダー",
     "settings": "設定"
   },
-  "modules": {
+  "partyTypes": {
     "investor": "投資家",
     "paper_mill": "バイヤー",
     "partner": "パートナー",

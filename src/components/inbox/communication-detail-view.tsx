@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChannelDirectionIcon } from './channel-direction-icon';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { StatusBadge } from '@/components/common/status-badge';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
@@ -74,7 +74,7 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
           {threadSubject || <span className="italic text-muted-foreground">{t('noSubject')}</span>}
         </h1>
         <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-          {partyContext && <ModuleBadge partyType={partyContext.partyType} size="sm" />}
+          {partyContext && <PartyTypeBadge partyType={partyContext.partyType} size="sm" />}
           {partyContext && (
             <Link
               href={`/${partyContext.partyType}/parties/${partyContext.id}`}
