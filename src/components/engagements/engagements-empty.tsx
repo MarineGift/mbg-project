@@ -20,7 +20,7 @@ export function EngagementsPipelineMissing({ partyType }: Props) {
       description={t('pipelineMissingDescription', { partyType })}
       action={
         <Button asChild variant="outline">
-          <Link href={`/settings/pipelines?module=${partyType}`}>
+          <Link href={`/settings/pipelines?partyType=${partyType}`}>
             <Settings className="h-4 w-4" />
             {t('configurePipeline')}
           </Link>

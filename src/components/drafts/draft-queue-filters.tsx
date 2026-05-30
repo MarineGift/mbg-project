@@ -131,7 +131,7 @@ export function DraftQueueFilters({
         <Label className="text-xs text-muted-foreground">{t('module')}</Label>
         <Select
           value={filters.partyType}
-          onValueChange={(v) => setParam('module', v)}
+          onValueChange={(v) => setParam('partyType', v)}
         >
           <SelectTrigger>
             <SelectValue />
