@@ -689,42 +689,6 @@ export type Database = {
           },
         ]
       }
-      audit_log: {
-        Row: {
-          actor_user_id: string | null
-          changed_at: string
-          id: number
-          new_data: Json | null
-          old_data: Json | null
-          operation: string
-          organization_id: string | null
-          record_id: string | null
-          table_name: string
-        }
-        Insert: {
-          actor_user_id?: string | null
-          changed_at?: string
-          id?: never
-          new_data?: Json | null
-          old_data?: Json | null
-          operation: string
-          organization_id?: string | null
-          record_id?: string | null
-          table_name: string
-        }
-        Update: {
-          actor_user_id?: string | null
-          changed_at?: string
-          id?: never
-          new_data?: Json | null
-          old_data?: Json | null
-          operation?: string
-          organization_id?: string | null
-          record_id?: string | null
-          table_name?: string
-        }
-        Relationships: []
-      }
       calendar_connections: {
         Row: {
           access_token: string
