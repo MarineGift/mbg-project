@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q      = searchParams.get('q') ?? '';
-  const module = searchParams.get('module') ?? 'paper_mill';
+  const module = searchParams.get('partyType') ?? 'paper_mill';
   const limit  = parseInt(searchParams.get('limit') ?? '10');
 
   const supabase = await createSupabaseServerClient();

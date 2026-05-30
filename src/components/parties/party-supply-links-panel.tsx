@@ -183,7 +183,7 @@ function AddLinkModal({ partyId, partyType, orgId, linkedPartyType, onClose, onA
       setSearching(true);
       try {
         const res = await fetch(
-          `/api/parties/search?q=${encodeURIComponent(query)}&module=${linkedPartyType}&limit=10`
+          `/api/parties/search?q=${encodeURIComponent(query)}&partyType=${linkedPartyType}&limit=10`
         );
         if (res.ok) setResults(await res.json());
       } finally { setSearching(false); }
@@ -217,11 +217,11 @@ function AddLinkModal({ partyId, partyType, orgId, linkedPartyType, onClose, onA
     setSaving(true);
     try {
       // Search for placeholder [Unregistered] or legacy [Korean-encoded] party in DB
-      const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&module=filler_supplier&limit=1');
+      const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&partyType=filler_supplier&limit=1');
       let list = res.ok ? await res.json() : [];
       if (list.length === 0) {
         // Fallback: legacy Korean placeholder [誘몃벑濡? (URL-encoded)
-        const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&module=filler_supplier&limit=1');
+        const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&partyType=filler_supplier&limit=1');
         list = res2.ok ? await res2.json() : [];
       }
       if (list.length === 0) {
