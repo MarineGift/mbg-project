@@ -12,7 +12,7 @@ import { Sparkles, Inbox, CheckSquare, Building2, Handshake } from 'lucide-react
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const MODULE_LABELS: Record<string, string> = {
+const PARTY_TYPE_LABELS: Record<string, string> = {
   paper_mill: 'Paper Mills',
   filler_supplier:     'Filler Suppliers',
   investor:   'Investors',
@@ -28,8 +28,8 @@ const MODULE_COLORS: Record<string, string> = {
   customer:   'text-rose-600 dark:text-rose-400',
 };
 
-const PARTY_MODULES = ['paper_mill', 'filler_supplier', 'investor', 'partner', 'customer'] as const;
-type PartyModule = typeof PARTY_MODULES[number];
+const PARTY_TYPES = ['paper_mill', 'filler_supplier', 'investor', 'partner', 'customer'] as const;
+type PartyTypeCode = typeof PARTY_TYPES[number];
 
 export default async function DashboardPage() {
   const auth = await requireAuthOrRedirect();
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
 
   // ── Row 2a: parties by module ──────────────────────────────────────────────
   const partyResults = await Promise.all(
-    PARTY_MODULES.map(m =>
+    PARTY_TYPES.map(m =>
       supabase
         .schema('app')
         .from('parties' as never)
@@ -70,9 +70,9 @@ export default async function DashboardPage() {
     ),
   );
   const partyCounts = Object.fromEntries(
-    PARTY_MODULES.map((m, i) => [m, (partyResults[i] as any).count ?? 0]),
-  ) as Record<PartyModule, number>;
-  const partyTotal = PARTY_MODULES.reduce((s, m) => s + partyCounts[m], 0);
+    PARTY_TYPES.map((m, i) => [m, (partyResults[i] as any).count ?? 0]),
+  ) as Record<PartyTypeCode, number>;
+  const partyTotal = PARTY_TYPES.reduce((s, m) => s + partyCounts[m], 0);
 
   // ── Row 2b: engagements by module ──────────────────────────────────────────
   const dealsTotalRes = await supabase
@@ -81,11 +81,11 @@ export default async function DashboardPage() {
     .select('id', { count: 'exact', head: true })
     .is('deleted_at' as never, null);
   const dealsTotal = (dealsTotalRes as { count: number | null }).count ?? 0;
-  const engResults = PARTY_MODULES.map(() => ({ count: dealsTotal }));
+  const engResults = PARTY_TYPES.map(() => ({ count: dealsTotal }));
   const engCounts = Object.fromEntries(
-    PARTY_MODULES.map((m, i) => [m, (engResults[i] as any).count ?? 0]),
-  ) as Record<PartyModule, number>;
-  const engTotal = PARTY_MODULES.reduce((s, m) => s + engCounts[m], 0);
+    PARTY_TYPES.map((m, i) => [m, (engResults[i] as any).count ?? 0]),
+  ) as Record<PartyTypeCode, number>;
+  const engTotal = PARTY_TYPES.reduce((s, m) => s + engCounts[m], 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -142,13 +142,13 @@ export default async function DashboardPage() {
               {partyTotal.toLocaleString()}
             </div>
             <div className="space-y-2">
-              {PARTY_MODULES.map(m => (
+              {PARTY_TYPES.map(m => (
                 <div key={m} className="flex items-center justify-between text-sm">
                   <Link
                     href={`/${m}/parties`}
                     className={`font-medium hover:underline underline-offset-2 ${MODULE_COLORS[m]}`}
                   >
-                    {MODULE_LABELS[m]}
+                    {PARTY_TYPE_LABELS[m]}
                   </Link>
                   <span className="tabular-nums text-muted-foreground font-mono text-xs">
                     {partyCounts[m].toLocaleString()}
@@ -173,13 +173,13 @@ export default async function DashboardPage() {
               <p className="text-xs text-muted-foreground">No engagements yet.</p>
             ) : (
               <div className="space-y-2">
-                {PARTY_MODULES.filter(m => engCounts[m] > 0).map(m => (
+                {PARTY_TYPES.filter(m => engCounts[m] > 0).map(m => (
                   <div key={m} className="flex items-center justify-between text-sm">
                     <Link
                       href={`/${m}/engagements`}
                       className={`font-medium hover:underline underline-offset-2 ${MODULE_COLORS[m]}`}
                     >
-                      {MODULE_LABELS[m]}
+                      {PARTY_TYPE_LABELS[m]}
                     </Link>
                     <span className="tabular-nums text-muted-foreground font-mono text-xs">
                       {engCounts[m].toLocaleString()}
