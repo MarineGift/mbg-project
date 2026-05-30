@@ -54,7 +54,7 @@ export default async function PipelinesAdminPage() {
     stagesByDef[s.pipeline_definition_id]!.push(s)
   }
 
-  const moduleGroups = defns.map((d) => ({
+  const partyTypeGroups = defns.map((d) => ({
     definition: d,
     stages: stagesByDef[d.id] ?? [],
   }))
@@ -68,7 +68,7 @@ export default async function PipelinesAdminPage() {
         </p>
       </div>
 
-      <PipelinesAdminClient moduleGroups={moduleGroups} />
+      <PipelinesAdminClient partyTypeGroups={partyTypeGroups} />
     </div>
   )
 }
