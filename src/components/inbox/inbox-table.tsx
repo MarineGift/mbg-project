@@ -8,7 +8,7 @@ import { Sparkles, Paperclip, Trash2, Loader2, AlertTriangle } from 'lucide-reac
 import { toast } from 'sonner';
 import { ChannelDirectionIcon } from './channel-direction-icon';
 import { InboxDeleteButton } from './inbox-delete-button';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -150,7 +150,7 @@ export function InboxTable({ rows }: Props) {
                       <p className="font-medium text-sm truncate flex-1">
                         {row.partyName ?? row.fromName ?? row.fromAddress ?? tPreview('noParty')}
                       </p>
-                      {row.partyTypeCode && <ModuleBadge partyType={row.partyTypeCode} size="sm" />}
+                      {row.partyTypeCode && <PartyTypeBadge partyType={row.partyTypeCode} size="sm" />}
                       <RelativeTime
                         date={row.occurredAt}
                         className="text-xs text-muted-foreground whitespace-nowrap"

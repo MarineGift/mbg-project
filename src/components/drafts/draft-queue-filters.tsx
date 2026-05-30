@@ -65,7 +65,7 @@ export function DraftQueueFilters({
   const t = useTranslations('drafts.filters');
   const tSort = useTranslations('drafts.sort');
   const tStatus = useTranslations('draftStatus');
-  const tModules = useTranslations('modules');
+  const tModules = useTranslations('partyTypes');
   const tCategories = useTranslations('classificationCategory');
   const router = useRouter();
   const pathname = usePathname();

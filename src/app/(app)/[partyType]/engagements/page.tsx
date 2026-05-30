@@ -35,7 +35,7 @@ export default async function KanbanPage({ params }: PageProps) {
 
   const board = await fetchKanbanBoard(module);
   const t = await getTranslations('engagements');
-  const tModules = await getTranslations('modules');
+  const tModules = await getTranslations('partyTypes');
 
   return (
     <div className="flex flex-col h-full">

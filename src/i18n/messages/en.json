@@ -43,7 +43,7 @@
     "calendar": "Calendar",
     "settings": "Settings"
   },
-  "modules": {
+  "partyTypes": {
     "investor": "Investors",
     "paper_mill": "Paper Mills",
     "partner": "Partners",

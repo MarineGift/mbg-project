@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { TaskFormDialog } from './task-form-dialog';
 import { updateTaskStatus, deleteTask } from '@/lib/actions/tasks';
 import type { TaskRow, TaskStatus, TaskPriority } from '@/types/task';
@@ -191,7 +191,7 @@ export function TaskDetailClient({ task: initial }: Props) {
                 Overdue
               </span>
             )}
-            {task.partyType && <ModuleBadge partyType={task.partyType} size="sm" />}
+            {task.partyType && <PartyTypeBadge partyType={task.partyType} size="sm" />}
           </div>
 
           {/* Status change */}

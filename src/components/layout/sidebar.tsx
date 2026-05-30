@@ -40,8 +40,8 @@ type Pipeline = { id: string; code: string; name: string; sort_order: number; de
 // Pipeline code -> dot color. Existing module-* theme tokens are reused where
 // they already exist; new pipelines get standard Tailwind colors.
 const PIPELINE_DOT: Record<string, string> = {
-  investor:         'bg-module-investor',
-  paper_mill:       'bg-module-buyer',
+  investor:         'bg-party-investor',
+  paper_mill:       'bg-party-buyer',
   filler_supplier:  'bg-amber-500',
   crowdfunding:     'bg-rose-500',
   government_grant: 'bg-violet-500',

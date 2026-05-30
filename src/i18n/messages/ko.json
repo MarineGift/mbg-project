@@ -43,7 +43,7 @@
     "calendar": "일정",
     "settings": "설정"
   },
-  "modules": {
+  "partyTypes": {
   "investor": "투자자",
   "paper_mill": "구매자",
   "partner": "파트너",

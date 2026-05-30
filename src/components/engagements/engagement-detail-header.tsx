@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import type { EngagementDetail } from '@/types/engagement';
 import { cn } from '@/lib/utils';
 
@@ -32,7 +32,7 @@ export function EngagementDetailHeader({ engagement }: Props) {
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <ModuleBadge partyType={engagement.partyType} size="sm" />
+          <PartyTypeBadge partyType={engagement.partyType} size="sm" />
           <span
             className={cn(
               'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',

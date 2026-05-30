@@ -64,7 +64,7 @@ const config: Config = {
         },
 
         // 7개 모듈 컬러 토큰 (마스터 §3.1 모듈 enum과 일치)
-        module: {
+        party: {
           investor: { DEFAULT: '#7c3aed', foreground: '#ffffff' },
           buyer: { DEFAULT: '#2563eb', foreground: '#ffffff' },
           partner: { DEFAULT: '#16a34a', foreground: '#ffffff' },

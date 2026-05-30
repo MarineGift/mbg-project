@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ExternalLink, Pencil } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ModuleBadge } from '@/components/common/module-badge';
+import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { StatusBadge } from '@/components/common/status-badge';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
 import { RiskFlagChip } from '@/components/common/risk-flag-chip';
@@ -94,7 +94,7 @@ export function DraftQueueTable({ rows }: DraftQueueTableProps) {
                 <StatusBadge status={row.status} size="sm" />
               </td>
               <td className="px-3 py-3 align-top">
-                {row.partyType ? <ModuleBadge partyType={row.partyType} size="sm" /> : null}
+                {row.partyType ? <PartyTypeBadge partyType={row.partyType} size="sm" /> : null}
               </td>
               <td className="px-3 py-3 align-top">
                 <div className="space-y-0.5 min-w-0">
