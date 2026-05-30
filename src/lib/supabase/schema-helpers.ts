@@ -23,7 +23,7 @@
 //   - For industry data (paper_mills/filler_suppliers/...), use sbIndustry().
 //
 // Usage:
-//   import { sbApp, sbUrm, sbAi, sbIndustry } from '@/lib/supabase/schema-helpers';
+//   import { sbApp, sbUrm, sbAi } from '@/lib/supabase/schema-helpers';
 //
 //   const { data } = await sbUrm(supabase)
 //     .from('parties')
@@ -99,18 +99,4 @@ export function sbUrm(client: SupabaseClient<Database>) {
  */
 export function sbAi(client: SupabaseClient<Database>) {
   return client.schema('ai');
-}
-
-/**
- * Supabase client scoped to the `industry` schema (global paper filler DB).
- *
- * **Use for**:
- * - `paper_companies`, `paper_mills`, `paper_mill_plants`
- * - `filler_suppliers`, `supplier_mill_linkages`
- * - `markets`
- *
- * This schema is NOT part of URM cutover. It remains as-is after stage29d.
- */
-export function sbIndustry(client: SupabaseClient<any>) {
-  return client.schema('industry' as any);
 }

@@ -70,8 +70,6 @@ const config: Config = {
           partner: { DEFAULT: '#16a34a', foreground: '#ffffff' },
           customer: { DEFAULT: '#ea580c', foreground: '#ffffff' },
           crowdfunding: { DEFAULT: '#db2777', foreground: '#ffffff' },
-          product_launch: { DEFAULT: '#0d9488', foreground: '#ffffff' },
-          sales: { DEFAULT: '#4f46e5', foreground: '#ffffff' },
         },
 
         // ai.draft_status enum 6개에 대한 상태 컬러
