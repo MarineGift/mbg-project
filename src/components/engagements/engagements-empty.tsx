@@ -11,16 +11,16 @@ interface Props {
   partyType: PartyTypeCode;
 }
 
-export function EngagementsPipelineMissing({ partyType: module }: Props) {
+export function EngagementsPipelineMissing({ partyType }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState
       icon={<Briefcase className="h-5 w-5" />}
       title={t('pipelineMissingTitle')}
-      description={t('pipelineMissingDescription', { module })}
+      description={t('pipelineMissingDescription', { partyType })}
       action={
         <Button asChild variant="outline">
-          <Link href={`/settings/pipelines?module=${module}`}>
+          <Link href={`/settings/pipelines?module=${partyType}`}>
             <Settings className="h-4 w-4" />
             {t('configurePipeline')}
           </Link>
@@ -30,7 +30,7 @@ export function EngagementsPipelineMissing({ partyType: module }: Props) {
   );
 }
 
-export function EngagementsEmpty({ partyType: module }: Props) {
+export function EngagementsEmpty({ partyType }: Props) {
   const t = useTranslations('engagements.empty');
   return (
     <EmptyState
