@@ -489,7 +489,6 @@
     "createDescription": "新しい取引先を追加 — 投資家、バイヤー、パートナー、顧客など",
     "editDescription": "取引先情報を編集",
     "name": "名前",
-    "module": "モジュール",
     "partyType": "種別",
     "tier": "Tier",
     "tiers": {

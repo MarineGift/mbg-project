@@ -519,7 +519,6 @@
     "createDescription": "Add a new party - investor, buyer, partner, customer, ...",
     "editDescription": "Edit party information",
     "name": "Name",
-    "module": "Module",
     "partyType": "Type",
     "tier": "Tier",
     "tiers": {
