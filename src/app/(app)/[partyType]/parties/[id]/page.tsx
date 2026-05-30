@@ -152,7 +152,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             <div className="space-y-4">
               <PartySupplyLinksPanel
                 partyId={full.party.id}
-                partyModule={full.party.partyType as 'filler_supplier' | 'paper_mill'}
+                partyType={full.party.partyType as 'filler_supplier' | 'paper_mill'}
                 orgId={orgId}
               />
               <PartyContactsList
