@@ -488,7 +488,6 @@
     "createDescription": "신규 거래처 추가 — 투자자, 바이어, 파트너, 고객 등",
     "editDescription": "거래처 정보 수정",
     "name": "이름",
-    "module": "모듈",
     "partyType": "유형",
     "tier": "Tier",
     "tiers": {
