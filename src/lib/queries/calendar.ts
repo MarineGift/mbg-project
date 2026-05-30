@@ -45,7 +45,7 @@ export async function fetchCalendarItems(
       id, title, location, meeting_url,
       start_at, end_at, is_all_day, status, source,
       party_id, engagement_id, meeting_id,
-      parties ( name )
+      parties ( name:party_name )
     `)
     .gte('start_at', rangeStart)
     .lte('start_at', rangeEnd)
@@ -59,7 +59,7 @@ export async function fetchCalendarItems(
       scheduled_at, duration_min, status,
       location, meeting_url,
       party_id, engagement_id,
-      parties ( name )
+      parties ( name:party_name )
     `)
     .gte('scheduled_at', rangeStart)
     .lte('scheduled_at', rangeEnd)
@@ -70,7 +70,7 @@ export async function fetchCalendarItems(
     supabase.schema('app').from('tasks' as never).select(`
       id, title, due_at,
       party_id,
-      parties ( name )
+      parties ( name:party_name )
     `)
     .not('due_at', 'is', null)
     .gte('due_at', rangeStart)
@@ -82,7 +82,7 @@ export async function fetchCalendarItems(
     supabase.schema('app').from('communications' as never).select(`
       id, subject, occurred_at,
       party_id,
-      parties ( name )
+      parties ( name:party_name )
     `)
     .not('occurred_at', 'is', null)
     .gte('occurred_at', rangeStart)

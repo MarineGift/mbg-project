@@ -144,7 +144,6 @@ export async function fetchMicrosoftEvents(
     const params = new URLSearchParams({
       startDateTime: timeMin,
       endDateTime:   timeMax,
-      $top:          '999',
       $select:       [
         'id','subject','bodyPreview','location','start','end',
         'isAllDay','isCancelled','recurrence','seriesMasterId',
