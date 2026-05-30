@@ -42,13 +42,13 @@ function cn(...classes: (string | undefined | false)[]) {
 
 interface Props {
   partyId: string;
-  partyModule: 'filler_supplier' | 'paper_mill';
+  partyType: 'filler_supplier' | 'paper_mill';
   orgId: string;
 }
 
-export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
-  const isFillerPage = partyModule === 'filler_supplier';
-  const linkedModule = isFillerPage ? 'paper_mill' : 'filler_supplier';
+export function PartySupplyLinksPanel({ partyId, partyType, orgId }: Props) {
+  const isFillerPage = partyType === 'filler_supplier';
+  const linkedPartyType = isFillerPage ? 'paper_mill' : 'filler_supplier';
   const title  = isFillerPage ? 'Paper Mills supplied' : 'Filler suppliers in use';
   const Icon   = isFillerPage ? Factory : Package;
 
@@ -59,7 +59,7 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
   async function loadLinks() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/supply-links?partyId=${partyId}&role=${partyModule}`);
+      const res = await fetch(`/api/supply-links?partyId=${partyId}&role=${partyType}`);
       if (res.ok) setLinks(await res.json());
     } finally { setLoading(false); }
   }
@@ -152,9 +152,9 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
       {showAdd && (
         <AddLinkModal
           partyId={partyId}
-          partyModule={partyModule}
+          partyType={partyType}
           orgId={orgId}
-          linkedModule={linkedModule}
+          linkedPartyType={linkedPartyType}
           onClose={() => setShowAdd(false)}
           onAdded={() => { setShowAdd(false); loadLinks(); }}
         />
@@ -163,9 +163,9 @@ export function PartySupplyLinksPanel({ partyId, partyModule, orgId }: Props) {
   );
 }
 
-function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAdded }: {
-  partyId: string; partyModule: string; orgId: string;
-  linkedModule: string; onClose: () => void; onAdded: () => void;
+function AddLinkModal({ partyId, partyType, orgId, linkedPartyType, onClose, onAdded }: {
+  partyId: string; partyType: string; orgId: string;
+  linkedPartyType: string; onClose: () => void; onAdded: () => void;
 }) {
   const [query, setQuery]         = useState('');
   const [results, setResults]     = useState<SearchParty[]>([]);
@@ -183,19 +183,19 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
       setSearching(true);
       try {
         const res = await fetch(
-          `/api/parties/search?q=${encodeURIComponent(query)}&module=${linkedModule}&limit=10`
+          `/api/parties/search?q=${encodeURIComponent(query)}&module=${linkedPartyType}&limit=10`
         );
         if (res.ok) setResults(await res.json());
       } finally { setSearching(false); }
     }, 300);
     return () => clearTimeout(t);
-  }, [query, linkedModule]);
+  }, [query, linkedPartyType]);
 
   async function save() {
     if (!selected) return;
     setSaving(true);
     try {
-      const isFillerPage = partyModule === 'filler_supplier';
+      const isFillerPage = partyType === 'filler_supplier';
       await fetch('/api/supply-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -235,7 +235,7 @@ function AddLinkModal({ partyId, partyModule, orgId, linkedModule, onClose, onAd
     } finally { setSaving(false); }
   }
 
-  const isFillerPage = partyModule === 'filler_supplier';
+  const isFillerPage = partyType === 'filler_supplier';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
