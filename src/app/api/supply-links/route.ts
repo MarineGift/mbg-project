@@ -10,14 +10,21 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
   const isFillerRole = role === 'filler_supplier';
-  const selfCol   = isFillerRole ? 'filler_party_id' : 'mill_party_id';
-  const linkedCol = isFillerRole ? 'mill_party_id'   : 'filler_party_id';
+  const selfCol = isFillerRole ? 'filler_party_id' : 'mill_party_id';
+
+  // party_type id -> code map (small, stable lookup)
+  const { data: ptRows } = await supabase.schema('app')
+    .from('party_types' as never)
+    .select('id, code');
+  const codeById = new Map<number, string>(
+    ((ptRows ?? []) as { id: number; code: string }[]).map(r => [r.id, r.code]),
+  );
 
   const { data, error } = await supabase.schema('app')
     .from('party_supply_links' as never)
     .select(`id, link_type, product_grade, volume_estimate, notes,
-      linked_filler:filler_party_id(id,name,module,country_code,tier),
-      linked_mill:mill_party_id(id,name,module,country_code,tier)`)
+      linked_filler:filler_party_id(id,party_name,party_type_id,country_code),
+      linked_mill:mill_party_id(id,party_name,party_type_id,country_code)`)
     .eq(selfCol as never, partyId);
 
   if (error) return NextResponse.json([], { status: 500 });
@@ -27,13 +34,13 @@ export async function GET(req: NextRequest) {
     return {
       id:             row.id,
       linked_id:      linked?.id ?? '',
-      linked_name:    linked?.name ?? '',
-      linked_module:  linked?.module ?? '',
+      linked_name:    linked?.party_name ?? '',
+      linked_module:  linked ? (codeById.get(linked.party_type_id) ?? '') : '',
       linked_country: linked?.country_code ?? null,
-      linked_tier:    linked?.tier ?? null,
-      link_type:    row.link_type,
+      linked_tier:    null,
+      link_type:      row.link_type,
       product_grade:  row.product_grade,
-      volume_estimate:     row.volume_estimate,
+      volume_estimate: row.volume_estimate,
       notes:          row.notes,
     };
   });
