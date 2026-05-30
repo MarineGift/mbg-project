@@ -91,7 +91,7 @@
     "queueDescription": "AI-generated replies awaiting review",
     "columns": {
       "status": "Status",
-      "module": "Module",
+      "module": "Party Type",
       "party": "Party",
       "subject": "Subject",
       "category": "Category",
@@ -103,8 +103,8 @@
     "filters": {
       "status": "Status",
       "allStatuses": "All statuses",
-      "module": "Module",
-      "allModules": "All modules",
+      "module": "Party Type",
+      "allModules": "All Party Types",
       "category": "Category",
       "allCategories": "All categories",
       "confidence": "Min confidence",
@@ -349,7 +349,7 @@
     },
     "empty": {
       "pipelineMissingTitle": "No pipeline configured",
-      "pipelineMissingDescription": "The {module} module has no active pipeline. Create one in settings.",
+      "pipelineMissingDescription": "The {partyType} module has no active pipeline. Create one in settings.",
       "configurePipeline": "Configure pipeline",
       "noEngagementsTitle": "No engagements",
       "noEngagementsDescription": "Create engagements from a party page; they will appear here."

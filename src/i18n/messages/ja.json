@@ -91,7 +91,7 @@
     "queueDescription": "レビュー待ちのAI生成返信",
     "columns": {
       "status": "ステータス",
-      "module": "モジュール",
+      "module": "タイプ",
       "party": "取引先",
       "subject": "件名",
       "category": "カテゴリ",
@@ -103,7 +103,7 @@
     "filters": {
       "status": "ステータス",
       "allStatuses": "すべて",
-      "module": "モジュール",
+      "module": "タイプ",
       "allModules": "すべて",
       "category": "カテゴリ",
       "allCategories": "すべて",
@@ -349,7 +349,7 @@
     },
     "empty": {
       "pipelineMissingTitle": "パイプライン未設定",
-      "pipelineMissingDescription": "{module}モジュールにアクティブなパイプラインがありません。設定で作成してください。",
+      "pipelineMissingDescription": "{partyType}モジュールにアクティブなパイプラインがありません。設定で作成してください。",
       "configurePipeline": "パイプラインを設定",
       "noEngagementsTitle": "エンゲージメントがありません",
       "noEngagementsDescription": "取引先ページから新規エンゲージメントを作成すると、ここに表示されます。"

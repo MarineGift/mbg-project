@@ -91,7 +91,7 @@
     "queueDescription": "검토 대기 중인 AI 생성 회신",
     "columns": {
       "status": "상태",
-      "module": "모듈",
+      "module": "유형",
       "party": "거래처",
       "subject": "제목",
       "category": "분류",
@@ -103,8 +103,8 @@
     "filters": {
       "status": "상태",
       "allStatuses": "전체 상태",
-      "module": "모듈",
-      "allModules": "전체 모듈",
+      "module": "유형",
+      "allModules": "전체 유형",
       "category": "분류",
       "allCategories": "전체 분류",
       "confidence": "신뢰도 (최소)",
@@ -348,7 +348,7 @@
     },
     "empty": {
       "pipelineMissingTitle": "파이프라인 미설정",
-      "pipelineMissingDescription": "{module} 모듈에 활성 파이프라인이 없습니다. 설정에서 파이프라인을 생성하세요.",
+      "pipelineMissingDescription": "{partyType} 모듈에 활성 파이프라인이 없습니다. 설정에서 파이프라인을 생성하세요.",
       "configurePipeline": "파이프라인 설정",
       "noEngagementsTitle": "인게이지먼트가 없습니다",
       "noEngagementsDescription": "거래처에서 새 인게이지먼트를 만들면 여기에 표시됩니다."
