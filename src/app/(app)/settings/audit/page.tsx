@@ -34,9 +34,9 @@ export default async function AuditPage() {
 
   // recent 100 changes
   const { data: rows } = await supabase
-    .schema('app').from('audit_log' as never)
-    .select('id, table_name, record_id, operation, actor_user_id, old_data, new_data, changed_at')
-    .order('changed_at', { ascending: false })
+    .schema('audit').from('change_log' as never)
+    .select('id, table_name, record_id, operation, actor_user_id:changed_by, old_data, new_data, changed_at:occurred_at')
+    .order('occurred_at', { ascending: false })
     .limit(100)
 
   // resolve actor names

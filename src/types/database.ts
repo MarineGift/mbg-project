@@ -5952,6 +5952,73 @@ export type Database = {
       [_ in never]: never
     }
   }
+  audit: {
+    Tables: {
+      change_log: {
+        Row: {
+          changed_by: string | null
+          changed_columns: string[] | null
+          client_ip: unknown
+          id: number
+          new_data: Json | null
+          occurred_at: string
+          old_data: Json | null
+          operation: string
+          organization_id: string | null
+          record_id: string | null
+          schema_name: string
+          session_id: string | null
+          table_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          changed_columns?: string[] | null
+          client_ip?: unknown
+          id?: number
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          operation: string
+          organization_id?: string | null
+          record_id?: string | null
+          schema_name: string
+          session_id?: string | null
+          table_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          changed_columns?: string[] | null
+          client_ip?: unknown
+          id?: number
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          operation?: string
+          organization_id?: string | null
+          record_id?: string | null
+          schema_name?: string
+          session_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       [_ in never]: never
@@ -8225,6 +8292,9 @@ export const Constants = {
       ],
       task_status: ["todo", "in_progress", "blocked", "done", "cancelled"],
     },
+  },
+  audit: {
+    Enums: {},
   },
   public: {
     Enums: {
