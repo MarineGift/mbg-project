@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,6 +28,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';import { sendOutboundManual } from '@/lib/actions/communications';
 import type { SendingAddressKind } from '@/types/email';
+import { AttachmentUploader } from '@/components/email/attachment-uploader';
+import type { UploadedAttachment } from '@/lib/actions/upload-attachment';
 
 interface Props {
   /** 미리 채울 수신자 (선택) */
@@ -70,6 +72,7 @@ export function ComposeForm({
   const router = useRouter();
   const t = useTranslations('compose');
   const [isPending, startTransition] = useTransition();
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
 
   const {
     register,
@@ -99,6 +102,7 @@ export function ComposeForm({
         contactId: contactId ?? null,
         inReplyTo: inReplyTo ?? null,
         threadId: threadId ?? null,
+        attachments,
       });
       if (result.ok && result.communicationId) {
         toast.success(t('sent'));
@@ -192,6 +196,14 @@ export function ComposeForm({
             {errors.bodyPlain && (
               <p className="text-xs text-destructive">{errors.bodyPlain.message}</p>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            <AttachmentUploader
+              attachments={attachments}
+              onChange={setAttachments}
+              disabled={isPending}
+            />
           </div>
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
