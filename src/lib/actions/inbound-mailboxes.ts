@@ -21,6 +21,7 @@ export type InboundMailbox = {
 export async function listMailboxes(): Promise<InboundMailbox[]> {
   const sb = createSupabaseAdminClient();
   const { data } = await sb
+    .schema("app")
     .from("inbound_mailboxes")
     .select("id, address, label, imap_host, imap_port, use_tls, is_active, created_at")
     .eq("organization_id", ORG_ID)
@@ -46,7 +47,7 @@ export async function addMailbox(
 
   const sb = createSupabaseAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (sb.rpc as any)("upsert_inbound_mailbox", {
+  const { error } = await (sb.schema("app").rpc as any)("upsert_inbound_mailbox", {
     p_organization_id: ORG_ID,
     p_address: addr,
     p_label: label.trim() || null,
@@ -64,6 +65,7 @@ export async function addMailbox(
 export async function toggleMailbox(id: string, active: boolean): Promise<{ ok: boolean }> {
   const sb = createSupabaseAdminClient();
   await sb
+    .schema("app")
     .from("inbound_mailboxes")
     .update({ is_active: active } as never)
     .eq("id", id)
@@ -75,6 +77,7 @@ export async function toggleMailbox(id: string, active: boolean): Promise<{ ok: 
 export async function deleteMailbox(id: string): Promise<{ ok: boolean }> {
   const sb = createSupabaseAdminClient();
   await sb
+    .schema("app")
     .from("inbound_mailboxes")
     .delete()
     .eq("id", id)
