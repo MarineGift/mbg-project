@@ -871,8 +871,10 @@ export class MailCarrierClient {
       return;
     }
 
-    const filename = sanitizeFilename(att.filename ?? `attachment-${Date.now()}`);
-    const path = `${this.organizationId}/${communicationId}/${randomUUID()}-${filename}`;
+    const rawName = att.filename ?? `attachment-${Date.now()}`;
+    const displayName = sanitizeFilename(rawName);
+    const keyName = toStorageKeySegment(rawName);
+    const path = `${this.organizationId}/${communicationId}/${randomUUID()}-${keyName}`;
     const contentHash = createHash('sha256').update(att.content).digest('hex');
 
     const { error: uploadError } = await this.supabase.storage
@@ -896,7 +898,7 @@ export class MailCarrierClient {
         organization_id: this.organizationId,
         entity_type: 'communication',
         entity_id: communicationId,
-        file_name: filename,
+        file_name: displayName,
         file_size_bytes: att.content.length,
         mime_type: att.contentType ?? 'application/octet-stream',
         storage_provider: 'supabase',
@@ -973,4 +975,29 @@ export function sanitizeFilename(name: string): string {
     sanitized = sanitized.slice(0, 180 - ext.length) + ext;
   }
   return sanitized;
+}
+
+/**
+ * Storage object key segment sanitizer.
+ * Supabase Storage rejects keys containing spaces, brackets, and most
+ * non-ASCII / punctuation chars (HTTP 400 "Invalid key"). This keeps only
+ * [A-Za-z0-9._-], collapses runs to a single underscore, preserves the
+ * extension, and falls back to a timestamp name if the base becomes empty.
+ * The human-readable original name is stored separately in attachments.file_name.
+ */
+export function toStorageKeySegment(name: string): string {
+  const dotIdx = name.lastIndexOf('.');
+  const rawExt = dotIdx > 0 ? name.slice(dotIdx + 1) : '';
+  const rawBase = dotIdx > 0 ? name.slice(0, dotIdx) : name;
+
+  const cleanExt = rawExt.replace(/[^A-Za-z0-9]/g, '').slice(0, 16);
+  let base = rawBase
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '');
+
+  if (base.length === 0) base = `attachment-${Date.now()}`;
+  if (base.length > 160) base = base.slice(0, 160);
+
+  return cleanExt ? `${base}.${cleanExt}` : base;
 }
