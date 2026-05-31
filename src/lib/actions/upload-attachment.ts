@@ -1,6 +1,11 @@
 'use server';
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { cookies } from 'next/headers';
+import { randomUUID } from 'node:crypto';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
+import { toStorageKeySegment } from '@/lib/email/mailcarrier';
+
+const BUCKET = 'email-attachments';
+const MAX_BYTES = 25 * 1024 * 1024;
 
 export interface UploadedAttachment {
   path: string;
@@ -9,33 +14,53 @@ export interface UploadedAttachment {
   mimeType: string;
 }
 
-export async function uploadAttachment(formData: FormData): Promise<UploadedAttachment> {
-  const supabase = await createSupabaseServerClient();
-  const file = formData.get('file') as File;
-  if (!file) throw new Error('파일이 없습니다.');
-  if (file.size > 25 * 1024 * 1024) throw new Error('25MB 초과 파일은 첨부 불가합니다.');
+/** Guard: an object path must live under the caller's organization prefix. */
+function assertOwnedPath(path: string, organizationId: string): void {
+  if (!path.startsWith(`${organizationId}/`)) {
+    throw new Error('Forbidden: attachment path does not belong to your organization.');
+  }
+}
 
-  const ext = file.name.split('.').pop() ?? 'bin';
-  const rand = Math.random().toString(36).slice(2);
-  const path = Date.now().toString() + '-' + rand + '.' + ext;
+export async function uploadAttachment(formData: FormData): Promise<UploadedAttachment> {
+  const auth = await requireAuth();
+  const supabase = await createSupabaseServerClient();
+
+  const file = formData.get('file') as File | null;
+  if (!file) throw new Error('No file provided.');
+  if (file.size > MAX_BYTES) throw new Error('File exceeds the 25MB limit.');
+
+  const safeName = toStorageKeySegment(file.name);
+  const path = `${auth.organizationId}/${randomUUID()}-${safeName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage
-    .from('email-attachments')
-    .upload(path, buffer, { contentType: file.type || 'application/octet-stream', upsert: false });
-  if (error) throw new Error('업로드 실패: ' + error.message);
+    .from(BUCKET)
+    .upload(path, buffer, {
+      contentType: file.type || 'application/octet-stream',
+      upsert: false,
+    });
+  if (error) throw new Error('Upload failed: ' + error.message);
+
   return { path, filename: file.name, size: file.size, mimeType: file.type };
 }
 
 export async function getAttachmentSignedUrl(path: string): Promise<string> {
+  const auth = await requireAuth();
+  assertOwnedPath(path, auth.organizationId);
   const supabase = await createSupabaseServerClient();
+
   const { data, error } = await supabase.storage
-    .from('email-attachments').createSignedUrl(path, 3600);
-  if (error) throw new Error('URL 생성 실패: ' + error.message);
+    .from(BUCKET)
+    .createSignedUrl(path, 3600);
+  if (error) throw new Error('Signed URL generation failed: ' + error.message);
   return data.signedUrl;
 }
 
-export async function deleteAttachment(path: string) {
+export async function deleteAttachment(path: string): Promise<void> {
+  const auth = await requireAuth();
+  assertOwnedPath(path, auth.organizationId);
   const supabase = await createSupabaseServerClient();
-  await supabase.storage.from('email-attachments').remove([path]);
+
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) throw new Error('Delete failed: ' + error.message);
 }
