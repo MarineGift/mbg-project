@@ -30,6 +30,7 @@ import { PartyCommunicationsTimeline } from '@/components/parties/party-communic
 import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
 import { PartyDetailTabs } from '@/components/parties/party-detail-tabs';
+import { PartyInfoCard } from '@/components/parties/party-info-card';
 
 const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
@@ -120,6 +121,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             overview={
               <>
                 <PartyStatsGrid party={full.party} />
+                <PartyInfoCard party={full.party} />
                 <PartySupplyLinksPanel
                   partyId={full.party.id}
                   partyType={full.party.partyType as 'filler_supplier' | 'paper_mill'}
