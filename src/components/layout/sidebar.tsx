@@ -58,6 +58,15 @@ const STATIC_PIPELINES: Pipeline[] = [
   { id: 'static-5', code: 'government_grant', name: 'Government Grant', sort_order: 5 },
 ];
 
+// Directory section -- party-list (info) pages, distinct from pipelines (workflow).
+// Links to /[partyType]/parties where partyType is the enum code.
+type DirectoryItem = { code: string; name: string };
+const DIRECTORY_ITEMS: readonly DirectoryItem[] = [
+  { code: 'investor',        name: 'Investors' },
+  { code: 'paper_mill',      name: 'Paper Mills' },
+  { code: 'filler_supplier', name: 'Filler Suppliers' },
+] as const;
+
 interface NavItem {
   href: string;
   labelKey: string;
@@ -165,6 +174,35 @@ export function Sidebar() {
               badge={item.badgeKey ? badges[item.badgeKey] : undefined}
             />
           ))}
+        </ul>
+
+        <Separator className="my-3" />
+
+        {!collapsed && (
+          <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            Directory
+          </p>
+        )}
+        <ul className="space-y-0.5">
+          {DIRECTORY_ITEMS.map((d) => {
+            const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
+            const href = `/${d.code}/parties`;
+            return (
+              <NavLink
+                key={d.code}
+                href={href}
+                icon={
+                  <span
+                    className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCls)}
+                    aria-hidden
+                  />
+                }
+                label={d.name}
+                active={isActive(pathname, href)}
+                collapsed={collapsed}
+              />
+            );
+          })}
         </ul>
 
         <Separator className="my-3" />
