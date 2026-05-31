@@ -169,7 +169,7 @@ export async function searchContacts(query: string): Promise<ContactResult[]> {
     .from('contacts' as never)
     .select(
       'id, full_name, given_name, family_name, email, title_text, ' +
-      'firm:parties!firm_party_id(party_name)'
+      'firm:parties!party_id(party_name)'
     )
     .is('deleted_at', null)
     .eq('is_active', true)

@@ -135,7 +135,7 @@ export async function searchContacts(query: string): Promise<ContactHit[]> {
     .schema('app')
     .from('contacts' as never)
     .select(
-      'id, full_name, given_name, family_name, title_text, firm:parties!firm_party_id(party_name)'
+      'id, full_name, given_name, family_name, title_text, firm:parties!party_id(party_name)'
     )
     .or(`full_name.ilike.%${q}%,title_text.ilike.%${q}%`)
     .eq('is_active', true)

@@ -19,7 +19,7 @@ export default async function ContactsPage() {
       'title_text, department, role_category, ' +
       'is_decision_maker, is_primary, is_active, ' +
       'last_contacted_at, ' +
-      'firm:parties!firm_party_id(id, party_name, country_code)'
+      'firm:parties!party_id(id, party_name, country_code)'
     )
     .is('deleted_at', null)
     .order('full_name', { ascending: true, nullsFirst: false })
