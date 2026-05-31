@@ -16,6 +16,10 @@ function fmtDate(iso: string | null | undefined): string {
   return format(d, 'yyyy-MM-dd HH:mm');
 }
 
+function isHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s);
+}
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 py-2 border-b border-border/50 last:border-0 sm:flex-row sm:items-start sm:gap-4">
@@ -52,14 +56,18 @@ export function PartyInfoCard({ party }: Props) {
           <Row label="Country">{party.countryCode || DASH}</Row>
           <Row label="Website">
             {party.website ? (
-              <a
-                href={party.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline break-all"
-              >
-                {party.website}
-              </a>
+              isHttpUrl(party.website) ? (
+                <a
+                  href={party.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline break-all"
+                >
+                  {party.website}
+                </a>
+              ) : (
+                <span className="break-words">{party.website}</span>
+              )
             ) : (
               DASH
             )}
