@@ -81,6 +81,13 @@ export function PartyInfoCard({ party }: Props) {
               DASH
             )}
           </Row>
+          <Row label="Notes">
+            {party.notes && party.notes.trim().length > 0 ? (
+              <p className="whitespace-pre-wrap leading-relaxed">{party.notes}</p>
+            ) : (
+              DASH
+            )}
+          </Row>
           <Row label="Created">{fmtDate(party.createdAt)}</Row>
           <Row label="Updated">{fmtDate(party.updatedAt)}</Row>
           <Row label="Party ID">
