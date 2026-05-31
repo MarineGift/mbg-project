@@ -3248,6 +3248,56 @@ export type Database = {
           },
         ]
       }
+      inbound_mailboxes: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          imap_host: string
+          imap_port: number
+          is_active: boolean
+          label: string | null
+          organization_id: string
+          password_encrypted: string | null
+          updated_at: string
+          use_tls: boolean
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id?: string
+          imap_host: string
+          imap_port?: number
+          is_active?: boolean
+          label?: string | null
+          organization_id: string
+          password_encrypted?: string | null
+          updated_at?: string
+          use_tls?: boolean
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          imap_host?: string
+          imap_port?: number
+          is_active?: boolean
+          label?: string | null
+          organization_id?: string
+          password_encrypted?: string | null
+          updated_at?: string
+          use_tls?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbound_mailboxes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       industry_tags: {
         Row: {
           category: string | null
@@ -5915,6 +5965,10 @@ export type Database = {
         Args: { enc_key: string; encrypted: string }
         Returns: string
       }
+      decrypt_inbound_mailbox_password: {
+        Args: { enc_key: string; encrypted: string }
+        Returns: string
+      }
       encrypt_calendar_token: {
         Args: { enc_key: string; plain_text: string }
         Returns: string
@@ -6027,6 +6081,19 @@ export type Database = {
           p_refresh_token: string
           p_scopes: string[]
           p_user_id: string
+        }
+        Returns: string
+      }
+      upsert_inbound_mailbox: {
+        Args: {
+          p_address: string
+          p_enc_key: string
+          p_imap_host: string
+          p_imap_port: number
+          p_label: string
+          p_organization_id: string
+          p_password: string
+          p_use_tls: boolean
         }
         Returns: string
       }
