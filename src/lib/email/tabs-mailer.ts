@@ -333,6 +333,8 @@ export class TabsMailerClient implements ITabsMailerClient {
           r.name ? { name: r.name, address: r.address } : r.address,
         ),
         replyTo: input.replyTo,
+        inReplyTo: input.inReplyTo,
+        references: input.references,
         subject: input.subject,
         text: input.bodyText,
         html: bodyHtml,

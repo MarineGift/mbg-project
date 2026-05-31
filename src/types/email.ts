@@ -217,6 +217,10 @@ export interface SendOneInput {
   fromName: string;
   fromAddress: string;
   replyTo?: string;
+  /** RFC 5322 In-Reply-To header (reply threading). */
+  inReplyTo?: string;
+  /** RFC 5322 References header chain (reply threading). */
+  references?: string[];
   subject: string;
   bodyText: string;
   bodyHtml?: string;
