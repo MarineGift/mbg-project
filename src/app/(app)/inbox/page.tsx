@@ -1,8 +1,9 @@
 /**
  * app/(app)/inbox/page.tsx
  *
- * 받은 편지함 — 통합 communications 목록.
- * inbound + outbound 모두 표시. 검색·필터·페이지네이션.
+ * Inbox list. Defaults to inbound only (DEFAULT_INBOX_FILTERS.direction = 'inbound')
+ * so the count matches the sidebar/dashboard unread-inbound indicator. Users can
+ * switch direction via the filter dropdown. Search + filter + pagination.
  */
 
 import { getTranslations } from 'next-intl/server';
