@@ -42,7 +42,7 @@ export function PartyTasksList({ tasks, partyId, partyType: module }: Props) {
             aria-label={t('addTask')}
           >
             <Plus className="h-4 w-4" />
-            <span className="text-xs">{t('addTask')}</span>
+            <span className="text-xs">Add</span>
           </Button>
         </CardHeader>
         <CardContent>
