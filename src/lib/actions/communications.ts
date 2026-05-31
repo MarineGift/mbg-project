@@ -298,6 +298,8 @@ export async function sendOutboundManual(
       subject: parsed.data.subject,
       bodyText: parsed.data.bodyPlain,   // plain text (fallback)
       bodyHtml: injectedHtml,            // HTML with tracking pixel ← NEW
+      inReplyTo: parsed.data.inReplyTo ?? undefined,
+      references: parsed.data.inReplyTo ? [parsed.data.inReplyTo] : undefined,
       urmHeaders: {
         communicationId: outboundId,
         autoSend: false,
