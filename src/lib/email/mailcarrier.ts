@@ -110,6 +110,20 @@ export interface MailCarrierClientOptions {
    * 미지정 시 기존 MAILCARRIER_USERNAME/PASSWORD 사용 (Phase 1 하위호환).
    */
   kind?: SendingAddressKind;
+  /**
+   * Phase 3: DB(app.inbound_mailboxes) 기반 임의 수신 계정.
+   * 지정 시 kind/env를 무시하고 이 계정의 host/port/username + 복호한 비밀번호로 접속.
+   * 비밀번호는 bytea(암호화)로 받아 connect() 시점에 RPC로 복호한다
+   * (생성자 동기성 유지 — kind/env 경로는 기존 그대로 동기 생성).
+   */
+  account?: {
+    id: string;
+    address: string;
+    host: string;
+    port: number;
+    /** app.inbound_mailboxes.password_encrypted (PostgREST bytea -> "\\x..." 문자열). */
+    passwordEncrypted: string;
+  };
 }
 
 export type InboundHandler = (event: InboundMessageEvent) => Promise<void>;
@@ -122,14 +136,18 @@ const MAX_RECONNECT_ATTEMPTS = 5;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
 export class MailCarrierClient {
-  private client: IImapClient;
+  private client!: IImapClient;
+  /** account 경로는 client를 connect() 시점에 lazy 생성. 생성 완료 여부 추적. */
+  private clientBuilt = false;
+  /** Phase 3: DB 기반 수신 계정 (지정 시 kind/env 무시). */
+  private readonly account?: MailCarrierClientOptions['account'];
   private isRunning = false;
   private reconnectAttempts = 0;
   private readonly parser: ParserFn;
   private readonly nowProvider: () => Date;
   private readonly maxIterations: number | undefined;
   /** kind 식별자 (로그·external_data 메타데이터용). */
-  public readonly kind: SendingAddressKind | 'default';
+  public readonly kind: SendingAddressKind | 'default' | 'account';
   /** 현재 IMAP 인증에 사용 중인 username (로깅용). */
   public readonly username: string;
 
@@ -141,11 +159,29 @@ export class MailCarrierClient {
     this.parser = options.parser ?? ((src) => simpleParser(src));
     this.nowProvider = options.nowProvider ?? (() => new Date());
     this.maxIterations = options.maxIterations;
-    this.kind = options.kind ?? 'default';
+    this.account = options.account;
 
-    const creds = this.resolveCredentials(options.kind);
-    this.username = creds.username;
-    this.client = options.imapClient ?? this.buildClient(creds);
+    if (options.imapClient) {
+      // 테스트 주입 클라이언트 — kind/account 무관하게 그대로 사용.
+      this.kind = options.account ? 'account' : (options.kind ?? 'default');
+      this.username =
+        options.account?.address ??
+        this.resolveCredentials(options.kind).username;
+      this.client = options.imapClient;
+      this.clientBuilt = true;
+    } else if (options.account) {
+      // Phase 3: DB 계정 — 비번 복호가 async라 client는 connect()에서 lazy 생성.
+      this.kind = 'account';
+      this.username = options.account.address;
+      // this.client 는 ensureClient()에서 세팅 (clientBuilt=false 유지)
+    } else {
+      // Phase 1/2: env(kind/default) 기반 — 기존 동작 그대로 동기 생성.
+      this.kind = options.kind ?? 'default';
+      const creds = this.resolveCredentials(options.kind);
+      this.username = creds.username;
+      this.client = this.buildClient(creds);
+      this.clientBuilt = true;
+    }
   }
 
   /**
@@ -197,15 +233,23 @@ export class MailCarrierClient {
     }
   }
 
-  private buildClient(creds: { username: string; password: string }): IImapClient {
+  private buildClient(creds: {
+    username: string;
+    password: string;
+    host?: string;
+    port?: number;
+  }): IImapClient {
+    // account 경로는 계정별 host/port 사용, 그 외는 기존 env 단일값 (하위호환).
+    const host = creds.host ?? env.MAILCARRIER_HOST;
+    const port = creds.port ?? env.MAILCARRIER_PORT;
     // 993: implicit TLS, 143: STARTTLS (ImapFlow가 자동 협상)
-    const isImplicitTls = env.MAILCARRIER_PORT === 993;
+    const isImplicitTls = port === 993;
     // 자체 서명 인증서 허용 옵션 (검증 환경 전용)
     const rejectUnauthorized = env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true;
 
     return new ImapFlow({
-      host: env.MAILCARRIER_HOST,
-      port: env.MAILCARRIER_PORT,
+      host,
+      port,
       secure: isImplicitTls,
       auth: {
         user: creds.username,
@@ -219,10 +263,69 @@ export class MailCarrierClient {
   }
 
   /* --------------------------------------------------------
+   * 클라이언트 lazy 생성 (Phase 3)
+   *
+   * account 경로는 비밀번호 복호가 async라 생성자에서 못 만든다.
+   * connect()/handleReconnect()에서 이 메서드들로 실제 client를 만든다.
+   * env(kind/default) 경로는 생성자에서 이미 만들어 clientBuilt=true이므로 no-op.
+   * -------------------------------------------------------- */
+
+  private async ensureClient(): Promise<void> {
+    if (this.clientBuilt) return;
+    await this.rebuildClient();
+  }
+
+  /** account면 복호한 비번 + 계정 host/port로, 아니면 kind/env creds로 client 재생성. */
+  private async rebuildClient(): Promise<void> {
+    if (this.account) {
+      const password = await this.decryptAccountPassword(
+        this.account.passwordEncrypted,
+      );
+      this.client = this.buildClient({
+        username: this.account.address,
+        password,
+        host: this.account.host,
+        port: this.account.port,
+      });
+    } else {
+      const creds = this.resolveCredentials(
+        this.kind === 'default' ? undefined : (this.kind as SendingAddressKind),
+      );
+      this.client = this.buildClient(creds);
+    }
+    this.clientBuilt = true;
+  }
+
+  /**
+   * app.inbound_mailboxes.password_encrypted(bytea)를 복호.
+   * calendar token-crypto와 동일하게 pgcrypto RPC + CALENDAR_TOKEN_ENCRYPTION_KEY 사용.
+   */
+  private async decryptAccountPassword(encrypted: string): Promise<string> {
+    const encKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
+    if (!encKey) {
+      throw new MailCarrierError(
+        'CALENDAR_TOKEN_ENCRYPTION_KEY not set (required to decrypt inbound mailbox password)',
+      );
+    }
+    const { data, error } = await this.supabase
+      .schema('app')
+      .rpc('decrypt_inbound_mailbox_password', { encrypted, enc_key: encKey });
+    if (error || typeof data !== 'string') {
+      throw new MailCarrierError(
+        `Mailbox password decrypt failed (mailbox=${this.account?.id ?? '?'}): ${
+          error?.message ?? 'no data'
+        }`,
+      );
+    }
+    return data;
+  }
+
+  /* --------------------------------------------------------
    * connect / stop
    * -------------------------------------------------------- */
 
   async connect(): Promise<void> {
+    await this.ensureClient();
     try {
       await this.client.connect();
       await this.client.mailboxOpen(env.MAILCARRIER_INBOX_FOLDER);
@@ -237,6 +340,7 @@ export class MailCarrierClient {
 
   async stop(): Promise<void> {
     this.isRunning = false;
+    if (!this.clientBuilt) return;
     try {
       await this.client.logout();
     } catch {
@@ -847,10 +951,7 @@ export class MailCarrierClient {
     } catch {
       // 이미 끊어진 세션 — 무시
     }
-    const creds = this.resolveCredentials(
-      this.kind === 'default' ? undefined : this.kind,
-    );
-    this.client = this.buildClient(creds);
+    await this.rebuildClient();
     await this.connect();
   }
 }
