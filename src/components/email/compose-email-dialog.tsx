@@ -37,7 +37,7 @@ import {
   type ComposePayload,
   type ComposeMode,
 } from "@/lib/actions/email-compose";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { uploadAttachment, type UploadedAttachment } from "@/lib/actions/upload-attachment";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
 import type { SendingAddressKind } from '@/types/email';
@@ -118,7 +118,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     [props.templates],
   );
 
-  const supabase = createSupabaseBrowserClient();
+  // browser supabase client removed; uploads now go through the uploadAttachment server action
 
   // ?? Common form state ???????????????????????????????????
   const [activeTab, setActiveTab] = useState<TabId>(props.initialTab ?? "direct");
@@ -202,25 +202,31 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     setAttachments((prev) => [...prev, ...newItems]);
 
     for (const item of newItems) {
-      const path = `${props.partyId}/${Date.now()}-${item.file.name}`;
-      const { error } = await supabase.storage
-        .from("email-attachments")
-        .upload(path, item.file, { upsert: false });
-
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.file === item.file
-            ? {
-                ...a,
-                uploading: false,
-                storagePath: error ? null : path,
-                error: error?.message,
-              }
-            : a,
-        ),
-      );
-
-      if (error) toast.error(`Upload failed: ${item.file.name}`);
+      // Route through the uploadAttachment server action: it enforces the org-id
+      // path prefix (storage RLS isolation) and whitelist-sanitizes the object key
+      // via toStorageKeySegment, so spaces/brackets/Hangul cannot trigger "Invalid key".
+      try {
+        const fd = new FormData();
+        fd.append("file", item.file);
+        const uploaded = await uploadAttachment(fd);
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.file === item.file
+              ? { ...a, uploading: false, storagePath: uploaded.path }
+              : a,
+          ),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "upload failed";
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.file === item.file
+              ? { ...a, uploading: false, storagePath: null, error: msg }
+              : a,
+          ),
+        );
+        toast.error(`Upload failed: ${item.file.name}`);
+      }
     }
 
     e.target.value = "";
@@ -250,9 +256,14 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       return;
     }
 
-    const attachmentPaths = attachments
-      .filter((a) => a.storagePath)
-      .map((a) => a.storagePath!);
+    const uploadedAttachments = attachments.filter((a) => a.storagePath);
+    const attachmentPaths = uploadedAttachments.map((a) => a.storagePath!);
+    const attachmentsMeta: UploadedAttachment[] = uploadedAttachments.map((a) => ({
+      path: a.storagePath!,
+      filename: a.file.name,
+      size: a.file.size,
+      mimeType: a.file.type || "application/octet-stream",
+    }));
 
     // Determine final ComposeMode for the action
     // (template tab => "template" payload, ai tab + reply => "reply", direct + reply => "reply", else "new")
@@ -279,6 +290,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         replyToMessageId: props.replyToMessageId,
         threadId: props.threadId,
         attachmentPaths,
+        attachments: attachmentsMeta,
         useSignature,
         fromKind,
       };
