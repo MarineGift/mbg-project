@@ -1,7 +1,22 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+
+const TAB_VALUES = [
+  'overview',
+  'activity',
+  'communications',
+  'contacts',
+  'engagements',
+  'tasks',
+  'notes',
+] as const;
+type TabValue = (typeof TAB_VALUES)[number];
+const DEFAULT_TAB: TabValue = 'overview';
+const TRIGGER = 'text-sm h-7';
 
 interface PartyDetailTabsProps {
   overview: ReactNode;
@@ -13,8 +28,6 @@ interface PartyDetailTabsProps {
   notes: ReactNode;
 }
 
-const TRIGGER = 'text-sm h-7';
-
 export function PartyDetailTabs({
   overview,
   activity,
@@ -24,8 +37,28 @@ export function PartyDetailTabs({
   tasks,
   notes,
 }: PartyDetailTabsProps) {
+  const searchParams = useSearchParams();
+  const fromUrl = searchParams.get('tab');
+  const initial: TabValue = (TAB_VALUES as readonly string[]).includes(fromUrl ?? '')
+    ? (fromUrl as TabValue)
+    : DEFAULT_TAB;
+
+  const handleChange = useCallback((value: string) => {
+    const params = new URLSearchParams(window.location.search);
+    if (value === DEFAULT_TAB) {
+      params.delete('tab');
+    } else {
+      params.set('tab', value);
+    }
+    const qs = params.toString();
+    const url = qs
+      ? `${window.location.pathname}?${qs}`
+      : window.location.pathname;
+    window.history.replaceState(null, '', url);
+  }, []);
+
   return (
-    <Tabs defaultValue="overview" className="w-full">
+    <Tabs defaultValue={initial} onValueChange={handleChange} className="w-full">
       <TabsList className="h-auto flex-wrap justify-start gap-1">
         <TabsTrigger value="overview" className={TRIGGER}>Overview</TabsTrigger>
         <TabsTrigger value="activity" className={TRIGGER}>Activity</TabsTrigger>
