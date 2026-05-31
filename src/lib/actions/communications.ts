@@ -92,6 +92,17 @@ const composeSchema = z.object({
   threadId: z.string().max(500).optional().nullable(),
   /** D6-7b-2: which sending account to send from (default: shared = contact@) */
   fromKind: z.enum(['personal', 'role', 'shared']).optional().default('shared'),
+  attachments: z
+    .array(
+      z.object({
+        path: z.string().max(500),
+        filename: z.string().max(255),
+        size: z.number().int().nonnegative(),
+        mimeType: z.string().max(255),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 /* ──────────────────────────────────────────────────────────
@@ -231,6 +242,23 @@ export async function sendOutboundManual(
     }
 
     // ── [B-2] TABS Mailer 발송 ──────────────────────────────────────
+    // resolve outbound attachments from storage (download -> Buffer for nodemailer)
+    const mailAttachments: { filename: string; content: Buffer; contentType?: string }[] = [];
+    for (const att of parsed.data.attachments ?? []) {
+      const { data: fileData, error: dlErr } = await supabase.storage
+        .from('email-attachments')
+        .download(att.path);
+      if (dlErr || !fileData) {
+        console.error('[communications] attachment download failed:', att.path, dlErr);
+        continue;
+      }
+      mailAttachments.push({
+        filename: att.filename || (att.path.split('/').pop() ?? 'attachment'),
+        content: Buffer.from(await fileData.arrayBuffer()),
+        contentType: att.mimeType || undefined,
+      });
+    }
+
     const mailer = await createTabsMailer();
     const sendResult = await mailer.sendOne({
       to: { address: parsed.data.to },
@@ -244,6 +272,7 @@ export async function sendOutboundManual(
         communicationId: outboundId,
         autoSend: false,
       },
+      attachments: mailAttachments,
       sendingAddressKind: kind,  // D6-7b-2: kind-aware SMTP credential selection
       traceLabel: `manual-compose:${auth.userId}`,
     });
@@ -259,6 +288,25 @@ export async function sendOutboundManual(
       } as never)
       .eq('id', outboundId)
       .eq('organization_id', auth.organizationId);
+
+    if (parsed.data.attachments && parsed.data.attachments.length > 0) {
+      const attachmentRows = parsed.data.attachments.map((m) => ({
+        organization_id: auth.organizationId,
+        entity_type: 'communication',
+        entity_id: outboundId,
+        file_name: m.filename,
+        file_size_bytes: m.size ?? 0,
+        mime_type: m.mimeType || 'application/octet-stream',
+        storage_provider: 'supabase',
+        storage_bucket: 'email-attachments',
+        storage_path: m.path,
+      }));
+      const { error: attErr } = await supabase
+        .schema('app')
+        .from('attachments' as never)
+        .insert(attachmentRows as never);
+      if (attErr) console.error('[communications] attachment record error:', attErr);
+    }
 
     revalidatePath('/inbox');
     if (parsed.data.partyId) {
