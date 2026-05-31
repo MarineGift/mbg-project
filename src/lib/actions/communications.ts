@@ -71,6 +71,7 @@ export interface ComposeResult {
     | 'no_sending_email'
     | 'send_failed'
     | 'database'
+    | 'not_whitelisted'
     | 'not_found';
   errorMessage?: string;
   /** 성공 시 outbound communications row id */
@@ -155,6 +156,35 @@ export async function sendOutboundManual(
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // [whitelist] 2a: enforce recipient whitelist (parity with dialog sendEmail).
+  // Checks 'to' against active app.email_whitelist patterns by exact address OR
+  // domain. Fail fast before any DB writes. (cc not checked - decision 2a.)
+  const toDomain = parsed.data.to.split('@')[1]?.toLowerCase();
+  if (toDomain) {
+    const { data: wlRows, error: wlErr } = await supabase
+      .schema('app')
+      .from('email_whitelist' as never)
+      .select('id')
+      .eq('organization_id', auth.organizationId)
+      .eq('is_active', true)
+      .in('pattern', [toDomain, parsed.data.to.toLowerCase()])
+      .limit(1);
+    if (wlErr) {
+      return {
+        ok: false,
+        errorCode: 'database',
+        errorMessage: `Whitelist lookup failed: ${wlErr.message}`,
+      };
+    }
+    if (!wlRows || (wlRows as unknown[]).length === 0) {
+      return {
+        ok: false,
+        errorCode: 'not_whitelisted',
+        errorMessage: `Recipient not in whitelist: ${parsed.data.to}`,
+      };
+    }
+  }
 
   // 사용자 발신 자격 조회
   const { data: userRaw } = await supabase
