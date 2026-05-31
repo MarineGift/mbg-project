@@ -1,7 +1,7 @@
 // src/lib/actions/inbound-mailboxes.ts
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const ORG_ID = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID!;
 const ENC_KEY = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY!;
@@ -19,7 +19,7 @@ export type InboundMailbox = {
 
 // 목록 — password_encrypted 는 절대 select 하지 않는다 (평문/암호문 모두 클라이언트로 안 감)
 export async function listMailboxes(): Promise<InboundMailbox[]> {
-  const sb = await createSupabaseServerClient();
+  const sb = createSupabaseAdminClient();
   const { data } = await sb
     .from("inbound_mailboxes")
     .select("id, address, label, imap_host, imap_port, use_tls, is_active, created_at")
@@ -44,7 +44,7 @@ export async function addMailbox(
   if (!password) return { ok: false, error: "비밀번호를 입력하세요" };
   if (!Number.isFinite(port) || port <= 0) return { ok: false, error: "포트가 올바르지 않습니다" };
 
-  const sb = await createSupabaseServerClient();
+  const sb = createSupabaseAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (sb.rpc as any)("upsert_inbound_mailbox", {
     p_organization_id: ORG_ID,
@@ -62,7 +62,7 @@ export async function addMailbox(
 }
 
 export async function toggleMailbox(id: string, active: boolean): Promise<{ ok: boolean }> {
-  const sb = await createSupabaseServerClient();
+  const sb = createSupabaseAdminClient();
   await sb
     .from("inbound_mailboxes")
     .update({ is_active: active } as never)
@@ -73,7 +73,7 @@ export async function toggleMailbox(id: string, active: boolean): Promise<{ ok: 
 }
 
 export async function deleteMailbox(id: string): Promise<{ ok: boolean }> {
-  const sb = await createSupabaseServerClient();
+  const sb = createSupabaseAdminClient();
   await sb
     .from("inbound_mailboxes")
     .delete()
