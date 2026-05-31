@@ -67,7 +67,7 @@ export default async function ContactDetailPage({ params }: Props) {
       'title_text, department, role_category, seniority_level, ' +
       'is_decision_maker, is_primary, is_active, ' +
       'last_contacted_at, notes, ' +
-      'firm:parties!firm_party_id(id, party_name, country_code, website)'
+      'firm:parties!party_id(id, party_name, country_code, website)'
     )
     .eq('id', params.id)
     .is('deleted_at', null)

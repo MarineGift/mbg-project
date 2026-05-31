@@ -76,7 +76,7 @@ async function renderWithContext(
     const { data: primary } = await supabase
       .schema("app").from("contacts" as never)
       .select("id")
-      .eq("firm_party_id", partyId)
+      .eq("party_id", partyId)
       .eq("is_primary", true)
       .maybeSingle();
     resolvedContactId = primary?.id ?? null;

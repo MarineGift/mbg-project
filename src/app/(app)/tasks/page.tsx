@@ -46,7 +46,7 @@ export default async function TasksPage({
        ),
        assignee:contacts!assigned_to_contact_id(
          id, full_name, given_name, family_name, title_text,
-         firm:parties!firm_party_id(party_name)
+         firm:parties!party_id(party_name)
        )`
     )
     // .is('deleted_at', null)   // <- re-enable ONLY if app.tasks gains a deleted_at column

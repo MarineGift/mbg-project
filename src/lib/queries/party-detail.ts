@@ -168,7 +168,7 @@ export async function fetchPartyDetail(
       .select('id, full_name, email, title_text, phone_e164, is_primary', {
         count: 'exact',
       })
-      .eq('firm_party_id', partyId)
+      .eq('party_id', partyId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
