@@ -29,6 +29,7 @@ import { CountryPeersPanel } from '@/components/parties/country-peers-panel';
 import { PartyCommunicationsTimeline } from '@/components/parties/party-communications-timeline';
 import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
+import { PartyDetailTabs } from '@/components/parties/party-detail-tabs';
 
 const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'investor',
@@ -114,70 +115,79 @@ export default async function PartyDetailPage({ params }: PageProps) {
       <PartyHeader party={full.party} />
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <PartyStatsGrid party={full.party} />
-
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            <div className="space-y-4">
-              <ActivityTimeline items={full.timeline} />
-
-              {/* Phase 22a — Communications Timeline (sent + received, threaded) */}
-              {orgId && (
-                <PartyCommunicationsTimeline
+        <div className="max-w-7xl mx-auto">
+          <PartyDetailTabs
+            overview={
+              <>
+                <PartyStatsGrid party={full.party} />
+                <PartySupplyLinksPanel
                   partyId={full.party.id}
-                  partyName={full.party.name}
-                  defaultContactEmail={defaultContact?.email ?? null}
-                  defaultContactId={defaultContact?.id ?? null}
-                  defaultContactName={defaultContactName}
-                  items={commTimeline}
-                  stats={commStats}
-                  templates={templates}
+                  partyType={full.party.partyType as 'filler_supplier' | 'paper_mill'}
                   orgId={orgId}
                 />
-              )}
-
-              <PartyNotesCard notes={full.party.notes} partyId={full.party.id} partyType={full.party.partyType} />
-              <PartyMeetingsList partyId={full.party.id} meetings={meetings as never} />
-
-              {/* Phase 21b — Email Sequences */}
-              {orgId && (
-                <PartySequencePanel
-                  partyId={full.party.id}
-                  orgId={orgId}
-                  contacts={sequenceContacts}
-                />
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <PartySupplyLinksPanel
-                partyId={full.party.id}
-                partyType={full.party.partyType as 'filler_supplier' | 'paper_mill'}
-                orgId={orgId}
-              />
+                {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
+                  <CountryPeersPanel
+                    partyId={full.party.id}
+                    country={partyCountry}
+                    currentModule={urlModule as 'paper_mill' | 'filler_supplier'}
+                  />
+                )}
+              </>
+            }
+            activity={
+              <>
+                <ActivityTimeline items={full.timeline} />
+                <PartyMeetingsList partyId={full.party.id} meetings={meetings as never} />
+              </>
+            }
+            communications={
+              <>
+                {orgId && (
+                  <PartyCommunicationsTimeline
+                    partyId={full.party.id}
+                    partyName={full.party.name}
+                    defaultContactEmail={defaultContact?.email ?? null}
+                    defaultContactId={defaultContact?.id ?? null}
+                    defaultContactName={defaultContactName}
+                    items={commTimeline}
+                    stats={commStats}
+                    templates={templates}
+                    orgId={orgId}
+                  />
+                )}
+                {orgId && (
+                  <PartySequencePanel
+                    partyId={full.party.id}
+                    orgId={orgId}
+                    contacts={sequenceContacts}
+                  />
+                )}
+              </>
+            }
+            contacts={
               <PartyContactsList
                 contacts={full.contacts}
                 partyId={full.party.id}
               />
+            }
+            engagements={
               <PartyEngagementsList
                 engagements={full.engagements}
                 partyId={full.party.id}
                 partyType={full.party.partyType}
               />
+            }
+            tasks={
               <PartyTasksList
                 tasks={full.tasks}
                 partyId={full.party.id}
                 partyType={full.party.partyType}
               />
-              {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
-                <CountryPeersPanel
-                  partyId={full.party.id}
-                  country={partyCountry}
-                  currentModule={urlModule as 'paper_mill' | 'filler_supplier'}
-                />
-              )}
-            </div>
-          </div>
+            }
+            notes={
+              <PartyNotesCard notes={full.party.notes} partyId={full.party.id} partyType={full.party.partyType} />
+            }
+          />
         </div>
       </div>
     </div>
