@@ -29,7 +29,8 @@ export interface ComposePayload {
   templateId?: string;
   replyToMessageId?: string;       // reply 모드
   threadId?: string;
-  attachmentPaths?: string[];      // Supabase Storage paths
+  attachmentPaths?: string[];      // Supabase Storage paths (legacy / fallback)
+  attachments?: Array<{ path: string; filename: string; size: number; mimeType: string }>; // preferred: rich metadata
   useSignature?: boolean;          // 서명 첨부 여부 (기본 true)
   fromKind?: SendingAddressKind;  // D6-7b: kind-aware SMTP sender selection
 }
@@ -296,10 +297,30 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   );
 
   // 첨부파일 처리
-  const attachments = await resolveAttachments(
-    supabase,
-    payload.attachmentPaths ?? []
-  );
+  const attachmentMetas =
+    payload.attachments && payload.attachments.length > 0
+      ? payload.attachments
+      : (payload.attachmentPaths ?? []).map((p) => ({
+          path: p,
+          filename: p.split("/").pop() ?? "attachment",
+          size: 0,
+          mimeType: "application/octet-stream",
+        }));
+  const attachments: nodemailer.SendMailOptions["attachments"] = [];
+  for (const meta of attachmentMetas) {
+    const { data: fileData, error: dlErr } = await supabase.storage
+      .from("email-attachments")
+      .download(meta.path);
+    if (dlErr || !fileData) {
+      console.error("[sendEmail] attachment download failed:", meta.path, dlErr);
+      continue;
+    }
+    attachments.push({
+      filename: meta.filename || (meta.path.split("/").pop() ?? "attachment"),
+      content: Buffer.from(await fileData.arrayBuffer()),
+      contentType: meta.mimeType || undefined,
+    });
+  }
 
   // SMTP 발송
   const kind: SendingAddressKind = payload.fromKind ?? 'shared';
@@ -356,6 +377,26 @@ export async function sendEmail(payload: ComposePayload): Promise<{
 
   if (dbErr) {
     console.error("[sendEmail] DB 저장 오류:", dbErr);
+  }
+
+  if (comm?.id && attachmentMetas.length > 0) {
+    const attachmentRows = attachmentMetas.map((m) => ({
+      organization_id: orgId,
+      entity_type: "communication",
+      entity_id: comm.id,
+      file_name: m.filename,
+      file_size_bytes: m.size ?? 0,
+      mime_type: m.mimeType || "application/octet-stream",
+      storage_provider: "supabase",
+      storage_bucket: "email-attachments",
+      storage_path: m.path,
+    }));
+    const { error: attErr } = await supabase
+      .schema("app").from("attachments" as never)
+      .insert(attachmentRows);
+    if (attErr) {
+      console.error("[sendEmail] attachment record error:", attErr);
+    }
   }
 
   return { success: true, messageId: comm?.id };
