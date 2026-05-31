@@ -112,25 +112,90 @@ export async function runMailCarrierWorker(): Promise<void> {
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  // ─ kind 목록 결정 ─
-  // MAILCARRIER_POLL_KINDS 비어있으면 Phase 1 fallback (단일 MAILCARRIER_USERNAME)
-  const configuredKinds = env.MAILCARRIER_POLL_KINDS;
-  const targetKinds: Array<SendingAddressKind | undefined> =
-    configuredKinds.length > 0 ? configuredKinds : [undefined];
+  // ─ 수신 계정 목록 결정 ─
+  // Phase 3: app.inbound_mailboxes(active)에 행이 있으면 그 계정들을 폴링.
+  //          행이 0개면 기존 env 경로(MAILCARRIER_POLL_KINDS / 단일 fallback)로 폴백.
+  //          (service_role이라 RLS 우회)
+  type InboundMailboxRow = {
+    id: string;
+    address: string;
+    imap_host: string;
+    imap_port: number;
+    password_encrypted: string;
+  };
+
+  let dbMailboxes: InboundMailboxRow[] = [];
+  try {
+    const { data, error } = await supabase
+      .schema('app')
+      .from('inbound_mailboxes')
+      .select('id, address, imap_host, imap_port, password_encrypted')
+      .eq('organization_id', ORG_ID)
+      .eq('is_active', true);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[${label}] inbound_mailboxes 조회 실패 — env 경로로 폴백:`,
+        error.message,
+      );
+    } else if (data) {
+      dbMailboxes = data as unknown as InboundMailboxRow[];
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[${label}] inbound_mailboxes 조회 예외 — env 경로로 폴백:`,
+      (err as Error).message,
+    );
+  }
 
   // ─ MailCarrierClient 인스턴스 생성 ─
   const carriers: MailCarrierClient[] = [];
-  for (const kind of targetKinds) {
-    try {
-      const carrier = new MailCarrierClient(supabase, ORG_ID, { kind });
-      carriers.push(carrier);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[${label}:${kind ?? 'default'}] 자격증명 누락 또는 잘못된 설정:`,
-        (err as Error).message,
-      );
-      // 한 kind 실패 시 다른 kind는 계속
+
+  if (dbMailboxes.length > 0) {
+    // Phase 3: DB 기반 임의 수신 계정 (계정별 host/port + 암호화 비번)
+    // eslint-disable-next-line no-console
+    console.log(
+      `[${label}] using ${dbMailboxes.length} DB mailbox(es) from app.inbound_mailboxes`,
+    );
+    for (const mb of dbMailboxes) {
+      try {
+        const carrier = new MailCarrierClient(supabase, ORG_ID, {
+          account: {
+            id: mb.id,
+            address: mb.address,
+            host: mb.imap_host,
+            port: mb.imap_port,
+            passwordEncrypted: mb.password_encrypted,
+          },
+        });
+        carriers.push(carrier);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[${label}:${mb.address}] 계정 초기화 실패:`,
+          (err as Error).message,
+        );
+        // 한 계정 실패 시 다른 계정은 계속
+      }
+    }
+  } else {
+    // Phase 1/2 폴백: env kind 목록 (DB 미등록 시 기존 동작 유지)
+    const configuredKinds = env.MAILCARRIER_POLL_KINDS;
+    const targetKinds: Array<SendingAddressKind | undefined> =
+      configuredKinds.length > 0 ? configuredKinds : [undefined];
+    for (const kind of targetKinds) {
+      try {
+        const carrier = new MailCarrierClient(supabase, ORG_ID, { kind });
+        carriers.push(carrier);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[${label}:${kind ?? 'default'}] 자격증명 누락 또는 잘못된 설정:`,
+          (err as Error).message,
+        );
+        // 한 kind 실패 시 다른 kind는 계속
+      }
     }
   }
 
@@ -191,7 +256,7 @@ export async function runMailCarrierWorker(): Promise<void> {
 
   // ─ 새 메일 처리 콜백 (carrier별) ─
   const makeOnMessage =
-    (carrierKind: SendingAddressKind | 'default') =>
+    (carrierKind: SendingAddressKind | 'default' | 'account') =>
     async (event: InboundMessageEvent): Promise<void> => {
       if (ctl.isShuttingDown()) {
         return;
