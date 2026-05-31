@@ -13,6 +13,8 @@ import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
 import type { SendingAddressKind } from '@/types/email';
 import Anthropic from "@anthropic-ai/sdk";
+import { createTabsMailer } from "@/lib/email/tabs-mailer";
+import { createEmailTracking } from "@/lib/actions/email-tracking";
 
 // ─────────────────────────────────────────────
 // Types
@@ -324,35 +326,11 @@ export async function sendEmail(payload: ComposePayload): Promise<{
 
   // SMTP 발송
   const kind: SendingAddressKind = payload.fromKind ?? 'shared';
-  const transporter = createTransporter(kind);
   const senderInfo = resolveSenderInfo(kind);
-  const fromAddress = `${senderInfo.displayName} <${senderInfo.username}>`;
 
-  let mailOptions: nodemailer.SendMailOptions = {
-    from: fromAddress,
-    to: payload.to,
-    subject: finalSubject,
-    html: finalBody,
-    attachments,
-  };
-
-  // Reply 모드: In-Reply-To / References 헤더
-  if (payload.mode === "reply" && payload.replyToMessageId) {
-    mailOptions.inReplyTo = payload.replyToMessageId;
-    mailOptions.references = payload.replyToMessageId;
-  }
-
-  let smtpMessageId: string | undefined;
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    smtpMessageId = info.messageId;
-  } catch (err: any) {
-    console.error("[sendEmail] SMTP 오류:", err);
-    return { success: false, error: err.message };
-  }
-
-  // DB 저장 (app.communications)
-  const { data: comm, error: dbErr } = await supabase
+  // [A] communications INSERT (status='sending') first, so we have an id for the
+  // tracking pixel + X-URM-communication-id header (parity with sendOutboundManual).
+  const { data: comm, error: insErr } = await supabase
     .schema("app").from("communications" as never)
     .insert({
       organization_id: orgId,
@@ -363,27 +341,94 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       subject: finalSubject,
       body_html: finalBody,
       from_address: senderInfo.username,
-      from_name:    senderInfo.displayName,
+      from_name: senderInfo.displayName,
       to_addresses: [payload.to],
-      message_id: smtpMessageId,
-      thread_id: payload.threadId ?? smtpMessageId,
+      thread_id: payload.threadId ?? null,
       in_reply_to: payload.replyToMessageId ?? null,
-      // attachment_paths: payload.attachmentPaths ?? [], // column not in communications - add via migration
-      status: "sent",
-      sent_at: new Date().toISOString(),
+      status: "sending",
+      ai_generated: false,
+      occurred_at: new Date().toISOString(),
     })
     .select("id")
     .single();
 
-  if (dbErr) {
-    console.error("[sendEmail] DB 저장 오류:", dbErr);
+  if (insErr || !comm?.id) {
+    console.error("[sendEmail] DB insert error:", insErr);
+    return { success: false, error: insErr?.message ?? "DB insert failed" };
+  }
+  const outboundId = comm.id as string;
+
+  // [B] app-level email tracking: pixel + click rewrite (decision 1a).
+  // Non-blocking: if tracking setup fails, still send.
+  let injectedHtml = finalBody;
+  try {
+    const trackingResult = await createEmailTracking({
+      orgId,
+      communicationId: outboundId,
+      partyId: payload.partyId ?? undefined,
+      contactId: payload.contactId ?? undefined,
+      subject: finalSubject,
+      sentTo: payload.to,
+      htmlBody: finalBody,
+    });
+    injectedHtml = trackingResult.injectedHtml;
+  } catch (trackingErr) {
+    console.warn("[sendEmail] tracking setup failed:", trackingErr);
   }
 
-  if (comm?.id && attachmentMetas.length > 0) {
+  // [C] send via TabsMailer (tracking pixel in html + URM header + reply threading).
+  const bodyTextFallback = finalBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  try {
+    const mailer = await createTabsMailer();
+    const sendResult = await mailer.sendOne({
+      to: { address: payload.to },
+      fromName: senderInfo.displayName,
+      fromAddress: senderInfo.username,
+      subject: finalSubject,
+      bodyText: bodyTextFallback,
+      bodyHtml: injectedHtml,
+      inReplyTo:
+        payload.mode === "reply" ? (payload.replyToMessageId ?? undefined) : undefined,
+      references:
+        payload.mode === "reply" && payload.replyToMessageId
+          ? [payload.replyToMessageId]
+          : undefined,
+      urmHeaders: { communicationId: outboundId, autoSend: false },
+      attachments,
+      sendingAddressKind: kind,
+      traceLabel: `dialog-compose:${user.id}`,
+    });
+
+    // [D] communications UPDATE (sent). Root a new thread at its own message-id.
+    await supabase
+      .schema("app").from("communications" as never)
+      .update({
+        message_id: sendResult.messageId,
+        thread_id: payload.threadId ?? sendResult.messageId,
+        status: "sent",
+        sent_at: sendResult.sentAt,
+      } as never)
+      .eq("id", outboundId)
+      .eq("organization_id", orgId);
+  } catch (sendErr: any) {
+    console.error("[sendEmail] send error:", sendErr);
+    await supabase
+      .schema("app").from("communications" as never)
+      .update({
+        status: "failed",
+        error_message: sendErr?.message ?? String(sendErr),
+      } as never)
+      .eq("id", outboundId)
+      .eq("organization_id", orgId);
+    return { success: false, error: sendErr?.message ?? "Send failed" };
+  }
+
+  // [E] attachment records (app.attachments)
+  if (attachmentMetas.length > 0) {
     const attachmentRows = attachmentMetas.map((m) => ({
       organization_id: orgId,
       entity_type: "communication",
-      entity_id: comm.id,
+      entity_id: outboundId,
       file_name: m.filename,
       file_size_bytes: m.size ?? 0,
       mime_type: m.mimeType || "application/octet-stream",
@@ -394,12 +439,10 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     const { error: attErr } = await supabase
       .schema("app").from("attachments" as never)
       .insert(attachmentRows);
-    if (attErr) {
-      console.error("[sendEmail] attachment record error:", attErr);
-    }
+    if (attErr) console.error("[sendEmail] attachment record error:", attErr);
   }
 
-  return { success: true, messageId: comm?.id };
+  return { success: true, messageId: outboundId };
 }
 
 // ─────────────────────────────────────────────
