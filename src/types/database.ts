@@ -608,6 +608,114 @@ export type Database = {
   }
   app: {
     Tables: {
+      _contacts_dedup_backup_20260530: {
+        Row: {
+          background: string | null
+          contact_type_id: number | null
+          created_at: string | null
+          deleted_at: string | null
+          department: string | null
+          education: string | null
+          email: string | null
+          email_secondary: string | null
+          extra_data: Json | null
+          family_name: string | null
+          focus_areas: string[] | null
+          full_name: string | null
+          given_name: string | null
+          id: string | null
+          is_active: boolean | null
+          is_decision_maker: boolean | null
+          is_primary: boolean | null
+          joined_at: string | null
+          last_contacted_at: string | null
+          left_at: string | null
+          linkedin_url: string | null
+          notes: string | null
+          organization_id: string | null
+          party_id: string | null
+          phone_e164: string | null
+          phone_mobile: string | null
+          role_category: string | null
+          seniority_level: string | null
+          source: string | null
+          source_external_id: string | null
+          title_text: string | null
+          twitter_handle: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          background?: string | null
+          contact_type_id?: number | null
+          created_at?: string | null
+          deleted_at?: string | null
+          department?: string | null
+          education?: string | null
+          email?: string | null
+          email_secondary?: string | null
+          extra_data?: Json | null
+          family_name?: string | null
+          focus_areas?: string[] | null
+          full_name?: string | null
+          given_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_decision_maker?: boolean | null
+          is_primary?: boolean | null
+          joined_at?: string | null
+          last_contacted_at?: string | null
+          left_at?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          party_id?: string | null
+          phone_e164?: string | null
+          phone_mobile?: string | null
+          role_category?: string | null
+          seniority_level?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          title_text?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          background?: string | null
+          contact_type_id?: number | null
+          created_at?: string | null
+          deleted_at?: string | null
+          department?: string | null
+          education?: string | null
+          email?: string | null
+          email_secondary?: string | null
+          extra_data?: Json | null
+          family_name?: string | null
+          focus_areas?: string[] | null
+          full_name?: string | null
+          given_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_decision_maker?: boolean | null
+          is_primary?: boolean | null
+          joined_at?: string | null
+          last_contacted_at?: string | null
+          left_at?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          party_id?: string | null
+          phone_e164?: string | null
+          phone_mobile?: string | null
+          role_category?: string | null
+          seniority_level?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          title_text?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       attachments: {
         Row: {
           content_hash_sha256: string | null
@@ -3170,6 +3278,36 @@ export type Database = {
         }
         Relationships: []
       }
+      investment_stages: {
+        Row: {
+          code: string
+          id: number
+          label_en: string
+          label_ja: string
+          label_ko: string
+          sort_order: number
+          stage_group: string | null
+        }
+        Insert: {
+          code: string
+          id: number
+          label_en: string
+          label_ja: string
+          label_ko: string
+          sort_order?: number
+          stage_group?: string | null
+        }
+        Update: {
+          code?: string
+          id?: number
+          label_en?: string
+          label_ja?: string
+          label_ko?: string
+          sort_order?: number
+          stage_group?: string | null
+        }
+        Relationships: []
+      }
       investor_portfolio_companies: {
         Row: {
           created_at: string
@@ -3261,7 +3399,6 @@ export type Database = {
           fund_vintage_year: number | null
           geographic_focus: string[]
           id: string
-          investment_stages: string[]
           is_lead_investor: boolean
           is_strategic: boolean
           organization_id: string
@@ -3282,7 +3419,6 @@ export type Database = {
           fund_vintage_year?: number | null
           geographic_focus?: string[]
           id?: string
-          investment_stages?: string[]
           is_lead_investor?: boolean
           is_strategic?: boolean
           organization_id: string
@@ -3303,7 +3439,6 @@ export type Database = {
           fund_vintage_year?: number | null
           geographic_focus?: string[]
           id?: string
-          investment_stages?: string[]
           is_lead_investor?: boolean
           is_strategic?: boolean
           organization_id?: string
@@ -3328,6 +3463,49 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      investor_stage_focus: {
+        Row: {
+          created_at: string
+          investor_profile_id: string
+          organization_id: string
+          stage_id: number
+        }
+        Insert: {
+          created_at?: string
+          investor_profile_id: string
+          organization_id: string
+          stage_id: number
+        }
+        Update: {
+          created_at?: string
+          investor_profile_id?: string
+          organization_id?: string
+          stage_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investor_stage_focus_investor_profile_id_fkey"
+            columns: ["investor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "investor_profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investor_stage_focus_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investor_stage_focus_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "investment_stages"
             referencedColumns: ["id"]
           },
         ]
