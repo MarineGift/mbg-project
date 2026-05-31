@@ -44,7 +44,7 @@ export function PartyEngagementsList({ engagements, partyId, partyType: module }
         >
           <Link href={`/${module}/engagements/new?partyId=${partyId}`}>
             <Plus className="h-4 w-4" />
-            <span className="text-xs">{t('addEngagement')}</span>
+            <span className="text-xs">Add</span>
           </Link>
         </Button>
       </CardHeader>

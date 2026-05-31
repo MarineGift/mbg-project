@@ -136,7 +136,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 />
               )}
 
-              <PartyNotesCard notes={full.party.notes} />
+              <PartyNotesCard notes={full.party.notes} partyId={full.party.id} partyType={full.party.partyType} />
               <PartyMeetingsList partyId={full.party.id} meetings={meetings as never} />
 
               {/* Phase 21b — Email Sequences */}

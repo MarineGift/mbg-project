@@ -87,9 +87,10 @@ export function PartySupplyLinksPanel({ partyId, partyType, orgId }: Props) {
           </span>
           <button
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 text-xs"
+            aria-label="Add link"
           >
-            <Plus className="h-3.5 w-3.5" /> Add link
+            <Plus className="h-3.5 w-3.5" /> Add
           </button>
         </CardTitle>
       </CardHeader>

@@ -30,7 +30,7 @@ export function PartyContactsList({ contacts, partyId }: Props) {
             aria-label={t('addContact')}
           >
             <Plus className="h-4 w-4" />
-            <span className="text-xs">{t('addContact')}</span>
+            <span className="text-xs">Add</span>
           </Button>
         </CardHeader>
         <CardContent>
