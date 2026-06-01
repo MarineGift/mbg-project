@@ -74,7 +74,7 @@ export function ClassificationPanel({ draft }: Props) {
           </p>
         )}
 
-        avoid unused warning
+        {/* avoid unused warning */}
         <span hidden>{tCommon('loading')}</span>
       </CardContent>
     </Card>

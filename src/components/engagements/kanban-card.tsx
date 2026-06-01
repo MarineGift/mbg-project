@@ -103,7 +103,7 @@ export function KanbanCardComponent({ card, isDragging, asOverlay }: Props) {
           className="text-[10px] text-muted-foreground pl-4 block"
         />
 
-        avoid unused warning
+        {/* avoid unused warning */}
         <span hidden>{t('open')}</span>
       </CardContent>
     </Card>

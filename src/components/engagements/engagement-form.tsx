@@ -342,7 +342,7 @@ export function EngagementForm({
             />
           </div>
 
-          edit-mode info (stage / status are changed on a separate page)
+          {/* edit-mode info (stage / status are changed on a separate page) */}
           {mode === 'edit' && existing && (
             <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 p-3 text-xs text-muted-foreground space-y-1">
               <p>{t('stageNote')}</p>

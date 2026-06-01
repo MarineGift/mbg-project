@@ -210,7 +210,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             />
           </div>
 
-          Party - simple text input (to be replaced by a Party search component)
+          {/* Party - simple text input (to be replaced by a Party search component) */}
           <div className="space-y-1">
             <Label htmlFor="mtg-party">Party *</Label>
             <Input
@@ -224,7 +224,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             </p>
           </div>
 
-          Stage 26 - Engagement (optional, shown after partyId is selected)
+          {/* Stage 26 - Engagement (optional, shown after partyId is selected) */}
           {partyId && (
             <div className="space-y-1">
               <Label htmlFor="mtg-engagement">Related Engagement (optional)</Label>
@@ -258,7 +258,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             </div>
           )}
 
-          Stage 26 - Stage (optional, shown after engagementId is selected)
+          {/* Stage 26 - Stage (optional, shown after engagementId is selected) */}
           {engagementId && (
             <div className="space-y-1">
               <Label htmlFor="mtg-stage">Stage (optional)</Label>

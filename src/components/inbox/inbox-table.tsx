@@ -70,7 +70,7 @@ export function InboxTable({ rows }: Props) {
 
   return (
     <>
-      selection action bar
+      {/* selection action bar */}
       {selected.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-2 border-b bg-primary/5">
           <Checkbox
@@ -95,7 +95,7 @@ export function InboxTable({ rows }: Props) {
         </div>
       )}
 
-      header selection row
+      {/* header selection row */}
       <div className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30">
         <Checkbox
           checked={allSelected}
@@ -108,7 +108,7 @@ export function InboxTable({ rows }: Props) {
         </span>
       </div>
 
-      message list
+      {/* message list */}
       <ul className="divide-y" aria-label={t('queueTitle')}>
         {rows.map((row) => {
           const isSelected = selected.has(row.id);
@@ -117,7 +117,7 @@ export function InboxTable({ rows }: Props) {
               key={row.id}
               className={cn('relative group flex items-stretch', isSelected && 'bg-primary/5')}
             >
-              checkbox area - fully separated from the Link
+              {/* checkbox area - fully separated from the Link */}
               <div
                 className="flex items-center px-3 cursor-pointer shrink-0 hover:bg-muted/30"
                 onClick={(e: React.MouseEvent) => {
@@ -134,7 +134,7 @@ export function InboxTable({ rows }: Props) {
                 />
               </div>
 
-              main content - Link
+              {/* main content - Link */}
               <Link
                 href={`/inbox/${row.id}`}
                 className="flex-1 block hover:bg-muted/40 transition-colors pr-10 min-w-0"
@@ -186,7 +186,7 @@ export function InboxTable({ rows }: Props) {
                 </div>
               </Link>
 
-              single delete
+              {/* single delete */}
               <div className="absolute top-2.5 right-2">
                 <InboxDeleteButton id={row.id} subject={row.subject} direction={row.direction} />
               </div>
@@ -195,7 +195,7 @@ export function InboxTable({ rows }: Props) {
         })}
       </ul>
 
-      bulk delete confirmation dialog
+      {/* bulk delete confirmation dialog */}
       <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
         <DialogContent>
           <DialogHeader>

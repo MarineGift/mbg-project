@@ -126,7 +126,7 @@ export function DraftQueueBulkActions({
           </p>
         )}
 
-        avoid unused warning
+        {/* avoid unused warning */}
         <span hidden>{allVisibleIds.length}</span>
       </div>
 

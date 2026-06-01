@@ -74,7 +74,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
         </DialogHeader>
 
         <div className="space-y-3">
-          body preview
+          {/* body preview */}
           <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
             <p className="font-medium truncate">
               {draft.finalSubject ?? draft.subject ?? '(no subject)'}
@@ -89,7 +89,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
             </p>
           </div>
 
-          send-immediately checkbox
+          {/* send-immediately checkbox */}
           {hasInbound ? (
             <div className="flex items-center gap-2">
               <Checkbox
@@ -107,7 +107,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
             </p>
           )}
 
-          from-address selector - enabled only when sending immediately
+          {/* from-address selector - enabled only when sending immediately */}
           {sendImmediately && hasInbound && (
             <div className="space-y-1.5">
               <Label htmlFor="sending-kind" className="text-sm">
