@@ -69,7 +69,7 @@ export function RealtimeProvider({
   setTaskRef.current = setOpenTaskCount;
   useEffect(() => { setTaskRef.current(initialOpenTaskCount); }, [initialOpenTaskCount]);
 
-  // ── subscribe to communications changes (decrement inbox count on soft-delete) ──
+  // ── communications 변경 구독 (soft-delete 시 inbox 카운트 감소) ──────────
   const inboxCountRef = useRef(inboxUnreadCount);
   inboxCountRef.current = inboxUnreadCount;
 
@@ -85,14 +85,26 @@ export function RealtimeProvider({
           filter: `organization_id=eq.${organizationId}`,
         },
         (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const wasDeleted = !payload.old?.deleted_at && payload.new?.deleted_at;
-          const wasRestored = payload.old?.deleted_at && !payload.new?.deleted_at;
-          if (wasDeleted) {
-            setInboxUnreadCount(Math.max(0, inboxCountRef.current - 1));
-          } else if (wasRestored) {
-            setInboxUnreadCount(inboxCountRef.current + 1);
+          const n = payload.new ?? {};
+          const o = payload.old ?? {};
+          const isInbound = n.direction === 'inbound';
+          const newDeleted = !!n.deleted_at;
+          const oldDeleted = !!o.deleted_at;
+          const newUnread = !n.read_at; // read_at is always present on the new row
+
+          if (isInbound) {
+            // an UNREAD inbound message was soft-deleted -> leaves the unread set
+            if (!oldDeleted && newDeleted && newUnread) {
+              setInboxUnreadCount(Math.max(0, inboxCountRef.current - 1));
+            // an UNREAD inbound message was restored -> re-enters the unread set
+            } else if (oldDeleted && !newDeleted && newUnread) {
+              setInboxUnreadCount(inboxCountRef.current + 1);
+            }
           }
-          if (wasDeleted || wasRestored) refreshIfRelevant('inbox');
+          // read/unread toggles change list emphasis AND the exact count; rather than
+          // do fragile optimistic math, let the (app) layout recompute the authoritative
+          // count on router.refresh() -> it re-runs and pushes initialInboxUnreadCount.
+          refreshIfRelevant('inbox');
         },
       )
       .on('postgres_changes' as never,
@@ -102,8 +114,13 @@ export function RealtimeProvider({
           table: 'communications',
           filter: `organization_id=eq.${organizationId}`,
         },
-        () => {
-          setInboxUnreadCount(inboxCountRef.current + 1);
+        (payload: { new: Record<string, unknown> }) => {
+          const n = payload.new ?? {};
+          // Only inbound + unread bumps the badge. (Previously every insert did,
+          // which wrongly counted outbound/sent mail as unread.)
+          if (n.direction === 'inbound' && !n.read_at) {
+            setInboxUnreadCount(inboxCountRef.current + 1);
+          }
           refreshIfRelevant('inbox');
         },
       )
@@ -112,7 +129,7 @@ export function RealtimeProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
-  // ── subscribe to drafts changes ──
+  // ── drafts 변경 구독 ────────────────────────────────────────────────────
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase

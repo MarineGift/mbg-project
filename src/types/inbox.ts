@@ -76,6 +76,12 @@ export interface InboxRow {
   threadId: string;
   /** Thread group: total message count in this thread */
   threadCount: number;
+  /**
+   * Read state. Outbound is always considered read; an inbound message (or thread)
+   * is read once every inbound message in it has read_at set. Unread => emphasized
+   * in the list and counted by the sidebar inbox badge.
+   */
+  isRead: boolean;
 }
 
 /**

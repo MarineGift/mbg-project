@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { fetchCommunicationDetailV2, fetchMessagesInThread } from '@/lib/queries/communication-detail-v2';
 import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { CommunicationDetailView } from '@/components/inbox/communication-detail-view';
+import { MarkThreadRead } from '@/components/inbox/mark-thread-read';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -24,10 +25,15 @@ export default async function InboxDetailPage({ params }: PageProps) {
   // Defensive: if thread fetch returned empty (shouldn't happen, but be safe), use [root].
   const messages = thread.length > 0 ? thread : [root];
 
+  // Mark every inbound message in this thread read on view (client effect; the
+  // server action filters to inbound + unread, so outbound/read ids are no-ops).
+  const threadIds = (messages as ReadonlyArray<{ id: string }>).map((m) => m.id);
+
   const templates = await listEmailTemplates();
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+      <MarkThreadRead ids={threadIds} />
       <Button variant="ghost" size="sm" asChild>
         <Link href="/inbox">
           <ArrowLeft className="h-4 w-4 mr-1" />
