@@ -15,7 +15,7 @@ export interface EmailSignature {
 export async function getSignatures(orgId: string): Promise<EmailSignature[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from('email_signatures').select('*').eq('organization_id', orgId)
+    .schema('app').from('email_signatures' as never).select('*').eq('organization_id', orgId)
     .order('is_default', { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -24,7 +24,7 @@ export async function getSignatures(orgId: string): Promise<EmailSignature[]> {
 export async function getDefaultSignature(orgId: string): Promise<EmailSignature | null> {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
-    .from('email_signatures').select('*')
+    .schema('app').from('email_signatures' as never).select('*')
     .eq('organization_id', orgId).eq('is_default', true).maybeSingle();
   return data;
 }
@@ -34,22 +34,22 @@ export async function upsertSignature(
 ): Promise<EmailSignature> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .from('email_signatures').upsert(sig as unknown as never, { onConflict: 'id' }).select().single();
+    .schema('app').from('email_signatures' as never).upsert(sig as unknown as never, { onConflict: 'id' }).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteSignature(id: string) {
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from('email_signatures').delete().eq('id', id);
+  const { error } = await supabase.schema('app').from('email_signatures' as never).delete().eq('id', id);
   if (error) throw error;
 }
 
 export async function setDefaultSignature(id: string, orgId: string) {
   const supabase = await createSupabaseServerClient();
-  await supabase.from('email_signatures')
-    .update({ is_default: false }).eq('organization_id', orgId).eq('is_default', true);
-  const { error } = await supabase.from('email_signatures')
-    .update({ is_default: true }).eq('id', id);
+  await supabase.schema('app').from('email_signatures' as never)
+    .update({ is_default: false } as never).eq('organization_id', orgId).eq('is_default', true);
+  const { error } = await supabase.schema('app').from('email_signatures' as never)
+    .update({ is_default: true } as never).eq('id', id);
   if (error) throw error;
 }
