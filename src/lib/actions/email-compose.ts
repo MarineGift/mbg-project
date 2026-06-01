@@ -412,7 +412,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       .eq("organization_id", orgId);
   } catch (sendErr: any) {
     console.error("[sendEmail] send error:", sendErr);
-    await supabase
+    const { error: failUpdErr } = await supabase
       .schema("app").from("communications" as never)
       .update({
         status: "failed",
@@ -420,6 +420,9 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       } as never)
       .eq("id", outboundId)
       .eq("organization_id", orgId);
+    if (failUpdErr) {
+      console.error("[sendEmail] failed-status update error:", failUpdErr);
+    }
     return { success: false, error: sendErr?.message ?? "Send failed" };
   }
 
