@@ -8,13 +8,10 @@
 "use server";
 
 import { requireAuth } from '@/lib/auth';
-import { createSupabaseServerClient, type SbClient } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
-import nodemailer from "nodemailer";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SendingAddressKind } from '@/types/email';
 import Anthropic from "@anthropic-ai/sdk";
 import { sendOutboundEmail } from "@/lib/email/send-outbound";
-import { createEmailTracking } from "@/lib/actions/email-tracking";
 
 // ─────────────────────────────────────────────
 // Types
@@ -45,124 +42,6 @@ export interface AIReplyPayload {
 }
 
 // ─────────────────────────────────────────────
-// Template merge: {{party.name}}, {{contact.given_name}} 등
-// ─────────────────────────────────────────────
-async function renderWithContext(
-  supabase: SbClient,
-  template: string,
-  partyId: string,
-  contactId?: string | null
-): Promise<string> {
-  let result = template;
-
-  // --- party 컨텍스트 ---
-  const { data: party } = await supabase
-    .schema("app").from("parties" as never)
-    .select("party_name, country_code, website")
-    .eq("id", partyId)
-    .single();
-
-  if (party) {
-    result = result
-      .replace(/{{party\.name}}/g, party.party_name ?? "")
-      .replace(/{{party\.country}}/g, party.country_code ?? "")
-      .replace(/{{party\.website}}/g, party.website ?? "");
-  }
-
-  // --- contact 컨텍스트 ---
-  // contactId가 명시적으로 전달된 경우 우선 사용,
-  // 없으면 해당 party의 primary contact 조회
-  let resolvedContactId = contactId;
-
-  if (!resolvedContactId) {
-    const { data: primary } = await supabase
-      .schema("app").from("contacts" as never)
-      .select("id")
-      .eq("party_id", partyId)
-      .eq("is_primary", true)
-      .maybeSingle();
-    resolvedContactId = primary?.id ?? null;
-  }
-
-  if (resolvedContactId) {
-    const { data: contact } = await supabase
-      .schema("app").from("contacts" as never)
-      .select("given_name, family_name, email, title_text, department, phone_e164")
-      .eq("id", resolvedContactId)
-      .single();
-
-    if (contact) {
-      const fullName = [contact.given_name, contact.family_name]
-        .filter(Boolean)
-        .join(" ");
-      result = result
-        .replace(/{{contact\.given_name}}/g, contact.given_name ?? "")
-        .replace(/{{contact\.family_name}}/g, contact.family_name ?? "")
-        .replace(/{{contact\.full_name}}/g, fullName)
-        .replace(/{{contact\.email}}/g, contact.email ?? "")
-        .replace(/{{contact\.title}}/g, contact.title_text ?? "")
-        .replace(/{{contact\.department}}/g, contact.department ?? "")
-        .replace(/{{contact\.phone}}/g, contact.phone_e164 ?? "");
-    }
-  }
-
-  // 치환 안 된 변수 제거 (빈 문자열)
-  result = result.replace(/{{[^}]+}}/g, "");
-
-  return result;
-}
-
-// ─────────────────────────────────────────────
-// 기본 서명 조회
-// ─────────────────────────────────────────────
-async function getDefaultSignature(
-  supabase: SbClient,
-  orgId: string
-): Promise<string | null> {
-  const { data } = await supabase
-    .schema("app").from("email_signatures" as never)
-    .select("html_content")
-    .eq("organization_id", orgId)
-    .eq("is_default", true)
-    .maybeSingle();
-  return data?.html_content ?? null;
-}
-
-// ─────────────────────────────────────────────
-// Supabase Storage → nodemailer 첨부파일 변환
-// ─────────────────────────────────────────────
-async function resolveAttachments(
-  supabase: SbClient,
-  paths: string[]
-): Promise<nodemailer.SendMailOptions["attachments"]> {
-  if (!paths || paths.length === 0) return [];
-
-  const attachments: nodemailer.SendMailOptions["attachments"] = [];
-
-  for (const storagePath of paths) {
-    // storagePath 형식: "email-attachments/{orgId}/{filename}"
-    const { data, error } = await supabase.storage
-      .from("email-attachments")
-      .download(storagePath);
-
-    if (error || !data) {
-      console.error(`[attachment] 다운로드 실패: ${storagePath}`, error);
-      continue;
-    }
-
-    const arrayBuffer = await data.arrayBuffer();
-    const filename = storagePath.split("/").pop() ?? "attachment";
-
-    attachments.push({
-      filename,
-      content: Buffer.from(arrayBuffer),
-    });
-  }
-
-  return attachments;
-}
-
-// ─────────────────────────────────────────────
 // SMTP 트랜스포터 생성
 // ─────────────────────────────────────────────
 // D6-7b: kind-aware SMTP sender resolution
@@ -187,35 +66,6 @@ function resolveSenderInfo(kind: SendingAddressKind = 'shared'): SenderInfo {
         displayName: process.env.MAIL_SHARED_DISPLAY_NAME ?? 'Marinebio Group',
       };
   }
-}
-
-function createTransporter(kind: SendingAddressKind = 'shared') {
-  let user: string | undefined;
-  let pass: string | undefined;
-  switch (kind) {
-    case 'personal':
-      user = process.env.MAIL_PERSONAL_USERNAME;
-      pass = process.env.MAIL_PERSONAL_PASSWORD;
-      break;
-    case 'role':
-      user = process.env.MAIL_ROLE_USERNAME;
-      pass = process.env.MAIL_ROLE_PASSWORD;
-      break;
-    case 'shared':
-    default:
-      user = process.env.MAIL_SHARED_USERNAME;
-      pass = process.env.MAIL_SHARED_PASSWORD;
-      break;
-  }
-  return nodemailer.createTransport({
-    host:   process.env.TABS_MAILER_HOST!,
-    port:   parseInt(process.env.TABS_MAILER_PORT ?? '587'),
-    secure: process.env.TABS_MAILER_USE_TLS === 'true',
-    auth: {
-      user: (user || process.env.TABS_MAILER_USERNAME)!,
-      pass: (pass || process.env.TABS_MAILER_PASSWORD)!,
-    },
-  });
 }
 
 // ─────────────────────────────────────────────
