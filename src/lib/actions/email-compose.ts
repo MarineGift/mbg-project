@@ -13,7 +13,7 @@ import { cookies } from "next/headers";
 import nodemailer from "nodemailer";
 import type { SendingAddressKind } from '@/types/email';
 import Anthropic from "@anthropic-ai/sdk";
-import { createTabsMailer } from "@/lib/email/tabs-mailer";
+import { sendOutboundEmail } from "@/lib/email/send-outbound";
 import { createEmailTracking } from "@/lib/actions/email-tracking";
 
 // ─────────────────────────────────────────────
@@ -231,74 +231,18 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "인증 필요" };
+  if (!user) return { success: false, error: "\uC778\uC99D \uD544\uC694" };
 
   // organization_id from JWT (via requireAuth)
   const auth = await requireAuth();
   const orgId = auth.organizationId;
 
-  // 화이트리스트 확인
-  const domain = payload.to.split("@")[1]?.toLowerCase();
-  if (domain) {
-    // D6-5e T6c: .or() with dot-containing values breaks PostgREST parsing for domain.com
-    // and ceo@domain.com style values. Use .in() with explicit array instead, plus
-    // .limit(1) (safer than .maybeSingle() which errors on multiple matches) and
-    // explicit error logging (was silently treating PostgREST errors as "not whitelisted").
-    const { data: wlRows, error: wlErr } = await supabase
-      .schema("app").from("email_whitelist" as never)
-      .select("id")
-      .eq("organization_id", orgId)
-      .eq("is_active", true)
-      .in("pattern", [domain, payload.to.toLowerCase()])
-      .limit(1);
+  // From identity (env MAIL_* by kind).
+  const kind: SendingAddressKind = payload.fromKind ?? 'shared';
+  const senderInfo = resolveSenderInfo(kind);
 
-    if (wlErr) {
-      console.error("[sendEmail] whitelist query error:", wlErr);
-      return { success: false, error: `?붿씠?몃━?ㅽ듃 議고쉶 ?ㅻ쪟: ${wlErr.message}` };
-    }
-
-    if (!wlRows || wlRows.length === 0) {
-      return { success: false, error: `수신 주소가 화이트리스트에 없습니다: ${payload.to}` };
-    }
-  }
-
-  // 본문 렌더링 (template 모드)
-  let finalBody = payload.body;
-  if (payload.mode === "template" && payload.templateId) {
-    // templateId로 원본 내용 조회
-    const { data: tmpl } = await supabase
-      .schema("app").from("email_templates" as never)
-      .select("body_html, subject")
-      .eq("id", payload.templateId)
-      .single();
-    if (tmpl) {
-      finalBody = await renderWithContext(
-        supabase,
-        tmpl.body_html ?? '',
-        payload.partyId,
-        payload.contactId ?? undefined
-      );
-    }
-  }
-
-  // 서명 추가
-  const useSignature = payload.useSignature !== false; // 기본 true
-  if (useSignature) {
-    const sig = await getDefaultSignature(supabase, orgId);
-    if (sig) {
-      finalBody = `${finalBody}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sig}`;
-    }
-  }
-
-  // 제목 렌더링 (contact 변수 포함 가능)
-  const finalSubject = await renderWithContext(
-    supabase,
-    payload.subject,
-    payload.partyId,
-    payload.contactId
-  );
-
-  // 첨부파일 처리
+  // Attachment metadata (rich list preferred, else legacy paths). The core
+  // downloads from storage and writes app.attachments records.
   const attachmentMetas =
     payload.attachments && payload.attachments.length > 0
       ? payload.attachments
@@ -308,144 +252,43 @@ export async function sendEmail(payload: ComposePayload): Promise<{
           size: 0,
           mimeType: "application/octet-stream",
         }));
-  const attachments: nodemailer.SendMailOptions["attachments"] = [];
-  for (const meta of attachmentMetas) {
-    const { data: fileData, error: dlErr } = await supabase.storage
-      .from("email-attachments")
-      .download(meta.path);
-    if (dlErr || !fileData) {
-      console.error("[sendEmail] attachment download failed:", meta.path, dlErr);
-      continue;
-    }
-    attachments.push({
-      filename: meta.filename || (meta.path.split("/").pop() ?? "attachment"),
-      content: Buffer.from(await fileData.arrayBuffer()),
-      contentType: meta.mimeType || undefined,
-    });
-  }
 
-  // SMTP 발송
-  const kind: SendingAddressKind = payload.fromKind ?? 'shared';
-  const senderInfo = resolveSenderInfo(kind);
-
-  // [A] communications INSERT (status='sending') first, so we have an id for the
-  // tracking pixel + X-URM-communication-id header (parity with sendOutboundManual).
-  const { data: comm, error: insErr } = await supabase
-    .schema("app").from("communications" as never)
-    .insert({
-      organization_id: orgId,
-      party_id: payload.partyId,
-      contact_id: payload.contactId ?? null,
-      direction: "outbound",
-      channel: "email",
-      subject: finalSubject,
-      body_html: finalBody,
-      from_address: senderInfo.username,
-      from_name: senderInfo.displayName,
-      to_addresses: [payload.to],
-      thread_id: payload.threadId ?? null,
-      in_reply_to: payload.replyToMessageId ?? null,
-      status: "sending",
-      ai_generated: false,
-      occurred_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (insErr || !comm?.id) {
-    console.error("[sendEmail] DB insert error:", insErr);
-    return { success: false, error: insErr?.message ?? "DB insert failed" };
-  }
-  const outboundId = comm.id as string;
-
-  // [B] app-level email tracking: pixel + click rewrite (decision 1a).
-  // Non-blocking: if tracking setup fails, still send.
-  let injectedHtml = finalBody;
-  try {
-    const trackingResult = await createEmailTracking({
-      orgId,
-      communicationId: outboundId,
-      partyId: payload.partyId ?? undefined,
+  // Delegate to the shared outbound core (Stage B). The dialog exposes template
+  // merge + default signature, so pass `merge` and `useSignature` through.
+  const result = await sendOutboundEmail({
+    supabase,
+    organizationId: orgId,
+    to: payload.to,
+    fromName: senderInfo.displayName,
+    fromAddress: senderInfo.username,
+    sendingAddressKind: kind,
+    subject: payload.subject,
+    bodyHtml: payload.body,
+    merge: {
+      partyId: payload.partyId,
       contactId: payload.contactId ?? undefined,
-      subject: finalSubject,
-      sentTo: payload.to,
-      htmlBody: finalBody,
-    });
-    injectedHtml = trackingResult.injectedHtml;
-  } catch (trackingErr) {
-    console.warn("[sendEmail] tracking setup failed:", trackingErr);
+      templateId:
+        payload.mode === "template" ? (payload.templateId ?? undefined) : undefined,
+    },
+    useSignature: payload.useSignature,
+    inReplyTo:
+      payload.mode === "reply" ? (payload.replyToMessageId ?? undefined) : undefined,
+    references:
+      payload.mode === "reply" && payload.replyToMessageId
+        ? [payload.replyToMessageId]
+        : undefined,
+    partyId: payload.partyId,
+    contactId: payload.contactId ?? null,
+    threadId: payload.threadId ?? null,
+    attachments: attachmentMetas,
+    traceLabel: `dialog-compose:${user.id}`,
+  });
+
+  if (!result.ok) {
+    return { success: false, error: result.errorMessage ?? "Send failed" };
   }
-
-  // [C] send via TabsMailer (tracking pixel in html + URM header + reply threading).
-  const bodyTextFallback = finalBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  try {
-    const mailer = await createTabsMailer();
-    const sendResult = await mailer.sendOne({
-      to: { address: payload.to },
-      fromName: senderInfo.displayName,
-      fromAddress: senderInfo.username,
-      subject: finalSubject,
-      bodyText: bodyTextFallback,
-      bodyHtml: injectedHtml,
-      inReplyTo:
-        payload.mode === "reply" ? (payload.replyToMessageId ?? undefined) : undefined,
-      references:
-        payload.mode === "reply" && payload.replyToMessageId
-          ? [payload.replyToMessageId]
-          : undefined,
-      urmHeaders: { communicationId: outboundId, autoSend: false },
-      attachments,
-      sendingAddressKind: kind,
-      traceLabel: `dialog-compose:${user.id}`,
-    });
-
-    // [D] communications UPDATE (sent). Root a new thread at its own message-id.
-    await supabase
-      .schema("app").from("communications" as never)
-      .update({
-        message_id: sendResult.messageId,
-        thread_id: payload.threadId ?? sendResult.messageId,
-        status: "sent",
-        sent_at: sendResult.sentAt,
-      } as never)
-      .eq("id", outboundId)
-      .eq("organization_id", orgId);
-  } catch (sendErr: any) {
-    console.error("[sendEmail] send error:", sendErr);
-    const { error: failUpdErr } = await supabase
-      .schema("app").from("communications" as never)
-      .update({
-        status: "failed",
-        error_message: sendErr?.message ?? String(sendErr),
-      } as never)
-      .eq("id", outboundId)
-      .eq("organization_id", orgId);
-    if (failUpdErr) {
-      console.error("[sendEmail] failed-status update error:", failUpdErr);
-    }
-    return { success: false, error: sendErr?.message ?? "Send failed" };
-  }
-
-  // [E] attachment records (app.attachments)
-  if (attachmentMetas.length > 0) {
-    const attachmentRows = attachmentMetas.map((m) => ({
-      organization_id: orgId,
-      entity_type: "communication",
-      entity_id: outboundId,
-      file_name: m.filename,
-      file_size_bytes: m.size ?? 0,
-      mime_type: m.mimeType || "application/octet-stream",
-      storage_provider: "supabase",
-      storage_bucket: "email-attachments",
-      storage_path: m.path,
-    }));
-    const { error: attErr } = await supabase
-      .schema("app").from("attachments" as never)
-      .insert(attachmentRows);
-    if (attErr) console.error("[sendEmail] attachment record error:", attErr);
-  }
-
-  return { success: true, messageId: outboundId };
+  // Preserve legacy return shape: messageId carries the communications row id.
+  return { success: true, messageId: result.communicationId };
 }
 
 // ─────────────────────────────────────────────
