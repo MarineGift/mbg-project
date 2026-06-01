@@ -72,7 +72,7 @@ export function InboxTable({ rows }: Props) {
     <>
       {/* selection action bar */}
       {selected.size > 0 && (
-        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-2 border-b bg-primary/5">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b bg-primary/5">
           <Checkbox
             checked={allSelected}
             onCheckedChange={toggleAll}
@@ -96,7 +96,7 @@ export function InboxTable({ rows }: Props) {
       )}
 
       {/* header selection row */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30">
+      <div className="flex items-center gap-3 px-3 sm:px-4 py-2 border-b bg-muted/30">
         <Checkbox
           checked={allSelected}
           onCheckedChange={toggleAll}
@@ -112,6 +112,7 @@ export function InboxTable({ rows }: Props) {
       <ul className="divide-y" aria-label={t('queueTitle')}>
         {rows.map((row) => {
           const isSelected = selected.has(row.id);
+          const unread = row.direction === 'inbound' && !row.isRead;
           return (
             <li
               key={row.id}
@@ -146,8 +147,14 @@ export function InboxTable({ rows }: Props) {
                     className="mt-0.5 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 mb-0.5">
-                      <p className="font-medium text-sm truncate flex-1">
+                    <div className="flex flex-wrap items-start gap-2 mb-0.5">
+                      {unread && (
+                        <span
+                          className="mt-1 h-2 w-2 rounded-full bg-purple-500 shrink-0"
+                          aria-label="Unread"
+                        />
+                      )}
+                      <p className={cn('text-sm truncate flex-1 min-w-0', unread ? 'font-semibold text-foreground' : 'font-medium')}>
                         {row.partyName ?? row.fromName ?? row.fromAddress ?? tPreview('noParty')}
                       </p>
                       {row.partyTypeCode && <PartyTypeBadge partyType={row.partyTypeCode} size="sm" />}
@@ -156,7 +163,7 @@ export function InboxTable({ rows }: Props) {
                         className="text-xs text-muted-foreground whitespace-nowrap"
                       />
                     </div>
-                    <p className={cn('text-sm truncate', row.subject ? 'font-medium' : 'text-muted-foreground italic')}>
+                    <p className={cn('text-sm truncate', row.subject ? (unread ? 'font-semibold' : 'font-medium') : 'text-muted-foreground italic')}>
                       {row.subject ?? t('noSubject')}
                       {row.threadCount > 1 && (
                         <span className="ml-1.5 text-xs text-muted-foreground font-normal">({row.threadCount})</span>

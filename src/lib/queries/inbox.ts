@@ -124,6 +124,7 @@ interface RawInboxRow {
   occurred_at: string;
   sent_at: string | null;
   ai_generated: boolean;
+  read_at: string | null;
   party_id: string | null;
   parties: { name: string; party_types: { code: string } | Array<{ code: string }> | null } | null;
   thread_id: string | null;
@@ -140,7 +141,7 @@ export async function fetchInbox(
     .from('communications' as never)
     .select(
       `id, channel, direction, status, from_address, from_name, to_addresses,
-       subject, body_plain, occurred_at, sent_at, ai_generated,
+       subject, body_plain, occurred_at, sent_at, ai_generated, read_at,
        thread_id,
        party_id,
        parties:party_id ( name:party_name, party_types(code) )`,
@@ -205,21 +206,24 @@ export async function fetchInbox(
 
   // t9a: group by threadId, pick latest representative + count + OR-aggregate hasDraft.
   // allRows is sorted by occurred_at desc, so first seen per thread IS the latest message.
-  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean }>();
+  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean; allRead: boolean }>();
   for (const row of allRows) {
     const existing = threadMap.get(row.threadId);
     if (existing) {
       existing.count += 1;
       if (row.hasDraft) existing.anyHasDraft = true;
+      // a thread is unread if ANY of its inbound messages is unread
+      existing.allRead = existing.allRead && row.isRead;
     } else {
-      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft });
+      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft, allRead: row.isRead });
     }
   }
 
-  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft }) => ({
+  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft, allRead }) => ({
     ...latest,
     threadCount: count,
     hasDraft: anyHasDraft,
+    isRead: allRead,
   }));
 
   // the hasDraft filter is applied after fetching all rows above (perf ok - max 100 per page)
@@ -279,6 +283,8 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     attachmentCount: 0,
     threadId: raw.thread_id ?? raw.id,
     threadCount: 1,
+    // Outbound is always 'read'; inbound is read once read_at is set.
+    isRead: raw.direction !== 'inbound' || raw.read_at !== null,
   };
 }
 
