@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchCommunicationDetailV2, fetchMessagesInThread } from '@/lib/queries/communication-detail-v2';
 import { listEmailTemplates } from '@/lib/queries/email-templates';
+import { fetchOpenStatuses } from '@/lib/queries/open-status';
 import { CommunicationDetailView } from '@/components/inbox/communication-detail-view';
 import { MarkThreadRead } from '@/components/inbox/mark-thread-read';
 
@@ -25,11 +26,17 @@ export default async function InboxDetailPage({ params }: PageProps) {
   // Defensive: if thread fetch returned empty (shouldn't happen, but be safe), use [root].
   const messages = thread.length > 0 ? thread : [root];
 
+  const typed = messages as ReadonlyArray<{ id: string; direction: string }>;
   // Mark every inbound message in this thread read on view (client effect; the
   // server action filters to inbound + unread, so outbound/read ids are no-ops).
-  const threadIds = (messages as ReadonlyArray<{ id: string }>).map((m) => m.id);
+  const threadIds = typed.map((m) => m.id);
+  // Outbound messages get open/read tracking ("Read time") from email_tracking.
+  const outboundIds = typed.filter((m) => m.direction === 'outbound').map((m) => m.id);
 
-  const templates = await listEmailTemplates();
+  const [templates, openStatuses] = await Promise.all([
+    listEmailTemplates(),
+    fetchOpenStatuses(outboundIds),
+  ]);
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
@@ -40,7 +47,12 @@ export default async function InboxDetailPage({ params }: PageProps) {
           Back
         </Link>
       </Button>
-      <CommunicationDetailView thread={messages} rootId={id} templates={templates} />
+      <CommunicationDetailView
+        thread={messages}
+        rootId={id}
+        templates={templates}
+        openStatuses={openStatuses}
+      />
     </div>
   );
 }

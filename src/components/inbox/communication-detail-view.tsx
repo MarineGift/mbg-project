@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   Sparkles, ArrowRight, AlertCircle,
-  PenLine, FileText, ChevronDown, ChevronRight,
+  PenLine, FileText, ChevronDown, ChevronRight, Eye,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,11 @@ interface Props {
   /** ID of the originally clicked message (default-expanded along with latest). */
   rootId: string;
   templates?: unknown[];
+  /** Per-communication open/read tracking (outbound only), keyed by message id. */
+  openStatuses?: Record<string, { firstOpenedAt: string | null; openCount: number }>;
 }
 
-export function CommunicationDetailView({ thread, rootId, templates }: Props) {
+export function CommunicationDetailView({ thread, rootId, templates, openStatuses }: Props) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
 
@@ -97,6 +99,7 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
           msg={msg}
           expanded={expanded.has(msg.id)}
           onToggle={() => toggle(msg.id)}
+          openStatus={openStatuses?.[msg.id]}
         />
       ))}
 
@@ -187,9 +190,10 @@ interface ThreadMessageCardProps {
   msg: CommunicationDetail;
   expanded: boolean;
   onToggle: () => void;
+  openStatus?: { firstOpenedAt: string | null; openCount: number };
 }
 
-function ThreadMessageCard({ msg, expanded, onToggle }: ThreadMessageCardProps) {
+function ThreadMessageCard({ msg, expanded, onToggle, openStatus }: ThreadMessageCardProps) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
   const hasDrafts = msg.generatedDrafts && msg.generatedDrafts.length > 0;
@@ -215,6 +219,12 @@ function ThreadMessageCard({ msg, expanded, onToggle }: ThreadMessageCardProps) 
                   <span className="inline-flex items-center gap-1 text-destructive normal-case tracking-normal">
                     <AlertCircle className="h-3 w-3" />
                     {t('failed')}
+                  </span>
+                )}
+                {msg.direction === 'outbound' && openStatus && openStatus.openCount > 0 && (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 normal-case tracking-normal">
+                    <Eye className="h-3 w-3" />
+                    Read
                   </span>
                 )}
                 <span className="ml-auto normal-case tracking-normal">
@@ -262,6 +272,28 @@ function ThreadMessageCard({ msg, expanded, onToggle }: ThreadMessageCardProps) 
               <>
                 <span className="text-muted-foreground">{t('messageId')}</span>
                 <span className="font-mono text-[10px] truncate" title={msg.messageId}>{msg.messageId}</span>
+              </>
+            )}
+            {msg.direction === 'outbound' && openStatus && (
+              <>
+                <span className="text-muted-foreground">Opened</span>
+                <span>
+                  {openStatus.openCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                      {openStatus.firstOpenedAt ? (
+                        <RelativeTime date={openStatus.firstOpenedAt} live={false} />
+                      ) : (
+                        <span>opened</span>
+                      )}
+                      <span className="text-muted-foreground">
+                        ({openStatus.openCount} {openStatus.openCount === 1 ? 'open' : 'opens'})
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Not opened yet</span>
+                  )}
+                </span>
               </>
             )}
             {msg.errorMessage && (
