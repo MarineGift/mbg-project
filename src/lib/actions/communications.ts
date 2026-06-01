@@ -19,9 +19,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { createTabsMailer } from '@/lib/email/tabs-mailer';
+import { sendOutboundEmail } from '@/lib/email/send-outbound';
 import type { SendingAddressKind } from '@/types/email';
-import { createEmailTracking } from '@/lib/actions/email-tracking';
 
 /* ──────────────────────────────────────────────────────────
  * Plain text → HTML 변환 (픽셀 삽입을 위한 최소 변환)
@@ -157,210 +156,70 @@ export async function sendOutboundManual(
 
   const supabase = await createSupabaseServerClient();
 
-  // [whitelist] 2a: enforce recipient whitelist (parity with dialog sendEmail).
-  // Checks 'to' against active app.email_whitelist patterns by exact address OR
-  // domain. Fail fast before any DB writes. (cc not checked - decision 2a.)
-  const toDomain = parsed.data.to.split('@')[1]?.toLowerCase();
-  if (toDomain) {
-    const { data: wlRows, error: wlErr } = await supabase
-      .schema('app')
-      .from('email_whitelist' as never)
-      .select('id')
-      .eq('organization_id', auth.organizationId)
-      .eq('is_active', true)
-      .in('pattern', [toDomain, parsed.data.to.toLowerCase()])
-      .limit(1);
-    if (wlErr) {
-      return {
-        ok: false,
-        errorCode: 'database',
-        errorMessage: `Whitelist lookup failed: ${wlErr.message}`,
-      };
-    }
-    if (!wlRows || (wlRows as unknown[]).length === 0) {
-      return {
-        ok: false,
-        errorCode: 'not_whitelisted',
-        errorMessage: `Recipient not in whitelist: ${parsed.data.to}`,
-      };
-    }
-  }
-
-  // 사용자 발신 자격 조회
+  // From identity (kind-aware; env MAIL_* with user-row fallback).
   const { data: userRaw } = await supabase
     .schema('app')
     .from('users' as never)
     .select('sending_email, full_name, email')
     .eq('id', auth.userId)
     .maybeSingle();
-
   const userRow = userRaw as
     | { sending_email: string | null; full_name: string; email: string }
     | null;
-  // D6-7b-2: kind-aware From determination
+
   const kind: SendingAddressKind = parsed.data.fromKind ?? 'shared';
   const senderInfo = resolveSenderInfoForKind(kind);
-  const fromAddress = senderInfo.username    || (userRow?.sending_email ?? userRow?.email ?? auth.email);
-  const fromName    = senderInfo.displayName || (userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender');
+  const fromAddress =
+    senderInfo.username || (userRow?.sending_email ?? userRow?.email ?? auth.email);
+  const fromName =
+    senderInfo.displayName || (userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender');
 
-  // cc 파싱
   const ccAddresses = (parsed.data.cc ?? '')
     .split(/[,;]/)
     .map((s) => s.trim())
     .filter((s) => /\S+@\S+\.\S+/.test(s));
 
-  // [A] outbound communications INSERT (status='sending')
-  const insertRow: Record<string, unknown> = {
-    organization_id: auth.organizationId,
-    channel: 'email',
-    direction: 'outbound',
-    party_id: parsed.data.partyId || null,
-    contact_id: parsed.data.contactId || null,
-    from_address: fromAddress,
-    from_name: fromName,
-    to_addresses: [parsed.data.to],
-    cc_addresses: ccAddresses,
+  // Delegate to the shared outbound core (Stage B). Whitelist, tracking,
+  // insert(sending), sendOne, sent/failed update and attachment records all
+  // live in the core now. Manual compose exposes no template/signature.
+  const result = await sendOutboundEmail({
+    supabase,
+    organizationId: auth.organizationId,
+    sentByUserId: auth.userId,
+    to: parsed.data.to,
+    cc: ccAddresses,
+    fromName,
+    fromAddress,
+    sendingAddressKind: kind,
     subject: parsed.data.subject,
-    body_plain: parsed.data.bodyPlain,
-    thread_id: parsed.data.threadId || null,
-    in_reply_to: parsed.data.inReplyTo || null,
-    status: 'sending',
-    ai_generated: false,
-    occurred_at: new Date().toISOString(),
-    sent_by_user_id: auth.userId,
-  };
-
-  const { data: insertData, error: insertError } = await supabase
-    .schema('app')
-    .from('communications' as never)
-    .insert(insertRow as never)
-    .select('id')
-    .single();
-
-  if (insertError || !insertData) {
-    return {
-      ok: false,
-      errorCode: 'database',
-      errorMessage: insertError?.message ?? 'Insert failed',
-    };
-  }
-  const outboundId = (insertData as { id: string }).id;
-
-  // [B] TABS Mailer 발송
-  try {
-    // ── [B-1] 이메일 추적 레코드 생성 + HTML 픽셀 주입 ──────────────
-    // bodyHtml이 직접 전달되면 그것을 사용, 없으면 bodyPlain → HTML 변환
-    const baseHtml = parsed.data.bodyHtml?.trim()
+    bodyHtml: parsed.data.bodyHtml?.trim()
       ? parsed.data.bodyHtml
-      : plainToHtml(parsed.data.bodyPlain);
+      : plainToHtml(parsed.data.bodyPlain),
+    bodyText: parsed.data.bodyPlain,
+    useSignature: false,
+    inReplyTo: parsed.data.inReplyTo ?? undefined,
+    references: parsed.data.inReplyTo ? [parsed.data.inReplyTo] : undefined,
+    partyId: parsed.data.partyId ?? null,
+    contactId: parsed.data.contactId ?? null,
+    threadId: parsed.data.threadId ?? null,
+    attachments: parsed.data.attachments ?? [],
+    traceLabel: `manual-compose:${auth.userId}`,
+  });
 
-    let injectedHtml: string = baseHtml;
-    try {
-      const trackingResult = await createEmailTracking({
-        orgId:           auth.organizationId,
-        communicationId: outboundId,
-        partyId:         parsed.data.partyId  ?? undefined,
-        contactId:       parsed.data.contactId ?? undefined,
-        subject:         parsed.data.subject,
-        sentTo:          parsed.data.to,
-        htmlBody:        baseHtml,
-      });
-      injectedHtml = trackingResult.injectedHtml;
-    } catch (trackingErr) {
-      // 추적 실패 시 발송은 계속 진행 (non-blocking)
-      console.warn('[communications] tracking setup failed:', trackingErr);
-    }
-
-    // ── [B-2] TABS Mailer 발송 ──────────────────────────────────────
-    // resolve outbound attachments from storage (download -> Buffer for nodemailer)
-    const mailAttachments: { filename: string; content: Buffer; contentType?: string }[] = [];
-    for (const att of parsed.data.attachments ?? []) {
-      const { data: fileData, error: dlErr } = await supabase.storage
-        .from('email-attachments')
-        .download(att.path);
-      if (dlErr || !fileData) {
-        console.error('[communications] attachment download failed:', att.path, dlErr);
-        continue;
-      }
-      mailAttachments.push({
-        filename: att.filename || (att.path.split('/').pop() ?? 'attachment'),
-        content: Buffer.from(await fileData.arrayBuffer()),
-        contentType: att.mimeType || undefined,
-      });
-    }
-
-    const mailer = await createTabsMailer();
-    const sendResult = await mailer.sendOne({
-      to: { address: parsed.data.to },
-      cc: ccAddresses.map((a) => ({ address: a })),
-      fromName,
-      fromAddress,
-      subject: parsed.data.subject,
-      bodyText: parsed.data.bodyPlain,   // plain text (fallback)
-      bodyHtml: injectedHtml,            // HTML with tracking pixel ← NEW
-      inReplyTo: parsed.data.inReplyTo ?? undefined,
-      references: parsed.data.inReplyTo ? [parsed.data.inReplyTo] : undefined,
-      urmHeaders: {
-        communicationId: outboundId,
-        autoSend: false,
-      },
-      attachments: mailAttachments,
-      sendingAddressKind: kind,  // D6-7b-2: kind-aware SMTP credential selection
-      traceLabel: `manual-compose:${auth.userId}`,
-    });
-
-    // [C] communications 갱신 — message_id + sent_at + status='sent'
-    await supabase
-      .schema('app')
-      .from('communications' as never)
-      .update({
-        message_id: sendResult.messageId,
-        status: 'sent',
-        sent_at: sendResult.sentAt,
-      } as never)
-      .eq('id', outboundId)
-      .eq('organization_id', auth.organizationId);
-
-    if (parsed.data.attachments && parsed.data.attachments.length > 0) {
-      const attachmentRows = parsed.data.attachments.map((m) => ({
-        organization_id: auth.organizationId,
-        entity_type: 'communication',
-        entity_id: outboundId,
-        file_name: m.filename,
-        file_size_bytes: m.size ?? 0,
-        mime_type: m.mimeType || 'application/octet-stream',
-        storage_provider: 'supabase',
-        storage_bucket: 'email-attachments',
-        storage_path: m.path,
-      }));
-      const { error: attErr } = await supabase
-        .schema('app')
-        .from('attachments' as never)
-        .insert(attachmentRows as never);
-      if (attErr) console.error('[communications] attachment record error:', attErr);
-    }
-
-    revalidatePath('/inbox');
-    if (parsed.data.partyId) {
-      revalidatePath(`/`, 'layout');
-    }
-    return { ok: true, communicationId: outboundId };
-  } catch (e) {
-    const errMsg = e instanceof Error ? e.message : String(e);
-    await supabase
-      .schema('app')
-      .from('communications' as never)
-      .update({
-        status: 'failed',
-        error_message: errMsg,
-      } as never)
-      .eq('id', outboundId)
-      .eq('organization_id', auth.organizationId);
-
-    return {
-      ok: false,
-      errorCode: 'send_failed',
-      errorMessage: errMsg,
-    };
+  revalidatePath('/inbox');
+  if (parsed.data.partyId) {
+    revalidatePath(`/`, 'layout');
   }
+
+  if (!result.ok) {
+    const errorCode: ComposeResult['errorCode'] =
+      result.errorCode === 'not_whitelisted'
+        ? 'not_whitelisted'
+        : result.errorCode === 'database'
+          ? 'database'
+          : 'send_failed';
+    return { ok: false, errorCode, errorMessage: result.errorMessage };
+  }
+
+  return { ok: true, communicationId: result.communicationId };
 }
