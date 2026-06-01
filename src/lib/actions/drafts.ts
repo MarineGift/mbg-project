@@ -26,7 +26,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { createTabsMailer } from '@/lib/email/tabs-mailer';
+import { sendOutboundEmail } from '@/lib/email/send-outbound';
 import type { RejectReason } from '@/types/draft-detail';
 import type { SendingAddressKind } from '@/types/email';
 
@@ -584,7 +584,7 @@ async function sendApprovedDraft(
     };
   }
 
-  // 1. inbound communication 정보 조회 (수신자·thread·subject)
+  // 1. inbound communication info (recipient / thread / subject)
   const { data: inboundRaw } = await supabase
     .schema('app')
     .from('communications' as never)
@@ -592,7 +592,6 @@ async function sendApprovedDraft(
     .eq('id', draft.inbound_communication_id)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-
   const inbound = inboundRaw as
     | {
         from_address: string | null;
@@ -603,7 +602,6 @@ async function sendApprovedDraft(
         channel: string;
       }
     | null;
-
   if (!inbound || !inbound.from_address) {
     return {
       ok: false,
@@ -612,13 +610,11 @@ async function sendApprovedDraft(
     };
   }
 
-  // 2. 현재 사용자의 발신 자격 조회 (3개 kind 컬럼 포함)
+  // 2. sender identity (DB-column kind resolution; caller-side, decision c)
   const { data: userRaw } = await supabase
     .schema('app')
     .from('users' as never)
-    .select(
-      'email, sending_email, full_name, email_personal, email_role, email_shared',
-    )
+    .select('email, sending_email, full_name, email_personal, email_role, email_shared')
     .eq('id', auth.userId)
     .maybeSingle();
   const userRow = userRaw as
@@ -631,135 +627,62 @@ async function sendApprovedDraft(
         email_shared: string | null;
       }
     | null;
-
-  // kind 기반 from 결정 (fallback 체인 포함)
   const fromAddress = resolveFromAddress(sendingAddressKind, userRow, auth.email);
   const fromName = userRow?.full_name ?? auth.email.split('@')[0] ?? 'Sender';
 
-  // 3. 본문·제목 결정 — 편집본 우선
-  const finalSubject =
-    draft.final_subject ?? draft.subject ?? `Re: ${inbound.subject ?? ''}`;
+  // 3. subject / body (edited version wins)
+  const finalSubject = draft.final_subject ?? draft.subject ?? `Re: ${inbound.subject ?? ''}`;
   const finalBody = draft.final_body_plain ?? draft.body_plain;
 
-  // 4. outbound communication 행 미리 INSERT (PROCESSING) → Message-ID 미정 상태로
-  //    이 DB 트리거가 audit 로그 자동 기록
-  const placeholderOutbound = (await supabase
-    .schema('app')
-    .from('communications' as never)
-    .insert({
-      organization_id: auth.organizationId,
-      channel: 'email',
-      direction: 'outbound',
-      party_id: draft.party_id,
-      from_address: fromAddress,
-      from_name: fromName,
-      to_addresses: [inbound.from_address],
-      subject: finalSubject,
-      body_plain: finalBody,
-      body_html: draft.body_html,
-      thread_id: inbound.thread_id,
-      in_reply_to: inbound.message_id,
-      status: 'sending',
-      ai_draft_id: draft.id,
-      ai_generated: true,
-      occurred_at: new Date().toISOString(),
-      sent_by_user_id: auth.userId,
+  // 4. delegate to the shared outbound core (Stage B). This closes the AI-path
+  //    gaps vs the verified contract: recipient whitelist, app-level tracking,
+  //    default signature, real In-Reply-To/References wire headers, failure
+  //    persisted to error_message, and urmHeaders.autoSend=true.
+  const result = await sendOutboundEmail({
+    supabase,
+    organizationId: auth.organizationId,
+    sentByUserId: auth.userId,
+    to: inbound.from_address,
+    fromName,
+    fromAddress,
+    sendingAddressKind,
+    subject: finalSubject,
+    bodyHtml: draft.body_html ?? '',
+    bodyText: finalBody,
+    useSignature: true,
+    inReplyTo: inbound.message_id ?? undefined,
+    references: inbound.message_id ? [inbound.message_id] : undefined,
+    partyId: draft.party_id,
+    threadId: inbound.thread_id,
+    autoSend: true,
+    aiGenerated: true,
+    aiDraftId: draft.id,
+    traceLabel: `approve-and-send:${draft.id}`,
+  });
+
+  if (!result.ok || !result.communicationId) {
+    // The communications row is already 'failed' + error_message (core).
+    // Leave the draft in 'approved' so the operator can retry.
+    return {
+      ok: false,
+      errorCode: 'send_failed',
+      errorMessage: result.errorMessage ?? 'Send failed',
+    };
+  }
+
+  // 5. link draft -> sent communication
+  await supabase
+    .schema('ai')
+    .from('drafts' as never)
+    .update({
+      status: 'sent',
+      sent_communication_id: result.communicationId,
     } as never)
-    .select('id')
-    .single()) as { data: { id: string } | null; error: { message: string } | null };
+    .eq('id', draft.id)
+    .eq('organization_id', auth.organizationId);
 
-  if (placeholderOutbound.error || !placeholderOutbound.data) {
-    return {
-      ok: false,
-      errorCode: 'database',
-      errorMessage: `Failed to insert outbound row: ${placeholderOutbound.error?.message}`,
-    };
-  }
-  const outboundId = (placeholderOutbound.data as { id: string }).id;
-
-  // 5. TABS Mailer로 실제 발송 (kind 전달)
-  let mailer;
-  try {
-    mailer = await createTabsMailer();
-  } catch (e) {
-    await markOutboundFailed(supabase, outboundId, auth.organizationId, e);
-    return {
-      ok: false,
-      errorCode: 'send_failed',
-      errorMessage: e instanceof Error ? e.message : 'Mailer init failed',
-    };
-  }
-
-  try {
-    const sendResult = await mailer.sendOne({
-      to: { address: inbound.from_address },
-      fromName,
-      fromAddress,
-      subject: finalSubject,
-      bodyText: finalBody,
-      bodyHtml: draft.body_html ?? undefined,
-      urmHeaders: {
-        communicationId: outboundId,
-        autoSend: false,
-      },
-      traceLabel: `approve-and-send:${draft.id}`,
-      sendingAddressKind, // ← Step 1.2 추가: kind 전달
-    });
-
-    // 6. outbound communication 상태 갱신 — Message-ID, sent_at
-    await supabase
-      .schema('app')
-      .from('communications' as never)
-      .update({
-        message_id: sendResult.messageId,
-        status: 'sent',
-        sent_at: sendResult.sentAt,
-      } as never)
-      .eq('id', outboundId)
-      .eq('organization_id', auth.organizationId);
-
-    // 7. draft 상태 → 'sent' + sent_communication_id 링크
-    await supabase
-      .schema('ai')
-      .from('drafts' as never)
-      .update({
-        status: 'sent',
-        sent_communication_id: outboundId,
-      } as never)
-      .eq('id', draft.id)
-      .eq('organization_id', auth.organizationId);
-
-    return {
-      ok: true,
-      data: { sent: true, outboundCommunicationId: outboundId },
-    };
-  } catch (e) {
-    await markOutboundFailed(supabase, outboundId, auth.organizationId, e);
-    return {
-      ok: false,
-      errorCode: 'send_failed',
-      errorMessage: e instanceof Error ? e.message : 'SMTP send failed',
-    };
-  }
-}
-
-async function markOutboundFailed(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  outboundId: string,
-  organizationId: string,
-  err: unknown,
-): Promise<void> {
-  try {
-    await supabase
-      .schema('app')
-      .from('communications' as never)
-      .update({
-        status: 'failed',
-        notes: err instanceof Error ? err.message : String(err),
-      } as never)
-      .eq('id', outboundId)
-      .eq('organization_id', organizationId);
-  } catch {
-    // 실패 표시 자체가 실패하더라도 상위 호출자에게 send_failed가 이미 반환됨
-  }
+  return {
+    ok: true,
+    data: { sent: true, outboundCommunicationId: result.communicationId },
+  };
 }
