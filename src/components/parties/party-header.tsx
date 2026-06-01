@@ -101,7 +101,7 @@ export function PartyHeader({ party }: Props) {
         </div>
         {hasAnyTag && (
           <div className="flex flex-wrap gap-1 mt-2">
-            industry tags - gray + border
+            {/* industry tags - gray + border */}
             {party.industryTags.map((tag) => (
               <span
                 key={`industry-${tag}`}
@@ -111,7 +111,7 @@ export function PartyHeader({ party }: Props) {
                 {tag}
               </span>
             ))}
-            interest tags - blue
+            {/* interest tags - blue */}
             {party.interestTags.map((tag) => (
               <span
                 key={`interest-${tag}`}

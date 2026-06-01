@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<EngagementDetail['status'], string> = {
 export function EngagementDetailHeader({ engagement }: Props) {
   return (
     <header className="border-b bg-background sticky top-0 z-20">
-      top bar: left = back + badge, right = Edit button
+      {/* top bar: left = back + badge, right = Edit button */}
       <div className="px-6 py-3 border-b flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Button asChild variant="ghost" size="icon" className="h-8 w-8">
@@ -58,8 +58,8 @@ export function EngagementDetailHeader({ engagement }: Props) {
           )}
         </div>
 
-        Edit button - navigates to the engagement edit page.
-            Delete is handled at the bottom of the form on the edit page.
+        {/* Edit button - navigates to the engagement edit page.
+            Delete is handled at the bottom of the form on the edit page. */}
         <Button asChild variant="outline" size="sm" className="shrink-0">
           <Link
             href={`/engagements/${engagement.id}/edit`}
