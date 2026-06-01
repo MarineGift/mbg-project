@@ -32,13 +32,13 @@ export default async function SentPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <header className="px-6 py-5 border-b bg-background">
-        <h1 className="text-xl font-semibold">{tNav('sent')}</h1>
+      <header className="px-4 py-4 sm:px-6 sm:py-5 border-b bg-background">
+        <h1 className="text-lg sm:text-xl font-semibold">{tNav('sent')}</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {/* TODO t7c: dedicated sent.queueDescription i18n key */}
           Messages you have sent.
         </p>
-        <div className="mt-4 max-w-xl">
+        <div className="mt-4 w-full max-w-xl">
           <InboxSearchBar initialQuery={filters.query} />
         </div>
       </header>

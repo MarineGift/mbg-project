@@ -5,6 +5,12 @@
 // excluding the 'default' technical fallback). A static fallback keeps the
 // sidebar rendering even before the fetch resolves -- and if it ever fails.
 //
+// Responsive:
+//   - Desktop (md+): in-flow <aside>, collapsible (w-16 / w-60) as before.
+//   - Mobile (<md): hidden in-flow; rendered as an overlay drawer controlled by
+//     `mobileOpen` (toggled by the hamburger in AppShell). Tapping a link or the
+//     backdrop closes it.
+//
 // Preserves existing app integrations:
 //   - named export `Sidebar` (consumed by AppShell)
 //   - useUiStore: collapse + drafts/inbox/tasks badges
@@ -25,6 +31,7 @@ import {
   Settings as SettingsIcon,
   LayoutDashboard,
   Menu,
+  X,
   Send,
   CalendarDays,
   Users,
@@ -94,7 +101,14 @@ const BOTTOM_ITEMS: readonly NavItem[] = [
   { href: '/settings', labelKey: 'settings', icon: SettingsIcon },
 ] as const;
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Mobile drawer open state (managed by AppShell). Ignored on desktop. */
+  mobileOpen?: boolean;
+  /** Called when the mobile drawer should close (link tap / backdrop / X). */
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const pendingDraftCount = useUiStore((s) => s.pendingDraftCount);
@@ -144,119 +158,174 @@ export function Sidebar() {
 
   const widthCls = collapsed ? 'w-16' : 'w-60';
 
+  // Inner content is rendered both in the desktop aside and the mobile drawer.
+  // `isCollapsed` only applies on desktop; the mobile drawer is always expanded.
+  // `mobile` swaps the header's collapse toggle for a close (X) button and makes
+  // nav links close the drawer on tap.
+  const renderBody = (opts: { isCollapsed: boolean; mobile: boolean }) => {
+    const { isCollapsed, mobile } = opts;
+    const onNavigate = mobile ? onMobileClose : undefined;
+    return (
+      <>
+        <div className="flex h-14 items-center justify-between gap-2 px-3 border-b">
+          {!isCollapsed && (
+            <span className="font-semibold text-sm truncate">{tCommon('appName')}</span>
+          )}
+          {mobile ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMobileClose}
+              aria-label="Close menu"
+              className="h-8 w-8 ml-auto"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              aria-label="Toggle sidebar"
+              className="h-8 w-8 ml-auto"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-2 px-2 scrollbar-thin">
+          <ul className="space-y-0.5">
+            {TOP_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={<item.icon className="h-4 w-4 shrink-0" />}
+                label={item.label ?? tNav(item.labelKey)}
+                active={isActive(pathname, item.href)}
+                collapsed={isCollapsed}
+                badge={item.badgeKey ? badges[item.badgeKey] : undefined}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
+
+          <Separator className="my-3" />
+
+          {!isCollapsed && (
+            <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Directory
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            {DIRECTORY_ITEMS.map((d) => {
+              const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
+              const href = `/${d.code}/parties`;
+              return (
+                <NavLink
+                  key={d.code}
+                  href={href}
+                  icon={
+                    <span
+                      className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCls)}
+                      aria-hidden
+                    />
+                  }
+                  label={d.name}
+                  active={isActive(pathname, href)}
+                  collapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                />
+              );
+            })}
+          </ul>
+
+          <Separator className="my-3" />
+
+          {!isCollapsed && (
+            <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Pipelines
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            {pipelines.map((p) => {
+              const dotCls = PIPELINE_DOT[p.code] ?? FALLBACK_DOT;
+              const href = `/pipelines/${p.code}`;
+              return (
+                <NavLink
+                  key={p.id}
+                  href={href}
+                  icon={
+                    <span
+                      className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCls)}
+                      aria-hidden
+                    />
+                  }
+                  label={p.name}
+                  active={isActive(pathname, href)}
+                  collapsed={isCollapsed}
+                  badge={p.dealCount && p.dealCount > 0 ? p.dealCount : undefined}
+                  onNavigate={onNavigate}
+                />
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="border-t py-2 px-2">
+          <ul className="space-y-0.5">
+            {BOTTOM_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={<item.icon className="h-4 w-4 shrink-0" />}
+                label={item.label ?? tNav(item.labelKey)}
+                active={isActive(pathname, item.href)}
+                collapsed={isCollapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
+        </div>
+      </>
+    );
+  };
+
   return (
-    <aside
-      className={cn(
-        'group flex h-screen flex-col border-r bg-card text-card-foreground transition-[width] duration-200',
-        widthCls,
-      )}
-      aria-label="Sidebar"
-    >
-      <div className="flex h-14 items-center justify-between gap-2 px-3 border-b">
-        {!collapsed && (
-          <span className="font-semibold text-sm truncate">{tCommon('appName')}</span>
+    <>
+      {/* Desktop sidebar (in-flow, collapsible) */}
+      <aside
+        className={cn(
+          'group hidden md:flex h-screen flex-col border-r bg-card text-card-foreground transition-[width] duration-200',
+          widthCls,
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          aria-label="Toggle sidebar"
-          className="h-8 w-8 ml-auto"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
-      </div>
+        aria-label="Sidebar"
+      >
+        {renderBody({ isCollapsed: collapsed, mobile: false })}
+      </aside>
 
-      <nav className="flex-1 overflow-y-auto py-2 px-2 scrollbar-thin">
-        <ul className="space-y-0.5">
-          {TOP_ITEMS.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={<item.icon className="h-4 w-4 shrink-0" />}
-              label={item.label ?? tNav(item.labelKey)}
-              active={isActive(pathname, item.href)}
-              collapsed={collapsed}
-              badge={item.badgeKey ? badges[item.badgeKey] : undefined}
-            />
-          ))}
-        </ul>
-
-        <Separator className="my-3" />
-
-        {!collapsed && (
-          <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-            Directory
-          </p>
+      {/* Mobile backdrop */}
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/40 md:hidden transition-opacity duration-200',
+          mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
-        <ul className="space-y-0.5">
-          {DIRECTORY_ITEMS.map((d) => {
-            const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
-            const href = `/${d.code}/parties`;
-            return (
-              <NavLink
-                key={d.code}
-                href={href}
-                icon={
-                  <span
-                    className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCls)}
-                    aria-hidden
-                  />
-                }
-                label={d.name}
-                active={isActive(pathname, href)}
-                collapsed={collapsed}
-              />
-            );
-          })}
-        </ul>
+        aria-hidden
+        onClick={onMobileClose}
+      />
 
-        <Separator className="my-3" />
-
-        {!collapsed && (
-          <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-            Pipelines
-          </p>
+      {/* Mobile drawer (overlay, always expanded) */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85%] flex-col border-r bg-card text-card-foreground md:hidden transition-transform duration-200 will-change-transform',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
-        <ul className="space-y-0.5">
-          {pipelines.map((p) => {
-            const dotCls = PIPELINE_DOT[p.code] ?? FALLBACK_DOT;
-            const href = `/pipelines/${p.code}`;
-            return (
-              <NavLink
-                key={p.id}
-                href={href}
-                icon={
-                  <span
-                    className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCls)}
-                    aria-hidden
-                  />
-                }
-                label={p.name}
-                active={isActive(pathname, href)}
-                collapsed={collapsed}
-                badge={p.dealCount && p.dealCount > 0 ? p.dealCount : undefined}
-              />
-            );
-          })}
-        </ul>
-      </nav>
-
-      <div className="border-t py-2 px-2">
-        <ul className="space-y-0.5">
-          {BOTTOM_ITEMS.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={<item.icon className="h-4 w-4 shrink-0" />}
-              label={item.label ?? tNav(item.labelKey)}
-              active={isActive(pathname, item.href)}
-              collapsed={collapsed}
-            />
-          ))}
-        </ul>
-      </div>
-    </aside>
+        aria-label="Sidebar"
+        aria-hidden={!mobileOpen}
+      >
+        {renderBody({ isCollapsed: false, mobile: true })}
+      </aside>
+    </>
   );
 }
 
@@ -267,6 +336,7 @@ function NavLink({
   active,
   collapsed,
   badge,
+  onNavigate,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -274,11 +344,13 @@ function NavLink({
   active: boolean;
   collapsed: boolean;
   badge?: number;
+  onNavigate?: () => void;
 }) {
   return (
     <li>
       <Link
         href={href}
+        onClick={onNavigate}
         className={cn(
           'relative flex items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors',
           active
