@@ -52,7 +52,7 @@ export interface SendOutboundInput {
   // identity - caller resolves (decision c). Core does not pick env vs DB policy.
   fromName: string;
   fromAddress: string;
-  sendingAddressKind: SendingAddressKind;
+  sendingAddressKind?: SendingAddressKind;
   replyTo?: string;
 
   // content
@@ -190,6 +190,23 @@ async function getDefaultSignature(supabase: SbClient, orgId: string): Promise<s
   return (data as { html_content: string | null } | null)?.html_content ?? null;
 }
 
+/** Minimal plain-text -> HTML (used when a caller has only plain text, e.g. AI drafts). */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function plainToHtml(text: string): string {
+  const parts = text.split('\n').map((line) => {
+    const t = line.trim();
+    return t === '' ? '<br>' : `<p style="margin:0 0 8px 0">${escapeHtml(t)}</p>`;
+  });
+  return `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">${parts.join('\n')}</div>`;
+}
+
 /* ============================================================
  * Core
  * ============================================================ */
@@ -247,6 +264,11 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
       }
     }
     finalSubject = await renderWithContext(supabase, input.subject, partyId, contactId ?? undefined);
+  }
+
+  // [2b] ensure an HTML body exists (tracking pixel + signature require HTML).
+  if (!finalBody.trim() && input.bodyText) {
+    finalBody = plainToHtml(input.bodyText);
   }
 
   // [3] signature (default true)
