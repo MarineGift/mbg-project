@@ -17,8 +17,7 @@ interface Props { orgId: string; initialSignatures: EmailSignature[] }
 
 const BLANK = {
   name: '새 서명',
-  html: '<p>감사합니다.<br/><strong>홍길동</strong><br/>MBG Inc.</p>',
-  plain_text: '감사합니다.\n홍길동\nMBG Inc.',
+  html_content: '<p>감사합니다.<br/><strong>홍길동</strong><br/>MBG Inc.</p>',
   is_default: false,
 };
 
@@ -35,7 +34,7 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
   async function save() {
     if (!cur) return;
     setSaving(true);
-    try { await upsertSignature({ ...cur, organization_id: orgId }); toast.success('저장되었습니다.'); }
+    try { await upsertSignature({ id: cur.id, name: cur.name, html_content: cur.html_content, is_default: cur.is_default, organization_id: orgId } as any); toast.success('저장되었습니다.'); }
     catch (e) { toast.error('저장 실패: ' + String(e)); }
     finally { setSaving(false); }
   }
