@@ -64,7 +64,8 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
   // Thread-level context
   const partyContext = root?.party ?? latest?.party ?? null;
   const threadSubject = root?.subject ?? latest?.subject ?? '';
-  const isReplyable = latest && latest.direction === 'inbound';
+  const replyTarget = [...thread].reverse().find((m) => m.direction === 'inbound') ?? null;
+  const isReplyable = replyTarget != null;
 
   return (
     <div className="space-y-3">
@@ -106,7 +107,7 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
             <CardTitle className="text-sm">Reply</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2 items-center">
-            {latest.party ? (
+            {replyTarget.party ? (
               <>
                 <Button onClick={() => openReply('direct')} variant="default" size="sm">
                   <PenLine className="h-4 w-4 mr-1" />
@@ -128,14 +129,14 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
                     href={
                       '/compose?' +
                       new URLSearchParams({
-                        to: latest.fromAddress ?? '',
-                        subject: latest.subject
-                          ? (latest.subject.toLowerCase().startsWith('re:')
-                              ? latest.subject
-                              : 'Re: ' + latest.subject)
+                        to: replyTarget.fromAddress ?? '',
+                        subject: replyTarget.subject
+                          ? (replyTarget.subject.toLowerCase().startsWith('re:')
+                              ? replyTarget.subject
+                              : 'Re: ' + replyTarget.subject)
                           : '',
-                        inReplyTo: latest.messageId ?? '',
-                        threadId: latest.threadId ?? '',
+                        inReplyTo: replyTarget.messageId ?? '',
+                        threadId: replyTarget.threadId ?? '',
                       }).toString()
                     }
                   >
@@ -153,24 +154,24 @@ export function CommunicationDetailView({ thread, rootId, templates }: Props) {
       )}
 
       {/* Reply dialog mount (only when party present) */}
-      {isReplyable && latest.party && (
+      {isReplyable && replyTarget.party && (
         <ComposeEmailDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           mode="reply"
           initialTab={initialTab}
-          partyId={latest.party.id}
-          defaultTo={latest.fromAddress ?? ''}
+          partyId={replyTarget.party.id}
+          defaultTo={replyTarget.fromAddress ?? ''}
           defaultSubject={
-            latest.subject
-              ? latest.subject.toLowerCase().startsWith('re:')
-                ? latest.subject
-                : `Re: ${latest.subject}`
+            replyTarget.subject
+              ? replyTarget.subject.toLowerCase().startsWith('re:')
+                ? replyTarget.subject
+                : `Re: ${replyTarget.subject}`
               : ''
           }
-          replyToMessageId={latest.messageId ?? undefined}
-          threadId={latest.threadId ?? undefined}
-          originalCommunicationId={latest.id}
+          replyToMessageId={replyTarget.messageId ?? undefined}
+          threadId={replyTarget.threadId ?? undefined}
+          originalCommunicationId={replyTarget.id}
           templates={templates ?? []}
         />
       )}
