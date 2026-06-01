@@ -1,17 +1,24 @@
 /**
  * lib/actions/tasks.ts
  *
- * Task Server Actions.
- *   - markTaskComplete:    status='done' + completed_at=now()
- *   - markTaskIncomplete:  status='todo' + completed_at=null
- *   - updateTaskStatus:    임의 상태 변경 (in_progress, blocked, cancelled 등)
- *   - createTask:          신규 task 생성
- *   - updateTaskDetails:   상세 수정 (title, description, priority, due_at)
- *   - deleteTask:          soft delete (deleted_at = now())
+ * Task Server Actions (app.tasks — deal-scoped).
  *
- * 변경 이력:
- *   - 2026-05-12: deleteTask에서 존재하지 않는 deleted_by 컬럼 참조 제거.
- *                 (parties와 동일한 패턴 — actor 추적은 audit log에 위임)
+ * D6 schema reality (database.ts): app.tasks columns are
+ *   id, organization_id, deal_id(NOT NULL), checklist_id, title, description,
+ *   notes, status, priority, due_at, started_at, completed_at, deleted_at,
+ *   assigned_to_contact_id, assigned_to_user_id, estimated_minutes,
+ *   actual_minutes, extra_data, created_by, updated_by, created_at, updated_at.
+ *
+ * There is NO party_id / engagement_id / party_type / module column.
+ *
+ * 2026-06-01 cleanup:
+ *   - Removed all references to nonexistent columns (party_id/party_type) from
+ *     post-mutation .select(); now selects id, deal_id and revalidates the deal
+ *     surfaces. The UPDATEs themselves were already schema-valid.
+ *   - createTask: standalone (deal-less) creation is impossible because deal_id
+ *     is NOT NULL. Task creation now lives in the deal Tasks tab
+ *     (pipelines/[code]/deals/[id]/actions.ts -> addTask). createTask here
+ *     returns a clear validation error instead of failing at the DB.
  */
 
 'use server';
@@ -33,6 +40,15 @@ const statusSchema = z.object({
   taskId: z.string().uuid(),
   status: z.enum(['todo', 'in_progress', 'blocked', 'done', 'cancelled']),
 });
+
+type UpdatedTaskRow = { id: string; deal_id: string | null };
+
+/** Revalidate the surfaces a task can appear on. */
+function revalidateTaskSurfaces() {
+  revalidatePath('/tasks');
+  // Deal detail Tasks tab + kanban (layout-level to cover any /pipelines route).
+  revalidatePath('/pipelines', 'layout');
+}
 
 export async function markTaskComplete(input: {
   taskId: string;
@@ -57,7 +73,7 @@ export async function markTaskComplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, party_type')
+    .select('id, deal_id')
     .maybeSingle();
 
   if (error) {
@@ -66,12 +82,8 @@ export async function markTaskComplete(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; party_type: string | null };
-  revalidatePath('/tasks');
-  // task에 module이 있으면 그 모듈 경로로 revalidate (이전에 임시로 'investor' 하드코딩)
-  if (updated.party_id && updated.party_type) {
-    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
-  }
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
   return { ok: true };
 }
 
@@ -97,7 +109,7 @@ export async function markTaskIncomplete(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, party_type')
+    .select('id, deal_id')
     .maybeSingle();
 
   if (error) {
@@ -106,11 +118,8 @@ export async function markTaskIncomplete(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; party_type: string | null };
-  revalidatePath('/tasks');
-  if (updated.party_id && updated.party_type) {
-    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
-  }
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
   return { ok: true };
 }
 
@@ -138,64 +147,21 @@ const createTaskSchema = z.object({
     .nullable(),
 });
 
+/**
+ * Standalone task creation is not supported: app.tasks.deal_id is NOT NULL, so a
+ * task must be created from a deal. Use the deal detail "Tasks" tab
+ * (pipelines/[code]/deals/[id] -> addTask). Returns a validation error so any
+ * legacy caller fails gracefully instead of hitting a DB constraint error.
+ */
 export async function createTask(
-  input: z.input<typeof createTaskSchema>,
+  _input: z.input<typeof createTaskSchema>,
 ): Promise<TaskActionResult & { taskId?: string }> {
-  let auth: AuthContext;
-  try {
-    auth = await requireAuth();
-  } catch {
-    return { ok: false, errorCode: 'unauthorized' };
-  }
-  const parsed = createTaskSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      errorCode: 'validation',
-      errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input',
-    };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const insertRow: Record<string, unknown> = {
-    organization_id: auth.organizationId,
-    title: parsed.data.title.trim(),
-    description: parsed.data.description?.trim() || null,
-    status: 'todo',
-    priority: parsed.data.priority,
-    due_at: parsed.data.dueAt || null,
-    party_id: parsed.data.partyId || null,
-    engagement_id: parsed.data.engagementId || null,
-    contact_id: parsed.data.contactId || null,
-    module: parsed.data.module || null,
-    assigned_to_user_id: auth.userId,
-    created_by: auth.userId,
+  void _input;
+  return {
+    ok: false,
+    errorCode: 'validation',
+    errorMessage: 'Tasks must be created from a deal. Open the deal and use the Tasks tab.',
   };
-
-  const { data, error } = await supabase
-    .schema('app')
-    .from('tasks' as never)
-    .insert(insertRow as never)
-    .select('id')
-    .single();
-
-  if (error || !data) {
-    console.error('[tasks.createTask] insert error:', error);
-    return {
-      ok: false,
-      errorCode: 'database',
-      errorMessage: error?.message ?? 'Insert failed',
-    };
-  }
-
-  revalidatePath('/tasks');
-  if (parsed.data.partyId && parsed.data.module) {
-    revalidatePath(`/${parsed.data.module}/parties/${parsed.data.partyId}`);
-  }
-  if (parsed.data.engagementId) {
-    revalidatePath(`/engagements/${parsed.data.engagementId}`);
-  }
-  return { ok: true, taskId: (data as { id: string }).id };
 }
 
 const updateTaskDetailsSchema = createTaskSchema.extend({
@@ -221,6 +187,8 @@ export async function updateTaskDetails(
   }
 
   const supabase = await createSupabaseServerClient();
+  // Only schema-valid columns. party/engagement/module inputs are ignored
+  // (no such columns on app.tasks).
   const updates: Record<string, unknown> = {
     title: parsed.data.title.trim(),
     description: parsed.data.description?.trim() || null,
@@ -236,7 +204,7 @@ export async function updateTaskDetails(
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, party_type')
+    .select('id, deal_id')
     .maybeSingle();
 
   if (error) {
@@ -245,11 +213,8 @@ export async function updateTaskDetails(
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; party_type: string | null };
-  revalidatePath('/tasks');
-  if (updated.party_id && updated.party_type) {
-    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
-  }
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
   return { ok: true };
 }
 
@@ -264,8 +229,7 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
   if (!parsed.success) return { ok: false, errorCode: 'validation' };
 
   const supabase = await createSupabaseServerClient();
-  // soft delete — audit log 트리거가 actor 자동 기록.
-  // app.tasks 스키마에 deleted_by 컬럼이 존재하지 않으므로 deleted_at만 설정.
+  // soft delete — audit log trigger records the actor.
   const { error, data } = await supabase
     .schema('app')
     .from('tasks' as never)
@@ -275,7 +239,7 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, party_type')
+    .select('id, deal_id')
     .maybeSingle();
 
   if (error) {
@@ -284,11 +248,8 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; party_type: string | null };
-  revalidatePath('/tasks');
-  if (updated.party_id && updated.party_type) {
-    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
-  }
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
   return { ok: true };
 }
 
@@ -322,7 +283,7 @@ export async function updateTaskStatus(input: {
     .eq('id', parsed.data.taskId)
     .eq('organization_id', auth.organizationId)
     .is('deleted_at', null)
-    .select('id, party_id, party_type')
+    .select('id, deal_id')
     .maybeSingle();
 
   if (error) {
@@ -331,10 +292,7 @@ export async function updateTaskStatus(input: {
   }
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  const updated = data as { id: string; party_id: string | null; party_type: string | null };
-  revalidatePath('/tasks');
-  if (updated.party_id && updated.party_type) {
-    revalidatePath(`/${updated.party_type}/parties/${updated.party_id}`);
-  }
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
   return { ok: true };
 }

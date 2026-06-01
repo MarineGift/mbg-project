@@ -1,11 +1,11 @@
 /**
  * lib/auth.ts
  *
- * Server Component·Server Action·Route Handler에서 사용하는 인증 헬퍼.
+ * Auth helper used in Server Components, Server Actions, and Route Handlers.
  *
- * 중요: app_metadata는 JWT에 hook이 주입한 것을 직접 디코드해서 사용한다.
- *       supabase.auth.getUser()는 DB의 raw_app_meta_data를 반환하므로
- *       hook이 주입한 organization_id를 못 본다.
+ * Important: app_metadata is used by decoding what the hook injected into the JWT directly.
+ *       supabase.auth.getUser() returns the DB's raw_app_meta_data, so it
+ *       does not see the organization_id injected by the hook.
  */
 
 import 'server-only';
@@ -32,7 +32,7 @@ export class AuthError extends Error {
 }
 
 /**
- * JWT의 payload 부분을 디코드. JWT 형식: header.payload.signature
+ * Decode the payload part of the JWT. JWT format: header.payload.signature
  */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {

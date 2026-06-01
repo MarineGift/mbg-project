@@ -1,12 +1,12 @@
 /**
  * types/engagement.ts
  *
- * Engagement(인게이지먼트, deals) 화면의 데이터 모델.
+ * Data model for the Engagement (deals) screen.
  *
- * Kanban 구조 (스키마 정규화):
- *   pipeline_definitions (모듈별 활성 파이프라인)
- *     └─ pipeline_stages   (stage 컬럼들)
- *         └─ engagements   (각 stage에 속한 카드들)
+ * Kanban structure (normalized schema):
+ *   pipeline_definitions (active pipeline per module)
+ *     └─ pipeline_stages   (stage columns)
+ *         └─ engagements   (cards belonging to each stage)
  */
 
 import type { PartyTypeCode } from './ai';
@@ -20,7 +20,7 @@ export type EngagementStatus =
   | 'lost'
   | 'archived';
 
-/** pipeline_stage_type — LEAN 분석용 공통 매핑. */
+/** pipeline_stage_type - common mapping for LEAN analysis. */
 export type PipelineStageType =
   | 'lead'
   | 'qualified'
@@ -30,7 +30,7 @@ export type PipelineStageType =
   | 'closed_lost'
   | 'other';
 
-/** Kanban 한 컬럼 = 한 pipeline_stage. */
+/** One Kanban column = one pipeline_stage. */
 export interface KanbanStage {
   id: string;
   pipelineDefinitionId: string;
@@ -45,7 +45,7 @@ export interface KanbanStage {
   colorHex: string | null;
 }
 
-/** Kanban 카드 = 한 engagement (목록용 평탄화). */
+/** Kanban card = one engagement (flattened for listing). */
 export interface KanbanCard {
   id: string;
   name: string;
@@ -64,18 +64,18 @@ export interface KanbanCard {
   updatedAt: string;
 }
 
-/** Kanban 보드 — 한 모듈의 default pipeline + stages + cards. */
+/** Kanban board - one module's default pipeline + stages + cards. */
 export interface KanbanBoard {
   partyType: PartyTypeCode;
-  /** module에 default pipeline이 없을 경우 null — 사용자에게 안내 표시 */
+  /** null when the module has no default pipeline - show guidance to the user */
   pipelineDefinitionId: string | null;
   pipelineName: string | null;
   stages: KanbanStage[];
-  /** stage_id → cards 그룹 매핑 */
+  /** stage_id -> cards group mapping */
   cardsByStage: Record<string, KanbanCard[]>;
-  /** stage가 없거나 매핑 안 된 카드 — '미분류' 컬럼 */
+  /** cards with no stage or unmapped - the 'Uncategorized' column */
   uncategorizedCards: KanbanCard[];
-  /** 카운트 (UI 헤더 표시용) */
+  /** count (for the UI header display) */
   totalCount: number;
 }
 
@@ -122,7 +122,7 @@ export interface EngagementDetail {
   source: string | null;
   createdAt: string;
   updatedAt: string;
-  /** 이 인게이지먼트의 사용 가능 stages (드롭다운 옵션) */
+  /** available stages for this engagement (dropdown options) */
   availableStages: KanbanStage[];
   stageHistory: EngagementStageHistoryItem[];
 }

@@ -2,7 +2,7 @@
 
 /**
  * src/app/actions/delete-task.ts
- * Task soft-delete — delete-communication.ts와 동일 패턴
+ * Task soft-delete - same pattern as delete-communication.ts
  */
 
 import { revalidatePath } from 'next/cache';
@@ -14,7 +14,7 @@ export type DeleteTaskResult =
   | { success: true }
   | { success: false; error: string };
 
-// JWT에서 orgId 추출
+// extract orgId from the JWT
 async function getSessionOrgId(): Promise<{ orgId: string } | null> {
   const supabase = await createSupabaseServerClient();
   const { data: { session } } = await supabase.auth.getSession();
@@ -34,7 +34,7 @@ async function getSessionOrgId(): Promise<{ orgId: string } | null> {
   }
 }
 
-// app 스키마 전용 admin client (RLS 우회)
+// app-schema-only admin client (bypasses RLS)
 function makeAdminAppClient() {
   return createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,

@@ -1,28 +1,28 @@
 /**
  * types/ai.ts
  *
- * AI 시스템의 도메인 객체 타입.
- * ai 스키마(ai.agents·ai.runs·ai.drafts·ai.brand_voice·ai.knowledge_chunks·
- * ai.auto_send_rules)의 행을 camelCase로 매핑한다.
+ * Domain object types for the AI system.
+ * Maps rows of the ai schema (ai.agents, ai.runs, ai.drafts, ai.brand_voice, ai.knowledge_chunks,
+ * ai.auto_send_rules) to camelCase.
  *
- * DB row → 도메인 객체 변환은 lib/db/mappers.ts에서 수행.
+ * DB row -> domain object conversion is done in lib/db/mappers.ts.
  */
 
 import type { ClassificationOutput, RiskFlag, StandardCategory } from './classification';
 
 /* ============================================================
- * 1. 모델·역할 enum
+ * 1. Model/role enums
  * ============================================================ */
 
-/** AI 에이전트 역할 (ai.agents.role 컬럼). */
+/** AI agent role (ai.agents.role column). */
 export type AgentRole =
-  | 'classifier' // 메일 분류기 (Haiku)
-  | 'reply_drafter' // 회신 초안 작성자 (Opus)
-  | 'strategy_advisor' // 전략 어드바이저 (Opus)
-  | 'summarizer' // 본문 요약기 (Haiku)
-  | 'content_extractor'; // 스크래핑 결과 정규화 (Haiku)
+  | 'classifier' // mail classifier (Haiku)
+  | 'reply_drafter' // reply-draft writer (Opus)
+  | 'strategy_advisor' // strategy advisor (Opus)
+  | 'summarizer' // body summarizer (Haiku)
+  | 'content_extractor'; // scraping-result normalizer (Haiku)
 
-/** 허용된 Claude 모델 ID. 다른 값이 들어오면 ClaudeInvalidModelError throw. */
+/** Allowed Claude model IDs. Any other value throws ClaudeInvalidModelError. */
 export type ClaudeModel =
   | 'claude-opus-4-7'
   | 'claude-sonnet-4-6'
@@ -37,8 +37,8 @@ export type DraftStatus =
   | 'auto_sent';
 
 /**
- * 분류기의 10개 표준 카테고리 (마스터 §4.2). 절대 변경 금지.
- * SQL CHECK 제약 (ai.drafts.classification_category, ai.auto_send_rules)과 일치.
+ * The classifier's 10 standard categories (master §4.2). Never change.
+ * Matches the SQL CHECK constraints (ai.drafts.classification_category, ai.auto_send_rules).
  */
 export type ClassificationCategory =
   | 'information_request'
@@ -53,7 +53,7 @@ export type ClassificationCategory =
   | 'other';
 
 /**
- * 표준 카테고리 배열 — UI 드롭다운 등에 사용.
+ * Standard category array - used for UI dropdowns, etc.
  */
 export const CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
   'information_request',
@@ -69,7 +69,7 @@ export const CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
 ] as const;
 
 /**
- * 도메인 수준 호출 상태(코드 vocabulary). recordRun()이 DB ai.run_status로 매핑한다.
+ * Domain-level call status (code vocabulary). recordRun() maps it to the DB ai.run_status.
  * - success         → ai.run_status='completed'
  * - failed          → ai.run_status='failed'
  * - timeout         → ai.run_status='timed_out'
@@ -77,7 +77,7 @@ export const CLASSIFICATION_CATEGORIES: readonly ClassificationCategory[] = [
  */
 export type RunStatus = 'success' | 'failed' | 'timeout' | 'budget_exceeded';
 
-/** 모듈 ENUM (마스터 프롬프트 §3.1). */
+/** Module ENUM (master prompt §3.1). */
 /**
  * @deprecated Use PartyTypeCode from '@/types/party-type' instead.
  *
@@ -97,7 +97,7 @@ export type { PartyTypeCode };
 export type Language = 'ko' | 'en' | 'ja';
 
 /* ============================================================
- * 2. AgentRow — ai.agents 행
+ * 2. AgentRow - ai.agents row
  * ============================================================ */
 export interface AgentRow {
   id: string;
@@ -119,7 +119,7 @@ export interface AgentRow {
 }
 
 /* ============================================================
- * 3. BrandVoiceRow — ai.brand_voice 행
+ * 3. BrandVoiceRow - ai.brand_voice row
  * ============================================================ */
 export interface BrandVoiceRow {
   id: string;
@@ -140,7 +140,7 @@ export interface BrandVoiceRow {
 }
 
 /* ============================================================
- * 4. KnowledgeChunkRow (검색 결과)
+ * 4. KnowledgeChunkRow (search result)
  * ============================================================ */
 export interface KnowledgeChunkSearchResult {
   id: string;
@@ -153,7 +153,7 @@ export interface KnowledgeChunkSearchResult {
 }
 
 /* ============================================================
- * 5. AutoSendRuleRow — ai.auto_send_rules 행
+ * 5. AutoSendRuleRow - ai.auto_send_rules row
  * ============================================================ */
 export interface AutoSendRuleRow {
   id: string;
@@ -173,7 +173,7 @@ export interface AutoSendRuleRow {
 }
 
 /* ============================================================
- * 6. DraftRow — ai.drafts 행
+ * 6. DraftRow - ai.drafts row
  * ============================================================ */
 export interface DraftRow {
   id: string;
@@ -210,21 +210,21 @@ export interface DraftRow {
 
 export interface ClaudeCompleteInput {
   agentRole: AgentRole;
-  /** Party 컨텍스트(선택). prompt-renderer가 조회. */
+  /** Party context (optional). Looked up by prompt-renderer. */
   partyId?: string;
-  /** Engagement 컨텍스트(선택). thread_history 조회 시 보조. */
+  /** Engagement context (optional). Aids thread_history lookup. */
   engagementId?: string;
-  /** 모델에 전달할 메시지 본문. PII 마스킹은 maskPii 옵션으로 제어. */
+  /** Message body to pass to the model. PII masking is controlled by the maskPii option. */
   inboundMessage: string;
-  /** 응답 언어 힌트(brand_voice 매칭에 사용). */
+  /** Response language hint (used for brand_voice matching). */
   language?: Language;
-  /** PII 마스킹 강제 여부. 미지정 시 agent.requirePiiMasking 따름. */
+  /** Whether to force PII masking. If unset, follows agent.requirePiiMasking. */
   maskPii?: boolean;
-  /** 'json' 시 응답을 JSON.parse → parsedJson에 채움. */
+  /** When 'json', the response is JSON.parse'd -> filled into parsedJson. */
   outputFormat?: 'text' | 'json';
-  /** 사용자 메시지에 추가할 컨텍스트(prompt-renderer 입력 보강용). */
+  /** Context to add to the user message (to enrich prompt-renderer input). */
   extraContext?: Record<string, unknown>;
-  /** 호출자 식별용 트레이스 라벨(로깅에만 사용). */
+  /** Trace label for identifying the caller (logging only). */
   traceLabel?: string;
 }
 
@@ -232,7 +232,7 @@ export interface ClaudeCompleteOutput {
   content: string;
   parsedJson?: object;
   runId: string;
-  /** ai.runs.agent_id와 동일. ai.drafts.agent_id (NOT NULL)에 사용. */
+  /** Same as ai.runs.agent_id. Used for ai.drafts.agent_id (NOT NULL). */
   agentId: string;
   model: ClaudeModel;
   latencyMs: number;
@@ -242,7 +242,7 @@ export interface ClaudeCompleteOutput {
 }
 
 /* ============================================================
- * 8. ReplyDrafter 출력
+ * 8. ReplyDrafter output
  * ============================================================ */
 export interface ReplyDrafterOutput {
   subject: string;
@@ -252,15 +252,15 @@ export interface ReplyDrafterOutput {
   riskFlags: RiskFlag[];
   requiresHumanApproval: boolean;
   language: Language;
-  /** 회신가가 사용한 brand_voice example의 인덱스(학습 루프용). */
+  /** Index of the brand_voice example the drafter used (for the learning loop). */
   usedBrandVoiceExampleIndices?: number[];
-  /** 사용된 knowledge_chunks의 ID(추적용). */
+  /** IDs of the knowledge_chunks used (for tracing). */
   citedKnowledgeChunkIds?: string[];
 }
 
 /**
- * Reply Drafter JSON 응답을 ReplyDrafterOutput으로 검증·변환.
- * 위반 시 [false, 사유] 반환 — processor가 requires_human_approval=true로 강제.
+ * Validate/convert the Reply Drafter JSON response into ReplyDrafterOutput.
+ * On violation, returns [false, reason] - the processor forces requires_human_approval=true.
  */
 export function validateReplyDrafterOutput(
   obj: unknown,
@@ -321,7 +321,7 @@ export function validateReplyDrafterOutput(
 }
 
 /* ============================================================
- * 9. RecordRun 입력 (cost-tracker → ai.runs INSERT)
+ * 9. RecordRun input (cost-tracker -> ai.runs INSERT)
  * ============================================================ */
 export interface RecordRunInput {
   agentId: string;
@@ -340,12 +340,12 @@ export interface RecordRunInput {
   knowledgeChunkIds?: string[];
   errorMessage?: string;
   errorStatus?: number;
-  /** trace 라벨(예: 'processor:classifier'). */
+  /** trace label (e.g. 'processor:classifier'). */
   traceLabel?: string;
 }
 
 /* ============================================================
- * 10. 분류 결과 + 회신 결과를 함께 다루는 합성 타입
+ * 10. Composite type holding both classification and reply results
  * ============================================================ */
 export interface ProcessedInbound {
   communicationId: string;

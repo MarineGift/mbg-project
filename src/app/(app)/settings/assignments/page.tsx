@@ -1,5 +1,5 @@
 // src/app/(app)/settings/assignments/page.tsx
-// Manager/admin-only screen to assign parties (거래처) to a user (owner).
+// Manager/admin-only screen to assign parties to a user (owner).
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import AssignmentsClient, { type OrgUser } from './assignments-client'
 

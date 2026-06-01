@@ -1,19 +1,19 @@
 /**
  * tests/action-schemas.test.ts
  *
- * Server Actions의 zod 검증 로직 테스트.
- * Server Action 자체는 supabase mock 없이 테스트하기 복잡하므로,
- * 여기선 schema가 input을 정확히 검증·정규화하는지에 집중.
+ * Tests the zod validation logic of Server Actions.
+ * Since the Server Action itself is complex to test without a supabase mock,
+ * this focuses on whether the schema validates/normalizes input correctly.
  *
- * Server Action 모듈을 직접 import할 수 없는 이유: 'use server' + supabase server client
- * → schema를 재정의해서 동일 규칙 검증.
+ * Why the Server Action module can't be imported directly: 'use server' + supabase server client
+ * -> redefine the schema to verify the same rules.
  */
 
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
 describe('Party action schemas', () => {
-  // src/lib/actions/parties.ts와 동일한 규칙 재정의
+  // redefine the same rules as src/lib/actions/parties.ts
   const partySchema = z.object({
     name: z.string().min(1).max(200),
     module: z.enum([

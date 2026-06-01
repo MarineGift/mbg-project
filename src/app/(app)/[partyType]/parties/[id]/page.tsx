@@ -84,7 +84,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
     redirect(`/${full.party.partyType}/parties/${id}`);
   }
 
-  // organization_id: env 변수 (단일 조직 앱)
+  // organization_id: env variable (single-org app)
   const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID ?? '';
   const partyCountry = full.party.countryCode ?? null;  // DB: country_code
 
@@ -104,7 +104,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
 
   const defaultContactName: string | null = getContactDisplayName(defaultContact);
 
-  // contacts → sequence panel용 shape 변환
+  // contacts -> transform into the shape needed by the sequence panel
   const sequenceContacts = full.contacts.map((c: any) => ({
     id:        c.id,
     full_name: c.fullName ?? c.full_name ?? '',

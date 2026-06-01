@@ -26,7 +26,7 @@ export function DraftEditor({ draft, readOnly = false }: Props) {
   const [isPending, startTransition] = useTransition();
   const [mode, setMode] = useState<ViewMode>('edit');
 
-  // 초기값: 편집본 있으면 편집본, 없으면 AI 원본
+  // initial value: the edited version if present, otherwise the AI original
   const initialSubject = draft.finalSubject ?? draft.subject ?? '';
   const initialBody = draft.finalBodyPlain ?? draft.bodyPlain;
 

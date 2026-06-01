@@ -1,4 +1,4 @@
-// src/lib/queries/calendar.ts  (v2 — meetings 포함)
+// src/lib/queries/calendar.ts  (v2 - includes meetings)
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 // ─────────────────────────────────────────────
@@ -29,7 +29,7 @@ export interface CalendarItem {
 }
 
 // ─────────────────────────────────────────────
-// fetchCalendarItems — 통합 조회
+// fetchCalendarItems - unified query
 // ─────────────────────────────────────────────
 
 export async function fetchCalendarItems(
@@ -40,7 +40,7 @@ export async function fetchCalendarItems(
 
   const [eventsRes, meetingsRes, tasksRes, commsRes] = await Promise.all([
 
-    // 1. calendar_events (Google/MS/internal — meeting_id 없는 것)
+    // 1. calendar_events (Google/MS/internal - those without a meeting_id)
     supabase.schema('app').from('calendar_events' as never).select(`
       id, title, location, meeting_url,
       start_at, end_at, is_all_day, status, source,
@@ -49,11 +49,11 @@ export async function fetchCalendarItems(
     `)
     .gte('start_at', rangeStart)
     .lte('start_at', rangeEnd)
-    .is('meeting_id', null)            // meeting이 있는 건 meetings 쿼리로
+    .is('meeting_id', null)            // rows that have a meeting go through the meetings query
     .neq('status', 'cancelled')
     .order('start_at'),
 
-    // 2. meetings (calendar_event_id 유무 모두 포함)
+    // 2. meetings (includes both with and without a calendar_event_id)
     supabase.schema('app').from('meetings' as never).select(`
       id, title, meeting_type,
       scheduled_at, duration_min, status,
@@ -68,9 +68,7 @@ export async function fetchCalendarItems(
 
     // 3. tasks with due_at
     supabase.schema('app').from('tasks' as never).select(`
-      id, title, due_at,
-      party_id,
-      parties ( name:party_name )
+      id, title, due_at, deal_id
     `)
     .not('due_at', 'is', null)
     .gte('due_at', rangeStart)
@@ -143,9 +141,9 @@ export async function fetchCalendarItems(
       start_at:      t.due_at,
       end_at:        t.due_at,
       is_all_day:    true,
-      party_id:      t.party_id ?? null,
-      party_name:    (t.parties as any)?.name ?? null,
-      engagement_id: null,
+      party_id:      null,
+      party_name:    null,
+      engagement_id: t.deal_id ?? null,
     })
   }
 
@@ -168,7 +166,7 @@ export async function fetchCalendarItems(
 }
 
 // ─────────────────────────────────────────────
-// createCalendarEvent — internal 이벤트 생성
+// createCalendarEvent - create an internal event
 // ─────────────────────────────────────────────
 
 export interface CreateCalendarEventInput {

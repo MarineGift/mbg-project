@@ -1,22 +1,22 @@
 /**
  * __tests__/email/auto-send-gate.test.ts
  *
- * auto-send-gate의 10단계 평가를 단계별로 검증.
+ * Verifies the auto-send-gate's 10-step evaluation step by step.
  *
- * 시나리오:
- *   - global flag 비활성화 → global_disabled
- *   - rule 없음 → no_rule_defined
+ * Scenarios:
+ *   - global flag disabled -> global_disabled
+ *   - no rule -> no_rule_defined
  *   - is_blocked → rule_blocked
- *   - module 불일치 → module_not_allowed
- *   - confidence 미달 → confidence_below_threshold
- *   - human 강제 → requires_human_approval / drafter_requires_human
- *   - risk_flags 존재 → risk_flags_present
- *   - blocked keyword 매칭 → blocked_keyword:xxx
- *   - daily limit 초과 → daily_limit_reached
- *   - 모든 통과 → allowed=true
+ *   - module mismatch -> module_not_allowed
+ *   - confidence below threshold -> confidence_below_threshold
+ *   - human forced -> requires_human_approval / drafter_requires_human
+ *   - risk_flags present -> risk_flags_present
+ *   - blocked keyword match -> blocked_keyword:xxx
+ *   - daily limit exceeded -> daily_limit_reached
+ *   - all pass -> allowed=true
  *
- * env.AI_AUTO_SEND_ENABLED는 setupFiles에서 false로 주입되어 있으므로,
- * "통과" 케이스는 vi.stubEnv 또는 직접 env 모듈 mock으로 우회한다.
+ * since env.AI_AUTO_SEND_ENABLED is injected as false in setupFiles,
+ * the "pass" cases work around it via vi.stubEnv or directly mocking the env module.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -24,7 +24,7 @@ import { evaluateAutoSend, matchBlockedKeyword } from '../../lib/email/auto-send
 import { buildSupabaseMock, type MockSupabase } from '../setup/supabase-mock';
 import type { ClassificationOutput } from '../../types/classification';
 
-// 기본 통과 가능한 분류 결과
+// a classification result that can pass by default
 const baseClassification: ClassificationOutput = {
   category: 'simple_acknowledgment',
   urgency: 'low',
@@ -64,7 +64,7 @@ describe('matchBlockedKeyword', () => {
   });
 
   it('falls back to substring on invalid regex', () => {
-    // ( 는 단독으로 잘못된 정규식 → substring 매칭으로 fallback
+    // ( alone is an invalid regex -> fall back to substring matching
     expect(matchBlockedKeyword('special (discount) inside', ['('])).toBe('(');
   });
 
@@ -74,10 +74,10 @@ describe('matchBlockedKeyword', () => {
 });
 
 /* --------------------------------------------------------------------
- * 다음 describe는 env 모듈을 mock해서 AI_AUTO_SEND_ENABLED=true 환경에서
- * 각 단계를 격리 검증한다.
- * "global_disabled" 경로는 evaluateAutoSend 첫 줄의 단순 조건이므로
- * 별도 단위 테스트 없이 스킵 — 통합 테스트에서 검증.
+ * the next describe mocks the env module to verify each step in isolation under
+ * an AI_AUTO_SEND_ENABLED=true environment.
+ * the "global_disabled" path is a simple condition on evaluateAutoSend's first line, so
+ * it's skipped here without a separate unit test - verified in integration tests.
  * ------------------------------------------------------------------ */
 
 vi.mock('../../lib/env', async () => {

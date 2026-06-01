@@ -32,7 +32,7 @@ import { AttachmentUploader } from '@/components/email/attachment-uploader';
 import type { UploadedAttachment } from '@/lib/actions/upload-attachment';
 
 interface Props {
-  /** 미리 채울 수신자 (선택) */
+  /** recipient to pre-fill (optional) */
   defaultTo?: string;
   defaultSubject?: string;
   defaultBody?: string;

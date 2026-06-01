@@ -1,19 +1,19 @@
 /**
  * lib/ai/prompt-renderer.ts
  *
- * ClaudeClient의 입력을 Anthropic Messages API의
- * { system, messages } 포맷으로 변환한다.
+ * Converts ClaudeClient's input into the Anthropic Messages API's
+ * { system, messages } format.
  *
- * 합성 데이터:
+ * Composed data:
  *   1. agent.systemPrompt           → system
- *   2. brand_voice (모듈+언어 매칭)  → 사용자 메시지 컨텍스트 번들
- *   3. knowledge_chunks (vector top_k=8) → 동일
- *   4. party 컨텍스트 (선택)        → 동일
- *   5. thread_history (최근 5개)    → 동일
- *   6. inboundMessage              → 동일
+ *   2. brand_voice (module + language match)  -> user-message context bundle
+ *   3. knowledge_chunks (vector top_k=8) -> same
+ *   4. party context (optional)        -> same
+ *   5. thread_history (most recent 5)    -> same
+ *   6. inboundMessage              -> same
  *
- * 임베딩 생성은 lib/ai/embeddings.ts에서 별도 처리.
- * (본 파일에서는 query embedding을 외부 인자로 받는 buildBundle 분기 제공)
+ * Embedding generation is handled separately in lib/ai/embeddings.ts.
+ * (this file provides a buildBundle branch that takes the query embedding as an external argument)
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -29,7 +29,7 @@ import type {
 } from '../../types/ai';
 
 /* ============================================================
- * 1. 입출력 타입
+ * 1. Input/output types
  * ============================================================ */
 
 export interface RenderInput {
@@ -40,9 +40,9 @@ export interface RenderInput {
   engagementId?: string;
   inboundMessage: string;
   language?: Language;
-  /** 호출자가 미리 계산한 임베딩(테스트용 또는 캐시 적중 시). */
+  /** Embedding precomputed by the caller (for tests or on a cache hit). */
   precomputedEmbedding?: number[];
-  /** 추가 컨텍스트(예: classification 결과). */
+  /** Additional context (e.g. classification result). */
   extraContext?: Record<string, unknown>;
 }
 
@@ -76,10 +76,10 @@ interface ThreadHistoryItem {
 }
 
 /* ============================================================
- * 2. OpenAI 임베딩 클라이언트 (싱글턴)
+ * 2. OpenAI embedding client (singleton)
  * ----------------------------------------------------------
- * embedQuery는 본 모듈 내부에서만 사용. 외부에서 query embedding을
- * 미리 계산해 넘기려면 RenderInput.precomputedEmbedding 사용.
+ * embedQuery is used only inside this module. To pass a query embedding from outside,
+ * precompute it and use RenderInput.precomputedEmbedding.
  * ============================================================ */
 let openaiSingleton: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -100,8 +100,8 @@ export class EmbeddingError extends Error {
 }
 
 /**
- * 텍스트 → 1536차원 임베딩 벡터.
- * 짧은 입력에 한해 호출 (정규화: 공백 정규화, 4000자로 절단).
+ * text -> 1536-dimensional embedding vector.
+ * Called only for short inputs (normalization: whitespace normalized, truncated to 4000 chars).
  */
 export async function embedQuery(
   text: string,
@@ -131,7 +131,7 @@ export async function embedQuery(
 }
 
 /* ============================================================
- * 3. 보조 조회 함수
+ * 3. Helper lookup functions
  * ============================================================ */
 
 async function loadBrandVoice(
@@ -270,7 +270,7 @@ async function loadThreadHistory(
 }
 
 /* ============================================================
- * 4. 메인 — renderPrompt
+ * 4. Main - renderPrompt
  * ============================================================ */
 
 export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> {
@@ -286,7 +286,7 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
     extraContext,
   } = input;
 
-  // 1. brand_voice (agent.applicableModules[0]을 우선 사용)
+  // 1. brand_voice (prefers agent.applicableModules[0])
   const PartyTypeCode = agent.applicablePartyTypes?.[0];
   const brandVoice = await loadBrandVoice(
     supabase,
@@ -295,10 +295,10 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
     language,
   );
 
-  // 2. party 컨텍스트
+  // 2. party context
   const party = partyId ? await loadParty(supabase, partyId) : null;
 
-  // 3. 임베딩 + knowledge_chunks
+  // 3. embedding + knowledge_chunks
   let embeddingTokens = 0;
   let queryEmbedding = precomputedEmbedding;
   if (!queryEmbedding) {
@@ -307,7 +307,7 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
       queryEmbedding = r.vector;
       embeddingTokens = r.tokens;
     } catch (err) {
-      // 임베딩 실패는 치명적이지 않음 — knowledge_chunks 없이 진행
+      // an embedding failure is not fatal - proceed without knowledge_chunks
       // eslint-disable-next-line no-console
       console.warn('[prompt-renderer] embedding failed, continuing without RAG:', err);
       queryEmbedding = undefined;
@@ -331,7 +331,7 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
     engagementId,
   );
 
-  // 5. 컨텍스트 번들 합성
+  // 5. compose the context bundle
   const contextBundle = {
     inbound_message: inboundMessage,
     target_language: language ?? null,
@@ -377,19 +377,19 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
 }
 
 /* ============================================================
- * 5. Liquid 변수 치환 (이메일 템플릿 본문 렌더링용)
+ * 5. Liquid variable substitution (for rendering email-template bodies)
  * ----------------------------------------------------------
- * 본 모듈의 부가 기능. email_templates의 본문에 {{ company_name }}
- * 같은 변수가 있을 때, 키-값 맵을 받아 안전하게 치환.
- * 정확한 LiquidJS 호환은 별도 모듈에서 처리하고, 여기는 단순
- * `{{ key }}` 치환만 지원.
+ * An add-on feature of this module. When an email_templates body has a variable like {{ company_name }},
+ * it takes a key-value map and substitutes safely.
+ * Exact LiquidJS compatibility is handled in a separate module; here only simple
+ * `{{ key }}` substitution is supported.
  * ============================================================ */
 
 /**
- * Liquid-스타일 변수 치환(단순 {{ key }} 형태만).
- * 공백 변형 허용: `{{key}}`, `{{ key }}`, `{{  key  }}`.
- * 미정의 키는 빈 문자열로 치환하지 않고 토큰 그대로 남겨, 호출자가
- * 검증할 수 있게 한다.
+ * Liquid-style variable substitution (simple {{ key }} form only).
+ * Whitespace variants allowed: `{{key}}`, `{{ key }}`, `{{  key  }}`.
+ * Undefined keys are left as the original token rather than replaced with an empty string, so the caller
+ * can validate them.
  */
 export function renderLiquidVariables(
   template: string,
@@ -402,7 +402,7 @@ export function renderLiquidVariables(
       const value = variables[key];
       if (value === undefined || value === null) {
         missing.add(key);
-        return full; // 토큰 보존
+        return full; // preserve the token
       }
       return String(value);
     },

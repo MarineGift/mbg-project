@@ -1,17 +1,17 @@
 /**
  * types/party-type.ts
  *
- * 두 차원의 party 분류:
+ * Two dimensions of party classification:
  *
- *   PartyType  - 비즈니스 카테고리 (urm.party_types 기반)
+ *   PartyType  - business category (based on urm.party_types)
  *     investor, paper_mill, filler_supplier, buyer, customer, partner, government_grant
  *
- *   PartyKind  - 법인 형태 (app.party_kind enum 기반)
+ *   PartyKind  - legal entity form (based on the app.party_kind enum)
  *     company, organization, individual, fund, government
  *
  * Naming policy (2026-05-25 Phase C):
- *   - TS type 이름: PartyType, PartyKind (PascalCase)
- *   - TS property / variable / form field: partyType, partyKind (camelCase, React/Next.js 컨벤션)
+ *   - TS type names: PartyType, PartyKind (PascalCase)
+ *   - TS property / variable / form field: partyType, partyKind (camelCase, React/Next.js convention)
  *   - DB column: party_type, party_kind (snake_case)
  *
  * Source of truth:
@@ -20,7 +20,7 @@
  */
 
 // ============================================================
-// PartyType - 비즈니스 카테고리
+// PartyType - business category
 // ============================================================
 
 export type PartyType =
@@ -32,10 +32,10 @@ export type PartyType =
   | 'partner'
   | 'government_grant';
 
-/** Legacy alias. 새 코드는 PartyType 직접 사용. */
+/** Legacy alias. New code uses PartyType directly. */
 export type PartyTypeCode = PartyType;
 
-/** 전체 PartyType 배열. */
+/** Array of all PartyType values. */
 export const PARTY_TYPES: readonly PartyType[] = [
   'investor',
   'paper_mill',
@@ -50,7 +50,7 @@ export const PARTY_TYPES: readonly PartyType[] = [
 export const PARTY_TYPE_CODES: readonly PartyType[] = PARTY_TYPES;
 
 /**
- * urm.party_types.id (smallint) ↔ code 매핑.
+ * urm.party_types.id (smallint) <-> code mapping.
  */
 export const PARTY_TYPE_ID_BY_CODE: Record<PartyType, number> = {
   investor: 1,
@@ -72,7 +72,7 @@ export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
   7: 'government_grant',
 };
 
-/** 다국어 표시명. */
+/** Localized display names. */
 export const PARTY_TYPE_DISPLAY: Record<
   PartyType,
   { en: string; ko: string; ja: string }
@@ -102,7 +102,7 @@ export function isPartyType(v: unknown): v is PartyType {
 export const isPartyTypeCode = isPartyType;
 
 // ============================================================
-// PartyKind - 법인 형태
+// PartyKind - legal entity form
 // ============================================================
 
 export type PartyKind =

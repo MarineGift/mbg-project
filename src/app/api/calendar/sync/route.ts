@@ -1,19 +1,19 @@
 // src/app/api/calendar/sync/route.ts
-// POST /api/calendar/sync — 수동 또는 cron 트리거
+// POST /api/calendar/sync - manual or cron trigger
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { syncAllConnections } from '@/lib/calendar/sync-engine'
 
 export async function POST(req: NextRequest) {
-  // cron 요청: Authorization 헤더로 검증
+  // cron request: verified via the Authorization header
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
 
   const isCron   = cronSecret && authHeader === `Bearer ${cronSecret}`
-  const isManual = !cronSecret  // 개발환경
+  const isManual = !cronSecret  // dev environment
 
   if (!isCron && !isManual) {
-    // 일반 사용자 세션 확인
+    // check the regular user session
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

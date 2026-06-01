@@ -1,17 +1,17 @@
 /**
  * __tests__/email/processor.test.ts
  *
- * processor.ts의 5단계 파이프라인 검증.
- * ClaudeClient는 인터페이스로 추상화되지 않았지만 fake instance를 주입할 수 있도록
- * options.claudeClient를 받는다. 본 테스트에서는 ClaudeClient의 complete()만
- * stub해서 분류기·회신가 응답을 통제한다.
+ * Verifies processor.ts's 5-step pipeline.
+ * ClaudeClient isn't abstracted via an interface, but to allow injecting a fake instance
+ * it accepts options.claudeClient. This test stubs only ClaudeClient's complete()
+ * to control the classifier/replier responses.
  *
- * 시나리오:
- *   1. 정상 흐름 — 표준 카테고리, 정상 회신, ai.drafts INSERT
- *   2. 비표준 카테고리 → 'other'로 강제 + requires_human=true
- *   3. 회신가 출력 검증 실패 → fallback reply + requires_human=true
- *   4. 회신 본문에 미복원 PII 토큰 → requires_human=true
- *   5. communications에 이미 ai_draft_id 있음 + force=false → 에러
+ * Scenarios:
+ *   1. normal flow - standard category, normal reply, ai.drafts INSERT
+ *   2. non-standard category -> forced to 'other' + requires_human=true
+ *   3. replier output validation fails -> fallback reply + requires_human=true
+ *   4. unrestored PII token in the reply body -> requires_human=true
+ *   5. communications already has ai_draft_id + force=false -> error
  *   6. ClaudeBudgetExceededError → ai_processing_status='failed'
  */
 
@@ -24,8 +24,8 @@ import type {
   ClaudeCompleteOutput,
 } from '../../types/ai';
 
-// auto-send-gate가 env.AI_AUTO_SEND_ENABLED=false에서 항상 차단하므로
-// processor 테스트에서는 차단되더라도 ai.drafts가 정상 생성되는지만 확인.
+// since auto-send-gate always blocks when env.AI_AUTO_SEND_ENABLED=false,
+// the processor tests only check that ai.drafts is created normally even when blocked.
 
 const orgId = 'org-1';
 const commId = 'comm-1';
@@ -146,16 +146,16 @@ describe('processInbound — happy path', () => {
     expect(result.drafterRunId).toBe('run-drafter-1');
     expect(result.classification.category).toBe('information_request');
     expect(result.reply.subject).toBe('Re: 가격 문의');
-    // env.AI_AUTO_SEND_ENABLED=false (test setup) → 차단
+    // env.AI_AUTO_SEND_ENABLED=false (test setup) -> blocked
     expect(result.autoSendAllowed).toBe(false);
     expect(result.autoSendBlockedReasons).toContain('global_disabled');
 
-    // claude는 정확히 2번 호출 (classifier + drafter)
+    // claude is called exactly twice (classifier + drafter)
     expect(claude.complete).toHaveBeenCalledTimes(2);
     expect(claude.complete.mock.calls[0]?.[0]?.agentRole).toBe('classifier');
     expect(claude.complete.mock.calls[1]?.[0]?.agentRole).toBe('reply_drafter');
 
-    // ai.drafts INSERT 검증
+    // verify the ai.drafts INSERT
     const draftInserts = supabase.__calls.insert.filter(
       (c) => c.schema === 'ai' && c.table === 'drafts',
     );
@@ -170,12 +170,12 @@ describe('processInbound — happy path', () => {
     expect(payload.drafter_run_id).toBe('run-drafter-1');
     expect(payload.ai_generated).toBe(true);
     expect(payload.status).toBe('pending_review');
-    expect(payload.requires_human_approval).toBe(true); // 게이트 차단되었으므로
+    expect(payload.requires_human_approval).toBe(true); // because the gate blocked it
     expect(payload.auto_send_eligible).toBe(false);
     expect(payload.language).toBe('ko');
     expect(typeof payload.expires_at).toBe('string');
 
-    // communications UPDATE 검증 (마지막 호출은 ai_draft_id 갱신)
+    // verify the communications UPDATE (the last call updates ai_draft_id)
     const updates = supabase.__calls.update.filter(
       (c) => c.schema === 'app' && c.table === 'communications',
     );
@@ -194,7 +194,7 @@ describe('processInbound — non-standard category enforcement', () => {
     const claude = buildMockClaude({
       classifierResponse: {
         ...validClassification,
-        category: 'material_request', // 비표준!
+        category: 'material_request', // non-standard!
       },
       drafterResponse: validReply,
     });
@@ -244,7 +244,7 @@ describe('processInbound — drafter validation failure', () => {
       claudeClient: claude as never,
     });
 
-    // fallback reply는 ko 언어
+    // the fallback reply is in Korean
     expect(result.reply.language).toBe('ko');
     expect(result.reply.requiresHumanApproval).toBe(true);
     expect(result.reply.bodyPlain).toContain('검토');
@@ -351,7 +351,7 @@ describe('processInbound — error handling', () => {
       }),
     ).rejects.toBeInstanceOf(ClaudeBudgetExceededError);
 
-    // communications가 failed 상태로 갱신되었는지
+    // whether communications was updated to the failed state
     const updates = supabase.__calls.update.filter(
       (c) => c.schema === 'app' && c.table === 'communications',
     );

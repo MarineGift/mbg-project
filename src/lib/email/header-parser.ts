@@ -1,11 +1,11 @@
 /**
  * lib/email/header-parser.ts
  *
- * 순수 함수 모음 — DB 접근은 findThreadId만 수행하고, 나머지는 입력→출력만.
- * 단위 테스트가 가장 쉬운 모듈이므로 비즈니스 로직(스레드 매칭 우선순위 등)을
- * 모두 본 파일에 모은다.
+ * Collection of pure functions - only findThreadId touches the DB; everything else is input->output.
+ * Since this is the easiest module to unit-test, the business logic (thread-matching priority, etc.)
+ * is all gathered in this file.
  *
- * mailcarrier.ts는 본 파일의 함수를 호출만 하고 IMAP I/O에 집중.
+ * mailcarrier.ts only calls functions from this file and focuses on IMAP I/O.
  */
 
 import type { ParsedMail } from 'mailparser';
@@ -21,21 +21,21 @@ import {
  * ============================================================ */
 
 /**
- * mailparser의 ParsedMail에서 우리 도메인이 필요로 하는 헤더만 추출.
+ * Extract from mailparser's ParsedMail only the headers our domain needs.
  *
- * 예외 처리:
- *   - messageId 없음 → `unknown-{timestamp}@local` 자동 생성 (멱등성 보존)
- *   - from.address 없음 → `unknown@unknown` (DB INSERT 실패 방지)
- *   - subject 없음 → `(no subject)`
- *   - date 없음 → 현재 시각
+ * Exception handling:
+ *   - missing messageId -> auto-generate `unknown-{timestamp}@local` (idempotency preserved)
+ *   - missing from.address -> `unknown@unknown` (prevents DB INSERT failure)
+ *   - missing subject -> `(no subject)`
+ *   - missing date -> current time
  *
- * URM 헤더(X-URM-*)는 4종 모두 추출. 헤더가 누락된 경우 invisible footer
- * (`<!-- urm:c=...;auto=...;e=... -->`)에서 회수 시도 — fallback.
+ * All four URM headers (X-URM-*) are extracted. If a header is missing, the invisible footer
+ * (`<!-- urm:c=...;auto=...;e=... -->`) is used to recover it - fallback.
  */
 export function parseInboundMessage(parsed: ParsedMail): ParsedHeaders {
   const messageId = parsed.messageId ?? `<unknown-${Date.now()}@local>`;
 
-  // References: 배열 또는 공백 분리 문자열
+  // References: array or whitespace-separated string
   const referencesRaw = parsed.references;
   const references: string[] = Array.isArray(referencesRaw)
     ? referencesRaw.map((s) => String(s)).filter((s) => s.length > 0)
@@ -43,20 +43,20 @@ export function parseInboundMessage(parsed: ParsedMail): ParsedHeaders {
       ? referencesRaw.split(/\s+/).filter((s) => s.length > 0)
       : [];
 
-  // X-URM-* 헤더 추출
+  // Extract X-URM-* headers
   const headers = parsed.headers;
   const urmHeaders = extractUrmHeadersFromMap(headers);
 
-  // 헤더 손실 시 fallback: HTML body의 invisible footer
+  // Fallback when headers are lost: invisible footer in the HTML body
   if (!hasAnyUrmHeader(urmHeaders) && typeof parsed.html === 'string') {
     const fromFooter = extractUrmHeadersFromHtmlFooter(parsed.html);
     Object.assign(urmHeaders, fromFooter);
   }
 
-  // From 정규화 — mailparser는 from.value: AddressObject[]
+  // Normalize From - mailparser returns from.value: AddressObject[]
   const fromAddr = parsed.from?.value?.[0];
 
-  // To/Cc 배열 평탄화
+  // Flatten To/Cc arrays
   const toList: ParsedHeaders['to'] = [];
   if (parsed.to) {
     const arr = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
@@ -86,7 +86,7 @@ export function parseInboundMessage(parsed: ParsedMail): ParsedHeaders {
     if (first) replyTo = first;
   }
 
-  // 보존할 raw 헤더 (디버깅·재처리용 — 작은 화이트리스트만)
+  // Raw headers to keep (for debugging/reprocessing - small whitelist only)
   const rawSelectedHeaders: Record<string, string> = {};
   for (const name of [
     'message-id',
@@ -120,7 +120,7 @@ export function parseInboundMessage(parsed: ParsedMail): ParsedHeaders {
 }
 
 /* ============================================================
- * 2. URM 헤더 추출 헬퍼
+ * 2. URM header extraction helper
  * ============================================================ */
 
 /** mailparser headers Map → UrmHeaders. */
@@ -146,7 +146,7 @@ function readStringHeader(
   headers: Map<string, unknown>,
   name: string,
 ): string | undefined {
-  // mailparser는 헤더 이름을 lowercase로 보관
+  // mailparser stores header names in lowercase
   const v = headers.get(name) ?? headers.get(name.toLowerCase());
   if (typeof v === 'string') return v;
   if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
@@ -163,10 +163,10 @@ export function hasAnyUrmHeader(urm: UrmHeaders): boolean {
 }
 
 /**
- * HTML body의 invisible footer에서 URM 정보 회수.
- * 형식: `<!-- urm:c=<commId>;auto=<0|1>[;e=<engId>][;bv=<brandVoiceId>] -->`
+ * Recover URM info from the invisible footer in the HTML body.
+ * Format: `<!-- urm:c=<commId>;auto=<0|1>[;e=<engId>][;bv=<brandVoiceId>] -->`
  *
- * tabs-mailer가 헤더 통과를 보장하지 못할 때의 fallback.
+ * Fallback for when tabs-mailer cannot guarantee headers pass through.
  */
 export function extractUrmHeadersFromHtmlFooter(html: string): UrmHeaders {
   const m = /<!--\s*urm:([^>]+?)\s*-->/i.exec(html);
@@ -185,7 +185,7 @@ export function extractUrmHeadersFromHtmlFooter(html: string): UrmHeaders {
 }
 
 /* ============================================================
- * 3. 스레드 매칭 알고리즘 (DB 접근)
+ * 3. Thread-matching algorithm (DB access)
  * ============================================================ */
 
 export interface ThreadMatchResult {
@@ -196,12 +196,12 @@ export interface ThreadMatchResult {
 }
 
 /**
- * 우선순위:
- *   1. X-URM-Communication-Id 헤더 → 발신 communications.id 직접 매칭
- *   2. In-Reply-To → 발신 communications.message_id 매칭
- *   3. References (역순) → 동일 매칭
+ * Priority:
+ *   1. X-URM-Communication-Id header -> direct match on outbound communications.id
+ *   2. In-Reply-To -> match outbound communications.message_id
+ *   3. References (reverse order) -> same match
  *
- * 어느 것도 매칭되지 않으면 null 반환 → 호출자가 새 thread_id 생성.
+ * If nothing matches, return null -> the caller generates a new thread_id.
  */
 export async function findThreadId(
   supabase: SupabaseClient,
@@ -246,7 +246,7 @@ export async function findThreadId(
     }
   }
 
-  // [3] References — 가장 최근(끝쪽)부터 매칭 시도
+  // [3] References - try matching from the most recent (end) first
   for (const ref of [...headers.references].reverse()) {
     const { data, error } = await supabase
       .schema('app')
@@ -269,10 +269,10 @@ export async function findThreadId(
 }
 
 /* ============================================================
- * 4. From 주소 → contact·party 매칭 후보
+ * 4. From address -> candidate contact/party matches
  * ----------------------------------------------------------
- * 본 함수는 contact_id·party_id를 추정하기 위한 보조 — 실제 INSERT 시
- * mailcarrier가 호출. 여러 후보가 나오면 가장 최근 활동 기준 1개 선택.
+ * This function is a helper to infer contact_id/party_id - at actual INSERT time
+ * mailcarrier calls it. If multiple candidates appear, pick one by most recent activity.
  * ============================================================ */
 
 export interface SenderMatchResult {
@@ -291,7 +291,7 @@ export async function matchSenderToContactAndParty(
   }
   const lowered = fromAddress.toLowerCase();
 
-  // [1] contacts.email 정확 매칭
+  // [1] exact match on contacts.email
   const { data: contact } = await supabase
     .schema('app')
     .from('contacts')
@@ -311,13 +311,13 @@ export async function matchSenderToContactAndParty(
     };
   }
 
-  // [2] 도메인 기반 party 매칭 (보조)
+  // [2] domain-based party match (secondary)
   const at = lowered.lastIndexOf('@');
   if (at < 0) return { matchedBy: 'none' };
   const domain = lowered.slice(at + 1);
   if (domain.length === 0) return { matchedBy: 'none' };
 
-  // 일반 메일 도메인은 매칭 제외 (false positive 방지)
+  // Exclude common mail domains from matching (avoid false positives)
   const generic = new Set([
     'gmail.com',
     'yahoo.com',
@@ -332,7 +332,7 @@ export async function matchSenderToContactAndParty(
   ]);
   if (generic.has(domain)) return { matchedBy: 'none' };
 
-  // contacts.email 또는 parties.website에서 도메인 매칭
+  // Match the domain against contacts.email or parties.website
   const { data: byDomain } = await supabase
     .schema('app')
     .from('contacts')

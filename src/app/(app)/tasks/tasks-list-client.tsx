@@ -350,11 +350,12 @@ export default function TasksListClient({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span
-              className={`text-sm ${done ? 'text-muted-foreground line-through' : 'font-medium'}`}
+            <Link
+              href={`/tasks/${task.id}`}
+              className={`text-sm hover:underline ${done ? 'text-muted-foreground line-through' : 'font-medium'}`}
             >
               {task.title}
-            </span>
+            </Link>
             {!done && priorityBadge(task.priority)}
             {!done && (
               <span

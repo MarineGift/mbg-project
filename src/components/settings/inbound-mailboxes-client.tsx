@@ -10,7 +10,7 @@ import {
 } from "@/lib/actions/inbound-mailboxes";
 import type { InboundMailbox } from "@/lib/actions/inbound-mailboxes";
 
-// 자주 쓰는 IMAP 호스트 프리셋 (선택 시 host/port 자동 채움)
+// common IMAP host presets (auto-fill host/port on selection)
 const PRESETS: Record<string, { host: string; port: number }> = {
   "gmail.com":   { host: "imap.gmail.com",          port: 993 },
   "naver.com":   { host: "imap.naver.com",          port: 993 },
@@ -67,7 +67,7 @@ export function InboundMailboxesClient({
         <div>
           <h2 className="text-xl font-semibold">Inbound Mailboxes</h2>
           <p className="text-sm text-gray-500 mt-1">
-            등록한 계정에서 IMAP으로 메일을 수신합니다. 추가/삭제 후 워커를 재시작하세요.
+            Incoming mail is received over IMAP from the registered accounts. Restart the worker after adding or removing accounts.
           </p>
         </div>
         <button
@@ -178,7 +178,7 @@ function AddForm({
   const [isPending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  // 주소 입력 시 도메인 프리셋으로 host/port 자동 추천 (host 비어있을 때만)
+  // on address entry, auto-suggest host/port from the domain preset (only when host is empty)
   const onAddressChange = (v: string) => {
     setAddress(v);
     const dom = v.trim().toLowerCase().split("@")[1];
@@ -203,7 +203,7 @@ function AddForm({
         is_active: true,
         created_at: new Date().toISOString(),
       });
-      setPassword(""); // 비번 즉시 비움
+      setPassword(""); // clear the password immediately
     });
   };
 
@@ -257,18 +257,18 @@ function AddForm({
         <input
           type="password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && submit()}
-          placeholder="앱 비밀번호 (저장 시 암호화됨)"
+          placeholder="App password (encrypted when saved)"
           autoComplete="new-password"
           className="w-full px-3 py-2 border rounded-md text-sm"
         />
         <p className="text-xs text-gray-500">
-          2단계 인증 계정은 앱 비밀번호가 필요합니다. 비밀번호는 암호화되어 저장되며 다시 표시되지 않습니다.
+          Accounts with two-factor auth require an app password. Passwords are stored encrypted and never shown again.
         </p>
       </div>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={useTls} onChange={e => setUseTls(e.target.checked)} />
-        Use TLS (권장)
+        Use TLS (recommended)
       </label>
 
       {err && <p className="text-xs text-red-600">Error: {err}</p>}

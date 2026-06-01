@@ -1,13 +1,13 @@
 /**
  * __tests__/workers/consultation-worker.test.ts
  *
- * processConsultation의 핵심 로직 검증:
- *   1. 정상 흐름 — strategy + 3개 액션 (immediate/short/long), immediate은 task 생성
- *   2. ai_processing_status='completed'인 consultation은 skip (멱등)
- *   3. consultation 미존재 → status='failed'
+ * Verifies the core logic of processConsultation:
+ *   1. normal flow - strategy + 3 actions (immediate/short/long); immediate creates a task
+ *   2. a consultation with ai_processing_status='completed' is skipped (idempotent)
+ *   3. consultation not found -> status='failed'
  *   4. ClaudeBudgetExceededError → ai_processing_retryable=false
  *   5. ClaudeApiError 5xx → ai_processing_retryable=true
- *   6. strategy_advisor가 invalid JSON 반환 → 실패 처리
+ *   6. strategy_advisor returns invalid JSON -> handled as failure
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -154,12 +154,12 @@ describe('processConsultation — happy path', () => {
     expect(result.actionsCreated).toBe(3); // 3 actions
     expect(result.tasksCreated).toBe(1); // 1 immediate
 
-    // claude는 strategy_advisor 1회 호출
+    // claude calls strategy_advisor once
     expect(claude.complete).toHaveBeenCalledTimes(1);
     expect(claude.complete.mock.calls[0]?.[0]?.agentRole).toBe('strategy_advisor');
     expect(claude.complete.mock.calls[0]?.[0]?.outputFormat).toBe('json');
 
-    // response_strategies INSERT 검증
+    // verify the response_strategies INSERT
     const strategyInserts = supabase.__calls.insert.filter(
       (c) => c.schema === 'app' && c.table === 'response_strategies',
     );
@@ -171,13 +171,13 @@ describe('processConsultation — happy path', () => {
     expect(strategyPayload.ai_generated).toBe(true);
     expect(strategyPayload.status).toBe('draft');
 
-    // strategy_actions 3건 INSERT
+    // INSERT 3 strategy_actions
     const actionInserts = supabase.__calls.insert.filter(
       (c) => c.schema === 'app' && c.table === 'strategy_actions',
     );
     expect(actionInserts).toHaveLength(3);
 
-    // tasks 1건 INSERT (immediate만)
+    // INSERT 1 task (immediate only)
     const taskInserts = supabase.__calls.insert.filter(
       (c) => c.schema === 'app' && c.table === 'tasks',
     );
@@ -185,14 +185,15 @@ describe('processConsultation — happy path', () => {
     const taskPayload = taskInserts[0]?.payload as Record<string, unknown>;
     expect(taskPayload.title).toBe('Reply with updated deck');
     expect(taskPayload.status).toBe('todo');
-    expect(taskPayload.party_id).toBe('party-1');
-    expect(taskPayload.engagement_id).toBe('eng-1');
-    expect(taskPayload.linked_strategy_action_id).toBe('action-1');
+    expect(taskPayload.deal_id).toBe('eng-1'); // engagement_id IS the deal id
+    expect(
+      (taskPayload.extra_data as Record<string, unknown>).linked_strategy_action_id,
+    ).toBe('action-1');
 
-    // due_at 24시간 후
+    // due_at 24 hours later
     expect(taskPayload.due_at).toBe('2026-04-02T10:00:00.000Z');
 
-    // strategy_actions UPDATE (linked_task_id back-link) 1건 이상
+    // strategy_actions UPDATE (linked_task_id back-link) at least 1
     const actionUpdates = supabase.__calls.update.filter(
       (c) => c.schema === 'app' && c.table === 'strategy_actions',
     );
@@ -208,7 +209,7 @@ describe('processConsultation — happy path', () => {
           title: 'Immediate without due',
           description: 'x',
           action_type: 'immediate',
-          // suggested_due_in_hours 없음
+          // no suggested_due_in_hours
         },
       ],
     };
@@ -236,9 +237,9 @@ describe('processConsultation — idempotency', () => {
 
     expect(result.status).toBe('completed');
     expect(result.errorMessage).toBe('already_completed');
-    // claude는 호출되지 않아야 함
+    // claude should not be called
     expect(claude.complete).not.toHaveBeenCalled();
-    // response_strategies는 INSERT 안 됨
+    // response_strategies is not INSERTed
     const strategyInserts = supabase.__calls.insert.filter(
       (c) => c.table === 'response_strategies',
     );
@@ -296,7 +297,7 @@ describe('processConsultation — failure paths', () => {
 
   it('handles invalid strategy JSON', async () => {
     const supabase = buildSupabase();
-    const claude = buildMockClaude({ parsedJson: { situation_analysis: 'x' } }); // recommended_approach 누락
+    const claude = buildMockClaude({ parsedJson: { situation_analysis: 'x' } }); // recommended_approach missing
 
     const result = await processConsultation(supabase as never, makeBaseNotification(), {
       claudeClient: claude as never,
@@ -319,7 +320,7 @@ describe('processConsultation — failure paths', () => {
         insertSingle: { data: { id: 'task-1' } },
       },
     });
-    // strategy_actions 첫 INSERT는 실패, 나머지는 성공
+    // the first strategy_actions INSERT fails, the rest succeed
     const orig = supa.schema;
     supa.schema = vi.fn((schemaName: string) => ({
       from: (table: string) => {
@@ -345,7 +346,7 @@ describe('processConsultation — failure paths', () => {
       claudeClient: claude as never,
     });
 
-    // 3개 중 첫 번째 실패 → 2개만 success
+    // first of 3 fails -> only 2 succeed
     expect(result.actionsCreated).toBe(2);
     expect(result.status).toBe('completed');
   });

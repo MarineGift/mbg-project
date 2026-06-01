@@ -18,7 +18,7 @@ interface Props {
   onRangeChange?:    (start: Date, end: Date) => void
 }
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MAX_CHIPS_PER_DAY = 3
 
 // ─────────────────────────────────────────────
@@ -76,8 +76,8 @@ function MonthGrid({
           key={d}
           className={cn(
             'border-r border-b border-border py-1 text-center text-xs font-medium text-muted-foreground',
-            d === '일' && 'text-red-500',
-            d === '토' && 'text-blue-500',
+            d === 'Sun' && 'text-red-500',
+            d === 'Sat' && 'text-blue-500',
           )}
         >
           {d}
@@ -126,7 +126,7 @@ function MonthGrid({
               ))}
               {overflow > 0 && (
                 <div className="text-xs text-muted-foreground pl-1">
-                  +{overflow}개
+                  +{overflow} more
                 </div>
               )}
             </div>
@@ -182,7 +182,7 @@ function WeekGrid({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* All-day row */}
       <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
-        <div className="text-xs text-muted-foreground p-1 pt-2">종일</div>
+        <div className="text-xs text-muted-foreground p-1 pt-2">All day</div>
         {days.map((day, i) => (
           <div key={i} className="border-l border-border min-h-[28px] p-0.5 space-y-0.5">
             {allDayItems
@@ -309,7 +309,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           variant="outline" size="sm"
           onClick={() => setPivot(startOfDay(new Date()))}
         >
-          오늘
+          Today
         </Button>
 
         <div className="flex items-center">
@@ -331,7 +331,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
             className="gap-1"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', isPending && 'animate-spin')} />
-            {isPending ? '동기화 중…' : '동기화'}
+            {isPending ? 'Syncing...' : 'Sync'}
           </Button>
 
           {/* Create */}
@@ -341,7 +341,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
             onClick={() => onCreateEvent?.(new Date())}
           >
             <Plus className="h-3.5 w-3.5" />
-            새 이벤트
+            New event
           </Button>
 
           {/* View toggle */}
@@ -357,7 +357,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
                     : 'bg-background text-muted-foreground hover:bg-accent'
                 )}
               >
-                {v === 'month' ? '월' : '주'}
+                {v === 'month' ? 'Month' : 'Week'}
               </button>
             ))}
           </div>

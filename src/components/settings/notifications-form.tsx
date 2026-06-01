@@ -11,9 +11,9 @@ import { toast } from 'sonner';
 import { useUiStore } from '@/lib/stores/ui-store';
 
 /**
- * Browser Notification 권한 + opt-in 토글.
+ * Browser Notification permission + opt-in toggle.
  * Q9 — default off.
- * 실제 알림 발송은 Realtime 메시지 핸들러에서 처리.
+ * Actual notification dispatch is handled in the Realtime message handler.
  */
 export function NotificationsForm() {
   const t = useTranslations('settings.notifications');

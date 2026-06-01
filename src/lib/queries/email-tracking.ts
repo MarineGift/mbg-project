@@ -1,7 +1,7 @@
 /**
  * lib/queries/email-tracking.ts
  *
- * 이메일 추적 데이터 조회.
+ * Query email tracking data.
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -13,10 +13,10 @@ import type {
 } from '@/types/phase21';
 
 /* ──────────────────────────────────────────────────────────
- * 단건 조회
+ * single-record query
  * ────────────────────────────────────────────────────────── */
 
-/** communication_id로 추적 레코드 조회 (수동 발송용) */
+/** Look up the tracking record by communication_id (for manual sends) */
 export async function fetchTrackingForCommunication(
   communicationId: string,
 ): Promise<EmailTracking | null> {
@@ -33,7 +33,7 @@ export async function fetchTrackingForCommunication(
   return data;
 }
 
-/** draft_id로 추적 레코드 조회 (드래프트 기반 발송용) */
+/** Look up the tracking record by draft_id (for draft-based sends) */
 export async function fetchTrackingForDraft(
   draftId: string,
 ): Promise<EmailTracking | null> {
@@ -50,7 +50,7 @@ export async function fetchTrackingForDraft(
   return data;
 }
 
-/** party_id로 해당 거래처의 발송 이력 전체 조회 */
+/** Look up the entire send history of a party by party_id */
 export async function fetchTrackingForParty(
   partyId: string,
 ): Promise<EmailTracking[]> {
@@ -65,7 +65,7 @@ export async function fetchTrackingForParty(
   return data ?? [];
 }
 
-/** 단건 이벤트 로그 조회 */
+/** single event-log query */
 export async function fetchTrackingEvents(
   trackingId: string,
 ): Promise<EmailTrackingEvent[]> {
@@ -81,13 +81,13 @@ export async function fetchTrackingEvents(
 }
 
 /* ──────────────────────────────────────────────────────────
- * 배치 조회 (인박스 목록 배지용)
+ * batch query (for inbox list badges)
  * ────────────────────────────────────────────────────────── */
 
 /**
- * communication_id 배열로 추적 요약 일괄 조회.
- * 인박스 sent 탭에서 행마다 배지를 표시할 때 사용.
- * Map<communicationId, DraftTrackingSummary> 반환.
+ * Batch-look up tracking summaries by an array of communication_id.
+ * Used to show a badge per row in the inbox Sent tab.
+ * Returns Map<communicationId, DraftTrackingSummary>.
  */
 export async function fetchTrackingMapForCommunications(
   communicationIds: string[],
@@ -112,7 +112,7 @@ export async function fetchTrackingMapForCommunications(
   }>) {
     if (row.communication_id) {
       map.set(row.communication_id, {
-        draft_id: row.communication_id,   // 재사용 — id 필드로 활용
+        draft_id: row.communication_id,   // reuse - used as the id field
         tracking_id: row.tracking_id,
         open_count: row.open_count,
         click_count: row.click_count,
@@ -124,7 +124,7 @@ export async function fetchTrackingMapForCommunications(
   return map;
 }
 
-/** draft_id 배열 배치 조회 (기존 호환) */
+/** batch query by an array of draft_id (backward compatibility) */
 export async function fetchTrackingMapForDrafts(
   draftIds: string[],
 ): Promise<Map<string, DraftTrackingSummary>> {

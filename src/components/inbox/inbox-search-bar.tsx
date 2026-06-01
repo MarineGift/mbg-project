@@ -13,8 +13,8 @@ interface Props {
 }
 
 /**
- * 디바운스된 검색 입력.
- * 입력 후 350ms 동안 추가 키 입력이 없으면 URL ?q=... 갱신 → 서버 컴포넌트 재실행.
+ * Debounced search input.
+ * if there's no further keystroke for 350ms after typing, update URL ?q=... -> re-run the server component.
  */
 export function InboxSearchBar({ initialQuery, className }: Props) {
   const t = useTranslations('inbox');
@@ -24,12 +24,12 @@ export function InboxSearchBar({ initialQuery, className }: Props) {
   const [value, setValue] = useState(initialQuery);
   const [isPending, startTransition] = useTransition();
 
-  // initialQuery가 외부에서 바뀌면 동기화 (필터 reset 등)
+  // sync when initialQuery changes externally (e.g. filter reset)
   useEffect(() => {
     setValue(initialQuery);
   }, [initialQuery]);
 
-  // 디바운스 — value 변경 후 350ms 정지 시 URL 갱신
+  // debounce - update URL after 350ms of inactivity following a value change
   useEffect(() => {
     const handler = setTimeout(() => {
       if (value === initialQuery) return;

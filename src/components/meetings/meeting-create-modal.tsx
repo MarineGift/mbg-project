@@ -3,12 +3,12 @@
 //
 // Stage 26 (2026-05-21):
 // party → engagement → stage cascading selector.
-// - engagement_id, stage_id 둘 다 optional (DB 도 nullable)
-// - active engagement (open / in_progress / on_hold) 만 노출
-// - terminal stage (won / lost) 는 visual marker
-// - 의존: src/lib/actions/meeting-form.ts (server action wrapper)
+// - engagement_id, stage_id both optional (nullable in the DB too)
+// - expose only active engagements (open / in_progress / on_hold)
+// - terminal stages (won / lost) get a visual marker
+// - depends on: src/lib/actions/meeting-form.ts (server action wrapper)
 //
-// 기존 Stage 24 의 channel + meetings.ts API 위에 cascading 만 얹는 형태.
+// Layers only cascading on top of the existing Stage 24 channel + meetings.ts API.
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -40,24 +40,24 @@ interface Props {
 }
 
 const MEETING_TYPES: { value: MeetingType; label: string }[] = [
-  { value: 'discovery',   label: '발견 미팅' },
-  { value: 'demo',        label: '데모' },
-  { value: 'proposal',    label: '제안' },
-  { value: 'negotiation', label: '협상' },
-  { value: 'follow_up',   label: '팔로업' },
-  { value: 'check_in',    label: '정기 체크인' },
-  { value: 'internal',    label: '사내 미팅' },
-  { value: 'other',       label: '기타' },
+  { value: 'discovery',   label: 'Discovery' },
+  { value: 'demo',        label: 'Demo' },
+  { value: 'proposal',    label: 'Proposal' },
+  { value: 'negotiation', label: 'Negotiation' },
+  { value: 'follow_up',   label: 'Follow-up' },
+  { value: 'check_in',    label: 'Check-in' },
+  { value: 'internal',    label: 'Internal' },
+  { value: 'other',       label: 'Other' },
 ]
 
 const MEETING_CHANNELS: { value: MeetingChannel; label: string; icon: string }[] = [
-  { value: 'video_call', label: '영상 통화', icon: '🎥' },
-  { value: 'phone_call', label: '전화',     icon: '📞' },
-  { value: 'in_person',  label: '대면 미팅', icon: '🏢' },
-  { value: 'hybrid',     label: '하이브리드', icon: '🔀' },
+  { value: 'video_call', label: 'Video call', icon: '🎥' },
+  { value: 'phone_call', label: 'Phone',     icon: '📞' },
+  { value: 'in_person',  label: 'In person', icon: '🏢' },
+  { value: 'hybrid',     label: 'Hybrid', icon: '🔀' },
 ]
 
-// engagement filter — modal 에는 active 상태만 (won/lost/archived 숨김)
+// engagement filter - the modal shows only active states (hides won/lost/archived)
 const ACTIVE_ENGAGEMENT_STATUSES = new Set(['open', 'in_progress', 'on_hold'])
 
 function todayAt(h: number, m = 0): string {
@@ -66,7 +66,7 @@ function todayAt(h: number, m = 0): string {
   return d.toISOString().slice(0, 16)   // "YYYY-MM-DDTHH:MM"
 }
 
-// Select 의 "선택 안 함" 의 sentinel value (Radix Select 는 empty string 불가)
+// sentinel value for the Select's "None" option (Radix Select can't use an empty string)
 const NONE = '__none__'
 
 export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId, defaultPartyName }: Props) {
@@ -97,7 +97,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
   const [loadingEngagements, setLoadingEngagements] = useState(false)
   const [loadingStages,      setLoadingStages]      = useState(false)
 
-  // Effect 1: partyId 변경 → engagement 후보 로드 (cascading 리셋)
+  // Effect 1: partyId change -> load engagement candidates (cascading reset)
   useEffect(() => {
     setEngagementId(null)
     setStageId(null)
@@ -113,7 +113,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
     loadPartyEngagementsForForm(partyId)
       .then((cards) => {
         if (cancelled) return
-        // active engagement 만 노출
+        // expose only active engagements
         setEngagements(cards.filter(c => ACTIVE_ENGAGEMENT_STATUSES.has(c.status)))
       })
       .catch(() => { if (!cancelled) setEngagements([]) })
@@ -122,7 +122,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
     return () => { cancelled = true }
   }, [partyId])
 
-  // Effect 2: engagementId 변경 → engagement 의 pipeline stage 로드
+  // Effect 2: engagementId change -> load the engagement's pipeline stages
   useEffect(() => {
     setStageId(null)
 
@@ -143,7 +143,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
       .then((s) => {
         if (cancelled) return
         setStages(s)
-        // engagement 의 current stage 가 있으면 preselect
+        // preselect the engagement's current stage if present
         if (engagement.currentStageId) {
           setStageId(engagement.currentStageId)
         }
@@ -166,8 +166,8 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
   function handleClose() { reset(); onClose() }
 
   function handleSubmit() {
-    if (!title.trim()) { setError('제목을 입력해주세요'); return }
-    if (!partyId)      { setError('Party를 선택해주세요 (필수)'); return }
+    if (!title.trim()) { setError('Please enter a title'); return }
+    if (!partyId)      { setError('Please select a party (required)'); return }
 
     startTransition(async () => {
       try {
@@ -195,44 +195,44 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
     <Dialog open={open} onOpenChange={v => !v && handleClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>새 미팅</DialogTitle>
+          <DialogTitle>New Meeting</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Title */}
           <div className="space-y-1">
-            <Label htmlFor="mtg-title">미팅 제목 *</Label>
+            <Label htmlFor="mtg-title">Meeting title *</Label>
             <Input
               id="mtg-title"
-              placeholder="예: ABC Corp 제안 미팅"
+              placeholder="e.g. ABC Corp proposal meeting"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
           </div>
 
-          {/* Party — 간단한 텍스트 입력 (실제로는 Party 검색 컴포넌트로 교체) */}
+          Party - simple text input (to be replaced by a Party search component)
           <div className="space-y-1">
             <Label htmlFor="mtg-party">Party *</Label>
             <Input
               id="mtg-party"
-              placeholder="Party ID 입력 (Party 검색 UI 연동 필요)"
+              placeholder="Enter Party ID (Party search UI to be wired up)"
               value={partyId}
               onChange={e => setPartyId(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              TODO: PartySearchCombobox로 교체
+              TODO: replace with PartySearchCombobox
             </p>
           </div>
 
-          {/* Stage 26 — Engagement (optional, partyId 선택 후 노출) */}
+          Stage 26 - Engagement (optional, shown after partyId is selected)
           {partyId && (
             <div className="space-y-1">
-              <Label htmlFor="mtg-engagement">관련 Engagement (선택)</Label>
+              <Label htmlFor="mtg-engagement">Related Engagement (optional)</Label>
               {loadingEngagements ? (
-                <p className="text-xs text-muted-foreground">불러오는 중...</p>
+                <p className="text-xs text-muted-foreground">Loading...</p>
               ) : engagements.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  진행 중인 engagement 없음 (engagement 없이도 미팅 등록 가능)
+                  No active engagement (you can still create a meeting without one)
                 </p>
               ) : (
                 <Select
@@ -240,10 +240,10 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
                   onValueChange={v => setEngagementId(v === NONE ? null : v)}
                 >
                   <SelectTrigger id="mtg-engagement">
-                    <SelectValue placeholder="engagement 선택" />
+                    <SelectValue placeholder="Select engagement" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>— 연결 안 함 —</SelectItem>
+                    <SelectItem value={NONE}>— None —</SelectItem>
                     {engagements.map(e => (
                       <SelectItem key={e.id} value={e.id}>
                         {e.name}
@@ -258,15 +258,15 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             </div>
           )}
 
-          {/* Stage 26 — Stage (optional, engagementId 선택 후 노출) */}
+          Stage 26 - Stage (optional, shown after engagementId is selected)
           {engagementId && (
             <div className="space-y-1">
-              <Label htmlFor="mtg-stage">단계 (선택)</Label>
+              <Label htmlFor="mtg-stage">Stage (optional)</Label>
               {loadingStages ? (
-                <p className="text-xs text-muted-foreground">불러오는 중...</p>
+                <p className="text-xs text-muted-foreground">Loading...</p>
               ) : stages.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  pipeline stage 없음
+                  No pipeline stages
                 </p>
               ) : (
                 <Select
@@ -274,10 +274,10 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
                   onValueChange={v => setStageId(v === NONE ? null : v)}
                 >
                   <SelectTrigger id="mtg-stage">
-                    <SelectValue placeholder="단계 선택" />
+                    <SelectValue placeholder="Select stage" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>— 미지정 —</SelectItem>
+                    <SelectItem value={NONE}>— Unassigned —</SelectItem>
                     {stages.map(s => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
@@ -301,7 +301,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
           {/* Date/Time + Duration */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="mtg-dt">일시 *</Label>
+              <Label htmlFor="mtg-dt">Date & time *</Label>
               <Input
                 id="mtg-dt"
                 type="datetime-local"
@@ -310,7 +310,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="mtg-dur">소요 시간(분)</Label>
+              <Label htmlFor="mtg-dur">Duration (min)</Label>
               <Select
                 value={String(duration)}
                 onValueChange={v => setDuration(Number(v))}
@@ -320,7 +320,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
                 </SelectTrigger>
                 <SelectContent>
                   {[15, 30, 45, 60, 90, 120].map(d => (
-                    <SelectItem key={d} value={String(d)}>{d}분</SelectItem>
+                    <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -330,7 +330,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
           {/* Meeting Type + Mode */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>미팅 유형</Label>
+              <Label>Meeting type</Label>
               <Select value={meetingType} onValueChange={v => setMeetingType(v as MeetingType)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -344,7 +344,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             </div>
 
             <div className="space-y-1">
-              <Label>미팅 방식</Label>
+              <Label>Meeting format</Label>
               <div className="grid grid-cols-2 gap-1">
                 {MEETING_CHANNELS.map(m => (
                   <button
@@ -369,7 +369,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
           {/* Meeting URL */}
           {(meetingMode === 'video_call' || meetingMode === 'hybrid') && (
             <div className="space-y-1">
-              <Label htmlFor="mtg-url">회의 링크</Label>
+              <Label htmlFor="mtg-url">Meeting link</Label>
               <Input
                 id="mtg-url"
                 placeholder="https://meet.google.com/..."
@@ -381,10 +381,10 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
 
           {/* Agenda */}
           <div className="space-y-1">
-            <Label htmlFor="mtg-agenda">안건 (선택)</Label>
+            <Label htmlFor="mtg-agenda">Agenda (optional)</Label>
             <Textarea
               id="mtg-agenda"
-              placeholder="회의의 주요 안건을 입력하세요"
+              placeholder="Enter the main agenda items"
               rows={3}
               value={agenda}
               onChange={e => setAgenda(e.target.value)}
@@ -398,14 +398,14 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
-            취소
+            Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isPending}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isPending ? '저장 중...' : '미팅 생성'}
+            {isPending ? 'Saving...' : 'Create Meeting'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,12 +1,12 @@
 /**
  * lib/queries/drafts.ts
  *
- * Server-side fetcher for AI 초안 큐.
+ * Server-side fetcher for the AI draft queue.
  *
- * RLS는 JWT의 organization_id로 자동 격리되므로 명시적 .eq('organization_id', ...) 불필요.
- * 다만 Database stub이 비어있어 .from() 결과가 never가 되므로 명시적 타입 단언 사용.
+ * RLS auto-isolates by the JWT's organization_id, so an explicit .eq('organization_id', ...) is unnecessary.
+ * However, the Database stub is empty so .from() resolves to never; hence explicit type assertions.
  *
- * 정렬 기본 (`urgent`): confidence ASC, expires_at ASC (idx_drafts_queue_sort 활용).
+ * Default sort (`urgent`): confidence ASC, expires_at ASC (uses idx_drafts_queue_sort).
  */
 
 import 'server-only';
@@ -56,7 +56,7 @@ const ALL_SORTS: readonly DraftQueueSort[] = [
 ] as const;
 
 /* ============================================================
- * URL searchParams 파싱
+ * Parse URL searchParams
  * ============================================================ */
 
 export function parseFilters(
@@ -75,7 +75,7 @@ export function parseFilters(
 
   return {
     status: (status === 'pending_review' || status === 'all') && params.status === undefined
-      ? 'pending_review'  // 기본
+      ? 'pending_review'  // default
       : (status as DraftStatus | 'all'),
     partyType: module as PartyTypeCode | 'all',
     category: category as ClassificationCategory | 'all',
@@ -151,30 +151,30 @@ interface RawJoinedDraft {
   engagement_id: string | null;
   parties: { name: string } | null;
   engagements: { name: string } | null;
-  // ssr의 joined select는 다중 행도 array로 올 수 있어 ambiguous —
-  // 단일 객체로 들어오는 경우 대비. 실제 쿼리 결과에 따라 type guard로 처리.
+  // an ssr joined select can return multiple rows as an array, which is ambiguous -
+  // handle the case where it arrives as a single object. Use a type guard based on the actual query result.
   inbound_communication: {
     from_address: string | null;
     subject: string | null;
   } | null;
 }
 // ============================================================
-// 이 파일의 내용으로 src/lib/queries/drafts.ts 의
-// `export async function fetchDraftQueue(...)` 함수 한 개만 교체.
-// (다른 코드 — RawJoinedDraft, toQueueRow, import 문 등 — 은 그대로 둠)
+// Using the contents of this file, replace only the single
+// `export async function fetchDraftQueue(...)` function in src/lib/queries/drafts.ts.
+// (leave the rest - RawJoinedDraft, toQueueRow, import statements, etc. - unchanged)
 // ============================================================
 //
-// 변경 사유:
-//   PostgREST가 cross-schema FK (ai.drafts → app.parties / app.engagements
-//   / app.communications) 메타데이터를 캐시에 인덱싱하지 못하는 환경 이슈.
-//   schema reload / 프로젝트 재시작에도 해결 안 되는 케이스가 있어,
-//   nested join 대신 별도 조회 후 JS에서 합치는 방식으로 우회.
+// Reason for the change:
+//   PostgREST cannot index cross-schema FK (ai.drafts -> app.parties / app.engagements
+//   / app.communications) metadata into its cache - an environment issue.
+//   There are cases not fixed even by a schema reload / project restart,
+//   so we work around it by querying separately and merging in JS instead of a nested join.
 //
-// 영향:
-//   - PostgREST 캐시 상태와 무관하게 100% 동작
-//   - 쿼리 1개 → 4개로 증가 (drafts + parties + engagements + communications)
-//   - 3개 보조 쿼리는 in() 절로 1회씩만 호출, Promise.all로 병렬 — 성능 영향 미미
-//   - RawJoinedDraft 형식으로 재조립해서 toQueueRow 로직 그대로 유지
+// Impact:
+//   - works 100% regardless of PostgREST cache state
+//   - queries increase from 1 to 4 (drafts + parties + engagements + communications)
+//   - the 3 auxiliary queries each run once via an in() clause, parallelized with Promise.all - negligible perf impact
+//   - reassembled into the RawJoinedDraft shape so toQueueRow logic stays unchanged
 
 export async function fetchDraftQueue(
   filters: DraftQueueFilters = DEFAULT_FILTERS,
@@ -183,7 +183,7 @@ export async function fetchDraftQueue(
 ): Promise<DraftQueueResult> {
   const supabase = await createSupabaseServerClient();
 
-  // 정렬 → SQL ORDER BY 매핑
+  // sort -> SQL ORDER BY mapping
   const orderClauses: Array<{ column: string; ascending: boolean }> = [];
   switch (sort) {
     case 'urgent':
@@ -204,7 +204,7 @@ export async function fetchDraftQueue(
       break;
   }
 
-  // ── [1] drafts 본체만 select (nested join 제거) ─────────────
+  // ── [1] select only the drafts body (nested join removed) ──
   let query = supabase
     .schema('ai')
     .from('drafts' as never)
@@ -217,7 +217,7 @@ export async function fetchDraftQueue(
       { count: 'exact' },
     );
 
-  // 필터
+  // filters
   if (filters.status !== 'all') {
     query = query.eq('status', filters.status);
   }
@@ -234,7 +234,7 @@ export async function fetchDraftQueue(
     query = query.not('risk_flags', 'eq', '{}');
   }
 
-  // 정렬
+  // sort
   for (const clause of orderClauses) {
     query = query.order(clause.column, {
       ascending: clause.ascending,
@@ -243,7 +243,7 @@ export async function fetchDraftQueue(
   }
   query = query.order('id', { ascending: true });
 
-  // 페이지네이션
+  // pagination
   const from = (pagination.page - 1) * pagination.pageSize;
   const to = from + pagination.pageSize - 1;
   query = query.range(from, to);
@@ -262,7 +262,7 @@ export async function fetchDraftQueue(
     };
   }
 
-  // 빈 결과면 보조 쿼리 스킵
+  // skip auxiliary queries on an empty result
   const draftRows = (data ?? []) as Array<{
     id: string;
     status: string;
@@ -293,7 +293,7 @@ export async function fetchDraftQueue(
     };
   }
 
-  // ── [2] 보조 id 모으기 (중복 제거) ──────────────────────────
+  // ── [2] collect auxiliary ids (deduplicated) ──
   const partyIds = Array.from(
     new Set(draftRows.map((d) => d.party_id).filter((v): v is string => !!v)),
   );
@@ -308,7 +308,7 @@ export async function fetchDraftQueue(
     ),
   );
 
-  // ── [3] 보조 정보 병렬 조회 ─────────────────────────────────
+  // ── [3] fetch auxiliary info in parallel ──
   const [partiesRes, engagementsRes, commsRes] = await Promise.all([
     partyIds.length > 0
       ? supabase
@@ -333,7 +333,7 @@ export async function fetchDraftQueue(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  // 보조 조회 에러는 치명적이지 않게 — 로그만 남기고 빈 맵으로 진행
+  // auxiliary lookup errors are non-fatal - just log and proceed with empty maps
   if (partiesRes.error) {
     // eslint-disable-next-line no-console
     console.error('[queries/drafts.fetchDraftQueue] parties lookup:', partiesRes.error);
@@ -347,7 +347,7 @@ export async function fetchDraftQueue(
     console.error('[queries/drafts.fetchDraftQueue] communications lookup:', commsRes.error);
   }
 
-  // ── [4] Map 생성 (id → 행) ──────────────────────────────────
+  // ── [4] build maps (id -> row) ──
   const partyMap = new Map<string, { name: string }>();
   for (const p of (partiesRes.data ?? []) as Array<{ id: string; name: string }>) {
     partyMap.set(p.id, { name: p.name });
@@ -365,7 +365,7 @@ export async function fetchDraftQueue(
     commMap.set(c.id, { from_address: c.from_address, subject: c.subject });
   }
 
-  // ── [5] RawJoinedDraft 형식으로 재조립 ─────────────────────
+  // ── [5] reassemble into the RawJoinedDraft shape ──
   const rawRows: RawJoinedDraft[] = draftRows.map((d) => ({
     ...d,
     parties: d.party_id ? partyMap.get(d.party_id) ?? null : null,
@@ -386,8 +386,8 @@ export async function fetchDraftQueue(
   };
 }
 /**
- * SELECT 결과 한 행을 DraftQueueRow로 변환.
- * 조인 결과가 단일 객체 또는 배열로 오는 케이스를 모두 안전 처리.
+ * Convert one SELECT result row into a DraftQueueRow.
+ * Safely handle both cases where the join result arrives as a single object or an array.
  */
 function toQueueRow(raw: RawJoinedDraft): DraftQueueRow {
   const party = extractFirst(raw.parties);

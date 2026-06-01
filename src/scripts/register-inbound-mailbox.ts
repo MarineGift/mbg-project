@@ -1,25 +1,25 @@
 /**
  * scripts/register-inbound-mailbox.ts
  *
- * app.inbound_mailboxes 에 수신 계정을 1개 등록(또는 갱신)한다.
+ * Register (or update) one receiving account in app.inbound_mailboxes.
  *
- * 핵심: 비밀번호 암호화에 쓰는 enc_key 를 process.env.CALENDAR_TOKEN_ENCRYPTION_KEY
- * 에서 읽는다 — mailcarrier 워커가 복호에 쓰는 키와 "같은 출처"이므로
- * 키 불일치가 구조적으로 불가능하다. (직접 SQL 로 키를 손으로 붙이다 틀리는 사고 방지)
+ * Key point: the enc_key used for password encryption is read from process.env.CALENDAR_TOKEN_ENCRYPTION_KEY
+ * - the same source as the key the mailcarrier worker uses to decrypt, so
+ * a key mismatch is structurally impossible. (prevents errors from hand-pasting the key via raw SQL)
  *
- * 실행 (워커와 동일하게 .env.local 주입):
+ * Run (inject .env.local just like the worker):
  *   npx tsx --env-file=.env.local src/scripts/register-inbound-mailbox.ts \
  *     --address you@gmail.com --host imap.gmail.com --port 993 --label "Gmail"
  *
- * 비밀번호는 인자로 받지 않고 실행 중 stdin 프롬프트(에코 숨김)로 입력 →
- * 프로세스 목록(ps)·셸 히스토리에 비번이 안 남는다.
+ * The password is not taken as an argument but entered via a stdin prompt (echo hidden) at runtime ->
+ * so the password does not remain in the process list (ps) or shell history.
  *
- * 인자:
- *   --address  (필수) 수신 주소 = IMAP username
- *   --host     (필수) IMAP host (예: imap.gmail.com, imap.naver.com)
- *   --port     (선택, 기본 993)
- *   --label    (선택) 표시용 라벨
- *   --org      (선택, 기본 MBG org)
+ * Arguments:
+ *   --address  (required) receiving address = IMAP username
+ *   --host     (required) IMAP host (e.g. imap.gmail.com, imap.naver.com)
+ *   --port     (optional, default 993)
+ *   --label    (optional) display label
+ *   --org      (optional, default MBG org)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -29,7 +29,7 @@ import { Writable } from 'node:stream';
 
 const DEFAULT_ORG = 'b25de8f2-1020-482f-9012-183f63883169'; // MBG Project
 
-/* ── 간단한 --flag value 파서 ───────────────────────────── */
+/* ── simple --flag value parser ── */
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -49,10 +49,10 @@ function parseArgs(argv: string[]): Record<string, string> {
   return out;
 }
 
-/* ── 비번 입력 (에코 숨김) ──────────────────────────────── */
+/* ── password input (echo hidden) ── */
 function promptHidden(question: string): Promise<string> {
   return new Promise((resolve) => {
-    // 입력 문자를 화면에 안 찍는 mutable stream
+    // a mutable stream that does not echo input to the screen
     let muted = false;
     const mutedOut = new Writable({
       write(chunk, _enc, cb) {
@@ -70,7 +70,7 @@ function promptHidden(question: string): Promise<string> {
       process.stdout.write('\n');
       resolve(answer.trim());
     });
-    muted = true; // question 출력 직후부터 입력 에코 차단
+    muted = true; // block input echo right after the question is printed
   });
 }
 
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // enc_key — 워커(mailcarrier)가 복호에 쓰는 바로 그 키와 동일 출처.
+  // enc_key - the same source as the very key the worker (mailcarrier) uses to decrypt.
   const encKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
   if (!encKey) {
     console.error(
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  // calendar token-crypto 와 동일하게 bare .rpc (app 스키마 함수).
+  // bare .rpc (app schema function), same as calendar token-crypto.
   const { data: id, error } = await supabase.schema('app').rpc('upsert_inbound_mailbox', {
     p_organization_id: org,
     p_address: address,
@@ -141,9 +141,9 @@ async function main(): Promise<void> {
   console.log(`  host:    ${host}:${port}`);
   console.log(`  label:   ${label ?? '(none)'}`);
 
-  // ── 라운드트립 복호 검증 ────────────────────────────────
-  // 방금 저장한 암호문을 같은 키로 복호 → 입력 비번과 일치해야 한다.
-  // (워커가 복호에 쓰는 키와 동일 출처이므로, 여기서 성공하면 워커도 성공)
+  // ── round-trip decryption check ──
+  // decrypt the just-saved ciphertext with the same key -> it must match the entered password.
+  // (same source as the worker's decryption key, so if this succeeds the worker will too)
   const { data: row, error: selErr } = await supabase
     .schema('app')
     .from('inbound_mailboxes')

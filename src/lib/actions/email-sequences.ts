@@ -95,7 +95,7 @@ export async function enrollParty(
   });
 
   if (error) {
-    // unique constraint ?�반 ???��? ?�성 ?�록 ?�음
+    // may already exist on unique-constraint violation
     if (error.code === '23505') {
       return { error: 'Already enrolled in this sequence (active).' };
     }
@@ -121,7 +121,7 @@ export async function cancelEnrollment(
 
 // ?�?� Manual processor trigger (admin only) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
 
-/** Settings?�서 "Run Now" 버튼 ???��??�으�?processor API ?�출 */
+/** Called when the "Run Now" button in Settings is clicked -> calls the processor API */
 export async function triggerSequenceProcessor(): Promise<{
   processed: number;
   results: unknown[];

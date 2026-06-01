@@ -1,20 +1,20 @@
 /**
  * types/inbox.ts
  *
- * 받은 편지함(Inbox) 화면의 데이터 모델.
- * communications 테이블의 inbound + outbound를 시간순으로 통합 표시.
+ * Data model for the Inbox screen.
+ * Displays inbound + outbound from the communications table merged in chronological order.
  *
- * 변경 이력:
- *   - 2026-05-12 (1차): CommunicationChannel을 DB enum 9개로 정렬.
- *   - 2026-05-12 (2차): UI 호환을 위해 11개로 확장 (slack, other 추가).
- *   - 2026-05-12 (3차): DB enum과 완전 일치 (12개) — webform 추가.
- *                       이제 DB enum app.channel_type과 1:1 매칭.
+ * Change history:
+ *   - 2026-05-12 (1st): aligned CommunicationChannel to the 9 DB enum values.
+ *   - 2026-05-12 (2nd): expanded to 11 for UI compatibility (added slack, other).
+ *   - 2026-05-12 (3rd): fully matches the DB enum (12) - added webform.
+ *                       now 1:1 with the DB enum app.channel_type.
  */
 
 import type { PartyTypeCode } from './ai';
 
 /**
- * 통신 채널 — DB enum app.channel_type과 1:1 매칭 (12개).
+ * Communication channel - 1:1 with the DB enum app.channel_type (12).
  *
  * email, phone, sms, linkedin, kakaotalk, wechat, whatsapp,
  * in_person, video_call, webform, other, slack
@@ -34,22 +34,22 @@ export type CommunicationChannel =
   | 'slack';
 
 /**
- * 통신 방향 — DB enum app.direction_type과 일치.
- * 'internal'도 enum에는 있지만 Phase 1은 inbound/outbound만 처리.
+ * Communication direction - matches the DB enum app.direction_type.
+ * 'internal' is in the enum too, but Phase 1 handles only inbound/outbound.
  */
 export type CommunicationDirection = 'inbound' | 'outbound';
 
-/** 통신 상태 — outbound 발송 결과 추적. */
+/** Communication status - tracks the outbound send result. */
 export type CommunicationStatus =
-  | 'received'    // inbound 수신 완료
-  | 'pending'     // 발송 대기
-  | 'sending'     // 발송 중
-  | 'sent'        // 발송 완료
-  | 'failed'      // 발송 실패
-  | 'bounced';    // 반송
+  | 'received'    // inbound received
+  | 'pending'     // pending send
+  | 'sending'     // sending
+  | 'sent'        // sent
+  | 'failed'      // send failed
+  | 'bounced';    // bounced
 
 /**
- * 인박스 행 모델 (목록 페이지용).
+ * Inbox row model (for the list page).
  */
 export interface InboxRow {
   id: string;
@@ -60,17 +60,17 @@ export interface InboxRow {
   fromName: string | null;
   toAddresses: string[];
   subject: string | null;
-  bodyPreview: string;       // 첫 120자
+  bodyPreview: string;       // first 120 chars
   occurredAt: string;
   sentAt: string | null;
   partyId: string | null;
   partyName: string | null;
   partyTypeCode: PartyTypeCode | null;
-  /** 이 인바운드에서 생성된 AI 초안이 존재하는가 (해당 시) */
+  /** Whether an AI draft was generated from this inbound (if applicable) */
   hasDraft: boolean;
-  /** 이 아웃바운드가 AI 초안에서 생성되었는가 */
+  /** Whether this outbound was generated from an AI draft */
   aiGenerated: boolean;
-  /** 첨부 파일 개수 — Phase 1 미구현, 항상 0 (DB 컬럼 없음) */
+  /** attachment count - not implemented in Phase 1, always 0 (no DB column) */
   attachmentCount: number;
   /** Thread group: id of conversation thread (= self id if standalone) */
   threadId: string;
@@ -79,16 +79,16 @@ export interface InboxRow {
 }
 
 /**
- * 인박스 필터 — URL searchParams로 전달.
+ * Inbox filter - passed via URL searchParams.
  */
 export interface InboxFilters {
   channel: CommunicationChannel | 'all';
   direction: CommunicationDirection | 'all';
-  /** 검색어 (ilike + pg_trgm). subject + body_plain 대상 */
+  /** search term (ilike + pg_trgm). targets subject + body_plain */
   query: string;
-  /** AI 초안 있는 인바운드만 */
+  /** only inbound that has an AI draft */
   hasDraft: boolean;
-  /** 특정 거래처 (UUID) — Phase 1은 URL 직접 입력만 지원 */
+  /** a specific party (UUID) - Phase 1 supports only direct URL input */
   partyId: string | null;
 }
 

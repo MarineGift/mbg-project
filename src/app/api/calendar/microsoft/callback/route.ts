@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
 
-    // URM: app.users.organization_id 가 single source of truth
+    // URM: app.users.organization_id is the single source of truth
     const { data: appUser } = await supabase
       .schema('app')
       .from('users')

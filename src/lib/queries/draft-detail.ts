@@ -1,15 +1,15 @@
 /**
  * lib/queries/draft-detail.ts
  *
- * 단일 ai.drafts 행과 모든 관련 데이터를 fetch.
+ * Fetch a single ai.drafts row and all related data.
  *
- * 조인 대상:
- *   - inbound communications (원본 메일)
+ * Join targets:
+ *   - inbound communications (original mail)
  *   - parties / engagements
- *   - classifier_run + drafter_run (ai.runs 두 행)
- *   - auto_send_rule (적용된 규칙)
+ *   - classifier_run + drafter_run (two ai.runs rows)
+ *   - auto_send_rule (the applied rule)
  *
- * RLS가 자동 격리. 다른 조직 draft 요청 시 null 반환 (404 처리는 호출자).
+ * RLS auto-isolates. Returns null when requesting another org's draft (the caller handles the 404).
  */
 
 import 'server-only';
@@ -72,7 +72,7 @@ export async function fetchDraftDetail(
 ): Promise<DraftDetail | null> {
   const supabase = await createSupabaseServerClient();
 
-  // [1] draft 본체 — stub 캐스트로 컬럼 직접 select
+  // [1] the draft body - select columns directly via a stub cast
   const { data: draftRaw, error: draftErr } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -81,12 +81,12 @@ export async function fetchDraftDetail(
     .maybeSingle();
 
   if (draftErr || !draftRaw) {
-    // RLS 차단 또는 미존재
+    // blocked by RLS or nonexistent
     return null;
   }
   const d = draftRaw as unknown as RawDraftRow;
 
-  // [2] 관련 객체들 — 병렬 fetch
+  // [2] related objects - fetched in parallel
   const [
     inboundData,
     partyData,
@@ -210,7 +210,7 @@ export async function fetchDraftDetail(
 }
 
 /* ============================================================
- * 매퍼들 — raw row를 도메인 타입으로 변환
+ * mappers - convert a raw row into the domain type
  * ============================================================ */
 
 function mapInbound(raw: unknown): DraftInboundSummary | null {
@@ -252,7 +252,7 @@ function mapParty(raw: unknown): DraftPartySummary | null {
 function mapEngagement(raw: unknown): DraftEngagementSummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
-  // urm.deals ??module ?놁쓬 - parties join ??party_type_id 濡?derive.
+  // urm.deals has no module - derive party_type_id via the parties join.
   const partyJoin = r.parties as
     | { party_type_id?: number | null }
     | Array<{ party_type_id?: number | null }>

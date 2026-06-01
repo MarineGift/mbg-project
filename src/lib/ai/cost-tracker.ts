@@ -1,12 +1,12 @@
 /**
  * lib/ai/cost-tracker.ts
  *
- * AI 호출 비용 계산 + ai.runs 기록 + 일일·월간 예산 강제.
+ * AI call cost calculation + ai.runs logging + daily/monthly budget enforcement.
  *
- * 모든 ClaudeClient.complete() 호출은 본 모듈을 거쳐
- * - 호출 직전: checkDailyBudget()
- * - 호출 직후: recordRun()
- * 으로 기록된다.
+ * Every ClaudeClient.complete() call is recorded through this module via
+ * - just before the call: checkDailyBudget()
+ * - just after the call: recordRun()
+ * as shown above.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,9 +14,9 @@ import { env } from '../env';
 import type { ClaudeModel, RecordRunInput } from '../../types/ai';
 
 /* ============================================================
- * 1. 단가 테이블 (USD per 1M tokens, 2026년 5월 기준)
+ * 1. Unit-price table (USD per 1M tokens, as of May 2026)
  * ----------------------------------------------------------
- * 마스터 시스템 프롬프트 §2.4와 일치해야 한다.
+ * Must match the master system prompt §2.4.
  * ============================================================ */
 export const MODEL_PRICING: Readonly<
   Record<ClaudeModel, { input: number; output: number }>
@@ -34,12 +34,12 @@ export class UnknownModelPricingError extends Error {
 }
 
 /* ============================================================
- * 2. 비용 계산
+ * 2. Cost calculation
  * ============================================================ */
 
 /**
- * 입력·출력 토큰 수 → USD 비용.
- * MODEL_PRICING에 없는 모델은 throw.
+ * input/output token counts -> USD cost.
+ * Models not in MODEL_PRICING throw.
  */
 export function calculateCost(
   model: ClaudeModel | string,
@@ -50,31 +50,31 @@ export function calculateCost(
   if (!pricing) {
     throw new UnknownModelPricingError(model);
   }
-  // 단가는 per 1M tokens
+  // unit price is per 1M tokens
   return (tokensIn * pricing.input + tokensOut * pricing.output) / 1_000_000;
 }
 
 /* ============================================================
  * 3. ai.runs INSERT
  * ----------------------------------------------------------
- * 성공·실패·재시도 모든 경로에서 호출된다.
- * INSERT 실패 시에도 절대 caller로 예외를 propagate하지 않음
- * (관측 데이터 누락이 비즈니스 흐름을 막아서는 안 됨).
+ * Called on all paths: success, failure, and retry.
+ * Never propagates an exception to the caller even when the INSERT fails
+ * (missing observability data must not block the business flow).
  *
- * 컬럼 매핑 (코드 도메인 → ai.runs SQL):
+ * Column mapping (code domain -> ai.runs SQL):
  *   - input.model         → model_used
- *   - input.tokensIn      → input_tokens (GENERATED tokens_in 미사용)
+ *   - input.tokensIn      -> input_tokens (the GENERATED tokens_in is unused)
  *   - input.tokensOut     → output_tokens
  *   - input.partyId/engagementId → related_entity_type + related_entity_id
  *   - input.retryCount/brandVoiceId/knowledgeChunkIds/errorStatus/traceLabel
- *       → metadata jsonb 필드 안에 함께 저장
- *   - input.status        → mapRunStatusToDb()로 ai.run_status enum 매핑
+ *       -> stored together inside the metadata jsonb field
+ *   - input.status        -> mapped to the ai.run_status enum via mapRunStatusToDb()
  * ============================================================ */
 
 /**
- * 도메인 RunStatus를 DB ai.run_status enum 값으로 매핑.
- * budget_exceeded는 ai.run_status에 없으므로 'failed'로 저장하되
- * metadata.error_class='ClaudeBudgetExceededError'로 식별 가능하게 보존.
+ * Map the domain RunStatus to a DB ai.run_status enum value.
+ * budget_exceeded is not in ai.run_status, so it is stored as 'failed' but
+ * preserved identifiably via metadata.error_class='ClaudeBudgetExceededError'.
  */
 export function mapRunStatusToDb(status: import('../../types/ai').RunStatus): string {
   switch (status) {
@@ -94,7 +94,7 @@ export async function recordRun(
   input: RecordRunInput,
 ): Promise<string> {
   try {
-    // metadata 누적: 도메인 필드를 jsonb 안에 보존
+    // accumulate metadata: preserve domain fields inside the jsonb
     const metadata: Record<string, unknown> = {};
     if (input.retryCount !== undefined && input.retryCount > 0) {
       metadata.retry_count = input.retryCount;
@@ -112,12 +112,12 @@ export async function recordRun(
       metadata.trace_label = input.traceLabel;
     }
     if (input.status === 'budget_exceeded') {
-      // 도메인 budget_exceeded는 DB 'failed'로 저장되므로
-      // 분석 시 구분할 수 있도록 error_class를 기록.
+      // the domain budget_exceeded is stored as DB 'failed', so
+      // record error_class so it can be distinguished during analysis.
       metadata.error_class = 'ClaudeBudgetExceededError';
     }
 
-    // related_entity: engagement_id 우선, 그 다음 party_id
+    // related_entity: engagement_id first, then party_id
     let relatedEntityType: string | null = null;
     let relatedEntityId: string | null = null;
     if (input.engagementId) {
@@ -167,7 +167,7 @@ export async function recordRun(
 }
 
 /* ============================================================
- * 4. 일일·월간 예산 체크
+ * 4. Daily/monthly budget checks
  * ============================================================ */
 
 export interface BudgetCheckResult {
@@ -178,10 +178,10 @@ export interface BudgetCheckResult {
 }
 
 /**
- * 오늘(00:00 ~ 현재) 누적 비용을 ai.runs에서 집계.
- * env.MAX_DAILY_AI_COST_USD와 비교.
+ * Aggregate today's (00:00 - now) accumulated cost from ai.runs.
+ * Compare against env.MAX_DAILY_AI_COST_USD.
  *
- * 조회 실패 시 안전 정책: allowed=false (예산 보호 우선).
+ * Safe policy on lookup failure: allowed=false (budget protection first).
  */
 export async function checkDailyBudget(
   supabase: SupabaseClient,
@@ -233,8 +233,8 @@ export async function checkDailyBudget(
 }
 
 /**
- * 이번 달(1일 00:00 ~ 현재) 누적 비용 집계.
- * 자동발송 자동 다운그레이드(월 $1,000 도달 시 Opus → Sonnet) 트리거에 사용.
+ * Aggregate this month's (00:00 on the 1st - now) accumulated cost.
+ * Used to trigger auto-downgrade for auto-send (Opus -> Sonnet when monthly $1,000 is reached).
  */
 export async function checkMonthlyBudget(
   supabase: SupabaseClient,
@@ -290,11 +290,11 @@ export async function checkMonthlyBudget(
 }
 
 /* ============================================================
- * 5. 비용 단계별 액션 결정
+ * 5. Decide actions per cost tier
  * ----------------------------------------------------------
- * 마스터 §4.5 — 월 $500 알림, $1,000 다운그레이드, $2,000 자동발송 차단.
- * 본 함수는 정책 평가만 수행하고, 실제 액션(Slack alert, env 토글)은
- * 호출자가 처리한다.
+ * Master §4.5 - monthly $500 alert, $1,000 downgrade, $2,000 auto-send block.
+ * This function only evaluates the policy; the actual actions (Slack alert, env toggle) are
+ * handled by the caller.
  * ============================================================ */
 export type CostThreshold =
   | 'normal'
@@ -310,7 +310,7 @@ export function evaluateMonthlyCostThreshold(monthlyUsed: number): CostThreshold
 }
 
 /**
- * threshold가 force_downgrade 이상이면 입력 모델을 더 저렴한 모델로 매핑.
+ * If the threshold is at or above force_downgrade, map the input model to a cheaper model.
  * Opus → Sonnet, Sonnet → Haiku.
  */
 export function applyDowngrade(
@@ -322,5 +322,5 @@ export function applyDowngrade(
   }
   if (model === 'claude-opus-4-7') return 'claude-sonnet-4-6';
   if (model === 'claude-sonnet-4-6') return 'claude-haiku-4-5-20251001';
-  return model; // 이미 가장 저렴한 모델
+  return model; // already the cheapest model
 }

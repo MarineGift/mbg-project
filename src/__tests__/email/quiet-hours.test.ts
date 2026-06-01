@@ -1,9 +1,9 @@
 /**
  * __tests__/email/quiet-hours.test.ts
  *
- * Quiet hours 평가 함수 단위 테스트.
- * 모든 시각은 UTC 기준 Date 객체로 직접 생성하고, IANA 타임존 변환은
- * Intl.DateTimeFormat에 위임 — Node 22의 ICU 기본 데이터로 충분.
+ * Unit tests for the quiet-hours evaluation function.
+ * All times are created directly as UTC Date objects, and IANA timezone conversion is
+ * delegated to Intl.DateTimeFormat - Node 22's default ICU data is sufficient.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -53,7 +53,7 @@ describe('evaluateQuietHours — basic time range', () => {
   };
 
   it('blocks at 23:00 UTC (within 22:00-08:00)', () => {
-    // 평일 (수요일) 23:00
+    // weekday (Wednesday) 23:00
     const v = evaluateQuietHours(qh, new Date('2026-03-04T23:00:00Z'));
     expect(v.blocked).toBe(true);
     expect(v.reason).toBe('within_quiet_hours');

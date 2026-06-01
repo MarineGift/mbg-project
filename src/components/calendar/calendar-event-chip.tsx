@@ -10,7 +10,7 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────
-// 색상 매핑
+// color mapping
 // ─────────────────────────────────────────────
 
 const CHIP_STYLES: Record<string, string> = {
@@ -24,7 +24,7 @@ const CHIP_STYLES: Record<string, string> = {
   event_microsoft: 'bg-indigo-500 text-white',
 }
 
-// source prefix 아이콘
+// source prefix icon
 const SOURCE_ICON: Record<string, string> = {
   google:    '🟢',
   microsoft: '🔵',

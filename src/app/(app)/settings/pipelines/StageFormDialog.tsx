@@ -9,7 +9,7 @@ import { createStage, updateStage } from '@/lib/actions/pipeline-stages'
 import type { Stage } from './PipelinesAdminClient'
 
 
-// 일반적인 색상 팔레트 (klein 클릭 가능)
+// common color palette (clickable)
 const COLOR_PRESETS = [
   '#6B7280', // gray
   '#3B82F6', // blue
@@ -54,7 +54,7 @@ export function StageFormDialog({
     color_hex: stage?.color_hex ?? '#3B82F6',
   })
 
-  // is_won 또는 is_lost를 체크하면 is_terminal도 자동 true
+  // checking is_won or is_lost automatically sets is_terminal to true as well
   const handleWonChange = (checked: boolean) => {
     setFormData({
       ...formData,

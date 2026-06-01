@@ -1,10 +1,10 @@
 /**
  * __tests__/email/header-parser.test.ts
  *
- * 순수 함수 위주 테스트:
- *   - parseInboundMessage: 헤더 추출, URM 헤더, fallback footer
- *   - findThreadId: 3단계 우선순위 (urm_header → in_reply_to → references)
- *   - matchSenderToContactAndParty: 정확 매칭, 도메인 매칭, generic 도메인 제외
+ * Tests focused on pure functions:
+ *   - parseInboundMessage: header extraction, URM header, fallback footer
+ *   - findThreadId: 3-level priority (urm_header -> in_reply_to -> references)
+ *   - matchSenderToContactAndParty: exact match, domain match, generic domain exclusion
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -19,7 +19,7 @@ import {
 import { URM_HEADER_NAMES } from '../../types/email';
 import { buildSupabaseMock } from '../setup/supabase-mock';
 
-// ParsedMail 헬퍼 — mailparser는 내부적으로 Map 기반 headers + value 배열 사용
+// ParsedMail helper - mailparser internally uses Map-based headers + value arrays
 function makeParsedMail(
   overrides: Partial<ParsedMail> & { headerEntries?: Array<[string, unknown]> } = {},
 ): ParsedMail {
@@ -238,8 +238,8 @@ describe('findThreadId — priority order', () => {
         const builder: Record<string, unknown> = { ...orig };
         builder.maybeSingle = vi.fn(() => {
           calls += 1;
-          // 첫 두 번(In-Reply-To는 미리 매칭 시도되지만 본 케이스는 없음;
-          // references 역순 r2 → 매칭 성공 가정)
+          // the first two (In-Reply-To is attempted first but absent in this case;
+          // references in reverse, r2 -> assume match success)
           if (calls === 1) {
             return Promise.resolve({
               data: { id: 'c-2', thread_id: 'thread-ref', engagement_id: 'eng-2' },
@@ -248,7 +248,7 @@ describe('findThreadId — priority order', () => {
           }
           return Promise.resolve({ data: null, error: null });
         });
-        // chain 메서드들도 모두 builder 반환
+        // all chain methods also return the builder
         for (const m of ['select', 'eq', 'is', 'order', 'limit']) {
           builder[m] = vi.fn(() => builder);
         }
@@ -352,10 +352,10 @@ describe('matchSenderToContactAndParty', () => {
         builder.maybeSingle = vi.fn(() => {
           callCount += 1;
           if (callCount === 1) {
-            // 첫 호출 (정확 매칭) — null
+            // first call (exact match) - null
             return Promise.resolve({ data: null, error: null });
           }
-          // 두 번째 호출 (도메인 매칭) — 매칭됨
+          // second call (domain match) - matched
           return Promise.resolve({
             data: { id: 'contact-x', party_id: 'party-x' },
             error: null,

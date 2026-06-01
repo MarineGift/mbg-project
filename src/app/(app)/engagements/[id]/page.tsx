@@ -1,8 +1,8 @@
 /**
  * app/(app)/engagements/[id]/page.tsx
  *
- * Engagement 상세 — 모듈 segment 없이 직접 접근.
- * 헤더에서 모듈 표시.
+ * Engagement detail - accessed directly without a module segment.
+ * Module is shown in the header.
  */
 
 import { notFound } from 'next/navigation';

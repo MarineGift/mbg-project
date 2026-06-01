@@ -4,32 +4,32 @@
  * Engagement Server Actions.
  *
  * URM cutover (Stage 29-c, 2026-05-25):
- *   - 모든 mutation 이 urm.deals 대상.
+ *   - all mutations target urm.deals.
  *   - app.engagements + app.pipeline_stages → urm.deals + urm.stages.
- *   - organization_id filter 제거 (RLS 가정).
- *   - module column 제거 (urm.deals 에 없음). zod schema 의 module 인자는
- *     legacy 호환 위해 그대로 받지만 INSERT 에서 무시.
+ *   - organization_id filter removed (assumes RLS).
+ *   - module column removed (absent in urm.deals). The module arg in the zod schema is
+ *     still accepted for legacy compatibility but ignored on INSERT.
  *
- * 핵심:
- *   - moveEngagementStage: kanban drag-drop 으로 stage 변경.
- *     (트리거 trg_deals_stage_history 가 urm.deal_stage_history 에 자동 기록
- *      되는지 확인 필요 — 없으면 별도 INSERT 추가 검토.)
+ * Core:
+ *   - moveEngagementStage: change stage via kanban drag-drop.
+ *     (verify whether the trg_deals_stage_history trigger auto-records into urm.deal_stage_history
+ *      - if not, consider adding a separate INSERT.)
  *
- *   - updateEngagementStatus: 상태만 변경 (open/in_progress/on_hold/won/lost/archived).
+ *   - updateEngagementStatus: change status only (open/in_progress/on_hold/won/lost/archived).
  *
  *   - createEngagement: 1-step INSERT.
  *
- *   - updateEngagement: 일반 필드 업데이트.
+ *   - updateEngagement: update general fields.
  *
  *   - deleteEngagement: soft delete (deleted_at = now()).
  *
  * revalidatePath:
- *   urm.deals 에 module column 이 없어서 정확한 module path 무효화 불가.
- *   - 옵션 (a): party_type 별도 query 로 추론 → 비용 ↑
- *   - 옵션 (b): 모든 알려진 module path 일괄 무효화 → 단순, 약간 over-invalidation
- *   - 옵션 (c): revalidatePath('/') → 가장 단순, cache 효율 ↓
- *   여기서는 (b) 채택 — 알려진 5 module path 일괄 무효화.
- *   build round 3 에서 routing rename 이후 단일 path 로 정리.
+ *   urm.deals has no module column, so precise module-path invalidation is not possible.
+ *   - option (a): infer via a separate party_type query -> higher cost
+ *   - option (b): invalidate all known module paths at once -> simple, slight over-invalidation
+ *   - option (c): revalidatePath('/') -> simplest, lower cache efficiency
+ *   Here we adopt (b) - invalidate the 5 known module paths at once.
+ *   After the routing rename in build round 3, consolidate to a single path.
  */
 
 'use server';
@@ -63,8 +63,8 @@ const ENGAGEMENT_STATUSES: readonly EngagementStatus[] = [
   'archived',
 ] as const;
 
-// Legacy PartyTypeCode 8 값 — build round 3 에서 PARTY_TYPE_CODES 의 7 값으로 교체.
-// 지금은 caller (UI) 호환 위해 그대로 유지. 어차피 INSERT 에는 안 들어감.
+// Legacy PartyTypeCode 8 values - replaced by the 7 values of PARTY_TYPE_CODES in build round 3.
+// For now kept for caller (UI) compatibility. It does not go into the INSERT anyway.
 const LEGACY_MODULE_VALUES = [
   'investor',
   'paper_mill',
@@ -73,7 +73,7 @@ const LEGACY_MODULE_VALUES = [
   'filler_supplier',
 ] as const;
 
-/** revalidate 대상 module path 목록 (build round 3 에서 단일 path 로 정리). */
+/** List of module paths to revalidate (consolidated to a single path in build round 3). */
 const REVALIDATE_MODULES = [
   'investor',
   'paper_mill',
@@ -121,7 +121,7 @@ export async function moveEngagementStage(input: {
 
   const supabase = await createSupabaseServerClient();
 
-  // [1] deal + target stage 병렬 검증
+  // [1] validate deal + target stage in parallel
   const [dealRes, stageRes] = await Promise.all([
     supabase
       .schema('app')
@@ -222,7 +222,7 @@ export async function moveEngagementStage(input: {
 }
 
 /* ============================================================
- * 2. updateEngagementStatus — 상태만 변경
+ * 2. updateEngagementStatus - change status only
  * ============================================================ */
 
 const statusSchema = z.object({
@@ -296,8 +296,8 @@ export async function updateEngagementStatus(input: {
 
 const engagementBaseSchema = z.object({
   partyId: z.string().uuid(),
-  // module argument — legacy 호환, INSERT 에는 안 들어감.
-  // build round 3 에서 PartyTypeCode 7 값으로 교체.
+  // module argument - legacy compatibility, not included in the INSERT.
+  // Replaced by the 7 PartyTypeCode values in build round 3.
   module: z.enum(LEGACY_MODULE_VALUES),
   name: z.string().min(1, 'Required').max(200),
   description: z.string().max(5000).optional().nullable(),
@@ -330,8 +330,8 @@ export async function createEngagement(
 
   const supabase = await createSupabaseServerClient();
 
-  // pipelineId 없으면 default pipeline 자동 할당.
-  // URM 에 모듈 분리 없어서 모든 module 이 동일 default pipeline 사용.
+  // If pipelineId is absent, auto-assign the default pipeline.
+  // URM has no module separation, so every module uses the same default pipeline.
   let pipelineId = parsed.data.pipelineDefinitionId ?? null;
   let currentStageId = parsed.data.currentStageId ?? null;
 
@@ -353,9 +353,9 @@ export async function createEngagement(
     };
   }
 
-  // urm.deals INSERT — NOT NULL 필수: party_id, pipeline_id, current_stage_id, deal_name.
-  // Default 있는 column (status, priority, module_data, value_currency) 은 omit 가능
-  //   하지만 명시적으로 'open' 등 세팅해서 도메인 의미 유지.
+  // urm.deals INSERT - NOT NULL required: party_id, pipeline_id, current_stage_id, deal_name.
+  // Columns with defaults (status, priority, module_data, value_currency) may be omitted
+  //   but are set explicitly (e.g. 'open') to preserve domain meaning.
   const insertRow: Record<string, unknown> = {
     party_id: parsed.data.partyId,
     pipeline_id: pipelineId,

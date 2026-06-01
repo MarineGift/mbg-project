@@ -1,9 +1,9 @@
 /**
  * workers/runtime.ts
  *
- * 3 워커가 공유하는 graceful shutdown 헬퍼.
+ * graceful shutdown helper shared by the 3 workers.
  *
- * 사용:
+ * Usage:
  *   const ctl = createShutdownController('mail-merge-worker');
  *   while (!ctl.isShuttingDown()) {
  *     await ctl.track(processOnce());
@@ -21,13 +21,13 @@ import { fileURLToPath } from 'node:url';
 
 export interface ShutdownController {
   isShuttingDown(): boolean;
-  /** Promise를 inflight 추적에 등록. 반환값은 동일 Promise (chain 가능). */
+  /** Register a Promise for inflight tracking. Returns the same Promise (chainable). */
   track<T>(p: Promise<T>): Promise<T>;
-  /** 모든 inflight 완료 대기. timeout 초과 시 강제 종료. */
+  /** Wait for all inflight to complete. Force-exit if the timeout is exceeded. */
   waitForInflight(timeoutMs?: number): Promise<void>;
-  /** 셧다운 신호를 받으면 즉시 깨어나는 sleep. */
+  /** A sleep that wakes immediately on a shutdown signal. */
   sleep(ms: number): Promise<void>;
-  /** 외부에서 강제 셧다운을 트리거 (테스트용). */
+  /** Trigger a forced shutdown externally (for tests). */
   shutdown(): void;
 }
 
@@ -42,7 +42,7 @@ export function createShutdownController(label: string): ShutdownController {
       try {
         resolve?.();
       } catch {
-        /* 무시 */
+        /* ignore */
       }
     }
   };
@@ -95,7 +95,7 @@ export function createShutdownController(label: string): ShutdownController {
       if (shuttingDown) return Promise.resolve();
       return new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
-          // wakeupResolvers에서 제거 시도
+          // attempt to remove from wakeupResolvers
           const idx = wakeupResolvers.indexOf(resolve);
           if (idx >= 0) wakeupResolvers.splice(idx, 1);
           resolve();
@@ -114,10 +114,10 @@ export function createShutdownController(label: string): ShutdownController {
 }
 
 /* ============================================================
- * 2. Entry-point 가드 (ESM)
+ * 2. Entry-point guard (ESM)
  * ----------------------------------------------------------
- * `tsx src/workers/foo.ts` 직접 실행 시 main()을 호출하기 위한 헬퍼.
- * import 시에는 호출되지 않아 단위 테스트가 안전.
+ * Helper to call main() when running `tsx src/workers/foo.ts` directly.
+ * Not called on import, so unit tests are safe.
  * ============================================================ */
 export function isMainEntry(importMetaUrl: string): boolean {
   try {

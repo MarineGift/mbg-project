@@ -1,9 +1,9 @@
 /**
  * __tests__/setup/env-setup.ts
  *
- * vitest setupFiles에 등록되는 진입점.
- * env.ts가 모듈 로드 시점에 zod 검증을 실행하므로,
- * 모든 env 변수를 본 파일에서 미리 주입한다.
+ * Entry point registered in vitest setupFiles.
+ * Since env.ts runs zod validation at module load time,
+ * all env variables are injected here in advance.
  */
 
 // Anthropic
@@ -50,9 +50,9 @@ process.env.MAX_MONTHLY_AI_COST_USD ??= '100';
 process.env.DRAFT_EXPIRY_DAYS ??= '7';
 process.env.LOG_LEVEL ??= 'error';
 process.env.WORKER_RUNTIME ??= 'node';
-// NODE_ENV는 @types/node에서 readonly literal union으로 선언됨 — 우회를 위해 캐스트
+// NODE_ENV is declared as a readonly literal union in @types/node - cast to work around it
 (process.env as Record<string, string | undefined>).NODE_ENV ??= 'test';
 
-// STEP 4 프론트엔드
+// STEP 4 frontend
 process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000';
 process.env.NEXT_PUBLIC_DEFAULT_LOCALE ??= 'ko';

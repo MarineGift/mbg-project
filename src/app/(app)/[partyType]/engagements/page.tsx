@@ -1,7 +1,7 @@
 /**
  * app/(app)/[module]/engagements/page.tsx
  *
- * 모듈별 Engagement Kanban 보드.
+ * Per-module Engagement Kanban board.
  */
 
 import { notFound } from 'next/navigation';

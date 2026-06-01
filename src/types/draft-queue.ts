@@ -1,10 +1,10 @@
 /**
  * types/draft-queue.ts
  *
- * AI 초안 큐 목록 화면용 타입.
+ * Type for the AI draft queue list screen.
  *
- * DraftQueueRow는 ai.drafts + parties(name) + contacts(full_name) +
- * inbound communications(from_address, subject) 조인 결과를 평탄화한 형태.
+ * DraftQueueRow is a flattened result of joining ai.drafts + parties(name) + contacts(full_name) +
+ * inbound communications(from_address, subject).
  */
 
 import type {
@@ -15,7 +15,7 @@ import type {
 } from './ai';
 
 /**
- * 큐 목록의 한 행. 큐 화면에서만 사용하는 좁은 SELECT 결과.
+ * One row of the queue list. A narrow SELECT result used only on the queue screen.
  */
 export interface DraftQueueRow {
   id: string;
@@ -25,52 +25,52 @@ export interface DraftQueueRow {
   confidenceScore: number | null;
   language: Language;
   subject: string | null;
-  bodyPlainPreview: string;  // body_plain의 첫 120자
+  bodyPlainPreview: string;  // first 120 chars of body_plain
   riskFlags: string[];
   requiresHumanApproval: boolean;
   autoSendEligible: boolean;
-  /** 사용자가 final_body_plain을 입력했는지 (편집 중 판단). 일괄 승인에서 제외. */
+  /** Whether the user entered final_body_plain (to detect editing). Excluded from bulk approve. */
   hasEdits: boolean;
   expiresAt: string;  // ISO 8601
   createdAt: string;
-  /** 거래처 정보 (null이면 미지정 — 첫 콜드 컨택 등) */
+  /** Party info (null means unassigned - e.g. a first cold contact) */
   partyId: string | null;
   partyName: string | null;
-  /** 발신자 (party 없을 때 fallback) */
+  /** Sender (fallback when there is no party) */
   fromAddress: string | null;
-  /** 원본 inbound 메일 제목 */
+  /** Original inbound mail subject */
   inboundSubject: string | null;
-  /** 인게이지먼트 (있으면) */
+  /** Engagement (if any) */
   engagementId: string | null;
   engagementName: string | null;
 }
 
 /**
- * 큐 필터. URL query string으로 전달되어 Server Component에서 파싱.
+ * Queue filter. Passed via the URL query string and parsed in a Server Component.
  */
 export interface DraftQueueFilters {
-  /** 상태 — 기본 'pending_review'. 'all'은 모든 상태 */
+  /** status - default 'pending_review'. 'all' means every status */
   status: DraftStatus | 'all';
   partyType: PartyTypeCode | 'all';
   category: ClassificationCategory | 'all';
-  /** 최소 신뢰도 (0~1). 0이면 필터 없음 */
+  /** minimum confidence (0-1). 0 means no filter */
   minConfidence: number;
-  /** 위험 표시 있는 것만 */
+  /** only those flagged as risky */
   onlyRisky: boolean;
 }
 
 /**
- * 큐 정렬 옵션.
+ * Queue sort options.
  */
 export type DraftQueueSort =
-  | 'urgent'           // confidence ASC, expires_at ASC (기본)
+  | 'urgent'           // confidence ASC, expires_at ASC (default)
   | 'newest'           // created_at DESC
   | 'oldest'           // created_at ASC
   | 'confidence_high'  // confidence DESC
   | 'expiring_soon';   // expires_at ASC
 
 /**
- * 페이지네이션.
+ * Pagination.
  */
 export interface DraftQueuePagination {
   page: number;        // 1-indexed
@@ -78,7 +78,7 @@ export interface DraftQueuePagination {
 }
 
 /**
- * 큐 쿼리 결과 — 행 + 전체 카운트(페이지네이션 표시용).
+ * Queue query result - rows + total count (for pagination display).
  */
 export interface DraftQueueResult {
   rows: DraftQueueRow[];
@@ -89,7 +89,7 @@ export interface DraftQueueResult {
 }
 
 /* ============================================================
- * 기본값
+ * default values
  * ============================================================ */
 
 export const DEFAULT_FILTERS: DraftQueueFilters = {

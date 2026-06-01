@@ -1,8 +1,8 @@
 /**
  * __tests__/email/tabs-mailer.test.ts
  *
- * TabsMailerClient (실 SMTP) + TabsMailerMockClient (mock) 양쪽 검증.
- * SMTP transporter는 nodemailer.createTransport stub으로 교체.
+ * Verifies both TabsMailerClient (real SMTP) + TabsMailerMockClient (mock).
+ * The SMTP transporter is replaced with a nodemailer.createTransport stub.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -26,7 +26,7 @@ function makeFakeTransporter(
     sendMail: vi.fn(
       sendMailImpl ??
         ((opts: unknown) => {
-          // nodemailer 응답 모양 모방
+          // mimic the nodemailer response shape
           void opts;
           return Promise.resolve({
             messageId: '<smtp-msg-id@local>',
@@ -136,7 +136,7 @@ describe('TabsMailerClient.sendOne', () => {
 });
 
 describe('TabsMailerClient.createCampaign / getCampaignStats', () => {
-  it('throws NotImplementedError until 탭스랩 spec is received', async () => {
+  it('throws NotImplementedError until TABS Lab spec is received', async () => {
     const client = new TabsMailerClient({
       transporter: makeFakeTransporter() as never,
     });
@@ -204,7 +204,7 @@ describe('TabsMailerMockClient', () => {
 
     await mock.syncCampaignToMergeJob(sb as never, 'org-1', 'job-1');
 
-    // UPDATE 호출이 progress를 갱신했는지
+    // whether the UPDATE call updated progress
     const updates = sb.__calls.update.filter(
       (c) => c.schema === 'app' && c.table === 'mail_merge_jobs',
     );

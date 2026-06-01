@@ -1,10 +1,10 @@
 /**
  * app/(app)/engagements/[id]/edit/page.tsx
  *
- * Engagement 수정 페이지.
+ * Engagement edit page.
  *
- * 디자인 결정: detail 페이지(/engagements/[id])와 동일하게 module 세그먼트 없이
- * 직접 접근. existing.module이 form에 전달되며, partyId/partyName도 existing에서 추출.
+ * Design decision: like the detail page (/engagements/[id]), accessed directly without
+ * a module segment. existing.module is passed to the form, and partyId/partyName are also extracted from existing.
  */
 
 import { notFound } from 'next/navigation';
@@ -19,15 +19,15 @@ interface PageProps {
 export default async function EditEngagementPage({ params }: PageProps) {
   const { id } = await params;
 
-  // UUID 형식 검증
+  // validate UUID format
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
     notFound();
   }
 
-  // 인증
+  // authentication
   await requireAuthOrRedirect();
 
-  // engagement 로드 (없거나 다른 organization이면 RLS가 차단 → null)
+  // load engagement (RLS blocks -> null if missing or in another organization)
   const engagement = await fetchEngagementDetail(id);
   if (!engagement) {
     notFound();

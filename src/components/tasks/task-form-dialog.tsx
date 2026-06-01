@@ -34,11 +34,11 @@ import type { TaskPriority, TaskRow } from '@/types/task';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** create 컨텍스트 — 빈 폼이지만 partyId/engagementId 자동 연결 */
+  /** create context - empty form but auto-links partyId/engagementId */
   partyId?: string | null;
   engagementId?: string | null;
   partyType?: PartyTypeCode | null;
-  /** edit 모드면 기존 task */
+  /** the existing task when in edit mode */
   existing?: TaskRow | null;
 }
 

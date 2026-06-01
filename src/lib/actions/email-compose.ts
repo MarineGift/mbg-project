@@ -4,7 +4,7 @@
 // Type safety to be restored in D6-cleanup using per-query Row type casts
 // following party-detail.ts RawPartyRow pattern.
 // src/lib/actions/email-compose.ts
-// Phase 22b: contact_id 치환 수정 + 이메일 서명 + 첨부파일 지원
+// Phase 22b: fix contact_id substitution + email signature + attachment support
 "use server";
 
 import { requireAuth } from '@/lib/auth';
@@ -21,16 +21,16 @@ export type ComposeMode = "new" | "reply" | "template";
 export interface ComposePayload {
   mode: ComposeMode;
   partyId: string;
-  contactId?: string | null;       // ← Fix: contact_id 명시
+  contactId?: string | null;       // <- Fix: explicit contact_id
   to: string;
   subject: string;
-  body: string;                    // HTML or plain (template 모드에서는 template 원문)
+  body: string;                    // HTML or plain (the raw template in template mode)
   templateId?: string;
-  replyToMessageId?: string;       // reply 모드
+  replyToMessageId?: string;       // reply mode
   threadId?: string;
   attachmentPaths?: string[];      // Supabase Storage paths (legacy / fallback)
   attachments?: Array<{ path: string; filename: string; size: number; mimeType: string }>; // preferred: rich metadata
-  useSignature?: boolean;          // 서명 첨부 여부 (기본 true)
+  useSignature?: boolean;          // whether to attach the signature (default true)
   fromKind?: SendingAddressKind;  // D6-7b: kind-aware SMTP sender selection
 }
 
@@ -42,7 +42,7 @@ export interface AIReplyPayload {
 }
 
 // ─────────────────────────────────────────────
-// SMTP 트랜스포터 생성
+// create the SMTP transporter
 // ─────────────────────────────────────────────
 // D6-7b: kind-aware SMTP sender resolution
 type SenderInfo = { username: string; displayName: string };
@@ -69,7 +69,7 @@ function resolveSenderInfo(kind: SendingAddressKind = 'shared'): SenderInfo {
 }
 
 // ─────────────────────────────────────────────
-// 메인: 이메일 발송
+// Main: send email
 // ─────────────────────────────────────────────
 export async function sendEmail(payload: ComposePayload): Promise<{
   success: boolean;
@@ -142,7 +142,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
 }
 
 // ─────────────────────────────────────────────
-// AI 답장 생성
+// generate an AI reply
 // ─────────────────────────────────────────────
 export async function generateAIReply(payload: AIReplyPayload): Promise<{
   success: boolean;
@@ -157,9 +157,9 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
     .eq("id", payload.communicationId)
     .single();
 
-  if (!comm) return { success: false, error: "원본 메시지를 찾을 수 없습니다." };
+  if (!comm) return { success: false, error: "Original message not found." };
 
-  // contact 이름 조회 (있으면 AI에게 힌트)
+  // look up the contact name (a hint to the AI if present)
   let contactName = "";
   if (payload.contactId) {
     const { data: c } = await supabase
@@ -213,7 +213,7 @@ Write a plain text reply draft for this email. Do not use any HTML tags.`;
 }
 
 // ─────────────────────────────────────────────
-// 서명 CRUD actions
+// signature CRUD actions
 // ─────────────────────────────────────────────
 export async function upsertEmailSignature(input: {
   id?: string;
@@ -223,12 +223,12 @@ export async function upsertEmailSignature(input: {
 }): Promise<{ success: boolean; error?: string }> {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "인증 필요" };
+  if (!user) return { success: false, error: "Authentication required" };
 
   const auth = await requireAuth();
   const orgId = auth.organizationId;
 
-  // isDefault = true 이면 기존 default 해제
+  // if isDefault = true, clear the existing default
   if (input.isDefault) {
     await supabase
       .schema("app").from("email_signatures" as never)
@@ -264,7 +264,7 @@ export async function upsertEmailSignature(input: {
 export async function deleteEmailSignature(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "인증 필요" };
+  if (!user) return { success: false, error: "Authentication required" };
 
   const { error } = await supabase
     .schema("app").from("email_signatures" as never)
@@ -282,7 +282,7 @@ export async function listEmailSignatures(): Promise<{
 }> {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "인증 필요" };
+  if (!user) return { success: false, error: "Authentication required" };
 
   const auth = await requireAuth();
   const orgId = auth.organizationId;

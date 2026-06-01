@@ -1,21 +1,21 @@
 /**
  * lib/email/tabs-mailer.ts
  *
- * TABS Mailer 4 외부 시스템과의 단일 통합점.
+ * Single integration point with the external TABS Mailer 4 system.
  *
- * 책임:
- *   - SMTP 인증 분기 (PLAIN / LOGIN / IP whitelist)
- *   - 단건 발송 (sendOne) — X-URM-* 헤더 부착
- *   - kind별 SMTP transporter 캐시 (personal / role / shared)
- *   - 캠페인 등록 (createCampaign)
- *   - 통계 조회 (getCampaignStats)
- *   - mail_merge_jobs.progress 동기화 (syncCampaignToMergeJob)
- *   - quiet hours·rate limit 클라이언트 측 검증
+ * Responsibilities:
+ *   - SMTP auth branching (PLAIN / LOGIN / IP whitelist)
+ *   - single send (sendOne) - attaches X-URM-* headers
+ *   - per-kind SMTP transporter cache (personal / role / shared)
+ *   - campaign registration (createCampaign)
+ *   - stats lookup (getCampaignStats)
+ *   - mail_merge_jobs.progress sync (syncCampaignToMergeJob)
+ *   - client-side quiet hours / rate limit validation
  *
- * 비책임:
- *   - 수신자 명단 해석 (mail-merge-worker)
- *   - bounces·complaints 후처리 (운영 시 별도 모듈)
- *   - unsubscribe 관리 (별도)
+ * Not responsible for:
+ *   - recipient-list resolution (mail-merge-worker)
+ *   - bounces/complaints post-processing (a separate module in production)
+ *   - unsubscribe management (separate)
  */
 
 import nodemailer, { type Transporter, type SentMessageInfo } from 'nodemailer';
@@ -34,7 +34,7 @@ import {
 import { evaluateQuietHours } from './quiet-hours';
 
 /* ============================================================
- * 1. 에러 클래스
+ * 1. Error classes
  * ============================================================ */
 
 export class TabsMailerError extends Error {
@@ -79,14 +79,14 @@ export class TabsMailerRateLimitError extends TabsMailerError {
 export class TabsMailerNotImplementedError extends TabsMailerError {
   constructor(method: string) {
     super(
-      `${method}: pending TABS Mailer 4 specification from 탭스랩 — use mock adapter for now`,
+      `${method}: pending TABS Mailer 4 specification from TABS Lab — use mock adapter for now`,
     );
     this.name = 'TabsMailerNotImplementedError';
   }
 }
 
 /* ============================================================
- * 2. ITabsMailerClient 인터페이스
+ * 2. ITabsMailerClient interface
  * ============================================================ */
 export interface ITabsMailerClient {
   verify(kind?: SendingAddressKind): Promise<void>;
@@ -102,18 +102,18 @@ export interface ITabsMailerClient {
 }
 
 /* ============================================================
- * 3. TabsMailerClient (실 SMTP 어댑터)
+ * 3. TabsMailerClient (real SMTP adapter)
  * ============================================================ */
 
 export interface TabsMailerOptions {
-  /** 단위 테스트에서 nodemailer transporter를 주입할 때 사용. */
+  /** Used to inject a nodemailer transporter in unit tests. */
   transporter?: Transporter;
-  /** 단위 테스트에서 시각을 고정할 때 사용. */
+  /** Used to freeze the clock in unit tests. */
   nowProvider?: () => Date;
 }
 
 export class TabsMailerClient implements ITabsMailerClient {
-  /** kind별 transporter 캐시. 'default'는 하위호환용 fallback. */
+  /** Per-kind transporter cache. 'default' is the backward-compat fallback. */
   private transporters: Map<SendingAddressKind | 'default', Transporter> = new Map();
   private readonly nowProvider: () => Date;
 
@@ -125,7 +125,7 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
-   * kind를 받아 SMTP 자격증명을 반환. 미설정 시 null.
+   * Takes a kind and returns SMTP credentials. null if not configured.
    */
   private resolveCredentials(
     kind: SendingAddressKind,
@@ -155,7 +155,7 @@ export class TabsMailerClient implements ITabsMailerClient {
     }
   }
 
-  /** 공통 SMTP 옵션 (auth 제외). */
+  /** Common SMTP options (excluding auth). */
   private baseSmtpOptions(): Omit<SMTPTransport.Options, 'auth'> {
     const rejectUnauthorized = env.TABS_MAILER_TLS_REJECT_UNAUTHORIZED ?? true;
     return {
@@ -173,8 +173,8 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
-   * kind별 transporter 생성/캐시.
-   * kind 미지정 시 기존 TABS_MAILER_USERNAME/PASSWORD fallback.
+   * Create/cache a transporter per kind.
+   * When kind is unset, falls back to the existing TABS_MAILER_USERNAME/PASSWORD.
    */
   private getTransporterFor(kind?: SendingAddressKind): Transporter {
     const cacheKey: SendingAddressKind | 'default' = kind ?? 'default';
@@ -197,7 +197,7 @@ export class TabsMailerClient implements ITabsMailerClient {
         pass: creds.password,
       };
     } else {
-      // 하위호환: 단일 TABS_MAILER_USERNAME/PASSWORD
+      // backward compat: single TABS_MAILER_USERNAME/PASSWORD
       if (
         env.TABS_MAILER_AUTH_METHOD === 'plain' ||
         env.TABS_MAILER_AUTH_METHOD === 'login'
@@ -208,7 +208,7 @@ export class TabsMailerClient implements ITabsMailerClient {
           pass: env.TABS_MAILER_PASSWORD ?? '',
         };
       }
-      // ip_whitelist는 auth 미지정 → TABS 측이 IP로 검증
+      // ip_whitelist leaves auth unset -> the TABS side verifies by IP
     }
 
     const transporter = nodemailer.createTransport(config);
@@ -217,8 +217,8 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
-   * SMTP 연결·인증 확인.
-   * @param kind 특정 kind만 검증하려면 지정. 미지정 시 default fallback 검증.
+   * Verify SMTP connection/auth.
+   * @param kind specify to verify only a particular kind. If omitted, verifies the default fallback.
    */
   async verify(kind?: SendingAddressKind): Promise<void> {
     const target = kind ? `kind=${kind}` : 'default';
@@ -234,7 +234,7 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
-   * 모든 configured kind를 일괄 검증. 보고용 결과 반환(throw 안 함).
+   * Verify all configured kinds in a batch. Returns a report-style result (does not throw).
    */
   async verifyAll(): Promise<
     Array<{ kind: SendingAddressKind | 'default'; ok: boolean; error?: string }>
@@ -267,10 +267,10 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
-   * 단건 발송.
-   * 1. quiet hours 검증
-   * 2. kind 기반 transporter + From 결정
-   * 3. URM 헤더 부착
+   * Single send.
+   * 1. quiet hours validation
+   * 2. kind-based transporter + From determination
+   * 3. attach URM headers
    * 4. nodemailer.sendMail
    */
   async sendOne(input: SendOneInput): Promise<SendOneOutput> {
@@ -286,12 +286,12 @@ export class TabsMailerClient implements ITabsMailerClient {
       }
     }
 
-    // [2] kind 기반 transporter + From 결정
+    // [2] kind-based transporter + From determination
     const kind = input.sendingAddressKind;
     const transporter = this.getTransporterFor(kind);
 
-    // From: kind 지정 시 자격증명 username으로 강제 (SPF/DKIM 일관성)
-    //       kind 미지정 시 input.fromAddress/fromName 그대로 (하위호환)
+    // From: when kind is set, force the credentials' username (SPF/DKIM consistency)
+    //       when kind is unset, use input.fromAddress/fromName as-is (backward compat)
     let effectiveFromAddress = input.fromAddress;
     let effectiveFromName = input.fromName;
     if (kind) {
@@ -302,7 +302,7 @@ export class TabsMailerClient implements ITabsMailerClient {
       }
     }
 
-    // [3] URM 헤더 + 보조 헤더
+    // [3] URM headers + auxiliary headers
     const headers: Record<string, string> = {
       [URM_HEADER_NAMES.communicationId]: input.urmHeaders.communicationId,
       [URM_HEADER_NAMES.autoSend]: input.urmHeaders.autoSend ? 'true' : 'false',
@@ -313,7 +313,7 @@ export class TabsMailerClient implements ITabsMailerClient {
     if (input.urmHeaders.brandVoiceId) {
       headers[URM_HEADER_NAMES.brandVoiceId] = input.urmHeaders.brandVoiceId;
     }
-    // 헤더 통과 여부 미확인 시 invisible footer fallback (HTML body에만)
+    // when header pass-through is unconfirmed, fall back to the invisible footer (HTML body only)
     let bodyHtml = input.bodyHtml;
     if (bodyHtml) {
       const footer = `<!-- urm:c=${input.urmHeaders.communicationId};auto=${
@@ -322,7 +322,7 @@ export class TabsMailerClient implements ITabsMailerClient {
       bodyHtml = `${bodyHtml}\n${footer}`;
     }
 
-    // [4] 발송
+    // [4] send
     let info: SentMessageInfo;
     try {
       info = await transporter.sendMail({
@@ -366,16 +366,16 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /* --------------------------------------------------------
-   * createCampaign — TABS Mailer 4 캠페인 등록
-   * TABS API 명세 미수령 → throw. 운영 시 mock fallback.
+   * createCampaign - register a TABS Mailer 4 campaign
+   * TABS API spec not yet received -> throw. Falls back to mock in production.
    * -------------------------------------------------------- */
   async createCampaign(_params: CampaignParams): Promise<CampaignCreateResult> {
     throw new TabsMailerNotImplementedError('createCampaign');
   }
 
   /* --------------------------------------------------------
-   * getCampaignStats — MS SQL Server 통계 DB 조회
-   * 운영 정보 미수령 → throw.
+   * getCampaignStats - query the MS SQL Server stats DB
+   * operational details not yet received -> throw.
    * -------------------------------------------------------- */
   async getCampaignStats(_tabsCampaignId: string): Promise<TabsCampaignStats> {
     throw new TabsMailerNotImplementedError('getCampaignStats');
@@ -383,7 +383,7 @@ export class TabsMailerClient implements ITabsMailerClient {
 
   /* --------------------------------------------------------
    * syncCampaignToMergeJob
-   * mail_merge_jobs.progress + tabs_campaign_status 갱신.
+   * Update mail_merge_jobs.progress + tabs_campaign_status.
    * -------------------------------------------------------- */
   async syncCampaignToMergeJob(
     supabase: SupabaseClient,
@@ -437,7 +437,7 @@ export class TabsMailerClient implements ITabsMailerClient {
       .eq('organization_id', organizationId);
   }
 
-  /** 모든 transporter 연결 종료 (cleanup). 워커 graceful shutdown에서 호출. */
+  /** Close all transporter connections (cleanup). Called on worker graceful shutdown. */
   async close(): Promise<void> {
     for (const [, t] of this.transporters) {
       try {
@@ -452,7 +452,7 @@ export class TabsMailerClient implements ITabsMailerClient {
 }
 
 /* ============================================================
- * 4. Rate limit 검증 (mail-merge-worker에서 호출)
+ * 4. Rate limit validation (called from mail-merge-worker)
  * ============================================================ */
 
 export interface RateLimitCheckInput {
@@ -466,12 +466,12 @@ export interface RateLimitVerdict {
   reason?: 'minute_limit' | 'hour_limit';
   observedMinute?: number;
   observedHour?: number;
-  /** 다음 발송 가능 시각의 ISO 문자열. */
+  /** ISO string of the next allowed send time. */
   nextAllowedAt?: string;
 }
 
 /**
- * 최근 1분·1시간 내 communications 발송 카운트를 집계해 한도 비교.
+ * Aggregate the count of communications sent in the last 1 min / 1 hour and compare against the limits.
  */
 export async function checkRateLimit(
   supabase: SupabaseClient,
@@ -541,21 +541,21 @@ export async function checkRateLimit(
 }
 
 /* ============================================================
- * 5. 팩토리 — env에 따라 mock vs 실제 어댑터 선택
+ * 5. Factory - selects the mock vs real adapter based on env
  * ============================================================ */
 
 let cachedClient: ITabsMailerClient | null = null;
 
 /**
- * TabsMailerClient 인스턴스 획득.
- * - TABS_MAILER_USE_MOCK=true 또는 HOST='mock' → mock 어댑터
- * - 그 외 → 실 SMTP 어댑터 (singleton)
+ * Obtain a TabsMailerClient instance.
+ * - TABS_MAILER_USE_MOCK=true or HOST='mock' -> mock adapter
+ * - otherwise -> real SMTP adapter (singleton)
  */
 export async function createTabsMailer(): Promise<ITabsMailerClient> {
   if (cachedClient) return cachedClient;
 
   if (isUsingMockMailer()) {
-    // 동적 import로 mock 어댑터 로드 (운영 번들에서 제외 가능)
+    // load the mock adapter via dynamic import (can be excluded from the production bundle)
     const { TabsMailerMockClient } = await import('./tabs-mailer.mock');
     cachedClient = new TabsMailerMockClient();
   } else {
@@ -564,7 +564,7 @@ export async function createTabsMailer(): Promise<ITabsMailerClient> {
   return cachedClient;
 }
 
-/** 테스트·재초기화용 — 캐시 초기화. */
+/** For tests/re-init - clears the cache. */
 export function resetTabsMailerCache(): void {
   cachedClient = null;
 }

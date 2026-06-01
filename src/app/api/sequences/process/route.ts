@@ -1,23 +1,23 @@
 // src/app/api/sequences/process/route.ts
-// Cron 엔드포인트: POST /api/sequences/process
-// 보안: x-cron-secret 헤더 필수
+// Cron endpoint: POST /api/sequences/process
+// Security: x-cron-secret header required
 //
-// 호출 예시 (외부 cron 서비스):
+// Call example (external cron service):
 //   curl -X POST https://yourdomain.com/api/sequences/process \
 //     -H "x-cron-secret: YOUR_SECRET"
 //
-// Vercel Cron (vercel.json에 추가):
+// Vercel Cron (add to vercel.json):
 //   { "crons": [{ "path": "/api/sequences/process", "schedule": "0 * * * *" }] }
-//   → Vercel은 GET으로 호출하므로 GET 핸들러도 제공
+//   -> Vercel calls via GET, so a GET handler is also provided
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processSequence } from '@/lib/utils/sequence-processor';
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false; // secret 미설정 = 비활성화
+  if (!secret) return false; // secret not set = disabled
   const header = req.headers.get('x-cron-secret');
-  // Vercel Cron은 Authorization: Bearer {CRON_SECRET} 사용
+  // Vercel Cron uses Authorization: Bearer {CRON_SECRET}
   const bearer = req.headers.get('authorization')?.replace('Bearer ', '');
   return header === secret || bearer === secret;
 }
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Vercel Cron은 GET 메서드로 호출
+// Vercel Cron calls via the GET method
 export async function GET(req: NextRequest) {
   return POST(req);
 }

@@ -17,6 +17,7 @@ import {
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { ActivityTabClient } from './log-activity-modal';
 import { TasksTabClient } from './add-task-modal';
+import { ChecklistTabClient } from './checklist-tab';
 
 interface Props {
   params: { code: string; id: string };
@@ -26,6 +27,7 @@ interface Props {
 const TAB_LABELS = {
   activity: 'Activity',
   tasks: 'Tasks',
+  checklist: 'Checklist',
   backers: 'Backers',
 } as const;
 type TabId = keyof typeof TAB_LABELS;
@@ -89,8 +91,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
 
   const isCrowdfunding = d.pipeline?.code === 'crowdfunding';
   const availableTabs: TabId[] = isCrowdfunding
-    ? ['activity', 'tasks', 'backers']
-    : ['activity', 'tasks'];
+    ? ['activity', 'tasks', 'checklist', 'backers']
+    : ['activity', 'tasks', 'checklist'];
   const rawTab = Array.isArray(searchParams.tab) ? searchParams.tab[0] : searchParams.tab;
   const activeTab: TabId =
     rawTab && (availableTabs as string[]).includes(rawTab) ? (rawTab as TabId) : 'activity';
@@ -143,6 +145,18 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
         .in('id', checklistIds);
       checklists = (cs ?? []) as any[];
     }
+  }
+
+  if (activeTab === 'checklist') {
+    const { data: cl } = await supabase
+      .schema('app')
+      .from('deal_checklists' as never)
+      .select('*')
+      .eq('deal_id', params.id)
+      .is('deleted_at', null)
+      .order('sort_order', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true });
+    checklists = (cl ?? []) as any[];
   }
 
   if (activeTab === 'backers') {
@@ -250,6 +264,13 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               dealId={params.id}
               tasks={tasks}
               checklists={checklists}
+            />
+          )}
+          {activeTab === 'checklist' && (
+            <ChecklistTabClient
+              pipelineCode={params.code}
+              dealId={params.id}
+              items={checklists}
             />
           )}
           {activeTab === 'backers' && (

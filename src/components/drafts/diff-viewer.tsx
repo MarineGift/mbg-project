@@ -11,10 +11,10 @@ interface Props {
 }
 
 /**
- * 원본 AI 출력과 사용자 편집본 사이의 라인 diff 표시.
- * - 추가: 초록 배경
- * - 삭제: 빨강 배경 (취소선)
- * - 변경 없음: 회색
+ * Shows a line diff between the original AI output and the user's edited version.
+ * - added: green background
+ * - removed: red background (strikethrough)
+ * - unchanged: gray
  */
 export function DiffViewer({ original, edited, className }: Props) {
   const parts = useMemo(() => diffLines(original, edited), [original, edited]);

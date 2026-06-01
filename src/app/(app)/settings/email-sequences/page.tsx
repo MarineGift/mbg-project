@@ -11,9 +11,9 @@ export default async function EmailSequencesPage() {
     return (
       <div className="max-w-5xl mx-auto p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-          NEXT_PUBLIC_DEFAULT_ORG_ID 환경변수가 설정되지 않았습니다.
+          The NEXT_PUBLIC_DEFAULT_ORG_ID environment variable is not set.
           <br />
-          <code>.env.local</code>에 추가 후 dev 서버를 재시작하세요.
+          <code>.env.local</code> and restart the dev server.
         </div>
       </div>
     );

@@ -1,8 +1,8 @@
 /**
  * components/common/relative-time.tsx
  *
- * 시간을 상대적으로 표시 ("방금 전", "3시간 전", "어제" 등).
- * 절대 시간은 tooltip에 표시.
+ * Displays time relatively ("just now", "3 hours ago", "yesterday", etc.).
+ * The absolute time is shown in a tooltip.
  */
 
 'use client';
@@ -15,9 +15,9 @@ import type { Locale as DateLocale } from 'date-fns';
 import type { Locale } from '@/i18n/routing';
 
 interface RelativeTimeProps {
-  /** ISO 8601 문자열 또는 Date */
+  /** ISO 8601 string or Date */
   date: string | Date;
-  /** 1분마다 자동 갱신 (기본 true) */
+  /** auto-refresh every minute (default true) */
   live?: boolean;
   className?: string;
 }
@@ -33,7 +33,7 @@ export function RelativeTime({ date, live = true, className }: RelativeTimeProps
   const dateLocale = LOCALE_MAP[localeCode] ?? enUS;
   const target = typeof date === 'string' ? new Date(date) : date;
 
-  // 매 분마다 재렌더 (live=true일 때만)
+  // re-render every minute (only when live=true)
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!live) return;

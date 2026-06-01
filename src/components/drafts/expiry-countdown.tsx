@@ -11,13 +11,13 @@ interface ExpiryCountdownProps {
 }
 
 /**
- * 만료 시각까지 남은 시간을 사람 친화적으로 표시.
- *   - 이미 만료: "만료됨" + 빨강
- *   - 오늘 만료: "오늘 만료" + 빨강
- *   - 24시간 이내: "N시간 남음" + 주황
- *   - 그 외: "N일 남음" + 회색
+ * Displays the time left until expiry in a human-friendly way.
+ *   - already expired: "Expired" + red
+ *   - expires today: "Expires today" + red
+ *   - within 24 hours: "N hours left" + orange
+ *   - otherwise: "N days left" + gray
  *
- * 매 분마다 자동 갱신.
+ * Auto-refreshes every minute.
  */
 export function ExpiryCountdown({ expiresAt, className }: ExpiryCountdownProps) {
   const t = useTranslations('drafts.expiry');
@@ -49,7 +49,7 @@ export function ExpiryCountdown({ expiresAt, className }: ExpiryCountdownProps) 
     icon = <AlertTriangle className="h-3 w-3" />;
   } else if (diffDays < 1) {
     if (diffHours < 1) {
-      // 1시간 이내
+      // within 1 hour
       label = t('hoursLeft', { hours: 1 });
       tone = 'soon';
     } else {

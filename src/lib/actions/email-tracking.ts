@@ -2,11 +2,11 @@
 /**
  * lib/actions/email-tracking.ts
  *
- * 이메일 추적 레코드 생성 + HTML 픽셀 주입.
+ * Create an email tracking record + inject the HTML pixel.
  *
- * 사용처:
- *   - communications.ts → sendOutboundManual (수동 발송)
- *   - (future) drafts.ts → sendApprovedDraft (AI 자동 발송)
+ * Used by:
+ *   - communications.ts -> sendOutboundManual (manual send)
+ *   - (future) drafts.ts -> sendApprovedDraft (AI auto-send)
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -15,15 +15,15 @@ import { extractLinks, injectTracking } from '@/lib/utils/email-tracking';
 import type { TrackingPayload } from '@/types/phase21';
 
 /* ──────────────────────────────────────────────────────────
- * 입력 타입
+ * Input type
  * ────────────────────────────────────────────────────────── */
 export interface CreateTrackingInput {
   orgId: string;
 
-  /** 수동 발송의 communications.id */
+  /** the communications.id of a manual send */
   communicationId?: string;
 
-  /** 템플릿 기반 드래프트의 id (future) */
+  /** the id of a template-based draft (future) */
   draftId?: string;
 
   partyId?: string;
@@ -31,26 +31,26 @@ export interface CreateTrackingInput {
   subject?: string;
   sentTo: string;
 
-  /** 픽셀 + 링크를 삽입할 HTML 본문.
-   *  plain text는 호출 전에 plainToHtml()로 변환해서 전달. */
+  /** The HTML body to inject the pixel + links into.
+   *  Convert plain text via plainToHtml() before calling. */
   htmlBody: string;
 }
 
 export interface CreateTrackingResult {
   payload: TrackingPayload;
-  /** 픽셀·추적 링크가 삽입된 HTML — sendOne(bodyHtml: ...) 에 전달 */
+  /** HTML with the pixel/tracking links injected - pass to sendOne(bodyHtml: ...) */
   injectedHtml: string;
 }
 
 /* ──────────────────────────────────────────────────────────
- * 메인 함수
+ * Main function
  * ────────────────────────────────────────────────────────── */
 
 /**
- * 1. htmlBody에서 외부 링크 추출
- * 2. email_tracking + email_tracking_links rows 생성 (RPC)
- * 3. HTML에 픽셀 + 추적 링크 주입
- * 4. injectedHtml 반환 → 이것을 sendOne(bodyHtml) 에 넘길 것
+ * 1. extract external links from htmlBody
+ * 2. create email_tracking + email_tracking_links rows (RPC)
+ * 3. inject the pixel + tracking links into the HTML
+ * 4. return injectedHtml -> pass this to sendOne(bodyHtml)
  */
 export async function createEmailTracking(
   input: CreateTrackingInput,

@@ -27,7 +27,7 @@ export function LanguageForm({ currentLanguage }: Props) {
     startTransition(async () => {
       const result = await updateUserPreferredLanguage({ language: selected });
       if (result.ok) {
-        // cookie도 즉시 갱신 (다음 요청부터 반영)
+        // also update the cookie immediately (applied from the next request)
         document.cookie = `${localeCookieName}=${selected}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
         toast.success(t('saved'));
         router.refresh();

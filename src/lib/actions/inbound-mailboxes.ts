@@ -17,7 +17,7 @@ export type InboundMailbox = {
   created_at: string;
 };
 
-// 목록 — password_encrypted 는 절대 select 하지 않는다 (평문/암호문 모두 클라이언트로 안 감)
+// list - never select password_encrypted (neither plaintext nor ciphertext goes to the client)
 export async function listMailboxes(): Promise<InboundMailbox[]> {
   const sb = createSupabaseAdminClient();
   const { data } = await sb
@@ -29,8 +29,8 @@ export async function listMailboxes(): Promise<InboundMailbox[]> {
   return (data || []) as unknown as InboundMailbox[];
 }
 
-// 추가/갱신 — 비번은 서버에서만 흐르고 RPC(pgp_sym_encrypt)로 즉시 암호화 저장.
-// upsert_inbound_mailbox 는 types/database.ts 에 아직 없을 수 있어 rpc 헬퍼 대신 직접 호출 + 캐스팅.
+// add/update - the password flows only on the server and is immediately encrypted via RPC (pgp_sym_encrypt).
+// upsert_inbound_mailbox may not be in types/database.ts yet, so call it directly + cast instead of the rpc helper.
 export async function addMailbox(
   address: string,
   host: string,
@@ -40,10 +40,10 @@ export async function addMailbox(
   password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const addr = address.trim().toLowerCase();
-  if (!addr || !addr.includes("@")) return { ok: false, error: "유효한 이메일 주소를 입력하세요" };
-  if (!host.trim()) return { ok: false, error: "IMAP 호스트를 입력하세요" };
-  if (!password) return { ok: false, error: "비밀번호를 입력하세요" };
-  if (!Number.isFinite(port) || port <= 0) return { ok: false, error: "포트가 올바르지 않습니다" };
+  if (!addr || !addr.includes("@")) return { ok: false, error: "Please enter a valid email address" };
+  if (!host.trim()) return { ok: false, error: "Please enter the IMAP host" };
+  if (!password) return { ok: false, error: "Please enter a password" };
+  if (!Number.isFinite(port) || port <= 0) return { ok: false, error: "Invalid port" };
 
   const sb = createSupabaseAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

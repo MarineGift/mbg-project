@@ -1,18 +1,18 @@
 /**
  * types/classification.ts
  *
- * 분류기(Classifier) 에이전트의 표준 출력 타입.
- * 마스터 시스템 프롬프트 §4.2의 표준 10개 카테고리만 허용한다.
+ * Standard output type of the Classifier agent.
+ * Only the 10 standard categories from master system prompt §4.2 are allowed.
  *
- * 본 파일에 정의된 STANDARD_CATEGORIES 외의 값은 processor.ts가
- * 자동으로 `other`로 강제 변환하고 requiresHuman=true로 마킹한다.
+ * Values outside the STANDARD_CATEGORIES defined here are
+ * automatically coerced to `other` by processor.ts and marked requiresHuman=true.
  */
 
 /* ============================================================
- * 1. 표준 10 카테고리 (마스터 프롬프트 §4.2)
+ * 1. The 10 standard categories (master prompt §4.2)
  * ----------------------------------------------------------
- * 변경 금지. ai.auto_send_rules.classification_category와
- * 정확히 일치해야 한다.
+ * Do not change. Must exactly match
+ * ai.auto_send_rules.classification_category.
  * ============================================================ */
 export const STANDARD_CATEGORIES = [
   'information_request',
@@ -30,33 +30,33 @@ export const STANDARD_CATEGORIES = [
 export type StandardCategory = (typeof STANDARD_CATEGORIES)[number];
 
 /* ============================================================
- * 2. 위험 플래그 (분류기가 발견한 민감 토픽)
+ * 2. Risk flags (sensitive topics the classifier found)
  * ----------------------------------------------------------
- * 1개라도 존재하면 자동발송 게이트가 차단한다.
- * (auto-send-gate.ts §[7] 참조)
+ * If even one is present, the auto-send gate blocks.
+ * (see auto-send-gate.ts §[7])
  * ============================================================ */
 export const RISK_FLAGS = [
-  // investor 모듈
+  // investor module
   'valuation_topic',
   'term_sheet_topic',
   'legal_topic',
   'financial_projection',
   'competitor_disclosure',
-  // buyer 모듈
+  // buyer module
   'price_commitment',
   'moq_commitment',
   'lead_time_commitment',
   'exclusivity_request',
   'payment_terms',
   'quality_certification',
-  // customer 모듈
+  // customer module
   'pricing_dispute',
   'delivery_issue',
   'quality_complaint',
-  // partner 모듈
+  // partner module
   'capacity_commitment',
   'audit_finding_topic',
-  // 공통
+  // common
   'pii_in_request',
   'regulatory_topic',
   'litigation_topic',
@@ -65,7 +65,7 @@ export const RISK_FLAGS = [
 export type RiskFlag = (typeof RISK_FLAGS)[number];
 
 /* ============================================================
- * 3. 보조 enum
+ * 3. Helper enums
  * ============================================================ */
 export type Urgency = 'low' | 'medium' | 'high' | 'urgent';
 export type Sentiment = 'positive' | 'neutral' | 'negative' | 'mixed';
@@ -74,39 +74,39 @@ export type DetectedLanguage = 'ko' | 'en' | 'ja' | 'zh' | 'other';
 /* ============================================================
  * 4. ClassificationOutput
  * ----------------------------------------------------------
- * Classifier 에이전트의 system_prompt가 강제하는 JSON 스키마.
- * (ai_prompts/classifier_*.json과 동일 구조)
+ * JSON schema enforced by the Classifier agent's system_prompt.
+ * (same structure as ai_prompts/classifier_*.json)
  * ============================================================ */
 export interface ClassificationOutput {
-  /** 표준 10 카테고리 중 하나. */
+  /** One of the 10 standard categories. */
   category: StandardCategory;
-  /** 시간 민감도. */
+  /** Time sensitivity. */
   urgency: Urgency;
-  /** 감정 톤. */
+  /** Emotional tone. */
   sentiment: Sentiment;
-  /** true면 자동발송 차단, 사람 검토 필수. */
+  /** If true, block auto-send; human review required. */
   requiresHuman: boolean;
-  /** 0.0 ~ 1.0. min_confidence 비교에 사용. */
+  /** 0.0 - 1.0. Used for the min_confidence comparison. */
   confidence: number;
-  /** 분류 근거(짧은 자연어). */
+  /** Classification rationale (short natural language). */
   rationale: string;
-  /** 발견된 위험 플래그 목록. */
+  /** List of risk flags found. */
   riskFlags: RiskFlag[];
-  /** 감지된 언어. */
+  /** Detected language. */
   detectedLanguage: DetectedLanguage;
-  /** 핵심 토픽 키워드(선택, knowledge_chunks 검색 보강용). */
+  /** Key topic keywords (optional, to enrich knowledge_chunks search). */
   topics?: string[];
-  /** 추출된 엔티티(선택, 회사명·금액·날짜 등). */
+  /** Extracted entities (optional, e.g. company name, amount, date). */
   entities?: Record<string, unknown>;
 }
 
 /* ============================================================
- * 5. 검증 헬퍼
+ * 5. Validation helpers
  * ============================================================ */
 
 /**
- * 임의의 문자열이 표준 카테고리인지 확인하는 type guard.
- * processor.ts에서 분류기 응답을 검증할 때 사용한다.
+ * Type guard checking whether an arbitrary string is a standard category.
+ * Used by processor.ts when validating the classifier response.
  */
 export function isStandardCategory(value: unknown): value is StandardCategory {
   return (
@@ -116,7 +116,7 @@ export function isStandardCategory(value: unknown): value is StandardCategory {
 }
 
 /**
- * 임의의 문자열이 정의된 risk flag인지 확인.
+ * Check whether an arbitrary string is a defined risk flag.
  */
 export function isRiskFlag(value: unknown): value is RiskFlag {
   return (
@@ -126,11 +126,11 @@ export function isRiskFlag(value: unknown): value is RiskFlag {
 }
 
 /**
- * 분류기가 반환한 임의 객체가 ClassificationOutput 형식을 만족하는지 검증.
- * 위반 시 [false, 사유 배열] 반환.
+ * Validate whether an arbitrary object returned by the classifier satisfies the ClassificationOutput shape.
+ * On violation, returns [false, array of reasons].
  *
- * processor.ts는 false 시 category='other', requiresHuman=true,
- * confidence=min(0.5, 원래값)로 강제한다.
+ * On false, processor.ts forces category='other', requiresHuman=true,
+ * confidence=min(0.5, original value).
  */
 export function validateClassificationOutput(
   obj: unknown,
@@ -171,7 +171,7 @@ export function validateClassificationOutput(
     return { ok: false, reasons };
   }
 
-  // 알 수 없는 risk_flag는 silently 제거 (이후 시드 추가 시 호환을 위해)
+  // unknown risk_flags are silently dropped (for compatibility when seeds are added later)
   const sanitizedFlags = (o.riskFlags as unknown[]).filter(isRiskFlag);
 
   return {

@@ -1,12 +1,12 @@
 /**
  * components/providers/toast-provider.tsx
  *
- * 토스트 컨테이너 — sonner 라이브러리 사용.
+ * Toast container - uses the sonner library.
  *
- * 사용 패턴:
+ * Usage pattern:
  *   import { toast } from 'sonner';
- *   toast.success('초안이 승인되었습니다');
- *   toast.error('승인에 실패했습니다', { description: error.message });
+ *   toast.success('Draft approved');
+ *   toast.error('Approval failed', { description: error.message });
  */
 
 'use client';

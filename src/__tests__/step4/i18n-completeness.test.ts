@@ -1,8 +1,8 @@
 /**
  * tests/i18n-completeness.test.ts
  *
- * 3개 언어 (ko/en/ja) 파일이 동일한 key 집합을 가지는지 검증.
- * Phase 1은 100% 동기화가 목표 (Q10 결정).
+ * Verifies that the 3 language files (ko/en/ja) have the same key set.
+ * Phase 1 targets 100% synchronization (Q10 decision).
  */
 
 import { describe, it, expect } from 'vitest';

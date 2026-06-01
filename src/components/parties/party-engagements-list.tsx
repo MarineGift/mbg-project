@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   engagements: readonly PartyEngagement[];
-  /** "+ Add Engagement" 딥링크용 */
+  /** for the "+ Add Engagement" deep link */
   partyId: string;
   partyType: PartyTypeCode;
 }

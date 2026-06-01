@@ -3,14 +3,14 @@
 /**
  * components/inbox/channel-direction-icon.tsx
  *
- * 통신 채널 + 방향을 한 줄 아이콘으로 표시.
- * 인박스 목록 / 활동 타임라인에서 공통 사용.
+ * Displays the communication channel + direction as a single-line icon.
+ * Shared by the inbox list / activity timeline.
  *
- * 변경 이력:
- *   - 2026-05-12 (1차): 9개 채널 매핑 + defensive fallback.
- *   - 2026-05-12 (2차): 11개로 확장 (slack, other 추가).
- *   - 2026-05-12 (3차): 12개로 확장 (webform = Globe).
- *                       DB enum app.channel_type과 1:1 매칭.
+ * Change history:
+ *   - 2026-05-12 (1st): mapped 9 channels + defensive fallback.
+ *   - 2026-05-12 (2nd): expanded to 11 (added slack, other).
+ *   - 2026-05-12 (3rd): expanded to 12 (webform = Globe).
+ *                       1:1 match with the DB enum app.channel_type.
  */
 
 import {
@@ -74,7 +74,7 @@ export function ChannelDirectionIcon({
   direction,
   className,
 }: Props) {
-  // Defensive fallback — DB enum이 향후 확장되어도 React render 에러 방지.
+  // Defensive fallback - prevents React render errors even if the DB enum expands later.
   const Icon = CHANNEL_ICON[channel] ?? HelpCircle;
   const colorCls = CHANNEL_COLOR[channel] ?? 'text-muted-foreground';
   const DirIcon = direction === 'inbound' ? ArrowDownLeft : ArrowUpRight;

@@ -1,8 +1,8 @@
 /**
  * components/providers/intl-provider.tsx
  *
- * next-intl client provider — Server Component(layout.tsx)에서 받은
- * locale·messages를 클라이언트로 전달.
+ * next-intl client provider - receives from the Server Component (layout.tsx)
+ * and passes locale/messages to the client.
  */
 
 'use client';

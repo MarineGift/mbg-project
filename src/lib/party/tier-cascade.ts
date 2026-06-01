@@ -1,9 +1,9 @@
 // src/lib/party/tier-cascade.ts
-// Phase 7-b-1: parent_party_id 기반 tier 자동 계산
+// Phase 7-b-1: auto-compute tier based on parent_party_id
 // party_level DB constraint: 'group_hq' | 'country_entity' | 'plant'
 
 // ──────────────────────────────────────────────
-// 타입
+// Types
 // ──────────────────────────────────────────────
 export type TierLevel = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5'
 
@@ -17,14 +17,14 @@ export type TierRole =
   | 'Associate'
   | 'Branch'
 
-/** DB constraint 허용값 (parties_party_level_check) */
+/** values allowed by the DB constraint (parties_party_level_check) */
 export type PartyLevel = 'group_hq' | 'country_entity' | 'plant'
 
 // ──────────────────────────────────────────────
 // tier cascade
 // ──────────────────────────────────────────────
 
-/** parent tier → child tier 자동 계산 */
+/** auto-compute parent tier -> child tier */
 export function cascadeTier(parentTier: TierLevel | null | undefined): TierLevel {
   if (!parentTier) return 'tier_1'
   const map: Record<TierLevel, TierLevel> = {
@@ -38,7 +38,7 @@ export function cascadeTier(parentTier: TierLevel | null | undefined): TierLevel
 }
 
 // ──────────────────────────────────────────────
-// industry tier_role → app 매핑
+// industry tier_role -> app mapping
 // ──────────────────────────────────────────────
 
 /** industry.tier_role → app.tier_level */
@@ -79,10 +79,10 @@ export function tierRoleToPartyLevel(role: TierRole): PartyLevel {
 }
 
 /**
- * 부모 party_level 기반으로 자식 party_level 추론
+ * Infer the child party_level based on the parent party_level
  *   group_hq       → country_entity
  *   country_entity → plant
- *   plant          → plant  (더 이상 내려가지 않음)
+ *   plant          -> plant  (goes no lower)
  */
 export function deriveChildPartyLevel(
   parentLevel: string | null | undefined,
@@ -93,7 +93,7 @@ export function deriveChildPartyLevel(
 }
 
 // ──────────────────────────────────────────────
-// 표시용 레이블
+// display labels
 // ──────────────────────────────────────────────
 
 export function partyLevelLabel(level: string | null | undefined): string {

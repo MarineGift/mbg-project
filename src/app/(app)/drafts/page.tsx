@@ -1,12 +1,12 @@
 /**
  * app/(app)/drafts/page.tsx
  *
- * AI 초안 검토 큐 — Phase 1의 핵심 화면.
+ * AI draft review queue - the core screen of Phase 1.
  *
- * Server Component로 동작:
- *   - URL searchParams를 fetchDraftQueue에 전달
- *   - 결과를 자식 클라이언트 컴포넌트(필터·테이블·페이지네이션)에 전달
- *   - 필터 변경 시 자동으로 페이지 재실행 (router.replace)
+ * Operates as a Server Component:
+ *   - passes URL searchParams to fetchDraftQueue
+ *   - passes results to child client components (filters, table, pagination)
+ *   - on filter change, the page re-runs automatically (router.replace)
  */
 
 import { getTranslations } from 'next-intl/server';

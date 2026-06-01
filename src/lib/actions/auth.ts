@@ -1,11 +1,11 @@
 /**
  * lib/actions/auth.ts
  *
- * 인증 관련 Server Actions.
+ * Authentication-related Server Actions.
  *
- * 중요: organization_id 검증은 session.access_token (JWT)을 직접 디코드한다.
- *       data.user.app_metadata는 DB의 raw_app_meta_data를 반환하므로
- *       hook이 주입한 organization_id를 못 본다.
+ * Important: organization_id validation decodes session.access_token (JWT) directly.
+ *       data.user.app_metadata returns the DB's raw_app_meta_data, so it
+ *       does not see the organization_id injected by the hook.
  */
 
 'use server';
@@ -32,7 +32,7 @@ const signInSchema = z.object({
 });
 
 /**
- * JWT의 payload를 base64url 디코드.
+ * base64url-decode the JWT payload.
  */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
@@ -81,8 +81,8 @@ export async function signInWithPassword(input: {
     };
   }
 
-  // JWT를 직접 디코드 — hook이 주입한 app_metadata가 여기 있음
-  // data.user.app_metadata는 DB의 raw_app_meta_data라서 hook 결과 안 보임
+  // decode the JWT directly - the hook-injected app_metadata is here
+  // data.user.app_metadata is the DB's raw_app_meta_data, so the hook result is not visible
   const accessToken = data.session?.access_token;
   let orgId: string | undefined;
   if (accessToken) {

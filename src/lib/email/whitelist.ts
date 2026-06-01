@@ -1,18 +1,18 @@
 /**
  * lib/email/whitelist.ts
  *
- * 발신자 이메일 주소가 조직의 화이트리스트에 등록되어 있는지 확인.
+ * Check whether a sender's email address is registered in the organization's whitelist.
  *
- * 매칭 우선순위:
- *   1. address — 정확 일치
- *   2. domain — @ 뒤 도메인 일치
- *   3. regex — 정규식 매칭
+ * Match priority:
+ *   1. address - exact match
+ *   2. domain - match the domain after @
+ *   3. regex - regular-expression match
  *
- * is_active = true 인 항목만 검사.
+ * Only entries with is_active = true are checked.
  *
- * 사용처:
- *   - mailcarrier.ts persistInbound() 진입 시
- *   - 허용 안 된 발신자는 communications INSERT 스킵
+ * Used by:
+ *   - on entry to persistInbound() in mailcarrier.ts
+ *   - senders that are not allowed skip the communications INSERT
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -23,8 +23,8 @@ interface WhitelistRow {
 }
 
 /**
- * 발신자 주소가 화이트리스트에 등록되어 있으면 true.
- * 화이트리스트가 비어있어도 false 반환 (명시적 허용 정책).
+ * Returns true if the sender address is registered in the whitelist.
+ * Returns false even when the whitelist is empty (explicit-allow policy).
  */
 export async function isFromAllowedSender(
   supabase: SupabaseClient,
@@ -45,7 +45,7 @@ export async function isFromAllowedSender(
     .eq('is_active', true);
 
   if (error) {
-    // 화이트리스트 조회 실패 — 보수적으로 차단
+    // whitelist lookup failed - block conservatively
     // eslint-disable-next-line no-console
     console.error('[whitelist] lookup failed:', error);
     return false;
@@ -67,7 +67,7 @@ export async function isFromAllowedSender(
           const re = new RegExp(row.pattern, 'i');
           if (re.test(fromAddress)) return true;
         } catch {
-          // 잘못된 정규식 — 무시
+          // invalid regex - ignore
         }
         break;
     }

@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 interface ConfidenceBarProps {
-  /** 0~1 사이 */
+  /** between 0 and 1 */
   value: number;
   showLabel?: boolean;
   showValue?: boolean;
@@ -12,7 +12,7 @@ interface ConfidenceBarProps {
 }
 
 /**
- * 신뢰도 기준:
+ * Confidence thresholds:
  *   - low:    < 0.7
  *   - medium: 0.7 ~ 0.9
  *   - high:   ≥ 0.9
@@ -42,7 +42,7 @@ export function ConfidenceBar({
   className,
 }: ConfidenceBarProps) {
   const t = useTranslations('confidence');
-  // 음수·1 초과를 안전 처리
+  // safely handle negatives and values over 1
   const v = Math.max(0, Math.min(1, value));
   const tier = classify(v);
 

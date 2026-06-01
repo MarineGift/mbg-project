@@ -28,7 +28,7 @@ interface Props {
   partyId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** edit 모드면 기존 contact */
+  /** the existing contact when in edit mode */
   existing?: PartyContact | null;
 }
 

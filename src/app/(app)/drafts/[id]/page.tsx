@@ -1,12 +1,12 @@
 /**
  * app/(app)/drafts/[id]/page.tsx
  *
- * AI 초안 상세·편집 화면.
+ * AI draft detail/edit screen.
  *
  * Server Component:
- *   1. fetchDraftDetail로 모든 데이터 fetch (404 처리)
- *   2. 왼쪽 컬럼: 분류·자동발송·메타·원본 메일
- *   3. 오른쪽 컬럼: 편집기 + sticky 액션 바
+ *   1. fetch all data via fetchDraftDetail (404 handling)
+ *   2. left column: classification, auto-send, meta, original email
+ *   3. right column: editor + sticky action bar
  */
 
 import { notFound } from 'next/navigation';

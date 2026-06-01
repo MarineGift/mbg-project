@@ -1,6 +1,6 @@
 /**
  * lib/stores/ui-store.ts
- * Phase 22b: inboxUnreadCount + openTaskCount 추가
+ * hhase 22b: added inboxUnreadCount + openTaskCount
  */
 
 'use client';

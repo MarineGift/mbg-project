@@ -21,7 +21,7 @@ import {
 } from '@/i18n/routing';
 
 /**
- * 언어 토글 — cookie 갱신 + router.refresh()로 Server Component 재렌더 유도.
+ * Language toggle - updates the cookie + triggers a Server Component re-render via router.refresh().
  */
 export function LanguageToggle() {
   const t = useTranslations('common');
@@ -31,7 +31,7 @@ export function LanguageToggle() {
 
   const setLocale = (next: Locale) => {
     if (next === current) return;
-    // cookie 1년 유효
+    // cookie valid for 1 year
     document.cookie = `${localeCookieName}=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
     startTransition(() => router.refresh());
   };

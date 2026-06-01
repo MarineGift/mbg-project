@@ -1,28 +1,28 @@
 /**
  * lib/queries/engagements.ts
  *
- * Engagement Kanban + 상세 + party-scoped list 의 read API.
+ * Read API for Engagement Kanban + detail + party-scoped list.
  *
  * URM cutover (Stage 29-c, 2026-05-25):
  *   - app.engagements → urm.deals (atomic cutover)
- *   - parties join 도 urm.parties (FK target)
- *   - module 정보는 urm.party_types.code 에서 lookup (urm.parties.party_type_id)
+ *   - the parties join also targets urm.parties (FK target)
+ *   - module info is looked up from urm.party_types.code (urm.parties.party_type_id)
  *
- * URM schema 차이점 흡수:
+ * Absorbs URM schema differences:
  *   - app.engagements.name → urm.deals.deal_name
  *   - app.engagements.pipeline_definition_id → urm.deals.pipeline_id
- *   - app.engagements.partyType 제거 → urm.parties.party_type_id 기반 추론
- *   - app.engagements.weighted_amount 제거 → 클라이언트 계산
+ *   - app.engagements.partyType removed -> inferred from urm.parties.party_type_id
+ *   - app.engagements.weighted_amount removed -> computed on the client
  *     (value_amount * probability_pct / 100)
- *   - organization_id filter 제거 (RLS 가정)
+ *   - organization_id filter removed (assumes RLS)
  *
- * 도메인 type (KanbanCard, EngagementDetail) 은 그대로 유지.
- * mapping layer 에서 column rename 및 derived field 처리.
+ * Domain types (KanbanCard, EngagementDetail) are kept as-is.
+ * The mapping layer handles column renames and derived fields.
  *
- * 책임:
- *   1. fetchKanbanBoard      ← module 별 Kanban 보드
- *   2. fetchEngagementDetail ← engagement 1개 + pipeline + stages + history
- *   3. fetchPartyEngagements ← party 의 모든 engagement (selector 용)
+ * Responsibilities:
+ *   1. fetchKanbanBoard      <- Kanban board per module
+ *   2. fetchEngagementDetail <- one engagement + pipeline + stages + history
+ *   3. fetchPartyEngagements <- all engagements of a party (for the selector)
  */
 
 import 'server-only';
@@ -91,10 +91,10 @@ interface RawEngagementDetailRow {
 }
 
 /**
- * Kanban / list 용 SELECT clause.
+ * SELECT clause for Kanban / list.
  *
- * urm.deals 의 column 명으로 작성. parties join 으로 name + party_type_id 가져옴.
- * party_type_id 가 mapping 단계에서 PartyTypeCode 으로 변환됨.
+ * Written with urm.deals column names. The parties join brings in name + party_type_id.
+ * party_type_id is converted to PartyTypeCode in the mapping step.
  */
 const DEAL_LIST_SELECT = `
   id, deal_name, status, current_stage_id, pipeline_id, party_id,
@@ -115,16 +115,16 @@ function toNumberOrNull(v: number | string | null | undefined): number | null {
 }
 
 /**
- * urm.parties.party_type_id (smallint) → PartyTypeCode 변환.
+ * urm.parties.party_type_id (smallint) -> PartyTypeCode conversion.
  *
  * Steps:
  *   1. id → PartyTypeCode (PARTY_TYPE_CODE_BY_ID)
  *   2. PartyTypeCode → PartyTypeCode (partyTypeToModule)
  *   3. fallback: 'investor' (default safe value)
  *
- * NOTE: PartyTypeCode 가 'buyer' 또는 'government_grant' 면 partyTypeToModule
- *       는 null 반환 → 'investor' fallback. 추후 도메인 type 이
- *       PartyTypeCode 로 rename 되면 fallback 제거.
+ * NOTE: when PartyTypeCode is 'buyer' or 'government_grant', partyTypeToModule
+ *       returns null -> 'investor' fallback. Later, when the domain type is
+ *       renamed to PartyTypeCode, remove the fallback.
  */
 function partyTypeIdToModule(
   partyTypeId: number | null | undefined,
@@ -171,14 +171,14 @@ function mapCard(r: RawEngagementListRow): KanbanCard {
 }
 
 /* ============================================================
- * 1. fetchKanbanBoard — module 별 Kanban 보드
+ * 1. fetchKanbanBoard - Kanban board per module
  *
- * NOTE: urm 에 모듈 분리 없으므로 module argument 는 fetchPipelineForModule
- *       및 board metadata 표시용으로만 사용. 모든 module 이 동일 default
- *       pipeline + 동일 stages + 동일 cards 를 봄.
+ * NOTE: urm has no module separation, so the module argument is only used for fetchPipelineForModule
+ *       and board metadata display. Every module sees the same default
+ *       pipeline + same stages + same cards.
  *
- *       module 별 카드 분리가 필요하면, party_type_id 기반 filter 를
- *       SELECT 단계에서 추가해야 함 (P2b/c 의 영역).
+ *       If per-module card separation is needed, a party_type_id-based filter
+ *       must be added at the SELECT step (P2b/c territory).
  * ============================================================ */
 
 export async function fetchKanbanBoard(
@@ -214,7 +214,7 @@ export async function fetchKanbanBoard(
   const rawCards = (cardsRes.data ?? []) as unknown as RawEngagementListRow[];
   const cards = rawCards.map(mapCard);
 
-  // stage_id 로 그룹핑
+  // group by stage_id
   const cardsByStage: Record<string, KanbanCard[]> = {};
   for (const stage of stages) {
     cardsByStage[stage.id] = [];
@@ -242,7 +242,7 @@ export async function fetchKanbanBoard(
 }
 
 /* ============================================================
- * 2. fetchEngagementDetail — engagement 1개 + pipeline + stages + history
+ * 2. fetchEngagementDetail - one engagement + pipeline + stages + history
  * ============================================================ */
 
 export async function fetchEngagementDetail(
@@ -267,7 +267,7 @@ export async function fetchEngagementDetail(
   if (error || !rawDetail) return null;
   const e = rawDetail as unknown as RawEngagementDetailRow;
 
-  // party + contact + pipeline + stages + history 병렬 fetch
+  // fetch party + contact + pipeline + stages + history in parallel
   const [partyRes, contactRes, pipeline, availableStages, stageHistory] =
     await Promise.all([
       supabase
@@ -313,7 +313,7 @@ export async function fetchEngagementDetail(
 
   return {
     id: e.id,
-    // organization_id 는 urm.deals 에 없음 → 빈 string (도메인 type 호환)
+    // organization_id is absent in urm.deals -> empty string (domain type compatibility)
     organizationId: '',
     partyId: e.party_id,
     partyName: party?.party_name ?? '(unknown party)',
@@ -345,9 +345,9 @@ export async function fetchEngagementDetail(
 }
 
 /* ============================================================
- * 3. fetchPartyEngagements — 한 party 의 모든 engagement
- *    Stage 26 이후 meeting-create-modal engagement selector 용.
- *    Soft-deleted / archived 제외, updated_at desc.
+ * 3. fetchPartyEngagements - all engagements of a party
+ *    For the meeting-create-modal engagement selector since Stage 26.
+ *    Excludes soft-deleted / archived, updated_at desc.
  * ============================================================ */
 
 export async function fetchPartyEngagements(

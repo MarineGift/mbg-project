@@ -1,15 +1,15 @@
 /**
  * lib/email/tabs-mailer.mock.ts
  *
- * TABS Mailer 4의 운영 정보 미수령 동안 사용하는 mock 어댑터.
+ * Mock adapter used while TABS Mailer 4 operational details have not been received.
  *
- * - sendOne(): 콘솔 출력 + `mock-{uuid}@local` 메시지 ID 반환
- * - createCampaign(): 가짜 campaign_id 생성
- * - getCampaignStats(): 메모리 카운터(테스트에서 setMockStats로 주입 가능)
- * - syncCampaignToMergeJob(): 실 클라이언트와 동일하게 progress 갱신
+ * - sendOne(): console output + returns a `mock-{uuid}@local` message ID
+ * - createCampaign(): generates a fake campaign_id
+ * - getCampaignStats(): in-memory counters (injectable in tests via setMockStats)
+ * - syncCampaignToMergeJob(): updates progress just like the real client
  *
- * env.TABS_MAILER_HOST === 'mock' 또는 TABS_MAILER_USE_MOCK=true 시
- * createTabsMailer()가 자동으로 본 클래스를 반환한다.
+ * when env.TABS_MAILER_HOST === 'mock' or TABS_MAILER_USE_MOCK=true,
+ * createTabsMailer() automatically returns this class.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -29,7 +29,7 @@ import {
 import { evaluateQuietHours } from './quiet-hours';
 
 /* ============================================================
- * 1. 메모리 상태 (테스트 검증·재현용)
+ * 1. In-memory state (for test verification/reproduction)
  * ============================================================ */
 
 interface MockSentRecord {
@@ -65,12 +65,12 @@ export class TabsMailerMockClient implements ITabsMailerClient {
   }
 
   async verify(): Promise<void> {
-    // mock은 항상 verify 통과
+    // mock always passes verify
     return Promise.resolve();
   }
 
   async sendOne(input: SendOneInput): Promise<SendOneOutput> {
-    // quiet hours 검증 (mock도 동일 동작)
+    // quiet hours validation (mock behaves the same)
     if (!input.bypassQuietHours && input.quietHours) {
       const verdict = evaluateQuietHours(input.quietHours, this.nowProvider());
       if (verdict.blocked) {
@@ -194,20 +194,20 @@ export class TabsMailerMockClient implements ITabsMailerClient {
   }
 
   /* ----------------------------------------------------------
-   * 테스트 헬퍼 — 검증·주입용 (실 클라이언트에는 없음)
+   * Test helpers - for verification/injection (not present on the real client)
    * ---------------------------------------------------------- */
 
-  /** 발송 기록 조회. 테스트에서 sendOne 호출 검증. */
+  /** Get the send log. Verifies sendOne calls in tests. */
   getSentLog(): readonly MockSentRecord[] {
     return this.sentLog;
   }
 
-  /** 발송 기록 초기화. 테스트 setUp/tearDown에서 사용. */
+  /** Reset the send log. Used in test setUp/tearDown. */
   clearSentLog(): void {
     this.sentLog.length = 0;
   }
 
-  /** 캠페인 통계 강제 주입. syncCampaignToMergeJob 검증. */
+  /** Force-inject campaign stats. Verifies syncCampaignToMergeJob. */
   setMockStats(
     tabsCampaignId: string,
     patch: Partial<Omit<TabsCampaignStats, 'tabsCampaignId'>>,
@@ -224,7 +224,7 @@ export class TabsMailerMockClient implements ITabsMailerClient {
     };
   }
 
-  /** 모든 캠페인 초기화. */
+  /** Reset all campaigns. */
   clearCampaigns(): void {
     this.campaigns.clear();
   }

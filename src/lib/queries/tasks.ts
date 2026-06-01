@@ -1,7 +1,12 @@
 /**
  * lib/queries/tasks.ts
  *
- * 태스크 목록 fetch + 필터 + 정렬 + 페이지네이션.
+ * Task list/detail fetch + URL parsers.
+ *
+ * 2026-06-01 cleanup: app.tasks is deal-scoped and has NO party_id /
+ * engagement_id / party_type / module / reminder_at / linked_strategy_action_id
+ * columns. The SELECTs were rewritten to schema-correct deal-based shape; the
+ * URL parsers below are unchanged (pure, no DB) and still consumed by tests.
  */
 
 import 'server-only';
@@ -46,7 +51,7 @@ const ALL_SORTS: readonly TaskSort[] = [
   'oldest',
 ] as const;
 
-/* URL parse */
+/* URL parse (pure — unchanged) */
 
 export function parseTaskFilters(
   params: Record<string, string | string[] | undefined>,
@@ -112,7 +117,7 @@ function pickEnum<T extends string>(
   return fallback;
 }
 
-/* Fetch */
+/* Fetch (deal-scoped, schema-correct) */
 
 interface RawTaskRow {
   id: string;
@@ -121,17 +126,24 @@ interface RawTaskRow {
   status: TaskStatus;
   priority: TaskPriority;
   due_at: string | null;
-  reminder_at: string | null;
-  partyType: PartyTypeCode | null;
-  party_id: string | null;
-  engagement_id: string | null;
-  assigned_to_user_id: string | null;
-  created_at: string;
   completed_at: string | null;
-  linked_strategy_action_id: string | null;
-  parties: { name: string; party_type: PartyTypeCode } | null;
-  engagements: { name: string } | null;
+  created_at: string;
+  assigned_to_user_id: string | null;
+  deal_id: string | null;
+  deal:
+    | {
+        id: string;
+        deal_name: string;
+        pipeline: { code: string; name: string } | null;
+      }
+    | Array<{ id: string; deal_name: string; pipeline: { code: string; name: string } | null }>
+    | null;
 }
+
+const TASK_SELECT =
+  'id, title, description, status, priority, due_at, completed_at, created_at, ' +
+  'assigned_to_user_id, deal_id, ' +
+  'deal:deals!deal_id ( id, deal_name, pipeline:pipelines!pipeline_id ( code, name ) )';
 
 export async function fetchTasks(
   filters: TaskFilters = DEFAULT_TASK_FILTERS,
@@ -143,17 +155,10 @@ export async function fetchTasks(
   let query = supabase
     .schema('app')
     .from('tasks' as never)
-    .select(
-      `id, title, description, status, priority, due_at, reminder_at, party_type,
-       party_id, engagement_id, assigned_to_user_id, created_at, completed_at,
-       linked_strategy_action_id,
-       parties:party_id ( name, party_type ),
-       engagements:engagement_id ( name )`,
-      { count: 'exact' },
-    )
+    .select(TASK_SELECT, { count: 'exact' })
     .is('deleted_at', null);
 
-  // 필터
+  // filters - status/priority/overdue only (no party/engagement/module columns).
   if (filters.status === 'open') {
     query = query.in('status', OPEN_STATUSES as unknown as string[]);
   } else if (filters.status !== 'all') {
@@ -162,26 +167,19 @@ export async function fetchTasks(
   if (filters.priority !== 'all') {
     query = query.eq('priority', filters.priority);
   }
-  if (filters.partyType !== 'all') {
-    query = query.eq('module', filters.partyType);
-  }
   if (filters.overdueOnly) {
     query = query
       .not('due_at', 'is', null)
       .lt('due_at', new Date().toISOString())
       .in('status', OPEN_STATUSES as unknown as string[]);
   }
-  if (filters.partyId) {
-    query = query.eq('party_id', filters.partyId);
-  }
 
-  // 정렬
+  // sort
   switch (sort) {
     case 'due_soonest':
       query = query.order('due_at', { ascending: true, nullsFirst: false });
       break;
     case 'priority':
-      // PostgREST는 enum 컬럼을 enum 정의 순서대로 정렬 — urgent가 마지막이므로 DESC가 좋음
       query = query.order('priority', { ascending: false });
       query = query.order('due_at', { ascending: true, nullsFirst: false });
       break;
@@ -194,7 +192,7 @@ export async function fetchTasks(
   }
   query = query.order('id', { ascending: true });
 
-  // 페이지네이션
+  // pagination
   const from = (pagination.page - 1) * pagination.pageSize;
   const to = from + pagination.pageSize - 1;
   query = query.range(from, to);
@@ -218,8 +216,7 @@ export async function fetchTasks(
 }
 
 function toTaskRow(r: RawTaskRow): TaskRow {
-  const party = Array.isArray(r.parties) ? r.parties[0] : r.parties;
-  const engagement = Array.isArray(r.engagements) ? r.engagements[0] : r.engagements;
+  const deal = Array.isArray(r.deal) ? r.deal[0] : r.deal;
   return {
     id: r.id,
     title: r.title,
@@ -227,38 +224,29 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     status: r.status,
     priority: r.priority,
     dueAt: r.due_at,
-    reminderAt: r.reminder_at,
-    partyType: r.partyType,
-    partyId: r.party_id,
-    partyName: party?.name ?? null,
-    partyTypeCode: party?.party_type ?? null,
-    engagementId: r.engagement_id,
-    engagementName: engagement?.name ?? null,
+    reminderAt: null,
+    partyType: null,
+    partyId: null,
+    partyName: null,
+    partyTypeCode: null,
+    engagementId: r.deal_id,
+    engagementName: deal?.deal_name ?? null,
     assignedToUserId: r.assigned_to_user_id,
     createdAt: r.created_at,
     completedAt: r.completed_at,
-    aiSuggested: r.linked_strategy_action_id != null,
-  };
+    aiSuggested: false,
+  } as unknown as TaskRow;
 }
-
-// ---------------------------------------------------------------------------
-// fetchTaskById
 
 // ---------------------------------------------------------------------------
 // fetchTaskById
 // ---------------------------------------------------------------------------
 export async function fetchTaskById(id: string): Promise<TaskRow | null> {
   const supabase = await createSupabaseServerClient();
-  const selectCols =
-    'id, title, description, status, priority, due_at, reminder_at, party_type, ' +
-    'party_id, engagement_id, assigned_to_user_id, created_at, completed_at, ' +
-    'linked_strategy_action_id, ' +
-    'parties:party_id ( name, party_type ), ' +
-    'engagements:engagement_id ( name )';
   const { data, error } = await supabase
     .schema('app')
     .from('tasks' as never)
-    .select(selectCols)
+    .select(TASK_SELECT)
     .eq('id', id)
     .is('deleted_at', null)
     .maybeSingle();

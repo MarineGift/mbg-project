@@ -11,18 +11,18 @@
 //     direct lookup forces immediate resolution and gives caller proper
 //     narrowing (avoids TS18048 cascade).
 //
-// URM 의 single source for all supabase.rpc(...) calls.
-// caller 측은 cast 없이 fn name + args 자동완성 + 결과 type 추론.
+// URM's single source for all supabase.rpc(...) calls.
+// On the caller side: no casts, with fn-name + args autocomplete + result-type inference.
 //
-// Augmentation: Supabase CLI gen types 가 PostgreSQL 함수 오버로드를 처리
-// 하지 못해 3 함수 type 누락 (DB 에 short + long 두 버전 공존). long-signature
-// 채택 (industry_tag + name_contains 포함). short 는 long 의 subset 이라 호환.
+// Augmentation: Supabase CLI gen types cannot handle PostgreSQL function overloads,
+// so 3 function types are missing (the DB has both short + long versions). The long signature
+// is adopted (includes industry_tag + name_contains). short is a subset of long, so it is compatible.
 
 import type { SupabaseClient, PostgrestError } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 
 // ---------------------------------------------------------------
-// Augmentation — CLI overload 미지원 보완 (3 함수)
+// Augmentation - compensates for the CLI's lack of overload support (3 functions)
 // ---------------------------------------------------------------
 
 type Augmentation = {
@@ -67,13 +67,13 @@ export type RpcResult<N extends FnName> = {
 };
 
 // ---------------------------------------------------------------
-// Wrapper — single cast site (Gotcha #28 의 RPC 버전).
+// Wrapper - single cast site (the RPC version of Gotcha #28).
 // v2: `as any` (not `as never`) to keep callable signature.
-// Stage 28-a: client param의 SchemaName generic widen (3번째 param도 any로).
-//   server.ts factory가 <Database, 'app'>으로 변경되면서 caller가 넘기는
-//   client는 SupabaseClient<Database, 'app', Database['app']>. 'public' 고정
-//   하면 mismatch → 첫번째 외 두 generic 모두 any로 받아 RPC만 가능하면 OK.
-//   .rpc()는 schema generic과 무관 (RPC는 public.Functions 또는 명시 schema).
+// Stage 28-a: widen the SchemaName generic of the client param (the 3rd param to any too).
+//   Since the server.ts factory changed to <Database, 'app'>, the client the caller passes
+//   is SupabaseClient<Database, 'app', Database['app']>. Fixing it to 'public'
+//   would mismatch -> accept both generics besides the first as any; as long as RPC works it is OK.
+//   .rpc() is independent of the schema generic (RPC uses public.Functions or an explicit schema).
 // ---------------------------------------------------------------
 
 export async function rpc<N extends FnName>(
