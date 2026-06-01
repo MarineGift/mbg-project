@@ -221,7 +221,7 @@ function AddLinkModal({ partyId, partyType, orgId, linkedPartyType, onClose, onA
       const res = await fetch('/api/parties/search?q=%5BUnregistered%5D&partyType=filler_supplier&limit=1');
       let list = res.ok ? await res.json() : [];
       if (list.length === 0) {
-        // Fallback: legacy Korean placeholder [誘몃벑濡? (URL-encoded)
+        // Fallback: legacy Korean placeholder (URL-encoded)
         const res2 = await fetch('/api/parties/search?q=%5B%EB%AF%B8%EB%93%B1%EB%A1%9D%5D&partyType=filler_supplier&limit=1');
         list = res2.ok ? await res2.json() : [];
       }

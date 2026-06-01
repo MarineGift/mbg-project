@@ -1,11 +1,11 @@
 /**
  * app/(app)/[module]/parties/[id]/edit/page.tsx
  *
- * 거래처 수정 페이지 (Phase 2 write).
+ * Party edit page (Phase 2 write).
  *
- * URL의 module 세그먼트가 Phase 1 모듈이 아니면 404.
- * party가 없거나 다른 organization에 속하면 (RLS가 차단) 404.
- * URL module과 party.module이 다르면 정확한 모듈 URL로 redirect.
+ * 404 if the URL module segment is not a Phase 1 module.
+ * 404 if the party does not exist or belongs to another organization (blocked by RLS).
+ * If the URL module differs from party.module, redirect to the correct module URL.
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -29,21 +29,21 @@ interface PageProps {
 export default async function EditPartyPage({ params }: PageProps) {
   const { partyType: urlModule, id } = (await params) as unknown as { partyType: string; id: string };
 
-  // URL의 module 세그먼트 검증
+  // validate the URL module segment
   if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
     notFound();
   }
 
-  // 인증 검증 (미인증 시 /login으로 redirect)
+  // auth check (redirect to /login if not authenticated)
   await requireAuthOrRedirect();
 
-  // party fetch — RLS가 organization 격리 자동 적용
+  // party fetch - RLS auto-applies organization isolation
   const full = await fetchPartyDetail(id);
   if (!full) {
     notFound();
   }
 
-  // URL module과 party.partyType 불일치 시 정확한 URL로 redirect
+  // if URL module and party.partyType mismatch, redirect to the correct URL
   if (full.party.partyType !== urlModule) {
     redirect(`/${full.party.partyType}/parties/${id}/edit`);
   }

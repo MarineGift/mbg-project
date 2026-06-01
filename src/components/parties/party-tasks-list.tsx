@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   tasks: readonly PartyTask[];
-  /** Add Task 다이얼로그에서 자동 연결할 party */
+  /** the party to auto-link in the Add Task dialog */
   partyId: string;
-  /** Task에 자동 채울 module */
+  /** the module to auto-fill on the Task */
   partyType: PartyTypeCode;
 }
 

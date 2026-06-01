@@ -1,18 +1,18 @@
 /**
  * workers/consultation-worker.ts
  *
- * Postgres LISTEN consultation_created 채널을 구독해 새 consultation에 대해
- * strategy_advisor 에이전트를 호출하고 다음을 생성:
- *   - response_strategies 1행
- *   - strategy_actions N행 (immediate / short_term / long_term)
- *   - immediate 액션은 tasks 자동 생성 + linked_task_id back-link
+ * Subscribes to the Postgres LISTEN consultation_created channel and, for each new consultation,
+ * calls the strategy_advisor agent and generates:
+ *   - 1 response_strategies row
+ *   - N strategy_actions rows (immediate / short_term / long_term)
+ *   - immediate actions auto-create tasks + a linked_task_id back-link
  *
- * 구조:
- *   - processConsultation(): 단위 테스트 가능한 핵심 로직
- *   - main(): pg LISTEN 루프 + graceful shutdown
+ * Structure:
+ *   - processConsultation(): unit-testable core logic
+ *   - main(): pg LISTEN loop + graceful shutdown
  *
- * pg.Client를 직접 사용하는 이유:
- *   Supabase JS는 LISTEN/NOTIFY를 지원하지 않음. SUPABASE_DB_URL로 직접 연결.
+ * Why pg.Client is used directly:
+ *   Supabase JS does not support LISTEN/NOTIFY. Connect directly via SUPABASE_DB_URL.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -26,7 +26,7 @@ import {
 import { createShutdownController, isMainEntry } from './runtime';
 
 /* ============================================================
- * 1. 타입
+ * 1. Types
  * ============================================================ */
 
 export interface ConsultationNotification {
@@ -47,9 +47,9 @@ export interface ProcessConsultationResult {
 }
 
 export interface ProcessConsultationOptions {
-  /** 단위 테스트에서 ClaudeClient를 주입. */
+  /** Inject ClaudeClient in unit tests. */
   claudeClient?: ClaudeClient;
-  /** 단위 테스트에서 시각 고정. */
+  /** Freeze the clock in unit tests. */
   nowProvider?: () => Date;
 }
 
@@ -77,7 +77,7 @@ interface StrategyData {
 }
 
 /* ============================================================
- * 2. processConsultation — 핵심 로직 (테스트 표면)
+ * 2. processConsultation - core logic (test surface)
  * ============================================================ */
 
 export async function processConsultation(
@@ -88,7 +88,7 @@ export async function processConsultation(
   const { consultation_id: consultationId, organization_id: orgId } = notification;
   const now = options.nowProvider ?? (() => new Date());
 
-  // [1] consultation 조회
+  // [1] look up the consultation
   const { data: consultation, error: consultError } = await supabase
     .schema('app')
     .from('consultations')
@@ -109,7 +109,7 @@ export async function processConsultation(
     };
   }
 
-  // 멱등성: 이미 처리되었으면 skip
+  // idempotency: skip if already processed
   if (consultation.ai_processing_status === 'completed') {
     return {
       consultationId,
@@ -120,7 +120,7 @@ export async function processConsultation(
     };
   }
 
-  // [2] processing 마킹
+  // [2] mark processing
   await supabase
     .schema('app')
     .from('consultations')
@@ -132,7 +132,7 @@ export async function processConsultation(
     .eq('organization_id', orgId);
 
   try {
-    // [3] strategy_advisor 호출
+    // [3] call strategy_advisor
     const claude = options.claudeClient ?? new ClaudeClient(supabase, orgId);
     const inboundMessage =
       (consultation.content_processed as string | null) ??
@@ -215,7 +215,7 @@ export async function processConsultation(
         .single();
 
       if (actionError || !actionRow) {
-        // 단건 액션 실패는 다음 액션에 영향 없음
+        // a single action failure does not affect the next action
         // eslint-disable-next-line no-console
         console.error(
           `[consultation-worker] strategy_action INSERT failed:`,
@@ -234,23 +234,31 @@ export async function processConsultation(
               ).toISOString()
             : null;
 
-        const { data: taskRow } = await supabase
-          .schema('app')
-          .from('tasks')
-          .insert({
-            organization_id: orgId,
-            party_id: consultation.party_id ?? null,
-            engagement_id: consultation.engagement_id ?? null,
-            party_type: consultation.party_type ?? null,
-            title: action.title,
-            description: action.description,
-            priority: action.priority ?? 'high',
-            status: 'todo',
-            due_at: dueAt,
-            linked_strategy_action_id: actionRow.id,
-          })
-          .select('id')
-          .single();
+        // app.tasks is deal-scoped: deal_id is NOT NULL, and consultation.engagement_id
+        // IS the deal id. There is no party_id / engagement_id / party_type /
+        // linked_strategy_action_id column on app.tasks. Skip task creation when the
+        // consultation has no deal; keep the action link in extra_data for traceability
+        // (the reverse strategy_actions.linked_task_id back-link is set below).
+        const dealId = (consultation.engagement_id as string | null) ?? null;
+        const taskRow = dealId
+          ? (
+              await supabase
+                .schema('app')
+                .from('tasks')
+                .insert({
+                  organization_id: orgId,
+                  deal_id: dealId,
+                  title: action.title,
+                  description: action.description,
+                  priority: action.priority ?? 'high',
+                  status: 'todo',
+                  due_at: dueAt,
+                  extra_data: { linked_strategy_action_id: actionRow.id },
+                })
+                .select('id')
+                .single()
+            ).data
+          : null;
 
         if (taskRow) {
           tasksCreated += 1;
@@ -263,7 +271,7 @@ export async function processConsultation(
       }
     }
 
-    // [6] consultation 완료 마킹
+    // [6] mark the consultation complete
     await supabase
       .schema('app')
       .from('consultations')
@@ -311,7 +319,7 @@ export async function processConsultation(
 }
 
 /* ============================================================
- * 3. main — pg LISTEN 루프 + graceful shutdown
+ * 3. main - pg LISTEN loop + graceful shutdown
  * ============================================================ */
 
 async function main(): Promise<void> {
@@ -360,7 +368,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log('[consultation-worker] listening on consultation_created');
 
-  // 셧다운 시그널이 올 때까지 대기 — sleep(Infinity) 대신 짧은 대기 반복
+  // wait until the shutdown signal arrives - repeated short waits instead of sleep(Infinity)
   while (!ctl.isShuttingDown()) {
     await ctl.sleep(60_000);
   }

@@ -1,20 +1,20 @@
 /**
  * lib/permissions.ts
  *
- * 권한 검사 헬퍼. Phase 1은 단순화된 규칙:
- *   - 조직 멤버 = 거의 모든 권한 (read·write·approve)
- *   - is_owner = true → 추가 권한 (조직 설정·감사 로그 SELECT 등)
+ * Permission-check helper. Phase 1 uses simplified rules:
+ *   - org member = almost all permissions (read/write/approve)
+ *   - is_owner = true -> extra permissions (org settings, audit log SELECT, etc.)
  *
- * 향후 Phase 2에서 app.permissions·role_permissions 매핑을 세밀하게 적용할 때
- * 본 모듈의 시그니처(requirePermission)만 유지하면 호출 코드 무변경.
+ * When Phase 2 later applies fine-grained app.permissions/role_permissions mapping,
+ * keeping just this module's signature (requirePermission) means callers need no changes.
  *
- * 결정 근거: 솔로 창업자 시나리오에서 RBAC 복잡성은 오버 엔지니어링.
+ * Rationale: in a solo-founder scenario, RBAC complexity is over-engineering.
  */
 
 import 'server-only';
 import type { AuthContext } from '@/lib/auth';
 
-/** 권한 액션 — DB의 app.permissions.action enum과 동일. */
+/** Permission action - same as the DB's app.permissions.action enum. */
 export type PermissionAction =
   | 'create'
   | 'read'
@@ -24,7 +24,7 @@ export type PermissionAction =
   | 'export'
   | 'admin';
 
-/** 권한 리소스 — DB의 app.permissions.resource. */
+/** Permission resource - the DB's app.permissions.resource. */
 export type PermissionResource =
   | 'parties'
   | 'contacts'
@@ -49,7 +49,7 @@ export class PermissionError extends Error {
 }
 
 /**
- * 권한이 있는지 boolean 반환. UI 표시·숨김에 사용.
+ * Returns a boolean for whether permission is granted. Used to show/hide UI.
  */
 export function hasPermission(
   auth: AuthContext | null,
@@ -58,31 +58,31 @@ export function hasPermission(
 ): boolean {
   if (!auth) return false;
 
-  // Phase 1 규칙
+  // Phase 1 rules
   switch (resource) {
     case 'audit.change_log':
-      // 감사 로그 SELECT는 소유자만 (RLS와 일치)
+      // audit log SELECT is owner-only (matches RLS)
       return auth.isOwner;
 
     case 'organization.settings':
-      // 조직 설정 변경은 소유자만
+      // changing org settings is owner-only
       if (action === 'update' || action === 'admin') return auth.isOwner;
-      // 조회는 모든 멤버
+      // reads are for all members
       return action === 'read';
 
     case 'ai.agents':
     case 'ai.brand_voice':
-      // 에이전트·브랜드 보이스 편집은 Phase 2이므로 read만 허용
+      // editing agents/brand voice is Phase 2, so read only
       return action === 'read';
 
     default:
-      // 그 외 모든 리소스 — 멤버는 read/create/update/delete/approve 가능
+      // all other resources - members can read/create/update/delete/approve
       return action !== 'admin';
   }
 }
 
 /**
- * 권한 없으면 throw — Server Action에서 사용.
+ * throw if no permission - used in Server Actions.
  */
 export function requirePermission(
   auth: AuthContext | null,

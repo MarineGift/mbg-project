@@ -1,14 +1,14 @@
 // src/lib/actions/communications-actions.ts
 // Phase 22b: communications 愿??server actions
-// (Client Component?먯꽌 吏곸젒 ?몄텧 媛?ν븳 "use server" wrapper)
+// (a "use server" wrapper callable directly from a Client Component)
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 
 /**
- * ?뱀젙 communication ?곸꽭 議고쉶 (party, contact join ?ы븿)
- * inbox/[id]/page.tsx ?먯꽌 useEffect ???몄텧
+ * Fetch a single communication detail (includes party, contact joins)
+ * Called from inbox/[id]/page.tsx inside a useEffect
  */
 export async function fetchCommunicationDetailAction(id: string) {
   const supabase = await createSupabaseServerClient();

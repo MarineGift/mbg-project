@@ -24,7 +24,7 @@ export default async function PipelinesAdminPage() {
   const defns = (definitions ?? []) as any[]
   const defnIds = defns.map((d) => d.id)
 
-  // 2) pipeline_stages fetch (모든 정의의 stages 한 번에)
+  // 2) fetch pipeline_stages (all definitions' stages at once)
   let stages: any[] = []
   if (defnIds.length > 0) {
     const { data: stagesRaw, error: stagesErr } = await supabase
@@ -45,7 +45,7 @@ export default async function PipelinesAdminPage() {
     stages = stagesRaw ?? []
   }
 
-  // 3) definition별로 stages 그룹화
+  // 3) group stages by definition
   const stagesByDef: Record<string, any[]> = {}
   for (const s of stages) {
     if (!stagesByDef[s.pipeline_definition_id]) {

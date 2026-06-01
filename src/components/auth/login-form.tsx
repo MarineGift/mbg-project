@@ -1,8 +1,8 @@
 /**
  * components/auth/login-form.tsx
  *
- * 이메일·비밀번호 로그인 폼. react-hook-form + zod로 클라이언트 검증.
- * Server Action(signInWithPassword)를 호출하여 실제 인증 수행.
+ * Email/password login form. Client validation via react-hook-form + zod.
+ * Calls a Server Action (signInWithPassword) to perform the actual authentication.
  */
 
 'use client';
@@ -52,8 +52,8 @@ export function LoginForm() {
         password: values.password,
         next: nextPath,
       });
-      // 성공 시에는 redirect로 인해 이 코드까지 도달 안 함.
-      // 실패 시에만 result 표시.
+      // on success, the redirect means this code is never reached.
+      // result is shown only on failure.
       if (result && !result.ok) {
         setServerError(result);
       }

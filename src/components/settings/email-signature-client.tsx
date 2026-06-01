@@ -16,8 +16,8 @@ import { toast } from 'sonner';
 interface Props { orgId: string; initialSignatures: EmailSignature[] }
 
 const BLANK = {
-  name: '새 서명',
-  html_content: '<p>감사합니다.<br/><strong>홍길동</strong><br/>MBG Inc.</p>',
+  name: 'New signature',
+  html_content: '<p>Best regards,<br/><strong>Your Name</strong><br/>MBG Inc.</p>',
   is_default: false,
 };
 
@@ -34,8 +34,8 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
   async function save() {
     if (!cur) return;
     setSaving(true);
-    try { await upsertSignature({ id: cur.id, name: cur.name, html_content: cur.html_content, is_default: cur.is_default, organization_id: orgId } as any); toast.success('저장되었습니다.'); }
-    catch (e) { toast.error('저장 실패: ' + String(e)); }
+    try { await upsertSignature({ id: cur.id, name: cur.name, html_content: cur.html_content, is_default: cur.is_default, organization_id: orgId } as any); toast.success('Saved.'); }
+    catch (e) { toast.error('Save failed: ' + String(e)); }
     finally { setSaving(false); }
   }
 
@@ -43,24 +43,24 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
     try {
       const created = await upsertSignature({ ...BLANK, organization_id: orgId } as any);
       setSigs((p) => [...p, created]); setEditing(created.id);
-    } catch (e) { toast.error('생성 실패: ' + String(e)); }
+    } catch (e) { toast.error('Create failed: ' + String(e)); }
   }
 
   async function del(id: string) {
-    if (!confirm('서명을 삭제하시겠습니까?')) return;
+    if (!confirm('Delete this signature?')) return;
     try {
       await deleteSignature(id);
       const rest = sigs.filter((s) => s.id !== id);
       setSigs(rest); setEditing(rest[0]?.id ?? null);
-    } catch (e) { toast.error('삭제 실패: ' + String(e)); }
+    } catch (e) { toast.error('Delete failed: ' + String(e)); }
   }
 
   async function setDefault(id: string) {
     try {
       await setDefaultSignature(id, orgId);
       setSigs((p) => p.map((s) => ({ ...s, is_default: s.id === id })));
-      toast.success('기본 서명으로 설정되었습니다.');
-    } catch (e) { toast.error('설정 실패: ' + String(e)); }
+      toast.success('Set as the default signature.');
+    } catch (e) { toast.error('Update failed: ' + String(e)); }
   }
 
   const activeClass = 'bg-accent font-medium';
@@ -73,11 +73,11 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
           <button key={s.id} onClick={() => setEditing(s.id)}
             className={'w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ' + (editing === s.id ? activeClass : inactiveClass)}>
             <span className="truncate">{s.name}</span>
-            {s.is_default && <Badge variant="secondary" className="text-[10px] ml-1 px-1">기본</Badge>}
+            {s.is_default && <Badge variant="secondary" className="text-[10px] ml-1 px-1">Default</Badge>}
           </button>
         ))}
         <Button variant="ghost" size="sm" className="w-full justify-start text-xs mt-1" onClick={add}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> 새 서명 추가
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add signature
         </Button>
       </div>
 
@@ -89,7 +89,7 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" onClick={() => setDefault(cur.id)} disabled={cur.is_default}>
                 <Star className={'h-4 w-4 mr-1 ' + (cur.is_default ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground')} />
-                {cur.is_default ? '기본 서명' : '기본으로'}
+                {cur.is_default ? 'Default signature' : 'Set default'}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => del(cur.id)}>
                 <Trash2 className="h-4 w-4 text-destructive" />
@@ -100,12 +100,12 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
             <Tabs defaultValue="html">
               <TabsList className="h-8">
                 <TabsTrigger value="html" className="text-xs h-7">HTML</TabsTrigger>
-                <TabsTrigger value="preview" className="text-xs h-7">미리보기</TabsTrigger>
-                <TabsTrigger value="plain" className="text-xs h-7">텍스트</TabsTrigger>
+                <TabsTrigger value="preview" className="text-xs h-7">Preview</TabsTrigger>
+                <TabsTrigger value="plain" className="text-xs h-7">Plain text</TabsTrigger>
               </TabsList>
               <TabsContent value="html">
                 <Textarea value={cur.html_content} onChange={(e) => upd('html_content', e.target.value)}
-                  className="font-mono text-xs min-h-[220px] resize-none" placeholder="<p>서명 HTML...</p>" />
+                  className="font-mono text-xs min-h-[220px] resize-none" placeholder="<p>Signature HTML...</p>" />
               </TabsContent>
               <TabsContent value="preview">
                 <div className="border rounded-md p-4 min-h-[220px] text-sm bg-white"
@@ -117,13 +117,13 @@ export function EmailSignatureClient({ orgId, initialSignatures }: Props) {
               </TabsContent>
             </Tabs>
             <div className="flex justify-end">
-              <Button size="sm" onClick={save} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
+              <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="flex items-center justify-center text-muted-foreground text-sm border rounded-md">
-          서명을 선택하거나 새로 만드세요
+          Select a signature or create a new one
         </div>
       )}
     </div>

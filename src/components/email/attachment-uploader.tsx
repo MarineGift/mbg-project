@@ -29,9 +29,9 @@ export function AttachmentUploader({ attachments, onChange, disabled }: Props) {
       try {
         const fd = new FormData(); fd.append('file', f);
         done.push(await uploadAttachment(fd));
-      } catch (e) { toast.error(f.name + ' 업로드 실패'); }
+      } catch (e) { toast.error(f.name + ' upload failed'); }
     }
-    if (done.length > 0) { onChange([...attachments, ...done]); toast.success(done.length + '개 첨부 완료'); }
+    if (done.length > 0) { onChange([...attachments, ...done]); toast.success(done.length + ' attached'); }
     setUploading(false);
     if (ref.current) ref.current.value = '';
   }
@@ -61,7 +61,7 @@ export function AttachmentUploader({ attachments, onChange, disabled }: Props) {
         {uploading
           ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
           : <Paperclip className="h-3.5 w-3.5 mr-1.5" />}
-        {uploading ? '업로드 중...' : '파일 첨부'}
+        {uploading ? 'Uploading...' : 'Attach file'}
       </Button>
     </div>
   );

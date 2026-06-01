@@ -12,8 +12,8 @@ interface Props {
 }
 
 /**
- * pending_review 상태일 때만 표시되는 하단 액션 바.
- * Approve / Reject 버튼이 각각 dialog를 열어 확정 절차를 거침.
+ * Bottom action bar shown only in the pending_review state.
+ * The Approve / Reject buttons each open a dialog to go through a confirmation step.
  */
 export function DraftActions({ draft }: Props) {
   const [approveOpen, setApproveOpen] = useState(false);

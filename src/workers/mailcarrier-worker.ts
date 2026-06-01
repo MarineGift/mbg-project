@@ -1,36 +1,36 @@
 /**
  * src/workers/mailcarrier-worker.ts
  *
- * IMAP에서 새 메일을 수신하고 ai.drafts 파이프라인을 트리거하는 워커.
+ * Worker that receives new mail from IMAP and triggers the ai.drafts pipeline.
  *
- * Phase 2 변경:
- *   - 단일 MAILCARRIER_USERNAME → MAILCARRIER_POLL_KINDS 배열 기반
- *   - kinds 길이만큼 MailCarrierClient 인스턴스 (personal/role/shared)
- *   - 각 client 독립 IDLE 루프 (한 box 장애가 다른 box에 영향 없음)
- *   - graceful shutdown: 모든 client 병렬 stop()
- *   - kinds 빈 값 시 Phase 1 fallback (단일 MAILCARRIER_USERNAME)
+ * Phase 2 changes:
+ *   - from a single MAILCARRIER_USERNAME -> based on the MAILCARRIER_POLL_KINDS array
+ *   - one MailCarrierClient instance per kind (personal/role/shared)
+ *   - each client has an independent IDLE loop (one box's failure doesn't affect others)
+ *   - graceful shutdown: stop() all clients in parallel
+ *   - if kinds is empty, Phase 1 fallback (single MAILCARRIER_USERNAME)
  *
- * 흐름:
- *   [1] Supabase service_role 클라이언트 생성 (RLS 우회)
- *   [2] MAILCARRIER_POLL_KINDS에 따라 1~3개 MailCarrierClient 생성 + connect()
- *   [3] 각 client.startListening(onMessage) 병렬 실행
- *   [4] 새 메일 도착 시 → persistInbound → processInbound → ai.drafts INSERT
- *   [5] SIGTERM/SIGINT → 모든 client 병렬 graceful shutdown
+ * Flow:
+ *   [1] create the Supabase service_role client (bypasses RLS)
+ *   [2] create 1-3 MailCarrierClients per MAILCARRIER_POLL_KINDS + connect()
+ *   [3] run each client.startListening(onMessage) in parallel
+ *   [4] on new mail arrival -> persistInbound -> processInbound -> ai.drafts INSERT
+ *   [5] SIGTERM/SIGINT -> graceful shutdown of all clients in parallel
  *
- * 실행:
+ * Run:
  *   npm run worker:mailcarrier
  *
- * 필수 환경변수:
+ * Required environment variables:
  *   - SUPABASE_SERVICE_ROLE_KEY
  *   - ANTHROPIC_API_KEY
- *   - MAILCARRIER_HOST / PORT (공통)
- *   - MAILCARRIER_POLL_KINDS (예: "personal,role,shared")
- *   - MAIL_<KIND>_USERNAME / PASSWORD (각 kind별)
- *   - 또는 MAILCARRIER_USERNAME / PASSWORD (POLL_KINDS 빈 값 시 fallback)
+ *   - MAILCARRIER_HOST / PORT (common)
+ *   - MAILCARRIER_POLL_KINDS (e.g. "personal,role,shared")
+ *   - MAIL_<KIND>_USERNAME / PASSWORD (per kind)
+ *   - or MAILCARRIER_USERNAME / PASSWORD (fallback when POLL_KINDS is empty)
  *
- * 비고:
- *   - Phase 1은 단일 조직(MBG Project) 처리.
- *   - 처리 중 에러는 communications.ai_processing_status='failed'로 기록.
+ * Notes:
+ *   - Phase 1 handles a single organization (MBG Project).
+ *   - errors during processing are recorded as communications.ai_processing_status='failed'.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -44,24 +44,24 @@ import { createShutdownController, isMainEntry } from './runtime';
 // =============================================================================
 // PATCH 2: src/workers/mailcarrier-worker.ts
 // =============================================================================
-// 적용 위치: 파일 최상단 (import문 직후, 메인 로직 위)에 아래 블록 그대로 추가
+// Where to apply: add the block below verbatim at the top of the file (right after imports, above the main logic)
 //
-// 핵심 진단 신호:
-//   - beforeExit 로그가 뜨면 = event loop가 비었다 = polling loop가 모두 종료된 결정적 신호
-//     → 핸드오프의 가설 (B-1) 확정
-//   - uncaughtException/unhandledRejection → 비동기 에러가 워커를 죽이려 하는 경우
-//   - SIGTERM/SIGINT → 외부에서 종료 (Task Scheduler, Defender, 사용자 등)
+// Key diagnostic signals:
+//   - a beforeExit log = the event loop is empty = a definitive sign that all polling loops ended
+//     -> confirms the handoff hypothesis (B-1)
+//   - uncaughtException/unhandledRejection -> an async error trying to kill the worker
+//   - SIGTERM/SIGINT -> terminated externally (Task Scheduler, Defender, user, etc.)
 //
-// 운영 단계 진입 시 주의:
-//   - uncaughtException 핸들러에서 process.exit(1)을 호출하도록 변경 필요
-//   - 진단 단계에서는 의도적으로 exit 안 함 (어떤 에러가 워커를 죽이려 하는지 보기 위함)
+// Caution when entering the production phase:
+//   - the uncaughtException handler needs to be changed to call process.exit(1)
+//   - during diagnosis it deliberately does not exit (to see which error tries to kill the worker)
 // =============================================================================
 
 // ─── Process-level diagnostics ─────────────────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error('[worker] uncaughtException:', err);
-  // 진단 단계: 의도적으로 exit 안 함
-  // 운영 단계로 가면 process.exit(1)로 바꿔야 함
+  // diagnosis phase: deliberately do not exit
+  // switch to process.exit(1) when moving to production
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -93,29 +93,29 @@ process.on('beforeExit', (code) => {
 
 
 /* ============================================================
- * 1. 조직 ID (Phase 1: 단일 조직 하드코딩)
+ * 1. Organization ID (Phase 1: single org hardcoded)
  * ============================================================ */
 const ORG_ID = 'b25de8f2-1020-482f-9012-183f63883169'; // MBG Project
 
 /* ============================================================
- * 2. 메인 워커 루프
+ * 2. Main worker loop
  * ============================================================ */
 
 export async function runMailCarrierWorker(): Promise<void> {
   const label = 'mailcarrier-worker';
   const ctl = createShutdownController(label);
 
-  // Supabase service_role (RLS 우회)
+  // Supabase service_role (bypasses RLS)
   const supabase = createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  // ─ 수신 계정 목록 결정 ─
-  // Phase 3: app.inbound_mailboxes(active)에 행이 있으면 그 계정들을 폴링.
-  //          행이 0개면 기존 env 경로(MAILCARRIER_POLL_KINDS / 단일 fallback)로 폴백.
-  //          (service_role이라 RLS 우회)
+  // ─ determine the list of receiving accounts ─
+  // Phase 3: if app.inbound_mailboxes (active) has rows, poll those accounts.
+  //          if there are 0 rows, fall back to the existing env path (MAILCARRIER_POLL_KINDS / single fallback).
+  //          (service_role, so RLS is bypassed)
   type InboundMailboxRow = {
     id: string;
     address: string;
@@ -135,7 +135,7 @@ export async function runMailCarrierWorker(): Promise<void> {
     if (error) {
       // eslint-disable-next-line no-console
       console.error(
-        `[${label}] inbound_mailboxes 조회 실패 — env 경로로 폴백:`,
+        `[${label}] inbound_mailboxes lookup failed - falling back to env path:`,
         error.message,
       );
     } else if (data) {
@@ -144,16 +144,16 @@ export async function runMailCarrierWorker(): Promise<void> {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(
-      `[${label}] inbound_mailboxes 조회 예외 — env 경로로 폴백:`,
+      `[${label}] inbound_mailboxes lookup error - falling back to env path:`,
       (err as Error).message,
     );
   }
 
-  // ─ MailCarrierClient 인스턴스 생성 ─
+  // ─ create MailCarrierClient instances ─
   const carriers: MailCarrierClient[] = [];
 
   if (dbMailboxes.length > 0) {
-    // Phase 3: DB 기반 임의 수신 계정 (계정별 host/port + 암호화 비번)
+    // Phase 3: arbitrary DB-based receiving accounts (per-account host/port + encrypted password)
     // eslint-disable-next-line no-console
     console.log(
       `[${label}] using ${dbMailboxes.length} DB mailbox(es) from app.inbound_mailboxes`,
@@ -173,14 +173,14 @@ export async function runMailCarrierWorker(): Promise<void> {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(
-          `[${label}:${mb.address}] 계정 초기화 실패:`,
+          `[${label}:${mb.address}] account init failed:`,
           (err as Error).message,
         );
-        // 한 계정 실패 시 다른 계정은 계속
+        // if one account fails, the others continue
       }
     }
   } else {
-    // Phase 1/2 폴백: env kind 목록 (DB 미등록 시 기존 동작 유지)
+    // Phase 1/2 fallback: env kind list (keeps the existing behavior when not registered in the DB)
     const configuredKinds = env.MAILCARRIER_POLL_KINDS;
     const targetKinds: Array<SendingAddressKind | undefined> =
       configuredKinds.length > 0 ? configuredKinds : [undefined];
@@ -191,10 +191,10 @@ export async function runMailCarrierWorker(): Promise<void> {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(
-          `[${label}:${kind ?? 'default'}] 자격증명 누락 또는 잘못된 설정:`,
+          `[${label}:${kind ?? 'default'}] missing credentials or bad config:`,
           (err as Error).message,
         );
-        // 한 kind 실패 시 다른 kind는 계속
+        // if one kind fails, the others continue
       }
     }
   }
@@ -207,11 +207,11 @@ export async function runMailCarrierWorker(): Promise<void> {
     process.exit(1);
   }
 
-  // ─ graceful shutdown 설정 ─
+  // ─ graceful shutdown setup ─
   const originalShutdown = ctl.shutdown.bind(ctl);
   const shutdownWithCleanup = async (): Promise<void> => {
     originalShutdown();
-    // 모든 carrier 병렬 stop()
+    // stop() all carriers in parallel
     await Promise.all(
       carriers.map(async (c) => {
         try {
@@ -226,7 +226,7 @@ export async function runMailCarrierWorker(): Promise<void> {
   process.on('SIGTERM', shutdownWithCleanup);
   process.on('SIGINT', shutdownWithCleanup);
 
-  // ─ 각 carrier 연결 ─
+  // ─ connect each carrier ─
   const connected: MailCarrierClient[] = [];
   for (const carrier of carriers) {
     const tag = `${label}:${carrier.kind}`;
@@ -243,8 +243,8 @@ export async function runMailCarrierWorker(): Promise<void> {
       );
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error(`[${tag}] IMAP 연결 실패:`, err);
-      // 한 kind 연결 실패해도 다른 kind는 계속
+      console.error(`[${tag}] IMAP connection failed:`, err);
+      // even if one kind fails to connect, the others continue
     }
   }
 
@@ -254,7 +254,7 @@ export async function runMailCarrierWorker(): Promise<void> {
     process.exit(1);
   }
 
-  // ─ 새 메일 처리 콜백 (carrier별) ─
+  // ─ new-mail processing callback (per carrier) ─
   const makeOnMessage =
     (carrierKind: SendingAddressKind | 'default' | 'account') =>
     async (event: InboundMessageEvent): Promise<void> => {
@@ -281,11 +281,11 @@ export async function runMailCarrierWorker(): Promise<void> {
         );
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(`${tag} processInbound 실패:`, err);
+        console.error(`${tag} processInbound failed:`, err);
       }
     };
 
-  // ─ 모든 carrier startListening 병렬 실행 ─
+  // ─ run startListening for all carriers in parallel ─
   // eslint-disable-next-line no-console
   console.log(
     `[${label}] listening on ${connected.length} inbox(es)… (Ctrl+C to stop)`,
@@ -300,22 +300,22 @@ export async function runMailCarrierWorker(): Promise<void> {
       } else {
         // eslint-disable-next-line no-console
         console.error(`[${tag}] listener crashed:`, err);
-        // 한 listener crash 시에도 다른 listener는 계속
+        // even if one listener crashes, the others continue
       }
     });
   });
 
-  // 모든 listener가 종료될 때까지 대기
+  // wait until all listeners terminate
   await Promise.all(listeners);
 
-  // ─ Graceful shutdown 마무리 ─
+  // ─ finalize graceful shutdown ─
   await ctl.waitForInflight(30_000);
   // eslint-disable-next-line no-console
   console.log(`[${label}] shutdown complete`);
 }
 
 /* ============================================================
- * 3. CLI 엔트리
+ * 3. CLI entry
  * ============================================================ */
 if (isMainEntry(import.meta.url)) {
   runMailCarrierWorker().catch((err) => {

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 interface Props {
   card: KanbanCardType;
   isDragging?: boolean;
-  /** drag overlay 모드일 때 true (Server Action 호출 중 등) */
+  /** true in drag-overlay mode (e.g. during a Server Action call) */
   asOverlay?: boolean;
 }
 
@@ -32,7 +32,7 @@ export function KanbanCardComponent({ card, isDragging, asOverlay }: Props) {
         opacity: draggable.isDragging || isDragging ? 0.4 : 1,
       };
 
-  // 만료 임박 체크
+  // check for imminent expiry
   const isCloseSoon =
     card.expectedCloseDate != null &&
     new Date(card.expectedCloseDate).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000;
@@ -54,7 +54,7 @@ export function KanbanCardComponent({ card, isDragging, asOverlay }: Props) {
             <Link
               href={`/engagements/${card.id}`}
               className="font-medium text-sm hover:underline block truncate"
-              // drag 시 클릭 방지
+              // prevent click during drag
               onClick={(e) => {
                 if (draggable.isDragging) e.preventDefault();
               }}
@@ -103,7 +103,7 @@ export function KanbanCardComponent({ card, isDragging, asOverlay }: Props) {
           className="text-[10px] text-muted-foreground pl-4 block"
         />
 
-        {/* 사용 안 함 회피 */}
+        avoid unused warning
         <span hidden>{t('open')}</span>
       </CardContent>
     </Card>

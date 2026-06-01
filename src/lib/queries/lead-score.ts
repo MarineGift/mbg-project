@@ -1,10 +1,10 @@
 /**
- * lib/queries/lead-score.ts (v2 — Stage 13d 적용)
+ * lib/queries/lead-score.ts (v2 - Stage 13d applied)
  *
  * Lead scoring queries. Returns 0-100 score per party.
- * v2: app.lead_scores 테이블은 더 이상 존재하지 않음 (Stage 13d 이후).
- *     parties.module_data->'lead_score' 에 저장되며
- *     public.get_lead_scores_many(uuid[]) RPC 가 호환 wrapper 제공.
+ * v2: the app.lead_scores table no longer exists (after Stage 13d).
+ *     It is stored in parties.module_data->'lead_score', and
+ *     the public.get_lead_scores_many(uuid[]) RPC provides a compatibility wrapper.
  */
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

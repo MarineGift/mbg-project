@@ -40,7 +40,7 @@ export type PartyTypeGroup = {
   stages: Stage[]
 }
 
-// 사이드바 라벨과 일치 (영어 기본)
+// matches the sidebar label (English by default)
 const PARTY_TYPE_NAMES: Record<string, string> = {
   investor: 'Investors',
   paper_mill: 'Paper Mills',
@@ -89,7 +89,7 @@ export function PipelinesAdminClient({ partyTypeGroups }: { partyTypeGroups: Par
       )}
 
       {partyTypeGroups.map((group) => {
-        // 다음 stage의 sort_order 계산 (마지막 + 10)
+        // compute the next stage's sort_order (last + 10)
         const lastSort =
           group.stages.length > 0 ? group.stages[group.stages.length - 1]!.sort_order : 0
         const nextSortOrder = lastSort + 10

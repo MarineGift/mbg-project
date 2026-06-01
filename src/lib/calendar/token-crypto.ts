@@ -1,5 +1,5 @@
 // src/lib/calendar/token-crypto.ts
-// 토큰 암호화 / 복호화 — Supabase RPC (service_role) 경유
+// Token encryption / decryption - via Supabase RPC (service_role)
 import { createClient } from '@supabase/supabase-js'
 
 const ENC_KEY = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY!
@@ -8,7 +8,7 @@ if (!ENC_KEY) {
   throw new Error('CALENDAR_TOKEN_ENCRYPTION_KEY env var is required')
 }
 
-/** service_role 클라이언트 (RLS 우회, 서버 전용) */
+/** service_role client (bypasses RLS, server-only) */
 function serviceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +18,7 @@ function serviceClient() {
 }
 
 // ─────────────────────────────────────────────
-// connection 저장 (upsert + 암호화 원자적)
+// save a connection (upsert + encryption, atomic)
 // ─────────────────────────────────────────────
 
 export interface SaveConnectionInput {
@@ -52,7 +52,7 @@ export async function saveCalendarConnection(input: SaveConnectionInput): Promis
 }
 
 // ─────────────────────────────────────────────
-// 토큰 복호화 (sync engine 전용)
+// decrypt tokens (sync engine only)
 // ─────────────────────────────────────────────
 
 export async function decryptToken(encryptedBytea: string): Promise<string> {
@@ -66,7 +66,7 @@ export async function decryptToken(encryptedBytea: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// access_token 갱신 저장
+// save the refreshed access_token
 // ─────────────────────────────────────────────
 
 export async function updateAccessToken(
@@ -85,7 +85,7 @@ export async function updateAccessToken(
 }
 
 // ─────────────────────────────────────────────
-// sync 상태 업데이트
+// update sync state
 // ─────────────────────────────────────────────
 
 export async function updateSyncState(
@@ -109,7 +109,7 @@ export async function updateSyncState(
 }
 
 // ─────────────────────────────────────────────
-// active connections 조회 (복호화 포함)
+// query active connections (includes decryption)
 // ─────────────────────────────────────────────
 
 export interface DecryptedConnection {
@@ -117,7 +117,7 @@ export interface DecryptedConnection {
   provider: 'google' | 'microsoft'
   account_email: string
   account_name: string | null
-  access_token: string       // 복호화된 평문
+  access_token: string       // decrypted plaintext
   refresh_token: string | null
   expires_at: string | null
   scopes: string[]
@@ -144,7 +144,7 @@ export async function getActiveConnections(
   if (error) throw error
   if (!rows || rows.length === 0) return []
 
-  // 병렬 복호화
+  // decrypt in parallel
   const connections = await Promise.all(
     rows.map(async (row: any) => {
       const [access, refresh] = await Promise.all([

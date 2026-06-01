@@ -9,8 +9,8 @@ interface RiskFlagChipProps {
 }
 
 /**
- * AI 분류 결과의 risk_flags 배열을 시각적 칩으로 표시.
- * 예: ['price_topic', 'legal_topic', 'urgency_high']
+ * Displays the risk_flags array from the AI classification result as visual chips.
+ * e.g. ['price_topic', 'legal_topic', 'urgency_high']
  */
 export function RiskFlagChip({ flag, className }: RiskFlagChipProps) {
   return (
@@ -27,8 +27,8 @@ export function RiskFlagChip({ flag, className }: RiskFlagChipProps) {
 }
 
 /**
- * 'price_topic' → 'Price Topic' 형태로 변환.
- * 향후 i18n 번역 시 namespace 'riskFlags' 추가 가능.
+ * Converts 'price_topic' -> 'Price Topic' form.
+ * A 'riskFlags' namespace can be added for future i18n translation.
  */
 function humanize(flag: string): string {
   return flag

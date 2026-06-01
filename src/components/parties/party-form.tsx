@@ -40,7 +40,7 @@ import type { PartyType, PartyKind } from '@/types/party-type';
 import type { PartyDetail, PartyTier } from '@/types/party-detail';
 
 interface Props {
-  /** edit 모드면 existing party, create 모드면 null + 초기 partyType */
+  /** existing party in edit mode; null + initial partyType in create mode */
   mode: 'create' | 'edit';
   initialPartyType: PartyType;
   existing?: PartyDetail | null;

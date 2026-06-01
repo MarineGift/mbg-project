@@ -1,5 +1,5 @@
 // src/lib/calendar/microsoft-client.ts
-// Microsoft Graph API 래퍼 — OAuth2 + calendarView delta
+// Microsoft Graph API wrapper - OAuth2 + calendarView delta
 
 const MS_AUTH_BASE    = 'https://login.microsoftonline.com/common/oauth2/v2.0'
 const MS_GRAPH_BASE   = 'https://graph.microsoft.com/v1.0'
@@ -168,7 +168,7 @@ export async function fetchMicrosoftEvents(
   return res.json()
 }
 
-/** 모든 페이지 수집 */
+/** collect all pages */
 export async function fetchAllMicrosoftEvents(
   opts: Omit<FetchMsEventsOptions, 'nextLink'>
 ): Promise<{ events: MicrosoftEvent[]; deltaLink: string }> {

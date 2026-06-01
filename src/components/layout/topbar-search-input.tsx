@@ -44,7 +44,7 @@ export function TopbarSearchInput() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="검색어 입력 후 Enter..."
+          placeholder="Type to search, then Enter..."
           className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
@@ -53,7 +53,7 @@ export function TopbarSearchInput() {
         disabled={!value.trim()}
         className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
       >
-        검색
+        Search
       </button>
     </div>
   );

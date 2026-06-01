@@ -1,25 +1,25 @@
 /**
  * lib/queries/party-detail.ts
  *
- * 거래처(parties) 상세 화면 데이터 fetch.
- *   - parties 행 본체
- *   - 통계 (contacts/communications/drafts/engagements/tasks 카운트)
- *   - 최근 활동 타임라인 (communications + tasks 통합 시간순)
- *   - 컨택트 / 인게이지먼트 / 태스크 사이드바 목록
+ * Fetch data for the party (parties) detail screen.
+ *   - the parties row body
+ *   - statistics (contacts/communications/drafts/engagements/tasks counts)
+ *   - recent activity timeline (communications + tasks merged chronologically)
+ *   - contacts / engagements / tasks sidebar lists
  *
- * RLS가 organization_id 자동 검증.
+ * RLS auto-validates organization_id.
  *
- * 변경 이력:
- *   - 2026-05-11: 실제 스키마와 컬럼명 정합 (industry → industry_tags,
- *                 tags → interest_tags). deleted_at 필터 추가, 에러 로깅 강화.
- *   - 2026-05-11: PartyDetail 인터페이스 정리에 맞춰 1:1 매핑.
- *   - 2026-05-12: contacts SELECT의 job_title → title 컬럼명 수정.
- *   - 2026-05-12: engagements SELECT의 stage → current_stage_id,
- *                 close_date → expected_close_date 수정 + pipeline_stages
- *                 JOIN으로 stage 이름 가져오기. openEngagements 카운트
- *                 필터의 status enum 값을 실제 schema와 일치시킴.
+ * Change history:
+ *   - 2026-05-11: aligned column names with the actual schema (industry -> industry_tags,
+ *                 tags -> interest_tags). Added a deleted_at filter, strengthened error logging.
+ *   - 2026-05-11: 1:1 mapping to match the cleaned-up PartyDetail interface.
+ *   - 2026-05-12: fixed the contacts SELECT column name job_title -> title.
+ *   - 2026-05-12: in the engagements SELECT, stage -> current_stage_id,
+ *                 close_date -> expected_close_date + a pipeline_stages
+ *                 JOIN to get the stage name. The openEngagements count
+ *                 filter's status enum values were matched to the actual schema.
  *   - 2026-05-14: Phase 6 — industry_paper_company_id /
- *                 industry_filler_supplier_id FK 컬럼 SELECT + mapping 추가.
+ *                 Added the industry_filler_supplier_id FK column to the SELECT + mapping.
  */
 
 import 'server-only';
@@ -64,9 +64,9 @@ const SIDEBAR_LIMIT = 10;
 const MEETINGS_LIMIT = 100;  // 2026-05-19
 
 /**
- * "Open" engagement로 카운트할 때 제외할 status 값.
- * 실제 app.engagement_status enum과 일치해야 함.
- * (won, lost, archived는 종료 상태)
+ * status values to exclude when counting an engagement as "Open".
+ * Must match the actual app.engagement_status enum.
+ * (won, lost, archived are terminal states)
  */
 const TERMINAL_ENGAGEMENT_STATUSES = new Set([
   'won',
@@ -75,9 +75,9 @@ const TERMINAL_ENGAGEMENT_STATUSES = new Set([
 ]);
 
 // ============================================================
-// 2026-05-19: 미팅 관련 타입 (app.meetings)
-// 주: meeting_mode 컬럼은 DB 에 존재하지 않음.
-// Stage 24 에서 channel enum 으로 정리 예정.
+// 2026-05-19: meeting-related types (app.meetings)
+// Note: the meeting_mode column does not exist in the DB.
+// To be reorganized into the channel enum in Stage 24.
 // ============================================================
 
 export type MeetingStatus =
@@ -133,7 +133,7 @@ export async function fetchPartyDetail(
 ): Promise<PartyDetailFull | null> {
   const supabase = await createSupabaseServerClient();
 
-  // 거래처 본체
+  // party body
   const { data: partyRaw, error: partyErr } = await supabase
     .schema('app')
     .from('parties' as never)
@@ -153,7 +153,7 @@ export async function fetchPartyDetail(
   }
   const p = partyRaw as unknown as RawPartyRow;
 
-  // 통계 + 사이드바 목록 + 타임라인 병렬 fetch
+  // fetch statistics + sidebar lists + timeline in parallel
   const [
     contactsRes,
     engagementsRes,
@@ -161,7 +161,7 @@ export async function fetchPartyDetail(
     commsRes,
     pendingDraftsCountRes,
   ] = await Promise.all([
-    // contacts 목록 (10개) + 카운트
+    // contacts list (10) + count
     supabase
       .schema('app')
       .from('contacts' as never)
@@ -173,7 +173,7 @@ export async function fetchPartyDetail(
       .order('created_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
 
-    // engagements (10개) — pipeline_stages JOIN으로 stage 이름 함께 fetch
+    // engagements (10) - fetch stage name via a pipeline_stages JOIN
     supabase
       .schema('app')
       .from('deals' as never)
@@ -188,12 +188,12 @@ export async function fetchPartyDetail(
       .order('updated_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
 
-    // tasks (10개)
+    // tasks (10)
     // D6-5e stub: tasks.party_id removed; tasks now FK to app.deals.
     // Re-implement via deal_id JOIN once deals exist. For now: empty result.
     Promise.resolve({ data: [] as unknown[], error: null, count: 0 } as any),
 
-    // communications (30개) — 타임라인용
+    // communications (30) - for the timeline
     supabase
       .schema('app')
       .from('communications' as never)
@@ -205,7 +205,7 @@ export async function fetchPartyDetail(
       .order('occurred_at', { ascending: false })
       .limit(TIMELINE_LIMIT),
 
-    // pending draft 카운트 (ai 스키마 — Exposed schemas에 ai 포함 필요)
+    // pending draft count (ai schema - ai must be included in Exposed schemas)
     supabase
       .schema('ai')
       .from('drafts' as never)
@@ -214,8 +214,8 @@ export async function fetchPartyDetail(
       .eq('status', 'pending_review'),
   ]);
 
-  // 병렬 쿼리 에러 로깅 (silent swallow 방지 — 데이터는 빈 값으로 fallback하되
-  // 에러는 반드시 로그에 남김)
+  // log parallel query errors (avoid silent swallow - data falls back to empty values but
+  // errors are always logged)
   if (contactsRes.error) {
     console.error('[party-detail] contacts error:', contactsRes.error);
   }
@@ -243,7 +243,7 @@ export async function fetchPartyDetail(
   ).map(mapEngagement);
   const tasks: PartyTask[] = ((tasksRes.data ?? []) as unknown[]).map(mapTask);
 
-  // PartyDetail 매핑 — DB 컬럼과 1:1 대응
+  // PartyDetail mapping - 1:1 with DB columns
   // D6-5e: party_type code via party_types lookup (col is now party_type_id FK)
   const { data: ptCodeRow } = await supabase
     .schema('app')
@@ -275,7 +275,7 @@ export async function fetchPartyDetail(
       contacts: contactsRes.count ?? 0,
       communications: commsRes.count ?? 0,
       pendingDrafts: pendingDraftsCountRes.count ?? 0,
-      // open engagement: terminal status (won/lost/archived)가 아닌 것
+      // open engagement: those not in a terminal status (won/lost/archived)
       openEngagements: ((engagementsRes.data ?? []) as Array<{ status: string }>)
         .filter((e) => !TERMINAL_ENGAGEMENT_STATUSES.has(e.status))
         .length,
@@ -285,7 +285,7 @@ export async function fetchPartyDetail(
     },
   };
 
-  // 타임라인 — communications + 최근 완료된 tasks 통합
+  // timeline - communications + recently completed tasks merged
   const timeline = buildTimeline(
     (commsRes.data ?? []) as unknown[],
     (tasksRes.data ?? []) as unknown[],
@@ -301,7 +301,7 @@ export async function fetchPartyDetail(
 }
 
 /* ============================================================
- * 매퍼
+ * mappers
  * ============================================================ */
 
 function mapContact(raw: unknown): PartyContact {
@@ -318,7 +318,7 @@ function mapContact(raw: unknown): PartyContact {
 
 function mapEngagement(raw: unknown): PartyEngagement {
   const r = raw as Record<string, unknown>;
-  // Supabase가 nested join을 객체 또는 배열로 반환할 수 있음 — 둘 다 처리
+  // Supabase may return a nested join as an object or an array - handle both
   const stageJoin = r.stages;
   let stageName: string | null = null;
   if (stageJoin) {
@@ -397,7 +397,7 @@ function buildTimeline(
     items.push(item);
   }
 
-  // 시간 역순 정렬
+  // sort in reverse chronological order
   items.sort((a, b) => {
     return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
   });
@@ -406,7 +406,7 @@ function buildTimeline(
 }
 
 // ============================================================
-// 2026-05-19: 미팅 query 함수 (방향 Y - meeting_mode 컬럼 미사용)
+// 2026-05-19: meeting query functions (direction Y - meeting_mode column unused)
 // ============================================================
 
 const MEETING_SELECT_COLS = [

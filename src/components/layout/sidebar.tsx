@@ -72,6 +72,8 @@ interface NavItem {
   labelKey: string;
   icon: typeof Inbox;
   badgeKey?: 'pendingDraftCount' | 'inboxUnreadCount' | 'openTaskCount';
+  /** Optional explicit label; bypasses tNav(labelKey) when set. */
+  label?: string;
 }
 
 const TOP_ITEMS: readonly NavItem[] = [
@@ -79,7 +81,11 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/drafts',   labelKey: 'drafts',    icon: Sparkles,    badgeKey: 'pendingDraftCount' },
   { href: '/inbox',    labelKey: 'inbox',     icon: Inbox,       badgeKey: 'inboxUnreadCount' },
   { href: '/sent',     labelKey: 'sent',      icon: Send },
-  { href: '/tasks',    labelKey: 'tasks',     icon: CheckSquare, badgeKey: 'openTaskCount' },
+  // To-Do board (standalone task engine, app.task_items). The deal-scoped
+  // engagement tasks at /tasks stay as a route for reuse inside deal detail,
+  // but no longer have a top-level sidebar link. Explicit label avoids
+  // touching the next-intl messages files; badge removed by design.
+  { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do' },
   { href: '/contacts', labelKey: 'contacts',  icon: Users },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
 ] as const;
@@ -168,7 +174,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               icon={<item.icon className="h-4 w-4 shrink-0" />}
-              label={tNav(item.labelKey)}
+              label={item.label ?? tNav(item.labelKey)}
               active={isActive(pathname, item.href)}
               collapsed={collapsed}
               badge={item.badgeKey ? badges[item.badgeKey] : undefined}
@@ -243,7 +249,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               icon={<item.icon className="h-4 w-4 shrink-0" />}
-              label={tNav(item.labelKey)}
+              label={item.label ?? tNav(item.labelKey)}
               active={isActive(pathname, item.href)}
               collapsed={collapsed}
             />

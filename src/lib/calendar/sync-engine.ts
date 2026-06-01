@@ -1,5 +1,5 @@
 // src/lib/calendar/sync-engine.ts
-// Google / Microsoft 이벤트 → calendar_events upsert
+// Google / Microsoft events -> upsert into calendar_events
 
 import { createClient } from '@supabase/supabase-js'
 import {

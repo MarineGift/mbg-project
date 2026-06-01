@@ -1,16 +1,16 @@
 /**
  * __tests__/email/mailcarrier.test.ts
  *
- * 단위 테스트 — IMAP I/O는 IImapClient·ParserFn 인터페이스로 추상화되어 있어
- * 모두 fake로 교체. Supabase는 buildSupabaseMock으로 응답 주입.
+ * Unit tests - IMAP I/O is abstracted via the IImapClient / ParserFn interfaces, so
+ * all replaced with fakes. Supabase responses are injected via buildSupabaseMock.
  *
- * 테스트 시나리오:
- *   1. persistInbound — 신규 메시지 정상 INSERT
- *   2. persistInbound — Message-ID 중복 시 null 반환 (멱등성)
- *   3. persistInbound — 첨부파일 Storage 업로드 + attachments INSERT
- *   4. persistInbound — PII 마스킹된 body로 저장
- *   5. sanitizeFilename — 경로 구분자·제어문자 제거
- *   6. fetchAndProcessNew — onMessage 호출 + Seen 플래그
+ * Test scenarios:
+ *   1. persistInbound - normal INSERT of a new message
+ *   2. persistInbound - returns null on duplicate Message-ID (idempotency)
+ *   3. persistInbound - attachment Storage upload + attachments INSERT
+ *   4. persistInbound - saved with a PII-masked body
+ *   5. sanitizeFilename - removes path separators / control characters
+ *   6. fetchAndProcessNew - calls onMessage + Seen flag
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -25,7 +25,7 @@ import {
 import type { InboundMessageEvent } from '../../types/email';
 import { buildSupabaseMock, type MockSupabase } from '../setup/supabase-mock';
 
-// ParsedMail 헬퍼
+// ParsedMail helper
 function makeParsedMail(
   overrides: Partial<ParsedMail> & { headerEntries?: Array<[string, unknown]> } = {},
 ): ParsedMail {
@@ -96,7 +96,7 @@ describe('MailCarrierClient.persistInbound', () => {
   beforeEach(() => {
     parser = vi.fn();
     supabase = buildSupabaseMock({
-      // 1차: communications duplicate check → null (신규)
+      // 1st: communications duplicate check -> null (new)
       'app.communications': {
         selectMaybeSingle: { data: null },
         insertSingle: { data: { id: 'comm-new-1' } },
@@ -133,11 +133,11 @@ describe('MailCarrierClient.persistInbound', () => {
     expect(event).not.toBeNull();
     expect(event?.communicationId).toBe('comm-new-1');
     expect(event?.messageId).toBe('<new@ex.com>');
-    expect(event?.bodyText).toContain('{{PII_001}}'); // 전화번호 마스킹됨
+    expect(event?.bodyText).toContain('{{PII_001}}'); // phone number masked
     expect(event?.bodyText).not.toContain('010-1234-5678');
     expect(event?.piiCategories).toContain('phone_kr');
 
-    // INSERT 호출 검증
+    // verify the INSERT call
     const insertCalls = supabase.__calls.insert.filter(
       (c) => c.schema === 'app' && c.table === 'communications',
     );
@@ -172,7 +172,7 @@ describe('MailCarrierClient.persistInbound', () => {
     const event = await dupClient.persistInbound(parsed);
 
     expect(event).toBeNull();
-    // INSERT는 호출되지 않았어야 함
+    // INSERT should not have been called
     const inserts = sbDup.__calls.insert.filter(
       (c) => c.table === 'communications',
     );
@@ -188,8 +188,8 @@ describe('MailCarrierClient.persistInbound', () => {
         insertSingle: { data: { id: 'comm-thread-1' } },
       },
     });
-    // duplicate check가 첫 호출로 null을 반환해야 하므로,
-    // chain을 단순하게 만들어 첫 maybeSingle은 null, 다음은 thread match.
+    // since the duplicate check must return null on the first call,
+    // keep the chain simple: first maybeSingle is null, the next is the thread match.
     let mbCalls = 0;
     const origSchema = sb.schema;
     sb.schema = vi.fn((schemaName: string) => ({
@@ -207,7 +207,7 @@ describe('MailCarrierClient.persistInbound', () => {
               error: null,
             });
           }
-          // contacts 매칭 — null
+          // contacts match - null
           return Promise.resolve({ data: null, error: null });
         });
         b.single = vi.fn(() => Promise.resolve({ data: { id: 'comm-thread-1' }, error: null }));
@@ -252,11 +252,11 @@ describe('MailCarrierClient.persistInbound', () => {
 
     await client.persistInbound(parsed);
 
-    // Storage upload 호출 검증
+    // verify the Storage upload call
     const storageFromCalls = (supabase.storage.from as ReturnType<typeof vi.fn>).mock.calls;
     expect(storageFromCalls.length).toBeGreaterThan(0);
 
-    // attachments INSERT 검증
+    // verify the attachments INSERT
     const attInserts = supabase.__calls.insert.filter(
       (c) => c.schema === 'app' && c.table === 'attachments',
     );
@@ -286,7 +286,7 @@ describe('MailCarrierClient.persistInbound', () => {
       ],
     });
     await client.persistInbound(parsed);
-    // attachments INSERT는 일어나지 않아야 함
+    // attachments INSERT should not occur
     const attInserts = supabase.__calls.insert.filter(
       (c) => c.table === 'attachments',
     );
@@ -371,7 +371,7 @@ describe('MailCarrierClient.fetchAndProcessNew', () => {
 
     await client.fetchAndProcessNew(onMessage);
 
-    // 두 번째 메시지는 정상 처리됨
+    // the second message is processed normally
     expect(onMessage).toHaveBeenCalledTimes(1);
     expect(imap.messageFlagsAdd).toHaveBeenCalledWith(2, ['\\Seen']);
   });

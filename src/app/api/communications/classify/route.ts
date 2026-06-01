@@ -1,5 +1,5 @@
 // src/app/api/communications/classify/route.ts
-// STUB: classifyInboundEmail 미구현. launch 후 Stage 30 에서 구현 예정.
+// STUB: classifyInboundEmail not implemented. Planned for Stage 30 after launch.
 
 import { NextResponse } from 'next/server'
 

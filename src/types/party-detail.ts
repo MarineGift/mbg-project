@@ -1,15 +1,15 @@
 /**
  * types/party-detail.ts
  *
- * 거래처(parties) 상세 화면의 데이터 모델.
- * Phase 1은 read-only.
+ * Data model for the party (parties) detail screen.
+ * Phase 1 is read-only.
  *
- * 변경 이력:
- *   - 2026-05-11: DB 스키마와 정합 — 단일 industry/tags 필드 제거,
- *                 industryTags/interestTags 배열로 분리.
- *                 (DB 실제 컬럼: industry_tags ARRAY, interest_tags ARRAY)
+ * Change history:
+ *   - 2026-05-11: aligned with the DB schema - removed the single industry/tags field,
+ *                 split into industryTags/interestTags arrays.
+ *                 (actual DB columns: industry_tags ARRAY, interest_tags ARRAY)
  *   - 2026-05-14: Phase 6 — industryPaperCompanyId /
- *                 industryFillerSupplierId FK 필드 추가.
+ *                 added the industryFillerSupplierId FK field.
  */
 
 import type { PartyTypeCode } from './ai';
@@ -19,10 +19,10 @@ import type {
   CommunicationStatus,
 } from './inbox';
 
-/** parties.tier CHECK 제약과 일치. */
+/** Matches the parties.tier CHECK constraint. */
 export type PartyTier = 'tier_1' | 'tier_2' | 'tier_3' | 'cold';
 
-/** parties.status CHECK 제약과 일치. */
+/** Matches the parties.status CHECK constraint. */
 export type PartyStatus = 'active' | 'paused' | 'closed_won' | 'closed_lost' | 'archived';
 
 export interface PartyDetail {
@@ -34,20 +34,20 @@ export interface PartyDetail {
   status: PartyStatus;
   countryCode: string | null;
   website: string | null;
-  /** 산업 분류 태그 (예: "Venture Capital", "Software", "Healthcare") */
+  /** Industry classification tags (e.g. "Venture Capital", "Software", "Healthcare") */
   industryTags: string[];
-  /** 관심/포커스 태그 (예: "Early Stage", "AI", "Growth") */
+  /** Interest/focus tags (e.g. "Early Stage", "AI", "Growth") */
   interestTags: string[];
   notes: string | null;
   source: string | null;
   createdAt: string;
   updatedAt: string;
 
-  /** ▼ Phase 6 — industry master DB 연동 FK */
+  /** ▼ Phase 6 - FK linking to the industry master DB */
   industryPaperCompanyId: number | null;
   industryFillerSupplierId: number | null;
 
-  /** 통계 — RPC나 별도 COUNT 쿼리로 채움 */
+  /** statistics - filled via RPC or a separate COUNT query */
   counts: {
     contacts: number;
     communications: number;
@@ -57,7 +57,7 @@ export interface PartyDetail {
   };
 }
 
-/** 활동 타임라인 한 항목 — communications + tasks 통합. */
+/** One activity-timeline item - communications + tasks merged. */
 export type TimelineItem =
   | TimelineCommunicationItem
   | TimelineTaskItem;

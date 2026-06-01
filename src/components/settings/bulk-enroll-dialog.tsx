@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 // src/components/settings/bulk-enroll-dialog.tsx
 
 import { useState, useTransition } from 'react';
@@ -91,7 +91,7 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
   }
 
   function handleClose() {
-    // 리셋 후 닫기
+    // reset then close
     setModule('');
     setTiers([]);
     setStatus('active');
@@ -144,7 +144,7 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tier (선택 안 하면 전체)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tier (none selected = all)</label>
                 <div className="flex gap-1.5 flex-wrap">
                   {TIERS.map(t => (
                     <button
@@ -178,12 +178,12 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country code (예: KR, JP, US)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country code (e.g. KR, JP, US)</label>
                 <input
                   type="text"
                   value={countryCode}
                   onChange={e => setCountryCode(e.target.value)}
-                  placeholder="비워두면 전체"
+                  placeholder="Leave blank for all"
                   maxLength={2}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
                 />

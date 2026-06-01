@@ -1,14 +1,14 @@
 /**
  * __tests__/setup/supabase-mock.ts
  *
- * Supabase 클라이언트 mock 빌더.
+ * Supabase client mock builder.
  *
- * 핵심 설계:
- *   - select / insert / update / delete 어느 것이든 builder 객체 반환
- *   - eq / order / limit 등 모든 chain 메서드도 builder 반환
- *   - 종단 평가는 다음 중 하나:
- *       * .single() / .maybeSingle() 호출 → 등록된 응답 반환
- *       * await builder (thenable) → 등록된 응답 반환 (Supabase의 PostgREST 동작)
+ * Core design:
+ *   - select / insert / update / delete all return a builder object
+ *   - all chain methods (eq / order / limit, etc.) also return the builder
+ *   - terminal evaluation is one of:
+ *       * calling .single() / .maybeSingle() -> returns the registered response
+ *       * await builder (thenable) -> returns the registered response (Supabase's PostgREST behavior)
  */
 
 import { vi } from 'vitest';
@@ -78,7 +78,7 @@ export function buildSupabaseMock(spec: SupabaseMockSpec = {}): MockSupabase {
     let mode: 'select' | 'insert' | 'update' | 'delete' = 'select';
     let isCountHead = false;
 
-    // 종단 응답 결정
+    // determine the terminal response
     function resolveTerminal(forSingle: boolean): { data: unknown; error: unknown; count?: number } {
       if (mode === 'insert') {
         const r = responses.insertSingle ?? { data: null, error: null };
@@ -108,7 +108,7 @@ export function buildSupabaseMock(spec: SupabaseMockSpec = {}): MockSupabase {
 
     builder.select = vi.fn(
       (cols?: unknown, options?: { count?: string; head?: boolean }) => {
-        // insert/update 후의 .select()는 PostgREST RETURNING — mode 유지
+        // .select() after insert/update is PostgREST RETURNING - keep the mode
         if (mode !== 'insert' && mode !== 'update') {
           mode = 'select';
         }

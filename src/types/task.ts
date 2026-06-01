@@ -1,7 +1,7 @@
 /**
  * types/task.ts
  *
- * 태스크 목록 + 상세의 데이터 모델.
+ * Data model for the task list + detail.
  */
 
 import type { PartyTypeCode } from './ai';
@@ -17,7 +17,7 @@ export type TaskStatus =
 /** app.priority_level enum. */
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
-/** 목록 한 행 (평탄화). */
+/** One list row (flattened). */
 export interface TaskRow {
   id: string;
   title: string;
@@ -35,7 +35,7 @@ export interface TaskRow {
   assignedToUserId: string | null;
   createdAt: string;
   completedAt: string | null;
-  /** AI가 생성한 태스크인지 (linked_strategy_action_id != null) */
+  /** Whether this is an AI-generated task (linked_strategy_action_id != null) */
   aiSuggested: boolean;
 }
 
@@ -43,15 +43,15 @@ export interface TaskFilters {
   status: TaskStatus | 'all' | 'open'; // 'open' = todo + in_progress + blocked
   priority: TaskPriority | 'all';
   partyType: PartyTypeCode | 'all';
-  /** true이면 due_at <= now 이면서 status가 done/cancelled 아닌 것만 */
+  /** if true, only tasks with due_at <= now and status not done/cancelled */
   overdueOnly: boolean;
-  /** 특정 거래처 */
+  /** a specific party */
   partyId: string | null;
 }
 
 export type TaskSort =
-  | 'due_soonest'      // due_at ASC (null 마지막)
-  | 'priority'         // urgent > high > medium > low, 같으면 due_at ASC
+  | 'due_soonest'      // due_at ASC (nulls last)
+  | 'priority'         // urgent > high > medium > low, ties broken by due_at ASC
   | 'newest'           // created_at DESC
   | 'oldest';          // created_at ASC
 

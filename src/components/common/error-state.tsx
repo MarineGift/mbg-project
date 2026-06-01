@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 interface ErrorStateProps {
   title?: string;
   description?: string;
-  /** Server Component 에러 boundary에서 reset 함수 전달 */
+  /** the reset function passed from the Server Component error boundary */
   onRetry?: () => void;
   className?: string;
 }

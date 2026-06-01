@@ -79,7 +79,7 @@ export function DraftQueueFilters({
     } else {
       next.set(key, value);
     }
-    // 필터 변경 시 page=1로 리셋
+    // reset to page=1 on filter change
     next.delete('page');
     startTransition(() => {
       router.replace(`${pathname}?${next.toString()}`);

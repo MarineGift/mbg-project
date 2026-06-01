@@ -27,8 +27,8 @@ export function KanbanBoardClient({ board }: Props) {
   const t = useTranslations('engagements');
   const [isPending, startTransition] = useTransition();
 
-  // Optimistic state — Server Action 응답 전까지 카드 위치 미리 갱신.
-  // board prop이 router.refresh 후 변경되면 동기화.
+  // Optimistic state - update card positions ahead of the Server Action response.
+  // syncs when the board prop changes after router.refresh.
   const [optimisticCardsByStage, setOptimisticCardsByStage] = useState<
     Record<string, KanbanCard[]>
   >(board.cardsByStage);
@@ -59,7 +59,7 @@ export function KanbanBoardClient({ board }: Props) {
     if (!card || !targetStage) return;
     if (card.currentStageId === targetStage.id) return;
 
-    // Optimistic — 즉시 UI 갱신
+    // Optimistic - update the UI immediately
     setOptimisticCardsByStage((prev) => {
       const next: Record<string, KanbanCard[]> = {};
       for (const stageId of Object.keys(prev)) {
@@ -73,7 +73,7 @@ export function KanbanBoardClient({ board }: Props) {
       return next;
     });
 
-    // Server Action — 실패 시 toast + 원복
+    // Server Action - on failure, toast + revert
     startTransition(async () => {
       const result = await moveEngagementStage({
         engagementId: card.id,

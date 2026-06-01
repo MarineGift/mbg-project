@@ -1,16 +1,16 @@
 /**
  * tests/url-parsers.test.ts
  *
- * URL searchParams → filter 객체로 변환하는 파서들의 단위 테스트.
- * 이들은 server-only 모듈에서 import — 'server-only' 폴리필 필요.
+ * Unit tests for the parsers that convert URL searchParams -> filter objects.
+ * These import from server-only modules - a 'server-only' polyfill is required.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 
-// server-only 폴리필 — Vitest 환경에서 import 가능하게
+// server-only polyfill - make it importable in the Vitest environment
 vi.mock('server-only', () => ({}));
 
-// supabase server client mock — 파서는 client 사용 안 함
+// supabase server client mock - the parsers don't use the client
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: vi.fn(),
 }));
@@ -116,7 +116,7 @@ describe('parseTaskFilters', () => {
 
   it('overdueOnly=1 → true', () => {
     expect(parseTaskFilters({ overdue: '1' }).overdueOnly).toBe(true);
-    expect(parseTaskFilters({ overdue: 'true' }).overdueOnly).toBe(false); // 정확히 '1'만
+    expect(parseTaskFilters({ overdue: 'true' }).overdueOnly).toBe(false); // exactly '1' only
   });
 
   it('defaults sort to "due_soonest"', () => {

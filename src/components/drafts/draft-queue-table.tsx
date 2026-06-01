@@ -30,10 +30,10 @@ export function DraftQueueTable({ rows }: DraftQueueTableProps) {
   const clear = useUiStore((s) => s.clearDraftSelection);
   const searchParams = useSearchParams();
 
-  // 페이지 / 필터 변경 시 선택 초기화 (사용자가 잘못된 행을 일괄 액션 대상에 포함하지 않도록)
+  // clear selection on page/filter change (so the user doesn't include wrong rows in bulk actions)
   useEffect(() => {
     clear();
-    // searchParams의 변경 시마다 호출
+    // called whenever searchParams change
   }, [searchParams, clear]);
 
   const visibleIds = rows.map((r) => r.id);

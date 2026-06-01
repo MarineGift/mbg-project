@@ -11,12 +11,12 @@ interface AppShellProps {
 }
 
 /**
- * 인증된 사용자 전용 레이아웃 셸.
- *   - 좌측: Sidebar
- *   - 상단: TopBar
- *   - 메인: children (페이지 컨텐츠)
+ * Layout shell for authenticated users only.
+ *   - left: Sidebar
+ *   - top: TopBar
+ *   - main: children (page content)
  *
- * email/displayName은 Server Component에서 받아 TopBar로 전달.
+ * email/displayName are received from the Server Component and passed to TopBar.
  */
 export function AppShell({ email, displayName, children }: AppShellProps) {
   return (

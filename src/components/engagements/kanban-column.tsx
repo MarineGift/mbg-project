@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 interface Props {
   stage: KanbanStage;
   cards: readonly KanbanCard[];
-  /** 드래그 중인 카드 id (드롭 후 optimistic 표시용) */
+  /** id of the card being dragged (for optimistic display after drop) */
   draggingCardId?: string | null;
 }
 

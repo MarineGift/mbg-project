@@ -1,7 +1,7 @@
 /**
  * components/common/party-type-badge.tsx
  *
- * 7개 모듈에 대한 시각적 식별 배지. 어디서든 행을 모듈별로 구분할 때 사용.
+ * Visual identifier badge for the 7 modules. Used anywhere to distinguish rows by module.
  */
 
 'use client';
@@ -23,7 +23,7 @@ const PARTY_TYPE_STYLES: Record<PartyTypeCode, string> = {
   customer: 'bg-party-customer text-party-customer-foreground',
   filler_supplier: 'bg-amber-100 text-amber-700',
   buyer: 'bg-yellow-100 text-yellow-700',
-  government_grant: 'bg-gray-100 text-gray-700',  // tailwind 표준 색상; 추후 module-filler 토큰 추가 가능
+  government_grant: 'bg-gray-100 text-gray-700',  // standard tailwind colors; a module-filler token can be added later
 };
 
 export function PartyTypeBadge({

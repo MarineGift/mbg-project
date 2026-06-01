@@ -1,16 +1,16 @@
 /**
  * lib/actions/communications.ts
  *
- * Outbound 메일 수동 발송 Server Action.
- * TABS Mailer를 사용해 SMTP 발송 + communications 행 기록.
+ * Server Action for manually sending outbound mail.
+ * Uses TABS Mailer to send via SMTP + records a communications row.
  *
- * 흐름:
- *   1. user의 sending_email 확인
+ * Flow:
+ *   1. confirm the user's sending_email
  *   2. communications INSERT (status='sending')
- *   3. createEmailTracking() → injectedHtml 획득 (픽셀 + 추적 링크)
- *   4. tabs-mailer.sendOne(bodyHtml: injectedHtml) → message-id 획득
+ *   3. createEmailTracking() -> obtain injectedHtml (pixel + tracking links)
+ *   4. tabs-mailer.sendOne(bodyHtml: injectedHtml) -> obtain message-id
  *   5. communications UPDATE (status='sent', message_id, sent_at)
- *   6. 실패 시 status='failed' + error_message
+ *   6. on failure, status='failed' + error_message
  */
 
 'use server';
@@ -23,7 +23,7 @@ import { sendOutboundEmail } from '@/lib/email/send-outbound';
 import type { SendingAddressKind } from '@/types/email';
 
 /* ──────────────────────────────────────────────────────────
- * Plain text → HTML 변환 (픽셀 삽입을 위한 최소 변환)
+ * Plain text -> HTML conversion (minimal conversion for pixel injection)
  * ────────────────────────────────────────────────────────── */
 
 function escapeHtml(s: string): string {
@@ -35,8 +35,8 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * plain text를 최소한의 HTML로 변환.
- * 빈 줄은 단락 구분, 일반 줄은 <p> 태그로 감싼다.
+ * Convert plain text into minimal HTML.
+ * Blank lines separate paragraphs; normal lines are wrapped in <p> tags.
  */
 function plainToHtml(text: string): string {
   const lines = text.split('\n');
@@ -59,7 +59,7 @@ function plainToHtml(text: string): string {
 }
 
 /* ──────────────────────────────────────────────────────────
- * 결과 타입 + 입력 스키마
+ * Result type + input schema
  * ────────────────────────────────────────────────────────── */
 
 export interface ComposeResult {
@@ -73,7 +73,7 @@ export interface ComposeResult {
     | 'not_whitelisted'
     | 'not_found';
   errorMessage?: string;
-  /** 성공 시 outbound communications row id */
+  /** the outbound communications row id on success */
   communicationId?: string;
 }
 
@@ -82,12 +82,12 @@ const composeSchema = z.object({
   cc: z.string().max(2000).optional().or(z.literal('')),
   subject: z.string().min(1, 'Subject is required').max(500),
   bodyPlain: z.string().min(1, 'Body is required').max(50_000),
-  /** 리치 텍스트 에디터가 있는 경우 HTML 직접 전달 가능 (없으면 bodyPlain → 자동 변환) */
+  /** If a rich-text editor exists, HTML can be passed directly (otherwise bodyPlain -> auto-converted) */
   bodyHtml: z.string().max(200_000).optional().nullable(),
-  /** 거래처 연결 (있으면 communications.party_id에 저장) */
+  /** Party link (if present, stored in communications.party_id) */
   partyId: z.string().uuid().optional().nullable(),
   contactId: z.string().uuid().optional().nullable(),
-  /** 새로운 thread 시작 — null이면 자동 생성된 message-id가 thread 시작 */
+  /** Starts a new thread - if null, the auto-generated message-id starts the thread */
   inReplyTo: z.string().max(500).optional().nullable(),
   threadId: z.string().max(500).optional().nullable(),
   /** D6-7b-2: which sending account to send from (default: shared = contact@) */

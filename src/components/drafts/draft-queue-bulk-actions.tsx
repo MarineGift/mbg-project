@@ -12,20 +12,20 @@ import { bulkApproveDrafts } from '@/lib/actions/drafts';
 import { cn } from '@/lib/utils';
 
 interface DraftQueueBulkActionsProps {
-  /** 화면에 보이는 선택 가능한 draft id 전체 */
+  /** all selectable draft ids visible on screen */
   allVisibleIds: readonly string[];
-  /** 편집 중(final_body_plain 있음)이라 일괄 액션에서 제외할 id들 */
+  /** ids to exclude from bulk actions because they're being edited (final_body_plain present) */
   editingIds: readonly string[];
   className?: string;
 }
 
 /**
- * 일괄 액션 toolbar — 선택 행이 1개 이상일 때만 표시.
+ * Bulk action toolbar - shown only when at least one row is selected.
  *
- * 동작:
- *   - Approve: bulkApproveDrafts 호출. status='approved'만, 발송 안 함 (안전성).
- *   - Reject:  BulkRejectDialog 열기 → bulkRejectDrafts.
- *   - 편집 중 행은 자동 제외 + 사용자에게 안내.
+ * Behavior:
+ *   - Approve: calls bulkApproveDrafts. status='approved' only, does not send (safety).
+ *   - Reject:  opens BulkRejectDialog -> bulkRejectDrafts.
+ *   - rows being edited are auto-excluded + the user is notified.
  */
 export function DraftQueueBulkActions({
   allVisibleIds,
@@ -42,9 +42,9 @@ export function DraftQueueBulkActions({
   const count = selectedIds.size;
   if (count === 0) return null;
 
-  // 편집 중인 ID 집합
+  // set of ids being edited
   const editingSet = new Set(editingIds);
-  // 일괄 액션 대상 = 선택된 것 중 편집 중 아닌 것
+  // bulk action targets = selected ones that are not being edited
   const targetIds = Array.from(selectedIds).filter((id) => !editingSet.has(id));
   const hasEditingInSelection = Array.from(selectedIds).some((id) =>
     editingSet.has(id),
@@ -126,7 +126,7 @@ export function DraftQueueBulkActions({
           </p>
         )}
 
-        {/* 사용 안 함 회피 */}
+        avoid unused warning
         <span hidden>{allVisibleIds.length}</span>
       </div>
 

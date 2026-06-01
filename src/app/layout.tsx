@@ -1,12 +1,12 @@
 /**
  * app/layout.tsx
  *
- * Root layout — 모든 페이지의 최상위 (login 포함).
- *   - 다국어 폰트 로드 (Inter, Noto Sans KR, Noto Sans JP, Geist)
- *   - locale + messages 결정 (next-intl)
- *   - 전역 providers (QueryProvider, IntlProvider, ToastProvider)
+ * Root layout - top level of all pages (including login).
+ *   - loads multilingual fonts (Inter, Noto Sans KR, Noto Sans JP, Geist)
+ *   - determines locale + messages (next-intl)
+ *   - global providers (QueryProvider, IntlProvider, ToastProvider)
  *
- * 인증 가드는 (app) group의 하위 layout에서 처리.
+ * Auth guard is handled in the (app) group's child layout.
  */
 
 import type { Metadata } from 'next';

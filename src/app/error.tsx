@@ -15,7 +15,7 @@ export default function ErrorBoundary({
   const t = useTranslations('common');
 
   useEffect(() => {
-    // 실제 운영에서는 Sentry 등으로 전송
+    // in production, send to Sentry or similar
     // eslint-disable-next-line no-console
     console.error('[app:error-boundary]', error);
   }, [error]);

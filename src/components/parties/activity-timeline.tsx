@@ -38,7 +38,7 @@ export function ActivityTimeline({ items }: Props) {
       </CardHeader>
       <CardContent className="space-y-0">
         <ul className="relative">
-          {/* 세로 라인 */}
+          vertical line
           <span
             aria-hidden
             className="absolute left-[10px] top-2 bottom-2 w-px bg-border"
@@ -52,7 +52,7 @@ export function ActivityTimeline({ items }: Props) {
                 idx !== items.length - 1 && 'border-b border-border/40',
               )}
             >
-              {/* 도트 (line 위에 표시) */}
+              dot (shown on top of the line)
               <span
                 aria-hidden
                 className={cn(

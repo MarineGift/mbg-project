@@ -67,7 +67,7 @@ async function deleteFromImap(messageId: string, accountKind: string): Promise<v
 export async function deleteCommunication(id: string): Promise<DeleteCommunicationResult> {
   console.log('[deleteComm] START id=', id);
 
-  // 1. 세션 + JWT 디코딩으로 orgId 추출
+  // 1. extract orgId from the session + JWT decode
   const supabase = await createSupabaseServerClient();
   const { data: { session }, error: sessErr } = await supabase.auth.getSession();
 
@@ -94,8 +94,8 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
 
   if (!orgId) return { success: false, error: 'Organization context missing' };
 
-  // 2. admin client — RLS 우회 (organization_id 이중 필터로 보안 유지)
-  // 변경 — app 스키마 전용 client
+  // 2. admin client - bypasses RLS (security kept via double organization_id filter)
+  // changed - app-schema-only client
   const admin = createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
@@ -106,7 +106,7 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
   );
   const adminComms = admin.from('communications') as any;
 
-  // 3. 메시지 조회
+  // 3. look up the message
   const { data: comm, error: fetchError } = await adminComms
     .select('id, message_id, direction, external_data')
     .eq('id', id)
@@ -128,7 +128,7 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
     return { success: false, error: 'Message not found or already deleted' };
   }
 
-  // 4. IMAP 삭제 (inbound + message_id 있는 경우만)
+  // 4. IMAP delete (only when inbound + message_id present)
   if (comm.direction === 'inbound' && comm.message_id) {
     const extData = (comm.external_data ?? {}) as Record<string, unknown>;
     const accountKind =

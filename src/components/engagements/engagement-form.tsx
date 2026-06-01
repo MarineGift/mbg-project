@@ -1,19 +1,19 @@
 /**
  * components/engagements/engagement-form.tsx
  *
- * Engagement create / edit 통합 폼.
- * party-form.tsx 패턴을 그대로 따름 (RHF + zodResolver, useTransition, Card layout,
+ * Unified Engagement create / edit form.
+ * Follows the party-form.tsx pattern exactly (RHF + zodResolver, useTransition, Card layout,
  * Delete Dialog, toast).
  *
- * 차이점:
- *   - partyId / partyName이 항상 필요 (engagement는 반드시 party에 속함)
- *   - currentStageId는 edit 모드에서만 노출 (create 시엔 서버가 첫 stage 자동 할당)
- *   - stage 변경은 detail 페이지의 EngagementStageMover에서 별도 처리되므로
- *     edit 폼에서는 의도적으로 stage select를 노출하지 않음 (혼란 방지)
+ * Differences:
+ *   - partyId / partyName always required (an engagement must belong to a party)
+ *   - currentStageId is exposed only in edit mode (on create, the server auto-assigns the first stage)
+ *   - stage changes are handled separately by EngagementStageMover on the detail page, so
+ *     the edit form intentionally does not expose a stage select (to avoid confusion)
  *
- * 변경 이력:
- *   - 2026-05-12: i18n 키 이름을 ko/en/ja.json의 기존 engagementForm namespace
- *                 키와 일치하게 정렬:
+ * Change history:
+ *   - 2026-05-12: align i18n key names with the existing engagementForm namespace in ko/en/ja.json
+ *                 to match its keys:
  *                 valueAmount → value, valueCurrency → currency,
  *                 probabilityPct → probability, expectedCloseDate → expectedClose,
  *                 missingParty → partyRequired
@@ -59,13 +59,13 @@ import type { EngagementDetail } from '@/types/engagement';
 
 interface Props {
   mode: 'create' | 'edit';
-  /** create + edit 모두에서 module 결정용 */
+  /** used to determine module in both create + edit */
   partyType: PartyTypeCode;
-  /** create 모드 필수, edit 모드에서는 existing.partyId 사용 */
+  /** required in create mode; edit mode uses existing.partyId */
   partyId?: string;
-  /** create 모드 표시용. edit 모드에서는 existing.partyName 사용 */
+  /** for display in create mode; edit mode uses existing.partyName */
   partyName?: string;
-  /** edit 모드에서만 */
+  /** edit mode only */
   existing?: EngagementDetail | null;
 }
 
@@ -117,7 +117,7 @@ export function EngagementForm({
   const [isPending, startTransition] = useTransition();
   const [showDelete, setShowDelete] = useState(false);
 
-  // create 모드에서 partyId는 페이지가 보장. edit 모드에서는 existing이 보장.
+  // in create mode the page guarantees partyId; in edit mode existing guarantees it.
   const effectivePartyId = existing?.partyId ?? partyId;
   const effectivePartyName = existing?.partyName ?? partyName ?? '';
 
@@ -197,7 +197,7 @@ export function EngagementForm({
       const result = await deleteEngagement({ engagementId: existing.id });
       if (result.ok) {
         toast.success(t('deleted'));
-        // delete 후 party 상세 페이지로 이동
+        // after delete, navigate to the party detail page
         router.push(`/${existing.partyType}/parties/${existing.partyId}`);
       } else {
         toast.error(result.errorMessage ?? t('deleteFailed'));
@@ -342,7 +342,7 @@ export function EngagementForm({
             />
           </div>
 
-          {/* edit 모드 정보 (stage / status는 별도 페이지에서 변경) */}
+          edit-mode info (stage / status are changed on a separate page)
           {mode === 'edit' && existing && (
             <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 p-3 text-xs text-muted-foreground space-y-1">
               <p>{t('stageNote')}</p>

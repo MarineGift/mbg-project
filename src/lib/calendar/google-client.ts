@@ -1,5 +1,5 @@
 // src/lib/calendar/google-client.ts
-// Google Calendar API v3 래퍼 (googleapis 패키지 불필요)
+// Google Calendar API v3 wrapper (no googleapis package needed)
 
 const GOOGLE_TOKEN_URL   = 'https://oauth2.googleapis.com/token'
 const GOOGLE_CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3'
@@ -179,7 +179,7 @@ export async function fetchGoogleEvents(
   return res.json()
 }
 
-/** 모든 페이지 수집 */
+/** collect all pages */
 export async function fetchAllGoogleEvents(
   opts: Omit<FetchEventsOptions, 'pageToken'>
 ): Promise<{ events: GoogleEvent[]; syncToken: string }> {

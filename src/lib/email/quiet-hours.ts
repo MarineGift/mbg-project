@@ -1,22 +1,22 @@
 /**
  * lib/email/quiet-hours.ts
  *
- * 발송 시점이 mail_merge_jobs.quiet_hours 정책에 위반되는지 평가.
+ * Evaluate whether the send time violates the mail_merge_jobs.quiet_hours policy.
  *
- * 외부 라이브러리 없이 Intl.DateTimeFormat의 timeZone 옵션을 활용해
- * IANA 타임존 변환을 수행한다(Node 18+/모던 브라우저 모두 지원).
+ * Without any external library, uses the timeZone option of Intl.DateTimeFormat to
+ * perform IANA timezone conversion (supported on Node 18+ and modern browsers).
  *
- * 자정을 가로지르는 구간(예: 22:00 → 08:00) 처리:
- *   start > end 인 경우, [start, 24:00) ∪ [00:00, end)를 차단 시간으로 본다.
+ * Handling ranges that cross midnight (e.g. 22:00 -> 08:00):
+ *   when start > end, treat [start, 24:00) U [00:00, end) as the blocked window.
  *
- * 주말 차단:
- *   weekends_blocked=true이고 발송 시점이 토(6)·일(0)이면 즉시 차단.
+ * Weekend blocking:
+ *   if weekends_blocked=true and the send time is Sat (6) or Sun (0), block immediately.
  */
 
 import type { QuietHours } from '../../types/email';
 
 /* ============================================================
- * 1. 타임존 변환
+ * 1. Timezone conversion
  * ============================================================ */
 
 interface ZonedParts {
@@ -29,10 +29,10 @@ interface ZonedParts {
 }
 
 /**
- * 주어진 UTC 시각을 IANA 타임존의 시계 시각으로 분해.
- * Intl.DateTimeFormat의 formatToParts를 사용.
+ * Decompose a given UTC time into wall-clock time in an IANA timezone.
+ * Uses formatToParts of Intl.DateTimeFormat.
  *
- * 잘못된 timezone 문자열은 RangeError를 throw하므로 caller에서 try-catch.
+ * Invalid timezone strings throw a RangeError, so the caller should try-catch.
  */
 export function getZonedParts(date: Date, timezone: string): ZonedParts {
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -71,12 +71,12 @@ export function getZonedParts(date: Date, timezone: string): ZonedParts {
 }
 
 /* ============================================================
- * 2. quiet hours 평가
+ * 2. quiet hours evaluation
  * ============================================================ */
 
 /**
- * "HH:mm" → 0~1439 분 단위 정수로 변환.
- * 잘못된 형식은 -1 반환(호출자가 폴백 처리).
+ * "HH:mm" -> convert to an integer number of minutes (0-1439).
+ * Invalid formats return -1 (the caller handles the fallback).
  */
 export function parseHHMM(hhmm: string): number {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
@@ -94,31 +94,31 @@ export interface QuietHoursVerdict {
     | 'within_quiet_hours'
     | 'invalid_config'
     | 'invalid_timezone';
-  /** 차단된 경우, 다음 발송 가능 시각의 UTC ISO 문자열. */
+  /** When blocked, the UTC ISO string of the next allowed send time. */
   nextAllowedAt?: string;
 }
 
 /**
- * 현재 시각이 quiet hours에 해당하는지 평가.
+ * Evaluate whether the current time falls within quiet hours.
  *
- * 잘못된 timezone·HH:mm 형식이면 blocked=true, reason='invalid_*'.
- * 운영 안전성: 정책 파싱 실패 시 발송 차단(보수적).
+ * On an invalid timezone or HH:mm format, blocked=true, reason='invalid_*'.
+ * Operational safety: if policy parsing fails, block sending (conservative).
  *
- * @param now 평가 기준 시각(UTC). 미지정 시 현재.
- * @param qh QuietHours 설정.
+ * @param now reference time for evaluation (UTC). Defaults to now if omitted.
+ * @param qh QuietHours settings.
  */
 export function evaluateQuietHours(
   qh: QuietHours,
   now: Date = new Date(),
 ): QuietHoursVerdict {
-  // start/end 검증
+  // validate start/end
   const startMin = parseHHMM(qh.start);
   const endMin = parseHHMM(qh.end);
   if (startMin < 0 || endMin < 0) {
     return { blocked: true, reason: 'invalid_config' };
   }
 
-  // 타임존 변환 시도
+  // attempt timezone conversion
   let zoned: ZonedParts;
   try {
     zoned = getZonedParts(now, qh.timezone);
@@ -126,7 +126,7 @@ export function evaluateQuietHours(
     return { blocked: true, reason: 'invalid_timezone' };
   }
 
-  // 주말 차단
+  // weekend blocking
   if (qh.weekends_blocked && (zoned.weekday === 0 || zoned.weekday === 6)) {
     return {
       blocked: true,
@@ -135,17 +135,17 @@ export function evaluateQuietHours(
     };
   }
 
-  // 시간 범위 차단
+  // time-range blocking
   const totalMin = zoned.hour * 60 + zoned.minute;
   let inRange: boolean;
   if (startMin === endMin) {
-    // start==end는 차단 의미 없음 (24h 허용 또는 24h 차단의 모호함 → 허용으로 해석)
+    // start==end has no blocking meaning (ambiguous between allow-24h and block-24h -> interpreted as allow)
     inRange = false;
   } else if (startMin > endMin) {
-    // 자정 횡단: [start, 24:00) ∪ [00:00, end)
+    // crosses midnight: [start, 24:00) U [00:00, end)
     inRange = totalMin >= startMin || totalMin < endMin;
   } else {
-    // 일반: [start, end)
+    // normal: [start, end)
     inRange = totalMin >= startMin && totalMin < endMin;
   }
 
@@ -161,18 +161,18 @@ export function evaluateQuietHours(
 }
 
 /* ============================================================
- * 3. 다음 발송 가능 시각 계산
+ * 3. Compute the next allowed send time
  * ============================================================ */
 
 /**
- * 현재 시각에서 quiet hours가 풀리는 다음 시점을 UTC Date로 계산.
+ * Compute, as a UTC Date, the next moment quiet hours lift from the current time.
  *
- * 휴리스틱 (정확한 분 단위 반올림은 mail-merge-worker가 다시 평가):
- *   - 주말 차단이면 다음 월요일 start 시각으로 이동
- *   - 자정 횡단(start>end)이면 오늘 또는 내일 end 시각으로 이동
- *   - 일반(start<end)이면 오늘 end 시각으로 이동
+ * Heuristic (exact minute-level rounding is re-evaluated by mail-merge-worker):
+ *   - if weekend-blocked, move to next Monday's start time
+ *   - if crossing midnight (start>end), move to today's or tomorrow's end time
+ *   - if normal (start<end), move to today's end time
  *
- * 본 함수는 보수적 추정 — 정확하지 않으면 워커가 다음 iteration에서 재평가.
+ * This function is a conservative estimate - if imprecise, the worker re-evaluates on the next iteration.
  */
 function computeNextAllowed(
   now: Date,
@@ -184,32 +184,32 @@ function computeNextAllowed(
   const startMin = parseHHMM(qh.start);
 
   if (isWeekendBlocked) {
-    // 다음 월요일까지 계산
+    // compute days until next Monday
     const daysUntilMonday = zoned.weekday === 0 ? 1 : 8 - zoned.weekday;
     const candidate = new Date(now);
     candidate.setUTCDate(candidate.getUTCDate() + daysUntilMonday);
-    // 시각은 startMin 이후부터 가능 — 시작 직후로 이동
+    // time is allowed from startMin onward - move to just after the start
     candidate.setUTCHours(0, 0, 0, 0);
     candidate.setUTCMinutes(endMin);
     return candidate;
   }
 
-  // 일반 quiet hours
-  // start>end (자정 횡단): totalMin >= start면 다음 날 end로, totalMin < end면 오늘 end로
-  // start<end: 오늘 end로 (단순)
+  // normal quiet hours
+  // start>end (crosses midnight): if totalMin >= start go to next day's end, if totalMin < end go to today's end
+  // start<end: go to today's end (simple)
   const totalMin = zoned.hour * 60 + zoned.minute;
   const candidate = new Date(now);
 
   if (startMin > endMin) {
-    // 자정 횡단
+    // crosses midnight
     if (totalMin >= startMin) {
-      // 오늘 밤 → 내일 오전 endMin
+      // tonight -> tomorrow morning's endMin
       candidate.setUTCDate(candidate.getUTCDate() + 1);
     }
-    // totalMin < endMin이면 오늘 오전 endMin
+    // if totalMin < endMin, today's morning endMin
   }
-  // start<end는 오늘 endMin
+  // start<end is today's endMin
 
-  // endMin을 UTC 시각으로 정확히 변환하긴 어려우므로, 보수적으로 +30분
+  // exactly converting endMin to a UTC time is hard, so conservatively add +30 min
   return new Date(candidate.getTime() + 30 * 60 * 1000);
 }

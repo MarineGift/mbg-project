@@ -1,16 +1,16 @@
 /**
  * workers/draft-expiry-worker.ts
  *
- * 만료된 ai.drafts 행의 status를 'expired'로 갱신.
+ * Set the status of expired ai.drafts rows to 'expired'.
  *
- * 호출 방식:
- *   - Vercel Cron (`vercel.json`의 `"schedule": "0 * * * *"`) 매시간 1회
- *   - 또는 stand-alone Node 워커: `tsx src/workers/draft-expiry-worker.ts`
+ * Invocation:
+ *   - Vercel Cron (`"schedule": "0 * * * *"` in `vercel.json`) once per hour
+ *   - or a stand-alone Node worker: `tsx src/workers/draft-expiry-worker.ts`
  *
- * SQL 측 함수 ai.expire_stale_drafts()가 다음을 수행:
+ * The SQL-side function ai.expire_stale_drafts() does the following:
  *   - WHERE status = 'pending_review' AND expires_at < NOW() AND expired_handled = false
  *   - UPDATE status='expired', expired_handled=true
- *   - 만료된 건수를 (expired_count int, organization_id uuid) 형태로 반환
+ *   - returns the expired count as (expired_count int, organization_id uuid)
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -23,8 +23,8 @@ export interface ExpireResult {
 }
 
 /**
- * 단위 테스트 가능한 핵심 로직.
- * supabase 클라이언트를 외부에서 주입.
+ * Unit-testable core logic.
+ * The supabase client is injected externally.
  */
 export async function expireStaleDrafts(
   supabase: SupabaseClient,
@@ -41,8 +41,8 @@ export async function expireStaleDrafts(
     throw new Error(`expire_stale_drafts RPC failed: ${error.message}`);
   }
 
-  // RPC 응답 형식: RETURNS TABLE (expired_count int, organization_id uuid)
-  // → 행 배열로 반환 (organization별 그룹). 모든 행의 expired_count를 합산.
+  // RPC response shape: RETURNS TABLE (expired_count int, organization_id uuid)
+  // -> returned as an array of rows (grouped by organization). Sum expired_count across all rows.
   let expired = 0;
   if (Array.isArray(data)) {
     expired = data.reduce(
@@ -56,7 +56,7 @@ export async function expireStaleDrafts(
       0,
     );
   } else if (data && typeof data === 'object') {
-    // 단일 행 fallback
+    // single-row fallback
     const n = (data as { expired_count?: unknown }).expired_count;
     if (typeof n === 'number') expired = n;
   } else if (typeof data === 'number') {

@@ -1,15 +1,15 @@
 /**
  * lib/actions/parties.ts
  *
- * Party Server Actions — 생성, 수정, 삭제.
+ * Party Server Actions - create, update, delete.
  *
- * 삭제는 soft delete (deleted_at = now()). 트리거가 audit log 자동.
+ * Delete is a soft delete (deleted_at = now()). A trigger handles the audit log automatically.
  *
- * 변경 이력:
- *   - 2026-05-11: industry 컬럼 제거, industry_tags / interest_tags 배열만 사용.
- *   - 2026-05-12: deleteParty에서 미존재 deleted_by 컬럼 참조 제거.
+ * Change history:
+ *   - 2026-05-11: removed the industry column, use only the industry_tags / interest_tags arrays.
+ *   - 2026-05-12: removed a reference to the nonexistent deleted_by column in deleteParty.
  *   - 2026-05-25 (Phase C): module → party_type, party_type → party_kind rename.
- *                 TS schema 는 camelCase (partyType, partyKind), DB column 은 snake_case.
+ *                 The TS schema is camelCase (partyType, partyKind); DB columns are snake_case.
  */
 
 'use server';
@@ -25,14 +25,14 @@ export interface PartyActionResult {
   ok: boolean;
   errorCode?: 'unauthorized' | 'validation' | 'not_found' | 'database';
   errorMessage?: string;
-  /** create 성공 시 새 party id */
+  /** the new party id on successful create */
   partyId?: string;
 }
 
 const partySchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   legalName: z.string().max(200).optional().nullable(),
-  // 비즈니스 카테고리
+  // business category
   partyType: z.enum([
     'investor',
     'paper_mill',
@@ -42,7 +42,7 @@ const partySchema = z.object({
     'partner',
     'government_grant',
   ]),
-  // 법인 형태
+  // legal entity form
   partyKind: z
     .enum(['company', 'organization', 'individual', 'fund', 'government'])
     .default('company'),

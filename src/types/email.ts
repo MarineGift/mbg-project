@@ -1,29 +1,29 @@
 /**
  * types/email.ts
  *
- * 이메일 통신 도메인 객체 타입.
+ * Domain object types for email communications.
  *
- * 다루는 영역:
- *   - app.communications 행 (CommunicationRow)
- *   - app.attachments 행 (AttachmentRow)
- *   - 수신 메일 파싱 결과 (ParsedHeaders, ParsedInbound)
- *   - URM 자체 헤더 (UrmHeaders, X-URM-* 4종)
- *   - 발송 입력 (SendOneInput, CampaignParams)
- *   - 발송 통계 (TabsCampaignStats)
- *   - 대량발송 잡 (MailMergeJobRow, QuietHours)
- *   - 스레드 매칭 결과
+ * Covered areas:
+ *   - app.communications rows (CommunicationRow)
+ *   - app.attachments rows (AttachmentRow)
+ *   - parsed incoming mail (ParsedHeaders, ParsedInbound)
+ *   - URM custom headers (UrmHeaders, 4 X-URM-* headers)
+ *   - send input (SendOneInput, CampaignParams)
+ *   - send statistics (TabsCampaignStats)
+ *   - bulk-send jobs (MailMergeJobRow, QuietHours)
+ *   - thread-matching result
  */
 
 import type { PartyTypeCode, Language } from './ai';
 
 /* ============================================================
- * 1. 채널·방향 enum
+ * 1. Channel/direction enums
  * ============================================================ */
 
 export type Direction = 'inbound' | 'outbound';
 export type Channel = 'email' | 'phone' | 'meeting' | 'note' | 'chat' | 'social' | 'linkedin';
 
-/** communications.status (DB CHECK 제약과 일치). */
+/** communications.status (matches the DB CHECK constraint). */
 export type CommunicationStatus =
   | 'draft'
   | 'queued'
@@ -43,24 +43,24 @@ export type AiProcessingStatus =
   | 'skipped';
 
 /* ============================================================
- * 2. URM 자체 헤더 (X-URM-*)
+ * 2. URM custom headers (X-URM-*)
  * ----------------------------------------------------------
- * 발송 시 부착, 수신 시 회수해 thread 매칭 1순위로 사용.
- * TABS Mailer 4가 헤더를 통과시키지 않을 가능성 대비
- * Message-ID·In-Reply-To 기반 fallback 제공 (mailcarrier 모듈).
+ * Attached on send, recovered on receive, used as the top priority for thread matching.
+ * In case TABS Mailer 4 does not pass headers through,
+ * a Message-ID/In-Reply-To-based fallback is provided (mailcarrier module).
  * ============================================================ */
 export interface UrmHeaders {
-  /** 인게이지먼트 UUID. 스레드·수신 매칭 1순위. */
+  /** Engagement UUID. Top priority for thread/receive matching. */
   engagementId?: string;
-  /** 발신 communications 행 UUID. 회신 시 thread 1:1 매칭. */
+  /** Outbound communications row UUID. 1:1 thread match on reply. */
   communicationId?: string;
-  /** 자동발송 게이트 통과 여부(true/false). */
+  /** Whether it passed the auto-send gate (true/false). */
   autoSend?: boolean;
-  /** 사용된 brand_voice 행 UUID(학습 루프용). */
+  /** UUID of the brand_voice row used (for the learning loop). */
   brandVoiceId?: string;
 }
 
-/** X-URM-* 헤더 이름 상수 (대소문자 비교 시 항상 lowercase 사용). */
+/** X-URM-* header name constants (always use lowercase for case-insensitive comparison). */
 export const URM_HEADER_NAMES = {
   engagementId: 'x-urm-engagement-id',
   communicationId: 'x-urm-communication-id',
@@ -69,7 +69,7 @@ export const URM_HEADER_NAMES = {
 } as const;
 
 /* ============================================================
- * 3. 첨부파일 입출력
+ * 3. Attachment I/O
  * ============================================================ */
 
 export interface AttachmentInput {
@@ -100,7 +100,7 @@ export interface AttachmentRow {
 }
 
 /* ============================================================
- * 4. communications 행 (camelCase 도메인 객체)
+ * 4. communications row (camelCase domain object)
  * ============================================================ */
 
 export interface CommunicationRow {
@@ -116,23 +116,23 @@ export interface CommunicationRow {
   messageId?: string;
   inReplyTo?: string;
   threadId?: string;
-  // 발신·수신
+  // send/receive
   fromAddress?: string;
   fromName?: string;
   toAddresses: string[];
   ccAddresses: string[];
   bccAddresses: string[];
   replyToAddress?: string;
-  // 본문
+  // body
   subject?: string;
   bodyHtml?: string;
   bodyPlain?: string;
   bodySummary?: string;
-  // 언어
+  // language
   languageDetected?: 'ko' | 'en' | 'ja' | 'zh-CN' | 'other';
-  // 상태
+  // status
   status: CommunicationStatus;
-  // 타임스탬프
+  // timestamps
   occurredAt: string;
   sentAt?: string;
   deliveredAt?: string;
@@ -147,12 +147,12 @@ export interface CommunicationRow {
   aiDraftId?: string;
   aiGenerated: boolean;
   aiProcessingStatus?: AiProcessingStatus;
-  // 템플릿
+  // template
   templateId?: string;
   templateVariables?: Record<string, unknown>;
-  // 외부
+  // external
   externalData: Record<string, unknown>;
-  // 메타
+  // meta
   sentByUserId?: string;
   isStarred: boolean;
   isImportant: boolean;
@@ -160,10 +160,10 @@ export interface CommunicationRow {
 }
 
 /* ============================================================
- * 5. 수신 메일 파싱 결과
+ * 5. Parsed incoming mail
  * ============================================================ */
 
-/** mailparser ParsedMail에서 추출한 우리 도메인 헤더. */
+/** Our domain headers extracted from mailparser ParsedMail. */
 export interface ParsedHeaders {
   messageId: string;
   inReplyTo?: string;
@@ -175,26 +175,26 @@ export interface ParsedHeaders {
   subject: string;
   date: Date;
   urmHeaders: UrmHeaders;
-  /** 원본 헤더 일부 (디버깅·재처리용). */
+  /** Some raw headers (for debugging/reprocessing). */
   rawSelectedHeaders?: Record<string, string>;
 }
 
-/** mailcarrier가 communications INSERT 후 processor.ts에 전달하는 메시지. */
+/** Message that mailcarrier passes to processor.ts after the communications INSERT. */
 export interface InboundMessageEvent {
   communicationId: string;
   organizationId: string;
   threadId: string;
   messageId: string;
-  /** 사전 마스킹된 본문(processor가 다시 마스킹할 필요 없게). */
+  /** Pre-masked body (so processor does not need to mask again). */
   bodyText: string;
-  /** 마스킹된 PII 카테고리(통계용). */
+  /** Masked PII categories (for statistics). */
   piiCategories: string[];
-  /** ParsedHeaders 일부 발췌 (party 매칭용). */
+  /** Excerpt of ParsedHeaders (for party matching). */
   fromAddress: string;
 }
 
 /* ============================================================
- * 6. 발송 입력
+ * 6. Send input
  * ============================================================ */
 
 export interface MailRecipient {
@@ -203,10 +203,10 @@ export interface MailRecipient {
 }
 
 /**
- * 발신 주소 종류. 사용자가 회신 시 선택.
- * - personal: 개인 메일 (예: yunyoung.heo@marinebiogroup.com)
- * - role:     직책 메일 (예: ceo@marinebiogroup.com)
- * - shared:   공통/팀 메일 (예: contact@marinebiogroup.com)
+ * Sender-address kind. Chosen by the user on reply.
+ * - personal: personal email (e.g. yunyoung.heo@marinebiogroup.com)
+ * - role:     role email (e.g. ceo@marinebiogroup.com)
+ * - shared:   shared/team email (e.g. contact@marinebiogroup.com)
  */
 export type SendingAddressKind = 'personal' | 'role' | 'shared';
 
@@ -224,17 +224,17 @@ export interface SendOneInput {
   subject: string;
   bodyText: string;
   bodyHtml?: string;
-  /** 부착할 X-URM-* 헤더. communicationId만 필수. */
+  /** X-URM-* headers to attach. Only communicationId is required. */
   urmHeaders: Required<Pick<UrmHeaders, 'communicationId'>> &
     Omit<UrmHeaders, 'communicationId'> & { autoSend: boolean };
   attachments?: AttachmentInput[];
-  /** quiet hours 검증 우회(테스트·운영자 수동 발송용). */
+  /** Bypass quiet hours validation (for tests / operator manual send). */
   bypassQuietHours?: boolean;
-  /** 적용할 quiet hours(미지정 시 검증 안 함). */
+  /** Quiet hours to apply (if unset, no validation). */
   quietHours?: QuietHours;
-  /** 추적용 라벨(로그·ai.runs trace_label). */
+  /** Label for tracing (logs / ai.runs trace_label). */
   traceLabel?: string;
-  /** 사용할 SMTP 자격증명 종류. 미지정 시 기존 단일 transporter 사용(하위호환). */
+  /** Which SMTP credentials kind to use. If unset, uses the existing single transporter (backward compat). */
   sendingAddressKind?: SendingAddressKind;
 }
 
@@ -244,12 +244,12 @@ export interface SendOneOutput {
   acceptedRecipients: string[];
   rejectedRecipients: string[];
   rawResponse: string;
-  /** 발송 시각(서버 응답 시각). */
+  /** Send time (server response time). */
   sentAt: string;
 }
 
 /* ============================================================
- * 7. 캠페인 (대량발송)
+ * 7. Campaign (bulk send)
  * ============================================================ */
 
 export interface CampaignParams {
@@ -286,18 +286,18 @@ export interface TabsCampaignStats {
  * ============================================================ */
 
 export interface QuietHours {
-  /** IANA 타임존 (예: "Asia/Seoul", "America/New_York"). */
+  /** IANA timezone (e.g. "Asia/Seoul", "America/New_York"). */
   timezone: string;
-  /** "HH:mm" 24h. 자정을 넘는 경우(22:00 → 08:00) 지원. */
+  /** "HH:mm" 24h. Supports crossing midnight (22:00 -> 08:00). */
   start: string;
   /** "HH:mm" 24h. */
   end: string;
-  /** 토·일 차단 여부. */
+  /** Whether to block Sat/Sun. */
   weekends_blocked: boolean;
 }
 
 /* ============================================================
- * 9. mail_merge_jobs 행
+ * 9. mail_merge_jobs row
  * ============================================================ */
 
 export type MailMergeJobStatus =
@@ -346,7 +346,7 @@ export interface MailMergeJobRow {
   startedAt?: string;
   completedAt?: string;
   errorMessage?: string;
-  /** 워커가 재시도 백오프를 적용할 다음 시각. */
+  /** Next time the worker will apply the retry backoff. */
   nextSendAt?: string;
   retryCount: number;
   maxRetries: number;
@@ -356,7 +356,7 @@ export interface MailMergeJobRow {
 }
 
 /* ============================================================
- * 10. DB row → 도메인 객체 매퍼 (mail_merge_jobs)
+ * 10. DB row -> domain object mapper (mail_merge_jobs)
  * ============================================================ */
 
 export function mapMailMergeJobRow(row: Record<string, unknown>): MailMergeJobRow {
@@ -419,13 +419,13 @@ export function mapMailMergeJobRow(row: Record<string, unknown>): MailMergeJobRo
 }
 
 /* ============================================================
- * 11. 회신 언어 결정 헬퍼
+ * 11. Reply-language decision helper
  * ----------------------------------------------------------
- * 마스터 §8.2의 우선순위 규칙을 코드화.
+ * Codifies the priority rules from master §8.2.
  *   1. contacts.preferred_language
  *   2. communications.language_detected
- *   3. parties.country 기본 언어
- *   4. 조직 기본 언어
+ *   3. parties.country default language
+ *   4. organization default language
  * ============================================================ */
 export function resolveReplyLanguage(input: {
   contactPreferred?: string;
@@ -442,7 +442,7 @@ export function resolveReplyLanguage(input: {
   const country = (input.partyCountryCode ?? '').toUpperCase();
   if (country === 'KR') return 'ko';
   if (country === 'JP') return 'ja';
-  if (country) return 'en'; // 그 외 국가는 영어로
+  if (country) return 'en'; // other countries default to English
 
   return input.organizationDefault ?? 'en';
 }

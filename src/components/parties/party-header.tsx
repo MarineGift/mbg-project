@@ -34,7 +34,7 @@ const STATUS_COLORS: Record<PartyDetail['status'], string> = {
 };
 
 export function PartyHeader({ party }: Props) {
-  // 서브타이틀: 산업 태그를 ' · '로 조인 (예: "Venture Capital · Growth Equity")
+  // subtitle: join industry tags with ' · ' (e.g. "Venture Capital · Growth Equity")
   const industryLine = party.industryTags.join(' · ');
   const hasAnyTag =
     party.industryTags.length > 0 || party.interestTags.length > 0;
@@ -101,7 +101,7 @@ export function PartyHeader({ party }: Props) {
         </div>
         {hasAnyTag && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {/* 산업 태그 — 회색 + 테두리 */}
+            industry tags - gray + border
             {party.industryTags.map((tag) => (
               <span
                 key={`industry-${tag}`}
@@ -111,7 +111,7 @@ export function PartyHeader({ party }: Props) {
                 {tag}
               </span>
             ))}
-            {/* 관심 태그 — 파랑 */}
+            interest tags - blue
             {party.interestTags.map((tag) => (
               <span
                 key={`interest-${tag}`}

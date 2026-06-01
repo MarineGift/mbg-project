@@ -1,7 +1,7 @@
 /**
  * types/communication-detail.ts
  *
- * 단일 communications 행의 상세 화면 모델.
+ * Detail-screen model for a single communications row.
  */
 
 import type { PartyTypeCode } from './ai';
@@ -35,21 +35,21 @@ export interface CommunicationDetail {
   errorMessage: string | null;
   attachmentCount: number;
   aiGenerated: boolean;
-  /** 이 outbound가 어떤 AI 초안에서 생성됐는지 (있다면) */
+  /** Which AI draft this outbound was generated from (if any) */
   aiDraftId: string | null;
-  /** 거래처 요약 */
+  /** Party summary */
   party: {
     id: string;
     name: string;
     partyType: PartyTypeCode;
   } | null;
-  /** 컨택트 요약 */
+  /** Contact summary */
   contact: {
     id: string;
     fullName: string | null;
     email: string | null;
   } | null;
-  /** 이 inbound로부터 생성된 AI 초안들 */
+  /** AI drafts generated from this inbound */
   generatedDrafts: Array<{
     id: string;
     status: string;

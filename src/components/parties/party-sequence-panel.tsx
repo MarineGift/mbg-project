@@ -1,6 +1,6 @@
 // src/components/parties/party-sequence-panel.tsx
-// Server component — party 상세 페이지 하단에 배치
-// 사용: <PartySequencePanel partyId={id} orgId={orgId} contacts={contacts} />
+// Server component - placed at the bottom of the party detail page
+// Usage: <PartySequencePanel partyId={id} orgId={orgId} contacts={contacts} />
 
 import { fetchPartyEnrollments, fetchSequences } from '@/lib/queries/email-sequences';
 import { EnrollSequenceDialog } from './enroll-sequence-dialog';

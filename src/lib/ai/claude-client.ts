@@ -1,20 +1,20 @@
 /**
  * lib/ai/claude-client.ts
  *
- * Anthropic API의 단일 진입점.
- * 모든 AI 호출은 본 클래스를 거쳐야 ai.runs 기록·PII 마스킹·비용 추적이
- * 일관되게 적용된다.
+ * Single entry point for the Anthropic API.
+ * All AI calls must go through this class so that ai.runs logging, PII masking, and cost tracking
+ * are applied consistently.
  *
- * 외부에서 anthropic.messages.create() 직접 호출 금지.
+ * Do not call anthropic.messages.create() directly from outside.
  *
- * 주요 책임:
- *   1. 모델 ID 화이트리스트 검증
- *   2. 일일 예산 사전 체크
- *   3. PII 마스킹·복원
- *   4. prompt-renderer 호출 (brand_voice + RAG + thread)
- *   5. 재시도 (429/5xx exponential backoff, fallback 모델)
- *   6. 비용 계산 + ai.runs INSERT (성공/실패 모두)
- *   7. JSON 파싱 (output_format='json' 또는 agent.outputFormat='structured')
+ * Main responsibilities:
+ *   1. validate the model ID against a whitelist
+ *   2. pre-check the daily budget
+ *   3. PII masking/restoration
+ *   4. call prompt-renderer (brand_voice + RAG + thread)
+ *   5. retries (429/5xx exponential backoff, fallback model)
+ *   6. cost calculation + ai.runs INSERT (both success and failure)
+ *   7. JSON parsing (output_format='json' or agent.outputFormat='structured')
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -41,7 +41,7 @@ import {
 } from './cost-tracker';
 
 /* ============================================================
- * 1. 에러 클래스
+ * 1. Error classes
  * ============================================================ */
 
 export class ClaudeApiError extends Error {
@@ -100,7 +100,7 @@ export class ClaudeTimeoutError extends ClaudeApiError {
 }
 
 /* ============================================================
- * 2. 상수
+ * 2. Constants
  * ============================================================ */
 
 const SUPPORTED_MODELS: ReadonlySet<ClaudeModel> = new Set<ClaudeModel>([
@@ -115,7 +115,7 @@ const HARD_TIMEOUT_MS = 60_000;
 const MAX_RETRY_ATTEMPTS = 3;
 
 /* ============================================================
- * 3. 보조 함수
+ * 3. Helper functions
  * ============================================================ */
 
 function isRetryableStatus(status: number | undefined): boolean {
@@ -163,7 +163,7 @@ function extractTextContent(message: Anthropic.Messages.Message): string {
 }
 
 function tryParseJson(content: string): object | undefined {
-  // ```json fence 또는 일반 ``` fence 제거
+  // remove a ```json fence or a plain ``` fence
   let cleaned = content.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
   try {
@@ -178,15 +178,15 @@ function tryParseJson(content: string): object | undefined {
 }
 
 /* ============================================================
- * 4. ClaudeClient 클래스
+ * 4. ClaudeClient class
  * ============================================================ */
 
 export interface ClaudeClientOptions {
-  /** 단위 테스트에서 SDK를 주입할 때 사용. */
+  /** Used to inject the SDK in unit tests. */
   anthropicClient?: Anthropic;
   /**
-   * 월간 비용이 임계값을 초과한 경우 자동 다운그레이드 적용 여부.
-   * 기본 true. 테스트에서 false로 설정해 결정론적 동작 확보.
+   * Whether to auto-downgrade when the monthly cost exceeds the threshold.
+   * Default true. Set to false in tests for deterministic behavior.
    */
   enableMonthlyDowngrade?: boolean;
 }
@@ -204,29 +204,29 @@ export class ClaudeClient {
       options.anthropicClient ??
       new Anthropic({
         apiKey: env.ANTHROPIC_API_KEY,
-        maxRetries: 0, // SDK 재시도 비활성화 — 본 클래스에서 직접 제어
+        maxRetries: 0, // disable SDK retries - controlled directly in this class
         timeout: HARD_TIMEOUT_MS,
       });
     this.enableMonthlyDowngrade = options.enableMonthlyDowngrade ?? true;
   }
 
   /**
-   * 메인 호출 진입점.
+   * Main call entry point.
    *
-   * 단계:
-   *   1. 일일 예산 체크
-   *   2. 월간 예산 평가 → 다운그레이드 여부
-   *   3. agent 조회
-   *   4. 모델 ID 검증
-   *   5. PII 마스킹
-   *   6. prompt-renderer 호출
-   *   7. API 호출 + 재시도
-   *   8. PII 복원 + JSON 파싱
-   *   9. 비용 계산 + ai.runs INSERT
-   *  10. 출력 반환
+   * Stages:
+   *   1. daily budget check
+   *   2. evaluate monthly budget -> whether to downgrade
+   *   3. look up the agent
+   *   4. validate the model ID
+   *   5. PII masking
+   *   6. call prompt-renderer
+   *   7. API call + retries
+   *   8. PII restoration + JSON parsing
+   *   9. cost calculation + ai.runs INSERT
+   *  10. return the output
    */
   async complete(input: ClaudeCompleteInput): Promise<ClaudeCompleteOutput> {
-    // ── [1] 일일 예산 ─────────────────────────────────
+    // ── [1] daily budget ──
     const dailyBudget = await checkDailyBudget(
       this.supabase,
       this.organizationId,
@@ -239,7 +239,7 @@ export class ClaudeClient {
       );
     }
 
-    // ── [2] 월간 예산 평가 → 다운그레이드 결정 ────────
+    // ── [2] evaluate monthly budget -> downgrade decision ──
     let costThreshold: 'normal' | 'alert_only' | 'force_downgrade' | 'block_auto_send' =
       'normal';
     if (this.enableMonthlyDowngrade) {
@@ -257,10 +257,10 @@ export class ClaudeClient {
       costThreshold = evaluateMonthlyCostThreshold(monthlyBudget.used);
     }
 
-    // ── [3] agent 조회 ─────────────────────────────────
+    // ── [3] look up the agent ──
     const agent = await this.loadAgent(input.agentRole);
 
-    // ── [4] 모델 검증 ─────────────────────────────────
+    // ── [4] validate the model ──
     if (!SUPPORTED_MODELS.has(agent.model)) {
       throw new ClaudeInvalidModelError(agent.model);
     }
@@ -271,10 +271,10 @@ export class ClaudeClient {
       throw new ClaudeInvalidModelError(agent.fallbackModel);
     }
 
-    // 다운그레이드 적용
+    // apply downgrade
     let modelUsed: ClaudeModel = applyDowngrade(agent.model, costThreshold);
 
-    // ── [5] PII 마스킹 ─────────────────────────────────
+    // ── [5] PII masking ──
     const maskPiiEnabled = input.maskPii ?? agent.requirePiiMasking ?? true;
     const maskResult = maskPiiEnabled
       ? maskPii(input.inboundMessage)
@@ -285,7 +285,7 @@ export class ClaudeClient {
           tokenCount: 0,
         };
 
-    // ── [6] prompt 렌더 ───────────────────────────────
+    // ── [6] prompt render ──
     const rendered = await renderPrompt({
       supabase: this.supabase,
       organizationId: this.organizationId,
@@ -297,7 +297,7 @@ export class ClaudeClient {
       extraContext: input.extraContext,
     });
 
-    // ── [7] API 호출 + 재시도 ─────────────────────────
+    // ── [7] API call + retries ──
     const startedAt = Date.now();
     let attempt = 0;
     let lastError: unknown;
@@ -308,7 +308,7 @@ export class ClaudeClient {
         response = await this.anthropic.messages.create({
           model: modelUsed,
           max_tokens: agent.maxTokens || DEFAULT_MAX_TOKENS,
-          // Claude Opus 4.7+는 temperature 파라미터 미지원 (Anthropic 정책 변경)
+          // Claude Opus 4.7+ does not support the temperature parameter (Anthropic policy change)
           ...(modelUsed === 'claude-opus-4-7'
             ? {}
             : { temperature: agent.temperature ?? DEFAULT_TEMPERATURE }),
@@ -319,12 +319,12 @@ export class ClaudeClient {
         lastError = err;
         const apiError = this.normalizeError(err);
 
-        // 재시도 가능 여부
+        // whether a retry is possible
         if (!isRetryableStatus(apiError.status)) {
-          break; // 즉시 실패
+          break; // fail immediately
         }
 
-        // 두 번째 재시도부터 fallback 모델
+        // use the fallback model from the second retry onward
         if (
           attempt === 1 &&
           agent.fallbackModel &&
@@ -342,7 +342,7 @@ export class ClaudeClient {
 
     const latencyMs = Date.now() - startedAt;
 
-    // ── [8] 실패 경로: 기록 후 throw ─────────────────
+    // ── [8] failure path: record then throw ──
     if (response === null) {
       const apiError = this.normalizeError(lastError);
       await recordRun(this.supabase, this.organizationId, {
@@ -368,7 +368,7 @@ export class ClaudeClient {
       throw apiError;
     }
 
-    // ── [9] 성공 경로: 추출 + 복원 + 파싱 ────────────
+    // ── [9] success path: extract + restore + parse ──
     const rawContent = extractTextContent(response);
     const content = maskPiiEnabled
       ? restorePii(rawContent, maskResult.tokens)
@@ -377,10 +377,10 @@ export class ClaudeClient {
     let parsedJson: object | undefined;
     if (input.outputFormat === 'json' || agent.outputFormat === 'structured') {
       parsedJson = tryParseJson(content);
-      // JSON 파싱 실패는 throw하지 않음 — 호출자가 parsedJson 부재로 검증
+      // JSON parse failure does not throw - the caller validates via the absence of parsedJson
     }
 
-    // ── [10] 비용 계산 + ai.runs INSERT ──────────────
+    // ── [10] cost calculation + ai.runs INSERT ──
     const tokensIn = response.usage?.input_tokens ?? 0;
     const tokensOut = response.usage?.output_tokens ?? 0;
     let costUsd = 0;
@@ -423,8 +423,8 @@ export class ClaudeClient {
   }
 
   /* --------------------------------------------------------
-   * agent 조회 — role + organization_id + is_active=true,
-   * 가장 높은 version 1건.
+   * look up the agent - role + organization_id + is_active=true,
+   * the single highest version.
    * -------------------------------------------------------- */
   private async loadAgent(role: AgentRole): Promise<AgentRow> {
     const { data, error } = await this.supabase
@@ -455,19 +455,19 @@ export class ClaudeClient {
   }
 
   /* --------------------------------------------------------
-   * Anthropic SDK 에러 → ClaudeApiError 정규화
+   * Normalize Anthropic SDK errors -> ClaudeApiError
    * -------------------------------------------------------- */
   private normalizeError(err: unknown): ClaudeApiError {
     if (err instanceof ClaudeApiError) return err;
 
     if (err instanceof Anthropic.APIError) {
-      // retry-after 헤더 추출 (Headers 객체 또는 plain object 모두 지원)
+      // extract the retry-after header (supports both a Headers object and a plain object)
       let retryAfter: number | undefined;
       const headers = (err as { headers?: unknown }).headers;
       if (headers) {
         let raw: string | null | undefined;
         if (typeof (headers as { get?: unknown }).get === 'function') {
-          // Fetch Headers 객체
+          // Fetch Headers object
           const h = headers as Headers;
           raw = h.get('retry-after') ?? h.get('Retry-After') ?? h.get('x-retry-after');
         } else if (typeof headers === 'object') {
@@ -483,7 +483,7 @@ export class ClaudeClient {
       return new ClaudeApiError(err.message, err.status, retryAfter, err);
     }
 
-    // SDK가 timeout을 별도 클래스로 던지지 않는 환경 대응
+    // handle environments where the SDK doesn't throw timeouts as a separate class
     if (err instanceof Error) {
       if (
         /timeout|timed out|aborted/i.test(err.message) ||

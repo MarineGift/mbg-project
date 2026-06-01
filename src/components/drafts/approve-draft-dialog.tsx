@@ -25,11 +25,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-/** 옵션 라벨 — 화면 표시용. 실제 주소는 사용자의 email_personal/role/shared에서 가져옴. */
+/** Option label - for display. The actual address comes from the user's email_personal/role/shared. */
 const KIND_OPTIONS: Array<{ value: SendingAddressKind; label: string; hint: string }> = [
-  { value: 'personal', label: '개인 메일', hint: 'Personal' },
-  { value: 'role', label: '직책 메일 (CEO 등)', hint: 'Role' },
-  { value: 'shared', label: '공통/팀 메일', hint: 'Shared' },
+  { value: 'personal', label: 'Personal email', hint: 'Personal' },
+  { value: 'role', label: 'Role email (CEO, etc.)', hint: 'Role' },
+  { value: 'shared', label: 'Shared/team email', hint: 'Shared' },
 ];
 
 export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
@@ -74,7 +74,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* 본문 미리보기 */}
+          body preview
           <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
             <p className="font-medium truncate">
               {draft.finalSubject ?? draft.subject ?? '(no subject)'}
@@ -89,7 +89,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
             </p>
           </div>
 
-          {/* 즉시 발송 체크박스 */}
+          send-immediately checkbox
           {hasInbound ? (
             <div className="flex items-center gap-2">
               <Checkbox
@@ -107,11 +107,11 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
             </p>
           )}
 
-          {/* 발신 주소 선택 — 즉시 발송 시에만 활성화 */}
+          from-address selector - enabled only when sending immediately
           {sendImmediately && hasInbound && (
             <div className="space-y-1.5">
               <Label htmlFor="sending-kind" className="text-sm">
-                발신 주소 (Send From)
+                Send From
               </Label>
               <select
                 id="sending-kind"
@@ -127,7 +127,7 @@ export function ApproveDraftDialog({ draft, open, onOpenChange }: Props) {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                기본값은 개인 메일. 회신은 선택한 계정으로 SMTP 인증 후 발송됩니다.
+                Defaults to your personal email. The reply is sent from the selected account after SMTP authentication.
               </p>
             </div>
           )}

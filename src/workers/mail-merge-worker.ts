@@ -1,15 +1,15 @@
 /**
  * workers/mail-merge-worker.ts
  *
- * mail_merge_jobs 테이블을 폴링해 큐에 들어온 잡을 처리:
- *   1. 잡 상태가 queued이고 scheduled_at이 도달한 잡 N건 fetch
- *   2. tabs_campaign_id가 없으면 TABS Mailer createCampaign 호출
- *   3. 잡 상태를 running으로 갱신
- *   4. 통계 동기화 (syncCampaignToMergeJob) — 별도 5분 주기 권장이나 본 워커가 함께 수행
- *   5. 실패 시 exponential backoff retry (max_retries 도달 시 status='failed')
+ * Polls the mail_merge_jobs table and processes queued jobs:
+ *   1. fetch N jobs whose status is queued and whose scheduled_at has arrived
+ *   2. if there is no tabs_campaign_id, call TABS Mailer createCampaign
+ *   3. update the job status to running
+ *   4. sync statistics (syncCampaignToMergeJob) - a separate 5-minute cycle is recommended, but this worker does it too
+ *   5. on failure, exponential backoff retry (status='failed' when max_retries is reached)
  *
- * 수신자 명단 해석(recipient_filter jsonb → SQL → 발송)은 STEP 7 운영 정보 수령 후
- * 추가. 본 STEP 3에서는 캠페인 등록·상태 동기화에 집중.
+ * Recipient-list resolution (recipient_filter jsonb -> SQL -> send) will be added after STEP 7 operational details are received.
+ * In this STEP 3, focus on campaign registration and status sync.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -32,9 +32,9 @@ const BATCH_SIZE = 5;
 const STATS_SYNC_BATCH_SIZE = 10;
 
 export interface ProcessJobOptions {
-  /** 단위 테스트에서 TabsMailer를 주입. */
+  /** Inject TabsMailer in unit tests. */
   mailer?: ITabsMailerClient;
-  /** 시각 고정. */
+  /** Freeze the clock. */
   nowProvider?: () => Date;
 }
 
@@ -47,7 +47,7 @@ export interface ProcessJobResult {
 }
 
 /* ============================================================
- * 1. processOneJob — 단일 잡 처리 (테스트 표면)
+ * 1. processOneJob - process a single job (test surface)
  * ============================================================ */
 
 export async function processOneJob(
@@ -57,7 +57,7 @@ export async function processOneJob(
 ): Promise<ProcessJobResult> {
   const now = options.nowProvider ?? (() => new Date());
 
-  // 컴플라이언스: legal 승인이 필요한데 미승인이면 skip
+  // compliance: skip if legal approval is required but not granted
   if (job.requiresLegalApproval && !job.legalApprovedAt) {
     return {
       jobId: job.id,
@@ -66,7 +66,7 @@ export async function processOneJob(
     };
   }
 
-  // Quiet hours 사전 검증 — 진입 시 차단되면 next_send_at으로 미루기
+  // quiet hours pre-check - if blocked on entry, defer to next_send_at
   const quiet = evaluateQuietHours(job.quietHours, now());
   if (quiet.blocked) {
     await supabase
@@ -89,7 +89,7 @@ export async function processOneJob(
   const mailer = options.mailer ?? (await createTabsMailer());
 
   try {
-    // 캠페인 미등록이면 등록
+    // register the campaign if not yet registered
     let tabsCampaignId = job.tabsCampaignId;
     if (!tabsCampaignId) {
       const created = await mailer.createCampaign({
@@ -128,7 +128,7 @@ export async function processOneJob(
 }
 
 /* ============================================================
- * 2. 실패 처리 — exponential backoff
+ * 2. failure handling - exponential backoff
  * ============================================================ */
 
 async function handleJobFailure(
@@ -168,7 +168,7 @@ async function handleJobFailure(
 }
 
 /* ============================================================
- * 3. processQueueBatch — 큐 일괄 처리
+ * 3. processQueueBatch - process the queue in a batch
  * ============================================================ */
 
 export async function processQueueBatch(
@@ -204,7 +204,7 @@ export async function processQueueBatch(
 }
 
 /* ============================================================
- * 4. syncRunningCampaigns — 진행 중인 캠페인 통계 동기화
+ * 4. syncRunningCampaigns - sync statistics for running campaigns
  * ============================================================ */
 
 export async function syncRunningCampaigns(
@@ -239,7 +239,7 @@ export async function syncRunningCampaigns(
     } catch (err) {
       failed += 1;
       if (err instanceof TabsMailerNotImplementedError) {
-        // 운영 정보 미수령 — 더 이상 시도 안 함
+        // operational details not received - stop trying
         // eslint-disable-next-line no-console
         console.warn(
           '[mail-merge-worker] sync skipped: TABS spec not implemented',
@@ -259,7 +259,7 @@ export async function syncRunningCampaigns(
 }
 
 /* ============================================================
- * 5. main — 폴링 루프 + graceful shutdown
+ * 5. main - polling loop + graceful shutdown
  * ============================================================ */
 
 async function main(): Promise<void> {

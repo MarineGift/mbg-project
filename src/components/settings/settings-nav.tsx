@@ -12,7 +12,7 @@ type NavItem = {
   href:      string;
   icon:      typeof User;
   labelKey?: string;   // i18n
-  label?:    string;   // 직접 라벨 (i18n 우회)
+  label?:    string;   // direct label (bypasses i18n)
 };
 
 const NAV_ITEMS: NavItem[] = [

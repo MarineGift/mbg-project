@@ -1,9 +1,9 @@
 /**
  * lib/actions/profile.ts
  *
- * 사용자 프로필 Server Actions.
- *   - updateUserProfile: full_name, display_name, sending_email 갱신
- *   - updateUserPreferredLanguage: preferred_language 갱신 + cookie 동기화는 클라이언트
+ * User profile Server Actions.
+ *   - updateUserProfile: update full_name, display_name, sending_email
+ *   - updateUserPreferredLanguage: update preferred_language + cookie sync on the client
  */
 
 'use server';
@@ -105,8 +105,8 @@ export async function updateUserPreferredLanguage(input: {
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   }
 
-  // JWT는 다음 토큰 갱신 시 자동 반영 (custom_access_token_hook)
-  // cookie는 클라이언트에서 즉시 동기화
+  // the JWT reflects this automatically on the next token refresh (custom_access_token_hook)
+  // the cookie is synced immediately on the client
   revalidatePath('/', 'layout');
   return { ok: true };
 }

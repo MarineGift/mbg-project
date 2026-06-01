@@ -1,8 +1,8 @@
 /**
  * lib/queries/user-profile.ts
  *
- * 현재 로그인 사용자의 프로필 조회.
- * app.users 행 + organization 정보.
+ * Query the currently logged-in user's profile.
+ * app.users row + organization info.
  */
 
 import 'server-only';

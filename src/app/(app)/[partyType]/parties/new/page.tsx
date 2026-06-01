@@ -1,10 +1,10 @@
 /**
  * app/(app)/[module]/parties/new/page.tsx
  *
- * 거래처 생성 페이지 (Phase 2 write).
+ * Party creation page (Phase 2 write).
  *
- * URL의 module 세그먼트가 Phase 1 모듈이 아니면 404.
- * PartyForm을 'create' 모드로 렌더링.
+ * 404 if the URL module segment is not a Phase 1 module.
+ * Renders PartyForm in 'create' mode.
  */
 
 import { notFound } from 'next/navigation';
@@ -27,13 +27,13 @@ interface PageProps {
 export default async function NewPartyPage({ params }: PageProps) {
   const { partyType: moduleParam } = await params;
 
-  // URL의 module 세그먼트 검증
+  // validate the URL module segment
   if (!(PHASE_1_MODULES as readonly string[]).includes(moduleParam)) {
     notFound();
   }
   const module = moduleParam as PartyTypeCode;
 
-  // 인증 검증 (미인증 시 /login으로 redirect)
+  // auth check (redirect to /login if not authenticated)
   await requireAuthOrRedirect();
 
   return (

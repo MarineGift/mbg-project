@@ -1,39 +1,39 @@
 /**
  * lib/email/mailcarrier.ts
  *
- * 자체 IMAP 메일서버에서 메일을 수신해 communications에 저장하고
- * processor.ts(Part 4)로 전달한다.
+ * Receives mail from our own IMAP mail server, stores it in communications, and
+ * hands it off to processor.ts (Part 4).
  *
- * Phase 2 변경:
- *   - 생성자에 kind? 옵션 추가 (personal/role/shared 자격증명 자동 매핑)
- *   - kind 미지정 시 기존 MAILCARRIER_USERNAME/PASSWORD 단일 fallback
- *   - 화이트리스트 진입점 체크 유지
+ * Phase 2 changes:
+ *   - added an optional kind? to the constructor (auto-maps personal/role/shared credentials)
+ *   - when kind is unset, falls back to the single MAILCARRIER_USERNAME/PASSWORD
+ *   - keeps the whitelist entry-point check
  *
- * Phase 2-b 변경 (안정성):
- *   - runPollingLoop tick 가시성 로그 + consecutive error 가드
- *   - ImapFlow socketTimeout 60초 (기본 5분에서 단축)
- *   - Connection-level 에러 시 자동 재연결
+ * Phase 2-b changes (stability):
+ *   - runPollingLoop tick visibility logs + consecutive-error guard
+ *   - ImapFlow socketTimeout 60s (shortened from the 5-minute default)
+ *   - auto-reconnect on connection-level errors
  *
- * Phase 2-c 변경 (UID 추적):
- *   - app.mailcarrier_state 테이블 기반 last_processed_uid 추적
- *   - \Seen flag 의존성 완전 제거 (messageFlagsAdd 호출 안 함)
- *   - fetch range를 UNSEEN search → UID range로 변경
+ * Phase 2-c changes (UID tracking):
+ *   - tracks last_processed_uid via the app.mailcarrier_state table
+ *   - fully removes the \Seen flag dependency (never calls messageFlagsAdd)
+ *   - changes the fetch range from UNSEEN search -> UID range
  *
- * 책임:
- *   - IMAP 연결·인증 (TLS)
- *   - IDLE 또는 폴링 기반 신규 메일 감지
- *   - mailparser로 raw → ParsedMail 변환
- *   - header-parser로 thread/sender 매칭
- *   - 화이트리스트 필터링
- *   - 첨부 → Supabase Storage 업로드
+ * Responsibilities:
+ *   - IMAP connection/auth (TLS)
+ *   - detect new mail via IDLE or polling
+ *   - convert raw -> ParsedMail with mailparser
+ *   - thread/sender matching via header-parser
+ *   - whitelist filtering
+ *   - upload attachments -> Supabase Storage
  *   - communications + attachments INSERT
- *   - 멱등성 (Message-ID UNIQUE + UID 추적)
- *   - PII 사전 마스킹 (저장 전 body)
- *   - 재연결 (exponential backoff + polling loop auto-reconnect)
+ *   - idempotency (Message-ID UNIQUE + UID tracking)
+ *   - PII pre-masking (body before storage)
+ *   - reconnect (exponential backoff + polling-loop auto-reconnect)
  *
- * 비책임:
- *   - 메일 분류·회신 초안 생성 (processor.ts)
- *   - 폴더 정리 (운영 정책)
+ * Not responsible for:
+ *   - mail classification / reply-draft generation (processor.ts)
+ *   - folder housekeeping (operational policy)
  */
 
 import { ImapFlow, type FetchMessageObject } from 'imapflow';
@@ -51,7 +51,7 @@ import { isFromAllowedSender } from './whitelist';
 import type { InboundMessageEvent, SendingAddressKind } from '../../types/email';
 
 /* ============================================================
- * 1. 에러 클래스
+ * 1. Error classes
  * ============================================================ */
 
 export class MailCarrierError extends Error {
@@ -78,10 +78,10 @@ export class MailCarrierMaxReconnectError extends MailCarrierError {
 }
 
 /* ============================================================
- * 2. 인터페이스 (테스트 친화)
+ * 2. Interfaces (test-friendly)
  * ============================================================ */
 
-/** ImapFlow를 추상화 — 테스트에서 fake로 교체 가능. */
+/** Abstracts ImapFlow - can be swapped with a fake in tests. */
 export interface IImapClient {
   connect(): Promise<void>;
   logout(): Promise<void>;
@@ -96,32 +96,32 @@ export interface IImapClient {
   idle(): Promise<unknown>;
 }
 
-/** mailparser의 simpleParser를 추상화. */
+/** Abstracts mailparser's simpleParser. */
 export type ParserFn = (source: Buffer | string) => Promise<ParsedMail>;
 
 export interface MailCarrierClientOptions {
   imapClient?: IImapClient;
   parser?: ParserFn;
   nowProvider?: () => Date;
-  /** 단위 테스트에서 idle 무한 루프 차단용. */
+  /** Used to break the infinite idle loop in unit tests. */
   maxIterations?: number;
   /**
-   * Phase 2: 어떤 발신 계정 자격증명을 IMAP 인증에 사용할지.
-   * 미지정 시 기존 MAILCARRIER_USERNAME/PASSWORD 사용 (Phase 1 하위호환).
+   * Phase 2: which sending-account credentials to use for IMAP auth.
+   * When unset, uses the existing MAILCARRIER_USERNAME/PASSWORD (Phase 1 backward compat).
    */
   kind?: SendingAddressKind;
   /**
-   * Phase 3: DB(app.inbound_mailboxes) 기반 임의 수신 계정.
-   * 지정 시 kind/env를 무시하고 이 계정의 host/port/username + 복호한 비밀번호로 접속.
-   * 비밀번호는 bytea(암호화)로 받아 connect() 시점에 RPC로 복호한다
-   * (생성자 동기성 유지 — kind/env 경로는 기존 그대로 동기 생성).
+   * Phase 3: an arbitrary receiving account from the DB (app.inbound_mailboxes).
+   * When set, ignores kind/env and connects with this account's host/port/username + decrypted password.
+   * The password is received as bytea (encrypted) and decrypted via RPC at connect() time
+   * (keeps the constructor synchronous - the kind/env path is still created synchronously as before).
    */
   account?: {
     id: string;
     address: string;
     host: string;
     port: number;
-    /** app.inbound_mailboxes.password_encrypted (PostgREST bytea -> "\\x..." 문자열). */
+    /** app.inbound_mailboxes.password_encrypted (PostgREST bytea -> hex string). */
     passwordEncrypted: string;
   };
 }
@@ -137,18 +137,18 @@ const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
 export class MailCarrierClient {
   private client!: IImapClient;
-  /** account 경로는 client를 connect() 시점에 lazy 생성. 생성 완료 여부 추적. */
+  /** The account path lazily creates the client at connect() time. Tracks whether creation is done. */
   private clientBuilt = false;
-  /** Phase 3: DB 기반 수신 계정 (지정 시 kind/env 무시). */
+  /** Phase 3: DB-based receiving account (ignores kind/env when set). */
   private readonly account?: MailCarrierClientOptions['account'];
   private isRunning = false;
   private reconnectAttempts = 0;
   private readonly parser: ParserFn;
   private readonly nowProvider: () => Date;
   private readonly maxIterations: number | undefined;
-  /** kind 식별자 (로그·external_data 메타데이터용). */
+  /** kind identifier (for logs / external_data metadata). */
   public readonly kind: SendingAddressKind | 'default' | 'account';
-  /** 현재 IMAP 인증에 사용 중인 username (로깅용). */
+  /** username currently used for IMAP auth (for logging). */
   public readonly username: string;
 
   constructor(
@@ -162,7 +162,7 @@ export class MailCarrierClient {
     this.account = options.account;
 
     if (options.imapClient) {
-      // 테스트 주입 클라이언트 — kind/account 무관하게 그대로 사용.
+      // Test-injected client - used as-is regardless of kind/account.
       this.kind = options.account ? 'account' : (options.kind ?? 'default');
       this.username =
         options.account?.address ??
@@ -170,12 +170,12 @@ export class MailCarrierClient {
       this.client = options.imapClient;
       this.clientBuilt = true;
     } else if (options.account) {
-      // Phase 3: DB 계정 — 비번 복호가 async라 client는 connect()에서 lazy 생성.
+      // Phase 3: DB account - password decryption is async, so the client is lazily created in connect().
       this.kind = 'account';
       this.username = options.account.address;
-      // this.client 는 ensureClient()에서 세팅 (clientBuilt=false 유지)
+      // this.client is set in ensureClient() (clientBuilt stays false)
     } else {
-      // Phase 1/2: env(kind/default) 기반 — 기존 동작 그대로 동기 생성.
+      // Phase 1/2: env (kind/default) based - created synchronously, same behavior as before.
       this.kind = options.kind ?? 'default';
       const creds = this.resolveCredentials(options.kind);
       this.username = creds.username;
@@ -185,15 +185,15 @@ export class MailCarrierClient {
   }
 
   /**
-   * kind 기반으로 IMAP 자격증명 결정.
-   * - kind 지정: MAIL_<KIND>_USERNAME/PASSWORD 사용
-   * - 미지정: MAILCARRIER_USERNAME/PASSWORD 사용 (Phase 1 하위호환)
+   * Determine IMAP credentials based on kind.
+   * - kind set: use MAIL_<KIND>_USERNAME/PASSWORD
+   * - unset: use MAILCARRIER_USERNAME/PASSWORD (Phase 1 backward compat)
    */
   private resolveCredentials(
     kind?: SendingAddressKind,
   ): { username: string; password: string } {
     if (!kind) {
-      // Phase 1 하위호환
+      // Phase 1 backward compat
       return {
         username: env.MAILCARRIER_USERNAME,
         password: env.MAILCARRIER_PASSWORD,
@@ -239,12 +239,12 @@ export class MailCarrierClient {
     host?: string;
     port?: number;
   }): IImapClient {
-    // account 경로는 계정별 host/port 사용, 그 외는 기존 env 단일값 (하위호환).
+    // The account path uses per-account host/port; otherwise the existing single env values (backward compat).
     const host = creds.host ?? env.MAILCARRIER_HOST;
     const port = creds.port ?? env.MAILCARRIER_PORT;
-    // 993: implicit TLS, 143: STARTTLS (ImapFlow가 자동 협상)
+    // 993: implicit TLS, 143: STARTTLS (ImapFlow negotiates automatically)
     const isImplicitTls = port === 993;
-    // 자체 서명 인증서 허용 옵션 (검증 환경 전용)
+    // option to allow self-signed certificates (verification environments only)
     const rejectUnauthorized = env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true;
 
     return new ImapFlow({
@@ -257,17 +257,17 @@ export class MailCarrierClient {
       },
       tls: { rejectUnauthorized },
       logger: false,
-      // 기본 5분 → 60초로 단축. 메일서버가 명령에 응답 안 하면 즉시 fail-fast.
+      // shortened from the 5-minute default to 60s. If the mail server doesn't respond to a command, fail fast.
       socketTimeout: 60_000,
     }) as unknown as IImapClient;
   }
 
   /* --------------------------------------------------------
-   * 클라이언트 lazy 생성 (Phase 3)
+   * Lazy client creation (Phase 3)
    *
-   * account 경로는 비밀번호 복호가 async라 생성자에서 못 만든다.
-   * connect()/handleReconnect()에서 이 메서드들로 실제 client를 만든다.
-   * env(kind/default) 경로는 생성자에서 이미 만들어 clientBuilt=true이므로 no-op.
+   * the account path can't be built in the constructor because password decryption is async.
+   * connect()/handleReconnect() build the actual client via these methods.
+   * the env (kind/default) path is already built in the constructor (clientBuilt=true), so this is a no-op.
    * -------------------------------------------------------- */
 
   private async ensureClient(): Promise<void> {
@@ -275,7 +275,7 @@ export class MailCarrierClient {
     await this.rebuildClient();
   }
 
-  /** account면 복호한 비번 + 계정 host/port로, 아니면 kind/env creds로 client 재생성. */
+  /** For an account, rebuild with the decrypted password + account host/port; otherwise with kind/env creds. */
   private async rebuildClient(): Promise<void> {
     if (this.account) {
       const password = await this.decryptAccountPassword(
@@ -297,8 +297,8 @@ export class MailCarrierClient {
   }
 
   /**
-   * app.inbound_mailboxes.password_encrypted(bytea)를 복호.
-   * calendar token-crypto와 동일하게 pgcrypto RPC + CALENDAR_TOKEN_ENCRYPTION_KEY 사용.
+   * Decrypt app.inbound_mailboxes.password_encrypted (bytea).
+   * Uses the pgcrypto RPC + CALENDAR_TOKEN_ENCRYPTION_KEY, same as calendar token-crypto.
    */
   private async decryptAccountPassword(encrypted: string): Promise<string> {
     const encKey = process.env.CALENDAR_TOKEN_ENCRYPTION_KEY;
@@ -344,12 +344,12 @@ export class MailCarrierClient {
     try {
       await this.client.logout();
     } catch {
-      // graceful — 무시
+      // graceful - ignore
     }
   }
 
   /* --------------------------------------------------------
-   * startListening — IDLE 또는 폴링
+   * startListening - IDLE or polling
    * -------------------------------------------------------- */
 
   async startListening(onMessage: InboundHandler): Promise<void> {
@@ -370,7 +370,7 @@ export class MailCarrierClient {
     while (this.isRunning) {
       try {
         await this.fetchAndProcessNew(onMessage);
-        // IDLE 대기 — 일부 IMAP 서버는 30분 후 끊으므로 imapflow는 자동 재시작
+        // IDLE wait - some IMAP servers drop after 30 minutes, so imapflow auto-restarts
         await this.client.idle();
       } catch (err) {
         if (!this.isRunning) break;
@@ -391,10 +391,10 @@ export class MailCarrierClient {
   /* --------------------------------------------------------
    * runPollingLoop (Phase 2-b)
    *
-   * - iteration tick 가시성 로그
-   * - 단건 에러는 break하지 않고 다음 tick 시도
-   * - 연속 10회 에러 시 abort (영구적 인증/네트워크 에러 가드)
-   * - connection-level 에러(NoConnection/ETIMEOUT/ECONNRESET/ECONNREFUSED) 시 자동 재연결
+   * - iteration tick visibility logs
+   * - a single error doesn't break the loop; it retries on the next tick
+   * - abort after 10 consecutive errors (guard against permanent auth/network errors)
+   * - auto-reconnect on connection-level errors (NoConnection/ETIMEOUT/ECONNRESET/ECONNREFUSED)
    * -------------------------------------------------------- */
 
   private async runPollingLoop(onMessage: InboundHandler): Promise<void> {
@@ -433,7 +433,7 @@ export class MailCarrierClient {
           err,
         );
 
-        // Connection-level 에러 시 자동 재연결 시도
+        // Attempt auto-reconnect on connection-level errors
         const errCode = (err as { code?: string }).code;
         if (
           errCode === 'NoConnection' ||
@@ -449,7 +449,7 @@ export class MailCarrierClient {
             await this.handleReconnect();
             // eslint-disable-next-line no-console
             console.log(`[mailcarrier:${this.kind}] reconnect succeeded`);
-            consecutiveErrors = 0; // 재연결 성공 시 카운터 리셋
+            consecutiveErrors = 0; // reset the counter on successful reconnect
           } catch (reconnectErr) {
             // eslint-disable-next-line no-console
             console.error(
@@ -481,11 +481,11 @@ export class MailCarrierClient {
   }
 
   /* --------------------------------------------------------
-   * withCommandTimeout — IMAP 명령 timeout 래퍼
+   * withCommandTimeout - IMAP command timeout wrapper
    *
-   * 일부 IMAP 서버가 특정 명령에 응답하지 않고 hang시키는 경우 대비.
-   * Phase 2-c에서 messageFlagsAdd 호출이 제거되어 현재 미사용,
-   * 향후 다른 IMAP 명령에 timeout이 필요할 때 활용.
+   * Guards against cases where some IMAP servers hang without responding to certain commands.
+   * In Phase 2-c the messageFlagsAdd call was removed, so it's currently unused;
+   * kept for future use when another IMAP command needs a timeout.
    * -------------------------------------------------------- */
 
   private async withCommandTimeout<T>(
@@ -515,14 +515,14 @@ export class MailCarrierClient {
   }
 
   /* --------------------------------------------------------
-   * UID 기반 추적 — load / save (Phase 2-c)
+   * UID-based tracking - load / save (Phase 2-c)
    *
-   * app.mailcarrier_state 테이블에 (org, kind, username)별로
-   * 마지막 처리한 UID 저장. \Seen flag 의존성 제거.
+   * In the app.mailcarrier_state table, per (org, kind, username),
+   * store the last processed UID. Removes the \Seen flag dependency.
    * -------------------------------------------------------- */
 
   /**
-   * DB에서 마지막 처리한 UID 조회. 레코드 없으면 0 반환 (모든 메시지를 새 것으로 간주).
+   * Look up the last processed UID from the DB. Returns 0 if no record (treats all messages as new).
    */
   private async loadLastProcessedUid(): Promise<number> {
     const { data, error } = await this.supabase
@@ -546,7 +546,7 @@ export class MailCarrierClient {
   }
 
   /**
-   * 마지막 처리한 UID를 DB에 UPSERT.
+   * UPSERT the last processed UID into the DB.
    */
   private async saveLastProcessedUid(uid: number): Promise<void> {
     const { error } = await this.supabase
@@ -569,16 +569,16 @@ export class MailCarrierClient {
         `[mailcarrier:${this.kind}] saveLastProcessedUid failed for uid=${uid}:`,
         error.message,
       );
-      // throw 안 함 — 다음 tick에서 재시도. 최악의 경우 같은 메시지 다시 처리되지만
-      // message_id UNIQUE로 중복 INSERT 차단됨.
+      // doesn't throw - retries on the next tick. Worst case the same message is processed again, but
+      // message_id UNIQUE blocks the duplicate INSERT.
     }
   }
 
   /* --------------------------------------------------------
-   * fetchAndProcessNew — UID 기반 새 메시지 처리 (Phase 2-c)
+   * fetchAndProcessNew - UID-based new-message processing (Phase 2-c)
    *
-   * \Seen 플래그 의존성 제거. DB에 저장된 last_processed_uid 기반으로
-   * 새 메시지만 fetch. messageFlagsAdd 호출 없음.
+   * Removes the \Seen flag dependency. Based on the last_processed_uid stored in the DB,
+   * fetch only new messages. No messageFlagsAdd call.
    * -------------------------------------------------------- */
 
   async fetchAndProcessNew(onMessage: InboundHandler): Promise<void> {
@@ -597,7 +597,7 @@ export class MailCarrierClient {
     let lastUidProcessed: number | undefined;
 
     try {
-      // 1. DB에서 last UID 조회
+      // 1. look up the last UID from the DB
       const lastUid = await this.loadLastProcessedUid();
       const range = `${lastUid + 1}:*`;
       // eslint-disable-next-line no-console
@@ -605,7 +605,7 @@ export class MailCarrierClient {
         `[mailcarrier:${this.kind}] fetch: range=${range} (last_uid=${lastUid})`,
       );
 
-      // 2. UID 기반 fetch (imapflow의 세 번째 인자 { uid: true })
+      // 2. UID-based fetch (imapflow's third argument { uid: true })
       for await (const message of this.client.fetch(
         range,
         { source: true, envelope: true, uid: true },
@@ -613,7 +613,7 @@ export class MailCarrierClient {
       )) {
         const uid = Number((message as unknown as { uid?: number | string }).uid);
 
-        // 안전 가드: 이미 처리한 UID는 skip (IMAP 서버가 inclusive로 반환할 수 있음)
+        // safety guard: skip UIDs already processed (the IMAP server may return them inclusively)
         if (!Number.isFinite(uid) || uid <= lastUid) {
           // eslint-disable-next-line no-console
           console.log(
@@ -660,11 +660,11 @@ export class MailCarrierClient {
                 `[mailcarrier:${this.kind}] fetch: msg #${msgCount} onMessage failed:`,
                 handlerErr,
               );
-              // onMessage 실패해도 메일 자체는 persist 완료 — UID 갱신 진행
+              // even if onMessage fails, the mail itself is fully persisted - proceed with the UID update
             }
           }
 
-          // 처리 완료 (persist 성공 또는 화이트리스트 skip 모두 포함) → UID 갱신
+          // processing done (covers both persist success and whitelist skip) -> update the UID
           lastUidProcessed = uid;
         } catch (err) {
           // eslint-disable-next-line no-console
@@ -672,13 +672,13 @@ export class MailCarrierClient {
             `[mailcarrier:${this.kind}] fetch: msg #${msgCount} uid=${uid} processing failed:`,
             err,
           );
-          // 단건 실패 시 lastUidProcessed 갱신 안 함 → 다음 tick에서 재시도.
-          // 그러나 그 후의 메시지들도 이번 tick에서는 처리 안 함 (sequential 보장).
+          // on a single failure, don't update lastUidProcessed -> retry on the next tick.
+          // but the messages after it are also not processed this tick (guarantees sequential order).
           break;
         }
       }
 
-      // 3. 처리한 마지막 UID를 DB에 저장
+      // 3. save the last processed UID to the DB
       if (lastUidProcessed !== undefined) {
         await this.saveLastProcessedUid(lastUidProcessed);
         // eslint-disable-next-line no-console
@@ -712,7 +712,7 @@ export class MailCarrierClient {
   /* --------------------------------------------------------
    * persistInbound — communications + attachments INSERT
    *
-   * Phase 2: 진입 시 화이트리스트 체크.
+   * Phase 2: whitelist check on entry.
    * -------------------------------------------------------- */
 
   async persistInbound(
@@ -720,7 +720,7 @@ export class MailCarrierClient {
   ): Promise<InboundMessageEvent | null> {
     const headers = parseInboundMessage(parsed);
 
-    // ── 화이트리스트 체크 (Phase 2) ──
+    // -- whitelist check (Phase 2) --
     const fromAddress = headers.from.address;
     const isAllowed = await isFromAllowedSender(
       this.supabase,
@@ -733,7 +733,7 @@ export class MailCarrierClient {
       return null;
     }
 
-    // 멱등성 — Message-ID UNIQUE
+    // idempotency - Message-ID UNIQUE
     const { data: existing, error: existingError } = await this.supabase
       .schema('app')
       .from('communications')
@@ -749,11 +749,11 @@ export class MailCarrierClient {
       );
     }
     if (existing) {
-      // 이미 처리된 메시지 — 무시
+      // already-processed message - ignore
       return null;
     }
 
-    // 스레드 매칭
+    // thread matching
     const threadMatch = await findThreadId(
       this.supabase,
       this.organizationId,
@@ -761,14 +761,14 @@ export class MailCarrierClient {
     );
     const threadId = threadMatch.threadId ?? randomUUID();
 
-    // 발신자 → contact·party 매칭
+    // sender -> contact/party matching
     const senderMatch = await matchSenderToContactAndParty(
       this.supabase,
       this.organizationId,
       headers.from.address,
     );
 
-    // PII 사전 마스킹
+    // PII pre-masking
     const bodyPlainRaw = parsed.text ?? '';
     const { masked: maskedPlain, categories } = maskPii(bodyPlainRaw);
 
@@ -830,7 +830,7 @@ export class MailCarrierClient {
 
     const communicationId = inserted.id as string;
 
-    // 첨부 처리
+    // attachment handling
     for (const att of parsed.attachments ?? []) {
       try {
         await this.persistAttachment(communicationId, att);
@@ -923,7 +923,7 @@ export class MailCarrierClient {
           .from(env.SUPABASE_STORAGE_BUCKET_ATTACHMENTS)
           .remove([path]);
       } catch {
-        /* 정리 실패도 무시 */
+        /* ignore cleanup failures too */
       }
       throw new MailCarrierError(
         `attachments INSERT failed: ${insertError.message}`,
@@ -951,7 +951,7 @@ export class MailCarrierClient {
     try {
       await this.client.logout();
     } catch {
-      // 이미 끊어진 세션 — 무시
+      // already-disconnected session - ignore
     }
     await this.rebuildClient();
     await this.connect();
@@ -959,11 +959,11 @@ export class MailCarrierClient {
 }
 
 /* ============================================================
- * 4. 보조 함수
+ * 4. Helper functions
  * ============================================================ */
 
 /**
- * 파일명 정규화 — Storage 경로에 안전한 문자만 허용.
+ * Filename normalization - allows only characters safe for a Storage path.
  */
 export function sanitizeFilename(name: string): string {
   let sanitized = name.replace(/[/\\\u0000-\u001f]/g, '_');

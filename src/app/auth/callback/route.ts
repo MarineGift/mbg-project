@@ -1,13 +1,13 @@
 /**
  * app/auth/callback/route.ts
  *
- * Supabase Auth callback — magic link, OAuth provider 응답 처리.
- * Phase 1은 이메일/비밀번호만 사용하지만 향후 확장 대비 endpoint 준비.
+ * Supabase Auth callback - handles magic link and OAuth provider responses.
+ * Phase 1 uses only email/password, but this endpoint is prepared for future expansion.
  *
- * 흐름:
- *   1. Supabase 로그인 화면 또는 OAuth provider → /auth/callback?code=...
- *   2. 본 핸들러가 code → session 교환
- *   3. 성공 시 next param의 경로(또는 /)로 redirect
+ * Flow:
+ *   1. Supabase login screen or OAuth provider -> /auth/callback?code=...
+ *   2. this handler exchanges code -> session
+ *   3. on success, redirect to the next param's path (or /)
  */
 
 import { NextResponse, type NextRequest } from 'next/server';

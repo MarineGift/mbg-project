@@ -1,19 +1,19 @@
 /**
  * lib/queries/inbox.ts
  *
- * Inbox(받은 편지함) 목록 fetch.
+ * Fetch the Inbox list.
  *
- * 검색: 단순 ilike (Phase 1). pg_trgm GIN 인덱스는 STEP 1에서 생성되어 있어
- *       빠르게 동작. 두 컬럼(subject, body_plain) OR 조건.
+ * Search: simple ilike (Phase 1). The pg_trgm GIN index was created in STEP 1, so it
+ *       runs fast. OR condition on two columns (subject, body_plain).
  *
- * 정렬: occurred_at DESC (받은 시각 기준). 동일 시각 tiebreaker id ASC.
+ * Sort: occurred_at DESC (by received time). Tiebreaker for equal times is id ASC.
  *
- * AI 초안 표시: drafts.inbound_communication_id IN (...) 별도 쿼리로 'hasDraft' 결정.
+ * AI draft indicator: a separate drafts.inbound_communication_id IN (...) query determines 'hasDraft'.
  *
- * 변경 이력:
- *   - 2026-05-12 (1차): ALL_CHANNELS 9개로 정렬 + attachment_count 제거.
- *   - 2026-05-12 (2차): ALL_CHANNELS 11개로 확장 (slack, other 재포함).
- *   - 2026-05-12 (3차): ALL_CHANNELS 12개 — webform 추가, DB enum과 완전 일치.
+ * Change history:
+ *   - 2026-05-12 (1st): aligned ALL_CHANNELS to 9 + removed attachment_count.
+ *   - 2026-05-12 (2nd): expanded ALL_CHANNELS to 11 (re-included slack, other).
+ *   - 2026-05-12 (3rd): ALL_CHANNELS 12 - added webform, fully matches the DB enum.
  */
 
 import 'server-only';
@@ -55,7 +55,7 @@ const ALL_DIRECTIONS: readonly CommunicationDirection[] = [
 ] as const;
 
 /* ============================================================
- * URL params 파싱
+ * Parse URL params
  * ============================================================ */
 
 export function parseInboxFilters(
@@ -147,8 +147,8 @@ export async function fetchInbox(
       { count: 'exact' },
     );
 
-  // 필터
-  query = query.is('deleted_at', null); // soft-delete 제외
+  // filters
+  query = query.is('deleted_at', null); // exclude soft-deleted
 
   if (filters.channel !== 'all') {
     query = query.eq('channel', filters.channel);
@@ -164,12 +164,12 @@ export async function fetchInbox(
     query = query.or(`subject.ilike.${pattern},body_plain.ilike.${pattern}`);
   }
 
-  // 정렬
+  // sort
   query = query
     .order('occurred_at', { ascending: false, nullsFirst: false })
     .order('id', { ascending: true });
 
-  // 페이지네이션
+  // pagination
   // t9a: fetch all matching messages (no server-side pagination);
   // JS-side group by thread, then paginate. TODO: server-side RPC if msg count > 1000.
   query = query.range(0, 999);
@@ -183,7 +183,7 @@ export async function fetchInbox(
 
   const rawRows = (data ?? []) as unknown as RawInboxRow[];
 
-  // hasDraft 결정 — inbound 통신 ID 중 ai.drafts.inbound_communication_id에 존재하는 것
+  // determine hasDraft - inbound communication IDs that exist in ai.drafts.inbound_communication_id
   const inboundIds = rawRows
     .filter((r) => r.direction === 'inbound')
     .map((r) => r.id);
@@ -222,7 +222,7 @@ export async function fetchInbox(
     hasDraft: anyHasDraft,
   }));
 
-  // hasDraft 필터는 위 단계에서 모든 행 가져온 후 사후 필터 (성능상 ok — 페이지당 최대 100)
+  // the hasDraft filter is applied after fetching all rows above (perf ok - max 100 per page)
   if (filters.hasDraft) {
     rows = rows.filter((r) => r.hasDraft);
   }
@@ -275,7 +275,7 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,
-    // Phase 1: 첨부파일 기능 미구현 — DB에 attachment_count 컬럼 없음
+    // Phase 1: attachment feature not implemented - no attachment_count column in the DB
     attachmentCount: 0,
     threadId: raw.thread_id ?? raw.id,
     threadCount: 1,
@@ -283,8 +283,8 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
 }
 
 /**
- * ilike 패턴 안전 escape — % 와 _ 를 리터럴로 변환.
+ * safely escape the ilike pattern - convert % and _ to literals.
  */
 function escapeLikePattern(s: string): string {
-  return s.replace(/[%_]/g, '\\$&').replace(/,/g, ''); // PostgREST or() 구문 보호용 , 제거
+  return s.replace(/[%_]/g, '\\$&').replace(/,/g, ''); // remove ',' to protect the PostgREST or() syntax
 }

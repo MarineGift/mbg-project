@@ -1,12 +1,12 @@
 /**
  * lib/supabase/client.ts
  *
- * Client Component('use client')에서 사용하는 Supabase 클라이언트.
+ * Supabase client used in Client Components ('use client').
  *
- * 핵심:
- *   - 싱글톤 (브라우저 메모리에 1개)
- *   - Realtime 채널 구독, 실시간 토스트 등에 사용
- *   - 쓰기는 Server Action 사용 권장 (RLS 우회 위험 차단)
+ * Key points:
+ *   - singleton (one per browser memory)
+ *   - used for Realtime channel subscriptions, live toasts, etc.
+ *   - prefer Server Actions for writes (prevents RLS-bypass risk)
  */
 
 'use client';
@@ -14,13 +14,13 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@/types/database';
 
-// Stage 28-a: schema generic을 'app'으로 변경 (server.ts와 일치).
-// 운영 테이블은 app schema 거주, public은 RPC functions 전용.
-// SupabaseClient 제네릭은 라이브러리 버전에 따라 인자 수가 다름 →
-// createBrowserClient의 반환 타입을 그대로 사용 (single source of truth).
+// Stage 28-a: changed the schema generic to 'app' (matches server.ts).
+// Operational tables live in the app schema; public is for RPC functions only.
+// The SupabaseClient generic has a different arity depending on the library version ->
+// use createBrowserClient's return type as-is (single source of truth).
 type SupabaseDb = ReturnType<typeof createBrowserClient<Database, 'app'>>;
 
-/** Stage 28-a: caller가 type annotation 가능하도록 export. */
+/** Stage 28-a: exported so the caller can add a type annotation. */
 export type SbBrowserClient = SupabaseDb;
 
 let browserClient: SupabaseDb | null = null;
@@ -28,8 +28,8 @@ let browserClient: SupabaseDb | null = null;
 export function createSupabaseBrowserClient(): SupabaseDb {
   if (browserClient) return browserClient;
 
-  // NEXT_PUBLIC_* 변수는 client bundle에 인라인되므로 process.env 직접 접근.
-  // (lib/env는 zod 검증을 위한 것이지만 client bundle에선 server-only 변수가 throw)
+  // NEXT_PUBLIC_* variables are inlined into the client bundle, so access process.env directly.
+  // (lib/env is for zod validation, but in the client bundle server-only variables would throw)
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {

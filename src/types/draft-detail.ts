@@ -1,8 +1,8 @@
 /**
  * types/draft-detail.ts
  *
- * AI 초안 상세·편집 화면의 데이터 모델.
- * 큐 행(DraftQueueRow)보다 훨씬 풍부 — 본문 전체, AI 런 메타, 게이트 평가, 거래처 등.
+ * Data model for the AI draft detail/edit screen.
+ * Much richer than the queue row (DraftQueueRow) - full body, AI run meta, gate evaluation, party, etc.
  */
 
 import type {
@@ -12,7 +12,7 @@ import type {
   PartyTypeCode,
 } from './ai';
 
-/** AI 런 메타 (분류기·회신가 각각). */
+/** AI run meta (classifier and reply-drafter respectively). */
 export interface DraftRunSummary {
   id: string;
   modelUsed: string;
@@ -23,11 +23,11 @@ export interface DraftRunSummary {
   status: string;
   startedAt: string;
   completedAt: string | null;
-  /** ai.runs.metadata 안의 trace_label, retry_count 등 */
+  /** trace_label, retry_count, etc. inside ai.runs.metadata */
   metadata: Record<string, unknown>;
 }
 
-/** 원본 인바운드 메일. */
+/** Original inbound mail. */
 export interface DraftInboundSummary {
   id: string;
   fromAddress: string | null;
@@ -44,7 +44,7 @@ export interface DraftInboundSummary {
   channel: string;
 }
 
-/** 거래처 요약. */
+/** Party summary. */
 export interface DraftPartySummary {
   id: string;
   name: string;
@@ -54,7 +54,7 @@ export interface DraftPartySummary {
   website: string | null;
 }
 
-/** 인게이지먼트 요약. */
+/** Engagement summary. */
 export interface DraftEngagementSummary {
   id: string;
   name: string;
@@ -64,14 +64,14 @@ export interface DraftEngagementSummary {
   valueCurrency: string;
 }
 
-/** 자동발송 규칙 + 평가 로그. */
+/** Auto-send rule + evaluation log. */
 export interface DraftAutoSendInfo {
   eligible: boolean;
   blockedReasons: string[];
   ruleId: string | null;
-  /** 게이트가 적용한 카테고리·신뢰도 기준 (디버깅용) */
+  /** The category/confidence criteria the gate applied (for debugging) */
   evaluationLog: Record<string, unknown>;
-  /** 규칙 자체의 활성 여부·키워드 등 */
+  /** The rule's own active state, keywords, etc. */
   rule: {
     classificationCategory: string;
     minConfidence: number;
@@ -82,7 +82,7 @@ export interface DraftAutoSendInfo {
   } | null;
 }
 
-/** 상세 화면 데이터 한 묶음. */
+/** One bundle of detail-screen data. */
 export interface DraftDetail {
   id: string;
   organizationId: string;
@@ -90,14 +90,14 @@ export interface DraftDetail {
   partyType: PartyTypeCode | null;
   language: Language;
 
-  // 분류 결과
+  // classification result
   classificationCategory: ClassificationCategory | null;
   confidenceScore: number | null;
   riskFlags: string[];
   requiresHumanApproval: boolean;
   rationale: string | null;
 
-  // 본문 (원본 vs 편집본)
+  // body (original vs edited)
   subject: string | null;
   bodyPlain: string;
   bodyHtml: string | null;
@@ -105,23 +105,23 @@ export interface DraftDetail {
   finalBodyPlain: string | null;
   editDistance: number | null;
 
-  // 검토 정보
+  // review info
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   reviewNotes: string | null;
 
-  // 만료
+  // expiry
   expiresAt: string;
   expiredHandled: boolean;
 
-  // 발송 결과 (status='sent'일 때)
+  // send result (when status='sent')
   sentCommunicationId: string | null;
 
   aiGenerated: boolean;
   createdAt: string;
   updatedAt: string;
 
-  // 조인된 객체
+  // joined objects
   inbound: DraftInboundSummary | null;
   party: DraftPartySummary | null;
   engagement: DraftEngagementSummary | null;
@@ -130,7 +130,7 @@ export interface DraftDetail {
   autoSend: DraftAutoSendInfo;
 }
 
-/** 거부 사유 — 4 preset + 'other' (free text는 notes 필드에). */
+/** Rejection reason - 4 presets + 'other' (free text goes in the notes field). */
 export type RejectReason =
   | 'outdated_request'
   | 'off_topic'

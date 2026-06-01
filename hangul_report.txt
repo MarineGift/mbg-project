@@ -1,0 +1,29 @@
+﻿src\i18n\routing.ts:37: ko: '한국어',
+src\lib\email\processor.ts:409: ko: '메시지를 잘 받았습니다. 검토 후 빠른 시일 내에 답변드리겠습니다.\n\n감사합니다.',
+src\types\party-type.ts:80: investor: { en: 'Investor', ko: '투자자', ja: '投資家' },
+src\types\party-type.ts:81: paper_mill: { en: 'Paper Mill', ko: '제지사', ja: '製紙会社' },
+src\types\party-type.ts:84: ko: '광물공급사',
+src\types\party-type.ts:87: buyer: { en: 'Buyer', ko: '구매사', ja: '購買会社' },
+src\types\party-type.ts:88: customer: { en: 'Customer', ko: '고객사', ja: '顧客' },
+src\types\party-type.ts:89: partner: { en: 'Partner', ko: '협력사', ja: 'パートナー' },
+src\types\party-type.ts:92: ko: '정부지원',
+src\types\party-type.ts:127: company: { en: 'Company', ko: '회사', ja: '会社' },
+src\types\party-type.ts:128: organization: { en: 'Organization', ko: '단체', ja: '団体' },
+src\types\party-type.ts:129: individual: { en: 'Individual', ko: '개인', ja: '個人' },
+src\types\party-type.ts:130: fund: { en: 'Fund', ko: '펀드', ja: 'ファンド' },
+src\types\party-type.ts:131: government: { en: 'Government', ko: '정부', ja: '政府' },
+src\__tests__\ai\claude-client.test.ts:207: inboundMessage: '안녕하세요, 가격이 궁금합니다.',
+src\__tests__\ai\claude-client.test.ts:286: inboundMessage: '연락처: 010-1234-5678 입니다',
+src\__tests__\email\mailcarrier.test.ts:127: text: '내 번호는 010-1234-5678 입니다.',
+src\__tests__\email\mailcarrier.test.ts:389: expect(sanitizeFilename('계약서.pdf')).toBe('계약서.pdf');
+src\__tests__\email\processor.test.ts:78: subject: 'Re: 가격 문의',
+src\__tests__\email\processor.test.ts:79: bodyPlain: '가격은 KG당 50달러입니다.',
+src\__tests__\email\processor.test.ts:80: bodyHtml: '<p>가격은 KG당 50달러입니다.</p>',
+src\__tests__\email\processor.test.ts:99: body_plain: '가격이 어떻게 되나요?',
+src\__tests__\email\processor.test.ts:100: subject: '가격 문의',
+src\__tests__\email\processor.test.ts:148: expect(result.reply.subject).toBe('Re: 가격 문의');
+src\__tests__\email\processor.test.ts:168: expect(payload.subject).toBe('Re: 가격 문의');
+src\__tests__\email\processor.test.ts:250: expect(result.reply.bodyPlain).toContain('검토');
+src\__tests__\email\processor.test.ts:262: bodyPlain: '안녕하세요, {{PII_001}}로 연락드리겠습니다.', // 미복원!
+src\__tests__\workers\consultation-worker.test.ts:101: content_raw: '안녕하세요, 데모 잘 봤습니다…',
+src\__tests__\workers\consultation-worker.test.ts:102: content_processed: '안녕하세요, 데모 잘 봤습니다… [요약]',

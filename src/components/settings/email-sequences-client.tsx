@@ -67,7 +67,7 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
 
   function handleDialogClose() {
     setDialogOpen(false);
-    // 목록 새로고침 (window.location.reload 대신 revalidatePath가 처리함)
+    // refresh the list (revalidatePath handles it instead of window.location.reload)
   }
 
   return (

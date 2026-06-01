@@ -1,23 +1,23 @@
 /**
  * lib/actions/drafts.ts
  *
- * AI 초안 검토 화면의 Server Actions.
+ * Server Actions for the AI draft review screen.
  *
- * 보안·통합 원칙:
- *   - 모든 액션 첫 줄에 requireAuth() 호출
- *   - RLS가 organization_id로 자동 격리 (별도 .eq 필요하지 않지만 명시적으로도 추가)
- *   - status 검증: pending_review 한정 approve/reject/edit 가능
- *   - audit 로그는 DB 트리거로 자동
+ * Security/integration principles:
+ *   - call requireAuth() as the first line of every action
+ *   - RLS auto-isolates by organization_id (a separate .eq isn't required, but added explicitly too)
+ *   - status check: approve/reject/edit allowed only for pending_review
+ *   - audit logging is automatic via a DB trigger
  *
- * 발송 전략 (Phase 1):
- *   - approveDraft({ sendImmediately: true })   → 즉시 동기 SMTP 발송
- *   - approveDraft({ sendImmediately: false })  → status='approved'만, 발송은 추후 처리
- *   - bulkApproveDrafts(ids)                    → 일괄 'approved'만, 발송 안 함 (안전성)
+ * Send strategy (Phase 1):
+ *   - approveDraft({ sendImmediately: true })   -> immediate synchronous SMTP send
+ *   - approveDraft({ sendImmediately: false })  -> status='approved' only, send handled later
+ *   - bulkApproveDrafts(ids)                    -> bulk 'approved' only, no send (safety)
  *
- * 발신 주소 (Step 1.2):
+ * Sender address (Step 1.2):
  *   - sendingAddressKind: 'personal' | 'role' | 'shared'
- *   - 사용자의 email_personal / email_role / email_shared 컬럼에서 From 결정
- *   - tabs-mailer가 같은 kind 자격증명으로 SMTP 인증 (SPF/DKIM 일관성)
+ *   - the From is determined from the user's email_personal / email_role / email_shared columns
+ *   - tabs-mailer authenticates SMTP with the same kind credentials (SPF/DKIM consistency)
  */
 
 'use server';
@@ -31,7 +31,7 @@ import type { RejectReason } from '@/types/draft-detail';
 import type { SendingAddressKind } from '@/types/email';
 
 /* ============================================================
- * 공용 타입
+ * Shared types
  * ============================================================ */
 
 export interface ActionResult<T = void> {
@@ -55,7 +55,7 @@ export interface BulkActionResult {
 }
 
 /* ============================================================
- * 1. saveDraftEdits — 본문·제목 편집 저장
+ * 1. saveDraftEdits - save body/subject edits
  * ============================================================ */
 
 const saveDraftEditsSchema = z.object({
@@ -87,7 +87,7 @@ export async function saveDraftEdits(input: {
 
   const supabase = await createSupabaseServerClient();
 
-  // 상태 검증 — pending_review만 편집 가능
+  // status check - only pending_review is editable
   const { data: current, error: fetchErr } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -107,7 +107,7 @@ export async function saveDraftEdits(input: {
     };
   }
 
-  // edit_distance는 013 마이그레이션 트리거가 자동 계산
+  // edit_distance is computed automatically by the 013 migration trigger
   const { error: updateErr } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -132,7 +132,7 @@ export async function saveDraftEdits(input: {
 }
 
 /* ============================================================
- * 2. approveDraft — 승인 (옵션: 즉시 발송)
+ * 2. approveDraft - approve (option: send immediately)
  * ============================================================ */
 
 const approveDraftSchema = z.object({
@@ -164,7 +164,7 @@ export async function approveDraft(input: {
 
   const supabase = await createSupabaseServerClient();
 
-  // 현재 상태 + 발송에 필요한 모든 필드 fetch
+  // fetch the current status + all fields needed for sending
   const { data, error: fetchErr } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -198,7 +198,7 @@ export async function approveDraft(input: {
     };
   }
 
-  // [A] status='approved' 우선 갱신
+  // [A] update status='approved' first
   const nowIso = new Date().toISOString();
   const { error: approveErr } = await supabase
     .schema('ai')
@@ -210,7 +210,7 @@ export async function approveDraft(input: {
     } as never)
     .eq('id', row.id)
     .eq('organization_id', auth.organizationId)
-    .eq('status', 'pending_review'); // 동시성 가드 — 다른 요청이 먼저 변경했으면 0행
+    .eq('status', 'pending_review'); // concurrency guard - 0 rows if another request changed it first
 
   if (approveErr) {
     return {
@@ -220,14 +220,14 @@ export async function approveDraft(input: {
     };
   }
 
-  // [B] 즉시 발송 안 함 → 종료
+  // [B] not sending immediately -> done
   if (!parsed.data.sendImmediately) {
     revalidatePath(`/drafts/${row.id}`);
     revalidatePath('/drafts');
     return { ok: true, data: { sent: false } };
   }
 
-  // [C] 즉시 발송 — 인바운드가 있어야 수신 대상이 결정됨
+  // [C] send immediately - an inbound is required to determine the recipient
   if (!row.inbound_communication_id) {
     return {
       ok: false,
@@ -237,7 +237,7 @@ export async function approveDraft(input: {
     };
   }
 
-  // 발송 시도 (선택된 kind 전달)
+  // attempt to send (passing the selected kind)
   const sendResult = await sendApprovedDraft(
     supabase,
     auth,
@@ -245,7 +245,7 @@ export async function approveDraft(input: {
     parsed.data.sendingAddressKind,
   );
   if (!sendResult.ok) {
-    // status는 'approved' 머무름 — 사용자가 재시도 가능
+    // status stays 'approved' - the user can retry
     return sendResult;
   }
 
@@ -261,7 +261,7 @@ export async function approveDraft(input: {
 }
 
 /* ============================================================
- * 3. rejectDraft — 거부 (사유 preset 4 + 'other')
+ * 3. rejectDraft - reject (4 preset reasons + 'other')
  * ============================================================ */
 
 const rejectDraftSchema = z.object({
@@ -291,7 +291,7 @@ export async function rejectDraft(input: {
     };
   }
 
-  // review_notes — preset + custom 합쳐서 저장 (DB 컬럼 없음 → Q5 결정 따라)
+  // review_notes - store preset + custom combined (no DB column -> per the Q5 decision)
   const reviewNotes = [
     `[${parsed.data.reason}]`,
     parsed.data.notes?.trim() ?? '',
@@ -320,7 +320,7 @@ export async function rejectDraft(input: {
       errorMessage: error.message,
     };
   }
-  // count가 0이면 다른 사람이 이미 처리한 경우 (race)
+  // if count is 0, someone else already handled it (race)
   if (count === 0) {
     return {
       ok: false,
@@ -335,10 +335,10 @@ export async function rejectDraft(input: {
 }
 
 /* ============================================================
- * 4. bulkApproveDrafts / bulkRejectDrafts — 일괄 액션
- *    발송은 하지 않음. 안전성 우선.
- *    편집 중인 행(final_body_plain not null)은 제외해야 하지만
- *    호출처(UI)가 이미 제외한 ID 배열만 전달.
+ * 4. bulkApproveDrafts / bulkRejectDrafts - bulk actions
+ *    Does not send. Safety first.
+ *    Rows being edited (final_body_plain not null) should be excluded, but
+ *    the caller (UI) passes only an array of IDs already excluded.
  * ============================================================ */
 
 const bulkIdsSchema = z.array(z.string().uuid()).min(1).max(100);
@@ -377,7 +377,7 @@ export async function bulkApproveDrafts(
   const supabase = await createSupabaseServerClient();
   const nowIso = new Date().toISOString();
 
-  // 단일 UPDATE 로 가능한 행만 변경되고 나머지는 RETURNING으로 확인
+  // a single UPDATE changes only the eligible rows; the rest are confirmed via RETURNING
   const { data: updated, error } = await supabase
     .schema('ai')
     .from('drafts' as never)
@@ -516,14 +516,14 @@ export async function bulkRejectDrafts(input: {
 }
 
 /* ============================================================
- * 5. 발송 헬퍼 — Approve & Send
- *    TABS Mailer 호출 + outbound communication INSERT + draft status='sent' 갱신
+ * 5. Send helper - Approve & Send
+ *    Call TABS Mailer + INSERT an outbound communication + update draft status='sent'
  *
- *    Step 1.2 변경:
- *    - sendingAddressKind 파라미터 받음
- *    - 사용자 행에서 email_personal/role/shared 컬럼 조회
- *    - kind 기반 fromAddress 결정 (fallback 체인 포함)
- *    - mailer.sendOne 호출 시 sendingAddressKind 전달
+ *    Step 1.2 changes:
+ *    - takes a sendingAddressKind parameter
+ *    - looks up the email_personal/role/shared columns from the user row
+ *    - determines fromAddress based on kind (includes a fallback chain)
+ *    - passes sendingAddressKind when calling mailer.sendOne
  * ============================================================ */
 
 interface DraftSendableRow {
@@ -541,9 +541,9 @@ interface SendApprovedResult
   extends ActionResult<{ sent: boolean; outboundCommunicationId: string }> {}
 
 /**
- * kind 기반 발신 주소 결정.
- * kind가 명시되고 해당 컬럼에 값이 있으면 그것 사용.
- * 그 외엔 fallback 체인: personal → role → shared → sending_email → email → auth.email
+ * Determine the sender address based on kind.
+ * If a kind is specified and the corresponding column has a value, use it.
+ * Otherwise the fallback chain: personal -> role -> shared -> sending_email -> email -> auth.email
  */
 function resolveFromAddress(
   kind: SendingAddressKind | undefined,

@@ -10,7 +10,7 @@ import type { PartyContact } from '@/types/party-detail';
 
 interface Props {
   contacts: readonly PartyContact[];
-  /** Add Contact 다이얼로그에서 자동 연결할 party */
+  /** the party to auto-link in the Add Contact dialog */
   partyId: string;
 }
 

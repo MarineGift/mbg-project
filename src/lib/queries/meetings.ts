@@ -2,29 +2,29 @@
 //
 // Engagement-first meeting domain.
 //
-// Stage 24 (2026-05-21) 재작성:
-//   - meeting_mode (DB 컬럼 없음) 폐기 → channel (engagement_channel enum) 사용
-//   - stage_id (pipeline_stages FK) 추가
-//   - attendees jsonb 폐기 → meeting_attendees table single source
-//   - engagement-first queries 추가 (engagement / stage / party 별)
-//   - recordMeetingOutcome + attendee mutations 신규
-//   - as never cast (Supabase types 의 never 추론 workaround)
+// Stage 24 (2026-05-21) rewrite:
+//   - dropped meeting_mode (no DB column) -> use channel (engagement_channel enum)
+//   - added stage_id (pipeline_stages FK)
+//   - dropped attendees jsonb -> meeting_attendees table as the single source
+//   - added engagement-first queries (by engagement / stage / party)
+//   - new recordMeetingOutcome + attendee mutations
+//   - as never cast (workaround for Supabase types' never inference)
 //
-// DB schema 정합:
+// DB schema alignment:
 //   app.meetings (party_id NOT NULL, engagement_id nullable, stage_id nullable)
 //   app.meeting_attendees (contact_id / user_id / is_internal / email+name snapshot)
-//   app.pipeline_stages (engagements.current_stage_id 의 FK 대상)
+//   app.pipeline_stages (FK target of engagements.current_stage_id)
 //
 import 'server-only'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 // =============================================================
-// Types — DB enum / schema 와 정확히 정합
+// Types - exactly aligned with the DB enum / schema
 // =============================================================
 
-// app.engagement_channel enum 의 subset (미팅 컨텍스트)
-// 전체 15 values 중 미팅 mode 로 의미 있는 것만.
-// 나머지 (email/sms/kakaotalk/...) 는 communications 도메인에 적합.
+// subset of the app.engagement_channel enum (meeting context)
+// only the values meaningful as a meeting mode out of all 15.
+// the rest (email/sms/kakaotalk/...) belong to the communications domain.
 export type MeetingChannel =
   | 'in_person'
   | 'video_call'
@@ -33,14 +33,14 @@ export type MeetingChannel =
   | 'hybrid'
   | 'other'
 
-// app.meetings.meeting_type 은 text 컬럼 (free-form).
-// 자주 쓰이는 값들의 union — UI 의 selector default 로 활용.
+// app.meetings.meeting_type is a text column (free-form).
+// a union of commonly used values - used as the UI selector default.
 export type MeetingType =
   | 'discovery' | 'demo' | 'proposal' | 'negotiation'
   | 'follow_up' | 'check_in' | 'internal'
   | 'kickoff' | 'review' | 'other'
 
-// app.meeting_status enum (정확히 5 values)
+// app.meeting_status enum (exactly 5 values)
 export type MeetingStatus =
   | 'scheduled' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled'
 
@@ -48,7 +48,7 @@ export type MeetingStatus =
 export type AttendeeRole = 'organizer' | 'required' | 'optional' | 'resource'
 export type AttendeeResponse = 'no_response' | 'accepted' | 'declined' | 'tentative'
 
-// action_items jsonb 내 item 구조
+// item structure inside the action_items jsonb
 export interface ActionItem {
   text: string
   assignee_user_id?: string
@@ -56,7 +56,7 @@ export interface ActionItem {
   done?: boolean
 }
 
-// meeting_attendees row — DB schema 와 1:1
+// meeting_attendees row - 1:1 with the DB schema
 export interface MeetingAttendeeRow {
   id: string
   organization_id: string
@@ -72,7 +72,7 @@ export interface MeetingAttendeeRow {
   notes: string | null
 }
 
-// meetings row — DB schema 와 1:1
+// meetings row - 1:1 with the DB schema
 export interface MeetingRow {
   id: string
   organization_id: string
@@ -103,7 +103,7 @@ export interface MeetingRow {
   updated_at: string
 }
 
-// detail view — 화면 표시용 (join 포함)
+// detail view - for display (includes joins)
 export interface MeetingDetail extends MeetingRow {
   parties: { id: string; name: string } | null
   engagements: { id: string; name: string; current_stage_id: string | null } | null
@@ -184,7 +184,7 @@ export async function fetchMeetings(
   return (data ?? []) as unknown as MeetingRow[]
 }
 
-// engagement-first primary — 한 deal 의 모든 미팅
+// engagement-first primary - all meetings of one deal
 export async function fetchEngagementMeetings(
   engagementId: string,
   limit = 100,
@@ -193,7 +193,7 @@ export async function fetchEngagementMeetings(
   return fetchMeetings({ engagement_id: engagementId, limit })
 }
 
-// stage-level — 특정 단계의 미팅
+// stage-level - meetings of a specific stage
 export async function fetchStageMeetings(
   stageId: string,
   limit = 100,
@@ -202,7 +202,7 @@ export async function fetchStageMeetings(
   return fetchMeetings({ stage_id: stageId, limit })
 }
 
-// party-level — 한 회사의 모든 미팅 (cross-engagement)
+// party-level - all meetings of one company (cross-engagement)
 export async function fetchPartyMeetings(
   partyId: string,
   limit = 100,
@@ -246,10 +246,10 @@ export async function fetchMeetingDetail(
 // =============================================================
 
 export interface CreateMeetingInput {
-  party_id: string                 // 필수 (DB NOT NULL)
-  engagement_id?: string           // engagement-first 권장 (nullable in DB)
-  stage_id?: string                // engagement 안의 단계
-  user_id?: string                 // organizer (default: 호출자)
+  party_id: string                 // required (DB NOT NULL)
+  engagement_id?: string           // engagement-first recommended (nullable in DB)
+  stage_id?: string                // stage within the engagement
+  user_id?: string                 // organizer (default: caller)
   title: string
   meeting_type?: string            // free-form, default 'other'
   channel?: MeetingChannel
@@ -371,7 +371,7 @@ export async function updateMeeting(
 }
 
 // =============================================================
-// Outcome — 미팅 완료 시 결과 기록
+// Outcome - record the result when a meeting completes
 // =============================================================
 
 export interface RecordOutcomeInput {
@@ -421,7 +421,7 @@ export async function addAttendee(
 ): Promise<MeetingAttendeeRow> {
   const supabase = await createSupabaseServerClient()
 
-  // organization_id 는 meeting 에서 가져와야 함 (RLS 정합)
+  // organization_id must come from the meeting (RLS alignment)
   const { data: meeting, error: mErr } = await supabase
     .schema('app')
     .from('meetings' as never)

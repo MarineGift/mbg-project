@@ -102,7 +102,7 @@ export async function createContact(
     return { ok: false, errorCode: 'database', errorMessage: error?.message ?? 'Insert failed' };
   }
 
-  // is_primary=true이면 같은 party의 다른 contacts는 false로 (트리거가 없으면 수동)
+  // if is_primary=true, set the party's other contacts to false (manual if there is no trigger)
   if (parsed.data.isPrimary) {
     await supabase
       .schema('app')
@@ -112,7 +112,7 @@ export async function createContact(
       .neq('id', (data as { id: string }).id);
   }
 
-  // party 모듈 fetch는 비용이 큼 — module 기반 redirect는 호출자가 처리
+  // fetching the party module is costly - the caller handles module-based redirects
   revalidatePath(`/`, 'layout');
   return { ok: true, contactId: (data as { id: string }).id };
 }
