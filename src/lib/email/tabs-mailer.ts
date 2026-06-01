@@ -165,6 +165,10 @@ export class TabsMailerClient implements ITabsMailerClient {
       requireTLS: env.TABS_MAILER_USE_TLS && env.TABS_MAILER_PORT !== 465,
       ignoreTLS: !env.TABS_MAILER_USE_TLS,
       tls: { rejectUnauthorized },
+      // Fail fast on dead host/port: ~10s instead of OS default (~40s).
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
     };
   }
 
