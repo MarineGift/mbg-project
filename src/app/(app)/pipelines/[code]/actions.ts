@@ -7,6 +7,10 @@
 //
 // All actions use RLS-scoped supabase server client; revalidatePath
 // refreshes the kanban for the calling pipeline.
+//
+// Round dimension (2026-06-02): createDeal accepts an optional round_id
+//   (deals.round_id FK -> app.rounds). Only the Investor modal passes it;
+//   for every other pipeline it stays null.
 
 'use server';
 
@@ -55,6 +59,8 @@ interface CreateDealInput {
   current_stage_id: string;
   value_amount?: number | null;
   value_currency?: string;
+  // Optional fundraising round (Investor pipeline only). FK -> app.rounds.
+  round_id?: string | null;
 }
 
 export async function createDeal(
@@ -99,6 +105,7 @@ export async function createDeal(
       deal_name: name,
       value_amount: input.value_amount ?? null,
       value_currency: input.value_currency ?? 'USD',
+      round_id: input.round_id ?? null,
       last_activity_at: nowIso,
       source: 'manual',
       // status/priority/module_data fall back to their column defaults

@@ -1,9 +1,16 @@
 // src/app/(app)/pipelines/[code]/page.tsx
 // Server component: resolves the pipeline by code (RLS scopes to org),
 // fetches stages + deals, hands off to the client kanban.
+//
+// Round dimension (2026-06-02):
+//   - deals select embeds round:rounds(id, name) via the deals.round_id FK,
+//     so each card can show its round badge.
+//   - for the Investor pipeline only, the full rounds list is fetched and
+//     passed down (board round filter + modal round selector).
 
 import { notFound } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { listRounds } from '@/lib/queries/rounds';
 import { KanbanClient } from './kanban-client';
 
 interface Props {
@@ -35,22 +42,30 @@ export default async function PipelinePage({ params }: Props) {
     .eq('pipeline_id', pipeline.id)
     .order('sort_order', { ascending: true });
 
-  // 3) deals in this pipeline, joined to the counterparty (party) for the card
+  // 3) deals in this pipeline, joined to the counterparty (party) + round.
   const { data: dealsData } = await supabase
     .schema('app')
     .from('deals' as never)
     .select(
       'id, deal_name, current_stage_id, value_amount, value_currency, ' +
       'last_activity_at, status, primary_contact_id, ' +
-      'party:parties(id, party_name, country_code)'
+      'party:parties(id, party_name, country_code), ' +
+      'round:rounds(id, name)'
     )
     .eq('pipeline_id', pipeline.id)
     .is('deleted_at', null)
     .order('last_activity_at', { ascending: false, nullsFirst: false });
 
+  // 4) Investor pipeline only: rounds list for the filter + modal selector.
+  const rounds =
+    pipeline.code === 'investor'
+      ? (await listRounds()).map((r) => ({ id: r.id, name: r.name }))
+      : [];
+
   return (
     <KanbanClient
       pipeline={pipeline}
+      rounds={rounds}
       stages={(stagesData ?? []) as unknown as Array<{
         id: string; code: string; name: string; sort_order: number;
       }>}
@@ -64,6 +79,7 @@ export default async function PipelinePage({ params }: Props) {
         status: string;
         primary_contact_id: string | null;
         party: { id: string; party_name: string; country_code: string | null } | null;
+        round: { id: string; name: string } | null;
       }>}
     />
   );

@@ -4,6 +4,8 @@
 //   - DragOverlay for smooth visual feedback
 //   - Optimistic state + server action; revert on failure
 //   - "+ New deal" button opening NewDealModal (quick-create form)
+//   - Round dimension (Investor only): a round badge on each card + a top
+//     "Round" filter bar (client-side filter by deals.round_id).
 
 'use client';
 
@@ -33,6 +35,7 @@ import { NewDealModal } from './new-deal-modal';
 
 type Pipeline = { id: string; code: string; name: string; description: string | null };
 type Stage = { id: string; code: string; name: string; sort_order: number };
+type RoundOption = { id: string; name: string };
 type Deal = {
   id: string;
   deal_name: string;
@@ -43,12 +46,15 @@ type Deal = {
   status: string;
   primary_contact_id: string | null;
   party: { id: string; party_name: string; country_code: string | null } | null;
+  round: { id: string; name: string } | null;
 };
 
 interface Props {
   pipeline: Pipeline;
   stages: Stage[];
   deals: Deal[];
+  /** Investor pipeline only; [] elsewhere. */
+  rounds: RoundOption[];
 }
 
 // ============================================================
@@ -83,7 +89,7 @@ function fmtRelative(iso: string | null): string {
 // Component
 // ============================================================
 
-export function KanbanClient({ pipeline, stages, deals }: Props) {
+export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
   const router = useRouter();
 
   // Optimistic state for drag moves
@@ -91,8 +97,13 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // Round filter ('all' | round id). Only used on the Investor board.
+  const [roundFilter, setRoundFilter] = useState<string>('all');
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+
+  const showRounds = pipeline.code === 'investor' && rounds.length > 0;
 
   // Resync when server data refreshes (after revalidatePath)
   useEffect(() => {
@@ -143,10 +154,16 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
     });
   };
 
+  // Apply the round filter before bucketing.
+  const visibleDeals = useMemo(() => {
+    if (roundFilter === 'all') return optimisticDeals;
+    return optimisticDeals.filter((d) => d.round?.id === roundFilter);
+  }, [optimisticDeals, roundFilter]);
+
   const stageBuckets = useMemo(() => {
     const byStage = new Map<string, Deal[]>();
     for (const s of stages) byStage.set(s.id, []);
-    for (const d of optimisticDeals) {
+    for (const d of visibleDeals) {
       const arr = byStage.get(d.current_stage_id);
       if (arr) arr.push(d);
     }
@@ -160,10 +177,10 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
       }
       return { stage: s, deals: ds, count: ds.length, sums };
     });
-  }, [stages, optimisticDeals]);
+  }, [stages, visibleDeals]);
 
   const totalValue: Record<string, number> = {};
-  for (const d of optimisticDeals) {
+  for (const d of visibleDeals) {
     if (d.value_amount != null) {
       totalValue[d.value_currency] = (totalValue[d.value_currency] ?? 0) + d.value_amount;
     }
@@ -196,7 +213,7 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
             </div>
             <div className="flex items-center gap-3 whitespace-nowrap">
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{optimisticDeals.length} deals</span>
+                <span>{visibleDeals.length} deals</span>
                 {Object.entries(totalValue).map(([cur, sum]) => (
                   <span key={cur} className="font-medium text-foreground">
                     {fmtMoney(sum, cur)}
@@ -213,6 +230,28 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
               </Button>
             </div>
           </div>
+
+          {/* Round filter bar (Investor only) */}
+          {showRounds ? (
+            <div className="flex items-center gap-2 border-b bg-background px-6 py-2 text-xs">
+              <span className="text-muted-foreground">Round</span>
+              <RoundPill
+                active={roundFilter === 'all'}
+                onClick={() => setRoundFilter('all')}
+              >
+                All
+              </RoundPill>
+              {rounds.map((r) => (
+                <RoundPill
+                  key={r.id}
+                  active={roundFilter === r.id}
+                  onClick={() => setRoundFilter(r.id)}
+                >
+                  {r.name}
+                </RoundPill>
+              ))}
+            </div>
+          ) : null}
 
           {/* Board */}
           <div className="flex-1 overflow-x-auto overflow-y-hidden bg-muted/30">
@@ -263,8 +302,38 @@ export function KanbanClient({ pipeline, stages, deals }: Props) {
         pipelineCode={pipeline.code}
         pipelineName={pipeline.name}
         stages={stages}
+        rounds={rounds}
       />
     </>
+  );
+}
+
+// ============================================================
+// Round filter pill
+// ============================================================
+
+function RoundPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full px-2.5 py-0.5 text-xs transition-colors',
+        active
+          ? 'bg-foreground text-background'
+          : 'border text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -365,6 +434,13 @@ function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: bool
           {deal.party.country_code ? (
             <span className="ml-1 opacity-60">{'\u00b7'} {deal.party.country_code}</span>
           ) : null}
+        </div>
+      ) : null}
+      {deal.round ? (
+        <div className="mt-1.5">
+          <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            {deal.round.name}
+          </span>
         </div>
       ) : null}
       <div className="mt-2 flex items-center justify-between text-xs">
