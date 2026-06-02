@@ -42,15 +42,28 @@ export async function logEngagement(
   const { data: dealRow, error: dErr } = await supabase
     .schema('app')
     .from('deals' as never)
-    .select('id, organization_id, party_id')
+    .select('id, organization_id')
     .eq('id', input.dealId)
     .is('deleted_at', null)
     .maybeSingle();
 
   if (dErr || !dealRow) return { ok: false, error: 'Deal not found or inaccessible' };
-  const deal = dealRow as unknown as {
-    id: string; organization_id: string; party_id: string;
+  const deal = dealRow as unknown as { id: string; organization_id: string };
+
+  // engagements.party_id is denormalized. deals.party_id was dropped; the deal's
+  // companies now live in app.deal_parties. Use the lead/primary company.
+  const { data: dpRows } = await supabase
+    .schema('app')
+    .from('deal_parties' as never)
+    .select('party_id, role')
+    .eq('deal_id', deal.id);
+  const roleRank: Record<string, number> = {
+    lead: 0, co_investor: 1, participant: 2, advisor: 3, primary: 4,
   };
+  const leadPartyId =
+    ((dpRows ?? []) as Array<{ party_id: string; role: string }>)
+      .slice()
+      .sort((a, b) => (roleRank[a.role] ?? 9) - (roleRank[b.role] ?? 9))[0]?.party_id ?? null;
 
   const { data, error } = await supabase
     .schema('app')
@@ -58,7 +71,7 @@ export async function logEngagement(
     .insert({
       organization_id: deal.organization_id,
       deal_id: deal.id,
-      party_id: deal.party_id,
+      party_id: leadPartyId,
       engagement_type_id: input.engagement_type_id,
       title,
       occurred_at: input.occurred_at,
