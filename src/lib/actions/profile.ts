@@ -2,7 +2,7 @@
  * lib/actions/profile.ts
  *
  * User profile Server Actions.
- *   - updateUserProfile: update full_name, display_name, sending_email
+ *   - updateUserProfile: update full_name, display_name, sending_email, timezone
  *   - updateUserPreferredLanguage: update preferred_language + cookie sync on the client
  */
 
@@ -14,6 +14,7 @@ import { requireAuth } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { locales } from '@/i18n/routing';
 import type { Locale } from '@/i18n/routing';
+import { isSupportedTimezone } from '@/lib/constants/timezones';
 
 export interface ProfileActionResult {
   ok: boolean;
@@ -31,12 +32,17 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => undefined))
     .nullable(),
+  timezone: z
+    .string()
+    .refine(isSupportedTimezone, 'Unsupported timezone')
+    .optional(),
 });
 
 export async function updateUserProfile(input: {
   fullName: string;
   displayName?: string | null;
   sendingEmail?: string | null;
+  timezone?: string;
 }): Promise<ProfileActionResult> {
   let auth;
   try {
@@ -60,6 +66,10 @@ export async function updateUserProfile(input: {
     display_name: parsed.data.displayName?.trim() || null,
     sending_email: parsed.data.sendingEmail?.trim() || null,
   };
+  // Only overwrite timezone when explicitly provided (other callers may omit it).
+  if (parsed.data.timezone) {
+    updates.timezone = parsed.data.timezone;
+  }
 
   const { error } = await supabase
     .schema('app')

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { updateUserProfile } from '@/lib/actions/profile';
 import type { UserProfile } from '@/lib/queries/user-profile';
+import { SUPPORTED_TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/constants/timezones';
 
 interface Props {
   profile: UserProfile;
@@ -23,6 +24,7 @@ const schema = z.object({
   fullName: z.string().min(1, 'Required').max(120),
   displayName: z.string().max(60).optional().or(z.literal('')),
   sendingEmail: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
+  timezone: z.string().min(1),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -42,6 +44,7 @@ export function ProfileForm({ profile }: Props) {
       fullName: profile.fullName,
       displayName: profile.displayName ?? '',
       sendingEmail: profile.sendingEmail ?? '',
+      timezone: profile.timezone || DEFAULT_TIMEZONE,
     },
   });
 
@@ -51,6 +54,7 @@ export function ProfileForm({ profile }: Props) {
         fullName: values.fullName,
         displayName: values.displayName || null,
         sendingEmail: values.sendingEmail || null,
+        timezone: values.timezone,
       });
       if (result.ok) {
         toast.success(t('saved'));
@@ -114,6 +118,26 @@ export function ProfileForm({ profile }: Props) {
               <p className="text-xs text-destructive">{errors.sendingEmail.message}</p>
             )}
             <p className="text-xs text-muted-foreground">{t('sendingEmailHint')}</p>
+          </div>
+
+          {/* Timezone (English literals: no i18n keys yet) */}
+          <div className="space-y-2">
+            <Label htmlFor="timezone">Timezone</Label>
+            <select
+              id="timezone"
+              {...register('timezone')}
+              disabled={isPending}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {SUPPORTED_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Times in the Sent list and message details are shown in this timezone.
+            </p>
           </div>
 
           <Button type="submit" disabled={!isDirty || isPending}>

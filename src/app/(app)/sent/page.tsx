@@ -5,6 +5,8 @@ import {
   parseInboxPagination,
 } from '@/lib/queries/inbox';
 import { fetchOpenStatuses } from '@/lib/queries/open-status';
+import { fetchCurrentUserProfile } from '@/lib/queries/user-profile';
+import { DEFAULT_TIMEZONE } from '@/lib/constants/timezones';
 import { InboxFiltersBar } from '@/components/inbox/inbox-filters';
 import { InboxSearchBar } from '@/components/inbox/inbox-search-bar';
 import { InboxTable } from '@/components/inbox/inbox-table';
@@ -24,10 +26,12 @@ export default async function SentPage({ searchParams }: PageProps) {
 
   const result = await fetchInbox(filters, pagination);
 
-  // Read/open tracking for the visible rows (Sent list "Read" column).
-  // fetchOpenStatuses returns {} for ids without a tracking row, so this is
-  // safe even when the list also contains inbound messages.
-  const openStatuses = await fetchOpenStatuses(result.rows.map((r) => r.id));
+  // Read tracking for the visible rows + the viewer's preferred display timezone.
+  const [openStatuses, profile] = await Promise.all([
+    fetchOpenStatuses(result.rows.map((r) => r.id)),
+    fetchCurrentUserProfile(),
+  ]);
+  const timeZone = profile?.timezone ?? DEFAULT_TIMEZONE;
 
   const isFiltered =
     filters.channel !== DEFAULT_SENT_FILTERS.channel ||
@@ -55,7 +59,7 @@ export default async function SentPage({ searchParams }: PageProps) {
         {result.rows.length === 0 ? (
           <InboxEmpty isFiltered={isFiltered} />
         ) : (
-          <InboxTable rows={result.rows} openStatuses={openStatuses} />
+          <InboxTable rows={result.rows} openStatuses={openStatuses} timeZone={timeZone} />
         )}
       </div>
 
