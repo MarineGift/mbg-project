@@ -66,15 +66,22 @@ function formatAbsolute(iso: string, timeZone?: string): string {
 
 /**
  * Read/Sent indicator for an outbound row.
- * The absolute timestamp is rendered only after mount to keep server-side
- * markup (UTC) and client markup (timezone-formatted) in agreement — no
- * hydration mismatch, and the time always reflects the viewer's timezone.
+ *
+ * Always shows an absolute timestamp in the viewer's timezone:
+ *   - not opened  -> "Sent · <sent time>"   (the time we reliably know)
+ *   - opened      -> "Read · <opened time>" (only when the tracking pixel loaded;
+ *                    many webmail clients block pixels, so absence != not received)
+ *
+ * The timestamp renders only after mount to keep server markup (UTC) and client
+ * markup (timezone-formatted) in agreement — no hydration mismatch.
  */
 function ReadIndicator({
+  sentAt,
   openedAt,
   openCount,
   timeZone,
 }: {
+  sentAt: string;
   openedAt: string | null;
   openCount: number;
   timeZone?: string;
@@ -89,6 +96,9 @@ function ReadIndicator({
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         <Send className="h-3 w-3" />
         Sent
+        {mounted && sentAt && (
+          <span className="font-normal">· {formatAbsolute(sentAt, timeZone)}</span>
+        )}
       </span>
     );
   }
@@ -261,6 +271,7 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
                     <div className="flex items-center gap-2 mt-1">
                       {openStatuses && row.direction === 'outbound' && (
                         <ReadIndicator
+                          sentAt={row.occurredAt}
                           openedAt={openStatuses[row.id]?.firstOpenedAt ?? null}
                           openCount={openStatuses[row.id]?.openCount ?? 0}
                           timeZone={timeZone}
