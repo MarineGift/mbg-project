@@ -1,18 +1,18 @@
 /**
  * lib/env.ts
  *
- * Single entry point for environment variables. Validates at runtime with a zod schema, then exports a frozen object.
+ * 환경변수 단일 진입점. zod 스키마로 런타임 검증 후 동결된 객체를 export.
  *
- * All infrastructure code uses only `import { env } from '@/lib/env'`.
- * Direct `process.env.X` access is forbidden (bypasses validation + loses types).
+ * 모든 인프라 코드는 `import { env } from '@/lib/env'` 만 사용한다.
+ * `process.env.X` 직접 접근은 금지(검증 우회 + 타입 손실).
  */
 
 import { z } from 'zod';
 
 /* ============================================================
- * 1. Schema definitions
+ * 1. 스키마 정의
  * ----------------------------------------------------------
- * Based on the variable catalog in master system prompt §11 and guide §3.1.
+ * 마스터 시스템 프롬프트 §11과 가이드 §3.1의 변수 카탈로그 기준.
  * ============================================================ */
 const envSchema = z
   .object({
@@ -22,7 +22,7 @@ const envSchema = z
     ANTHROPIC_MODEL_HAIKU: z.literal('claude-haiku-4-5-20251001'),
     ANTHROPIC_MODEL_SONNET: z.literal('claude-sonnet-4-6'),
 
-    // ── OpenAI (embeddings only) ──
+    // ── OpenAI (임베딩 전용) ─────────────────────────────
     OPENAI_API_KEY: z.string().min(20),
     OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-large'),
 
@@ -35,7 +35,7 @@ const envSchema = z
       .string()
       .default('communications-attachments'),
 
-    // ── TABS Mailer 4 (sending) ──
+    // ── TABS Mailer 4 (발송) ─────────────────────────────
     TABS_MAILER_HOST: z.string().min(1),
     TABS_MAILER_PORT: z.coerce.number().int().min(1).max(65535).default(587),
     TABS_MAILER_AUTH_METHOD: z.enum(['plain', 'login', 'ip_whitelist']),
@@ -50,22 +50,8 @@ const envSchema = z
       .union([z.boolean(), z.enum(['true', 'false'])])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
       .default(false),
-    TABS_MAILER_TLS_REJECT_UNAUTHORIZED: z
-      .union([z.boolean(), z.enum(['true', 'false'])])
-      .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
-      .optional(),
 
-    MAIL_PERSONAL_USERNAME: z.string().email().optional(),
-    MAIL_PERSONAL_PASSWORD: z.string().min(1).optional(),
-    MAIL_ROLE_USERNAME: z.string().email().optional(),
-    MAIL_ROLE_PASSWORD: z.string().min(1).optional(),
-    MAIL_SHARED_USERNAME: z.string().email().optional(),
-    MAIL_SHARED_PASSWORD: z.string().min(1).optional(),
-    MAIL_PERSONAL_DISPLAY_NAME: z.string().default('YunYoung Heo'),
-    MAIL_ROLE_DISPLAY_NAME: z.string().default('CEO'),
-    MAIL_SHARED_DISPLAY_NAME: z.string().default('Marinebio Group'),
-
-    // ── MailCarrier 7 (receiving) ──
+    // ── MailCarrier 7 (수신) ─────────────────────────────
     MAILCARRIER_HOST: z.string().min(1),
     MAILCARRIER_PORT: z.coerce.number().int().min(1).max(65535).default(993),
     MAILCARRIER_USERNAME: z.string().min(1),
@@ -80,28 +66,8 @@ const envSchema = z
       .int()
       .min(5)
       .default(30),
-    MAILCARRIER_TLS_REJECT_UNAUTHORIZED: z
-      .union([z.boolean(), z.enum(['true', 'false'])])
-      .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
-      .optional(),
 
-    // ── MailCarrier polling target kinds (Phase 2) ──
-    // Decides which sending-account inboxes to poll.
-    // If empty or unset, uses the single MAILCARRIER_USERNAME (Phase 1 backward compat).
-    // e.g. MAILCARRIER_POLL_KINDS=personal,role,shared
-    MAILCARRIER_POLL_KINDS: z
-      .string()
-      .default('')
-      .transform((v) =>
-        v
-          .split(',')
-          .map((s) => s.trim().toLowerCase())
-          .filter((s): s is 'personal' | 'role' | 'shared' =>
-            s === 'personal' || s === 'role' || s === 'shared',
-          ),
-      ),  
-
-    // ── Business ──
+    // ── 비즈니스 ─────────────────────────────────────────
     AI_AUTO_SEND_ENABLED: z
       .union([z.boolean(), z.enum(['true', 'false'])])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
@@ -118,29 +84,20 @@ const envSchema = z
       .default('info'),
     WORKER_RUNTIME: z.enum(['node', 'edge', 'cron']).default('node'),
 
-    // ── Tracking / operations (optional) ──
+    // ── 트래킹·운영 (선택) ───────────────────────────────
     MAIL_DOMAIN: z.string().min(1).optional(),
     TRACKING_BASE_URL: z.string().url().optional(),
     SLACK_WEBHOOK_URL: z.string().url().optional(),
     SENTRY_DSN: z.string().url().optional(),
     REDIS_URL: z.string().url().optional(),
 
-    // ── STEP 4 frontend ──
-    NEXT_PUBLIC_APP_URL: z
-      .string()
-      .url()
-      .default('http://localhost:3000'),
-    NEXT_PUBLIC_DEFAULT_LOCALE: z
-      .enum(['ko', 'en', 'ja'])
-      .default('ko'),
-
-    // ── Node standard ──
+    // ── Node 표준 ────────────────────────────────────────
     NODE_ENV: z
       .enum(['development', 'test', 'production'])
       .default('development'),
   })
   .superRefine((data, ctx) => {
-    // conditionally required: username/password needed unless ip_whitelist
+    // 조건부 필수: ip_whitelist가 아니면 username/password 필요
     if (data.TABS_MAILER_AUTH_METHOD !== 'ip_whitelist') {
       if (!data.TABS_MAILER_USERNAME) {
         ctx.addIssue({
@@ -157,7 +114,7 @@ const envSchema = z
         });
       }
     }
-    // the daily limit must not exceed the monthly limit
+    // 일일 한도가 월 한도보다 크면 안 됨
     if (data.MAX_DAILY_AI_COST_USD > data.MAX_MONTHLY_AI_COST_USD) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -168,17 +125,17 @@ const envSchema = z
   });
 
 /* ============================================================
- * 2. Run validation
+ * 2. 검증 실행
  * ----------------------------------------------------------
- * Throw immediately on validation failure - surface problems at boot time.
- * In the test environment, to allow partial omissions when NODE_ENV='test',
- * use .env.test or a vitest global setup.
+ * 검증 실패 시 즉시 throw — 부팅 단계에서 문제를 노출시킨다.
+ * 테스트 환경에서는 NODE_ENV='test'일 때 부분 누락을 허용하기 위해
+ * .env.test 또는 vitest 글로벌 setup 사용을 권장.
  * ============================================================ */
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  // print details to stderr so the server fails fast on startup in production
-  // never print secret values - only the path and message
+  // 운영 환경에서 서버 시작 시 즉시 실패하도록 stderr에 상세 출력
+  // 시크릿 값은 절대 출력하지 않고 path와 message만 노출
   const formatted = parsed.error.issues.map((i) => ({
     path: i.path.join('.'),
     code: i.code,
@@ -195,19 +152,19 @@ if (!parsed.success) {
 }
 
 /* ============================================================
- * 3. Export the frozen env object
+ * 3. 동결된 환경 객체 export
  * ============================================================ */
 export const env = Object.freeze(parsed.data);
 export type Env = typeof env;
 
 /**
- * Quickly check whether the current environment is production.
+ * 현재 환경이 production인지 빠르게 확인.
  */
 export const isProduction = (): boolean => env.NODE_ENV === 'production';
 
 /**
- * Whether the mock TABS Mailer is used.
- * true when env.TABS_MAILER_USE_MOCK or host==='mock'.
+ * Mock TABS Mailer 사용 여부.
+ * env.TABS_MAILER_USE_MOCK 또는 host==='mock' 시 true.
  */
 export const isUsingMockMailer = (): boolean =>
   env.TABS_MAILER_USE_MOCK || env.TABS_MAILER_HOST === 'mock';
