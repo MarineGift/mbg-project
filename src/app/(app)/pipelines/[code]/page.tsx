@@ -3,10 +3,13 @@
 // fetches stages + deals, hands off to the client kanban.
 //
 // Round dimension (2026-06-02):
-//   - deals select embeds round:rounds(id, name) via the deals.round_id FK,
-//     so each card can show its round badge.
-//   - for the Investor pipeline only, the full rounds list is fetched and
-//     passed down (board round filter + modal round selector).
+//   - deals embeds round:rounds(id, name) via deals.round_id FK.
+//   - Investor pipeline only: full rounds list passed down (filter + selector).
+//
+// Multi-company / Stage 1-B (2026-06-02):
+//   - deals.party_id was dropped. Companies now live in app.deal_parties (M:N),
+//     each row carrying role + commitment_amount. The deal embeds them as
+//     deal_parties(...). The card shows every company + the summed commitment.
 
 import { notFound } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -42,14 +45,15 @@ export default async function PipelinePage({ params }: Props) {
     .eq('pipeline_id', pipeline.id)
     .order('sort_order', { ascending: true });
 
-  // 3) deals in this pipeline, joined to the counterparty (party) + round.
+  // 3) deals in this pipeline, with their companies (deal_parties) + round.
   const { data: dealsData } = await supabase
     .schema('app')
     .from('deals' as never)
     .select(
       'id, deal_name, current_stage_id, value_amount, value_currency, ' +
-      'last_activity_at, status, primary_contact_id, ' +
-      'party:parties(id, party_name, country_code), ' +
+      'last_activity_at, status, ' +
+      'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
+      '  parties ( party_name, country_code ) ), ' +
       'round:rounds(id, name)'
     )
     .eq('pipeline_id', pipeline.id)
@@ -77,8 +81,14 @@ export default async function PipelinePage({ params }: Props) {
         value_currency: string;
         last_activity_at: string | null;
         status: string;
-        primary_contact_id: string | null;
-        party: { id: string; party_name: string; country_code: string | null } | null;
+        deal_parties: Array<{
+          id: string;
+          party_id: string;
+          role: string;
+          commitment_amount: number | string | null;
+          currency: string;
+          parties: { party_name: string; country_code: string | null } | null;
+        }> | null;
         round: { id: string; name: string } | null;
       }>}
     />

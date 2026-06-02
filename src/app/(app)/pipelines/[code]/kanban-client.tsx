@@ -4,8 +4,12 @@
 //   - DragOverlay for smooth visual feedback
 //   - Optimistic state + server action; revert on failure
 //   - "+ New deal" button opening NewDealModal (quick-create form)
-//   - Round dimension (Investor only): a round badge on each card + a top
-//     "Round" filter bar (client-side filter by deals.round_id).
+//   - Round dimension (Investor only): round badge on each card + top filter.
+//
+// Multi-company / Stage 1-B (2026-06-02):
+//   - A deal now has many companies via deal_parties (M:N), each with its own
+//     commitment_amount. The card shows every company (first + "+N") and the
+//     deal total = sum(commitment_amount). Column/board totals aggregate those.
 
 'use client';
 
@@ -36,6 +40,16 @@ import { NewDealModal } from './new-deal-modal';
 type Pipeline = { id: string; code: string; name: string; description: string | null };
 type Stage = { id: string; code: string; name: string; sort_order: number };
 type RoundOption = { id: string; name: string };
+
+type DealPartyRow = {
+  id: string;
+  party_id: string;
+  role: string;
+  commitment_amount: number | string | null;
+  currency: string;
+  parties: { party_name: string; country_code: string | null } | null;
+};
+
 type Deal = {
   id: string;
   deal_name: string;
@@ -44,8 +58,7 @@ type Deal = {
   value_currency: string;
   last_activity_at: string | null;
   status: string;
-  primary_contact_id: string | null;
-  party: { id: string; party_name: string; country_code: string | null } | null;
+  deal_parties: DealPartyRow[] | null;
   round: { id: string; name: string } | null;
 };
 
@@ -58,8 +71,41 @@ interface Props {
 }
 
 // ============================================================
-// Formatters
+// Helpers
 // ============================================================
+
+function toNum(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Sum a deal's commitments, keyed by currency (a deal may mix currencies).
+function commitmentTotals(deal: Deal): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const p of deal.deal_parties ?? []) {
+    const n = toNum(p.commitment_amount);
+    if (n != null) out[p.currency] = (out[p.currency] ?? 0) + n;
+  }
+  return out;
+}
+
+const ROLE_ORDER: Record<string, number> = {
+  lead: 0,
+  co_investor: 1,
+  participant: 2,
+  advisor: 3,
+  primary: 4,
+};
+
+function sortedParties(deal: Deal): DealPartyRow[] {
+  return [...(deal.deal_parties ?? [])].sort(
+    (a, b) =>
+      (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) ||
+      (a.parties?.party_name ?? '').localeCompare(b.parties?.party_name ?? '')
+  );
+}
 
 function fmtMoney(amount: number | null, currency: string): string {
   if (amount == null) return '\u2014';
@@ -74,6 +120,12 @@ function fmtMoney(amount: number | null, currency: string): string {
   }
 }
 
+function fmtTotals(totals: Record<string, number>): string {
+  const entries = Object.entries(totals);
+  if (entries.length === 0) return '\u2014';
+  return entries.map(([cur, sum]) => fmtMoney(sum, cur)).join(' \u00b7 ');
+}
+
 function fmtRelative(iso: string | null): string {
   if (!iso) return '';
   const ms = Date.now() - new Date(iso).getTime();
@@ -85,6 +137,12 @@ function fmtRelative(iso: string | null): string {
   return Math.floor(days / 365) + 'y ago';
 }
 
+function mergeTotals(into: Record<string, number>, add: Record<string, number>): void {
+  for (const [cur, sum] of Object.entries(add)) {
+    into[cur] = (into[cur] ?? 0) + sum;
+  }
+}
+
 // ============================================================
 // Component
 // ============================================================
@@ -92,20 +150,15 @@ function fmtRelative(iso: string | null): string {
 export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
   const router = useRouter();
 
-  // Optimistic state for drag moves
   const [optimisticDeals, setOptimisticDeals] = useState<Deal[]>(deals);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  // Round filter ('all' | round id). Only used on the Investor board.
   const [roundFilter, setRoundFilter] = useState<string>('all');
-
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
 
   const showRounds = pipeline.code === 'investor' && rounds.length > 0;
 
-  // Resync when server data refreshes (after revalidatePath)
   useEffect(() => {
     setOptimisticDeals(deals);
   }, [deals]);
@@ -154,7 +207,6 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
     });
   };
 
-  // Apply the round filter before bucketing.
   const visibleDeals = useMemo(() => {
     if (roundFilter === 'all') return optimisticDeals;
     return optimisticDeals.filter((d) => d.round?.id === roundFilter);
@@ -170,21 +222,13 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
     return stages.map((s) => {
       const ds = byStage.get(s.id) ?? [];
       const sums: Record<string, number> = {};
-      for (const d of ds) {
-        if (d.value_amount != null) {
-          sums[d.value_currency] = (sums[d.value_currency] ?? 0) + d.value_amount;
-        }
-      }
+      for (const d of ds) mergeTotals(sums, commitmentTotals(d));
       return { stage: s, deals: ds, count: ds.length, sums };
     });
   }, [stages, visibleDeals]);
 
   const totalValue: Record<string, number> = {};
-  for (const d of visibleDeals) {
-    if (d.value_amount != null) {
-      totalValue[d.value_currency] = (totalValue[d.value_currency] ?? 0) + d.value_amount;
-    }
-  }
+  for (const d of visibleDeals) mergeTotals(totalValue, commitmentTotals(d));
 
   const activeDeal = activeDealId
     ? optimisticDeals.find((d) => d.id === activeDealId) ?? null
@@ -373,9 +417,7 @@ function DroppableColumn({
         </div>
         {Object.keys(sums).length > 0 ? (
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            {Object.entries(sums)
-              .map(([cur, sum]) => fmtMoney(sum, cur))
-              .join(' \u00b7 ')}
+            {fmtTotals(sums)}
           </div>
         ) : null}
       </div>
@@ -418,6 +460,11 @@ function DraggableCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
 }
 
 function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: boolean }) {
+  const parties = sortedParties(deal);
+  const lead = parties[0];
+  const extra = parties.length - 1;
+  const totals = commitmentTotals(deal);
+
   return (
     <div
       className={cn(
@@ -428,14 +475,21 @@ function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: bool
       <div className="line-clamp-2 font-medium leading-tight text-foreground">
         {deal.deal_name}
       </div>
-      {deal.party ? (
+
+      {lead ? (
         <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">
-          {deal.party.party_name}
-          {deal.party.country_code ? (
-            <span className="ml-1 opacity-60">{'\u00b7'} {deal.party.country_code}</span>
+          {lead.parties?.party_name ?? '(unknown party)'}
+          {lead.parties?.country_code ? (
+            <span className="ml-1 opacity-60">{'\u00b7'} {lead.parties.country_code}</span>
+          ) : null}
+          {extra > 0 ? (
+            <span className="ml-1 font-medium text-foreground">+{extra}</span>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-1.5 text-xs text-muted-foreground/70">No companies</div>
+      )}
+
       {deal.round ? (
         <div className="mt-1.5">
           <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -443,9 +497,10 @@ function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: bool
           </span>
         </div>
       ) : null}
+
       <div className="mt-2 flex items-center justify-between text-xs">
         <span className="font-medium tabular-nums text-foreground">
-          {fmtMoney(deal.value_amount, deal.value_currency)}
+          {fmtTotals(totals)}
         </span>
         {deal.last_activity_at ? (
           <span className="text-muted-foreground">
