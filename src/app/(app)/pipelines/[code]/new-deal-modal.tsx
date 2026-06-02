@@ -1,7 +1,13 @@
 // src/app/(app)/pipelines/[code]/new-deal-modal.tsx
 //
-// Quick-create modal for a new deal. Three fields (name / counterparty / value).
+// Quick-create modal for a new deal. Fields: name / counterparty / value
+// (+ round, Investor pipeline only).
 // Counterparty uses server-side debounced search via the searchParties action.
+//
+// Round (2026-06-02): when pipelineCode === 'investor', an optional Round
+//   selector is shown. Picking a round sets deals.round_id on create. An
+//   inline "+ New" lets the user create a round on the spot (createRound),
+//   then router.refresh() reloads the rounds prop from the server page.
 //
 // Hooks order: all React hooks declared at the top of each component, BEFORE
 // any conditional return -- avoids the "Rendered fewer hooks than expected"
@@ -21,8 +27,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { createDeal, searchParties } from './actions';
+import { createRound } from '@/lib/actions/rounds';
 
 type Stage = { id: string; code: string; name: string; sort_order: number };
+type RoundOption = { id: string; name: string };
 
 interface PartyResult {
   id: string;
@@ -36,6 +44,8 @@ interface Props {
   pipelineCode: string;
   pipelineName: string;
   stages: Stage[];
+  /** Investor pipeline only; [] elsewhere. */
+  rounds: RoundOption[];
 }
 
 export function NewDealModal({
@@ -44,6 +54,7 @@ export function NewDealModal({
   pipelineCode,
   pipelineName,
   stages,
+  rounds,
 }: Props) {
   const router = useRouter();
 
@@ -54,6 +65,13 @@ export function NewDealModal({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Round (investor only)
+  const [roundId, setRoundId] = useState('');
+  const [newRoundMode, setNewRoundMode] = useState(false);
+  const [newRoundName, setNewRoundName] = useState('');
+  const [creatingRound, startRoundTransition] = useTransition();
+
+  const isInvestor = pipelineCode === 'investor';
   const firstStage = stages[0];
 
   useEffect(() => {
@@ -63,8 +81,29 @@ export function NewDealModal({
       setPartyDisplay('');
       setValue('');
       setError(null);
+      setRoundId('');
+      setNewRoundMode(false);
+      setNewRoundName('');
     }
   }, [open]);
+
+  const handleCreateRound = () => {
+    const name = newRoundName.trim();
+    if (!name) return;
+    setError(null);
+    startRoundTransition(async () => {
+      const res = await createRound({ name });
+      if (res.ok && res.roundId) {
+        setRoundId(res.roundId);
+        setNewRoundMode(false);
+        setNewRoundName('');
+        // reloads the rounds prop (server page) so the new option appears
+        router.refresh();
+      } else {
+        setError(res.errorMessage ?? 'Failed to create round');
+      }
+    });
+  };
 
   const handleSubmit = () => {
     setError(null);
@@ -90,6 +129,7 @@ export function NewDealModal({
         party_id: partyId,
         current_stage_id: firstStage.id,
         value_amount: amount,
+        round_id: isInvestor ? (roundId || null) : null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -171,6 +211,75 @@ export function NewDealModal({
               disabled={isPending}
             />
           </div>
+
+          {/* Round (Investor pipeline only) */}
+          {isInvestor && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Round
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  optional
+                </span>
+              </label>
+
+              {!newRoundMode ? (
+                <div className="flex gap-2">
+                  <select
+                    value={roundId}
+                    onChange={(e) => setRoundId(e.target.value)}
+                    disabled={isPending}
+                    className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                  >
+                    <option value="">No round</option>
+                    {rounds.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setNewRoundMode(true)}
+                    disabled={isPending}
+                    className="shrink-0 rounded-md border px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    + New
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newRoundName}
+                    onChange={(e) => setNewRoundName(e.target.value)}
+                    placeholder="e.g. Series A"
+                    maxLength={120}
+                    disabled={creatingRound}
+                    className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateRound}
+                    disabled={creatingRound || !newRoundName.trim()}
+                    className="shrink-0 rounded-md border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    {creatingRound ? '...' : 'Create'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewRoundMode(false);
+                      setNewRoundName('');
+                    }}
+                    disabled={creatingRound}
+                    className="shrink-0 rounded-md px-2 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {firstStage && (
             <div className="text-xs text-muted-foreground">
