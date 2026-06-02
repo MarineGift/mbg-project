@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { fetchCommunicationDetailV2, fetchMessagesInThread } from '@/lib/queries/communication-detail-v2';
 import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { fetchOpenStatuses } from '@/lib/queries/open-status';
+import { fetchCurrentUserProfile } from '@/lib/queries/user-profile';
+import { DEFAULT_TIMEZONE } from '@/lib/constants/timezones';
 import { CommunicationDetailView } from '@/components/inbox/communication-detail-view';
 import { MarkThreadRead } from '@/components/inbox/mark-thread-read';
 
@@ -33,10 +35,12 @@ export default async function InboxDetailPage({ params }: PageProps) {
   // Outbound messages get open/read tracking ("Read time") from email_tracking.
   const outboundIds = typed.filter((m) => m.direction === 'outbound').map((m) => m.id);
 
-  const [templates, openStatuses] = await Promise.all([
+  const [templates, openStatuses, profile] = await Promise.all([
     listEmailTemplates(),
     fetchOpenStatuses(outboundIds),
+    fetchCurrentUserProfile(),
   ]);
+  const timeZone = profile?.timezone ?? DEFAULT_TIMEZONE;
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
@@ -52,6 +56,7 @@ export default async function InboxDetailPage({ params }: PageProps) {
         rootId={id}
         templates={templates}
         openStatuses={openStatuses}
+        timeZone={timeZone}
       />
     </div>
   );

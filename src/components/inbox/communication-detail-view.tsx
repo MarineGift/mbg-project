@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   Sparkles, ArrowRight, AlertCircle,
-  PenLine, FileText, ChevronDown, ChevronRight, Eye,
+  PenLine, FileText, ChevronDown, ChevronRight, Eye, Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,27 @@ import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import type { CommunicationDetail } from '@/types/communication-detail';
 import type { DraftStatus } from '@/types/ai';
 
+/**
+ * Absolute time in the viewer's configured timeZone, 24h, no seconds: "2026-06-02 06:05".
+ * Deterministic across server/client because the IANA timeZone is explicit, so it is
+ * safe to render directly (no hydration mismatch) as long as timeZone is provided.
+ */
+function formatAbsolute(iso: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+}
+
 interface Props {
   /** All messages in the thread, sorted by occurredAt ASC. */
   thread: CommunicationDetail[];
@@ -28,9 +49,11 @@ interface Props {
   templates?: unknown[];
   /** Per-communication open/read tracking (outbound only), keyed by message id. */
   openStatuses?: Record<string, { firstOpenedAt: string | null; openCount: number }>;
+  /** Viewer's configured display timezone (IANA). Falls back to runtime default when unset. */
+  timeZone?: string;
 }
 
-export function CommunicationDetailView({ thread, rootId, templates, openStatuses }: Props) {
+export function CommunicationDetailView({ thread, rootId, templates, openStatuses, timeZone }: Props) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
 
@@ -100,6 +123,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           expanded={expanded.has(msg.id)}
           onToggle={() => toggle(msg.id)}
           openStatus={openStatuses?.[msg.id]}
+          timeZone={timeZone}
         />
       ))}
 
@@ -191,14 +215,17 @@ interface ThreadMessageCardProps {
   expanded: boolean;
   onToggle: () => void;
   openStatus?: { firstOpenedAt: string | null; openCount: number };
+  timeZone?: string;
 }
 
-function ThreadMessageCard({ msg, expanded, onToggle, openStatus }: ThreadMessageCardProps) {
+function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone }: ThreadMessageCardProps) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
   const hasDrafts = msg.generatedDrafts && msg.generatedDrafts.length > 0;
 
   const previewText = (msg.bodyPlain ?? '').replace(/\s+/g, ' ').slice(0, 180);
+
+  const opened = !!openStatus && openStatus.openCount > 0 && !!openStatus.firstOpenedAt;
 
   return (
     <Card className={cn(!expanded && 'hover:bg-muted/20 transition-colors')}>
@@ -221,11 +248,20 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus }: ThreadMessag
                     {t('failed')}
                   </span>
                 )}
-                {msg.direction === 'outbound' && openStatus && openStatus.openCount > 0 && (
-                  <span className="inline-flex items-center gap-1 text-emerald-600 normal-case tracking-normal">
-                    <Eye className="h-3 w-3" />
-                    Read
-                  </span>
+                {/* Outbound: always show an absolute timestamp in the viewer timezone.
+                    Opened (pixel loaded) -> Read . <opened time>, else -> Sent . <sent time>. */}
+                {msg.direction === 'outbound' && (
+                  opened ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-600 normal-case tracking-normal">
+                      <Eye className="h-3 w-3" />
+                      Read · {formatAbsolute(openStatus!.firstOpenedAt!, timeZone)}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 normal-case tracking-normal">
+                      <Send className="h-3 w-3" />
+                      Sent · {formatAbsolute(msg.occurredAt, timeZone)}
+                    </span>
+                  )
                 )}
                 <span className="ml-auto normal-case tracking-normal">
                   <RelativeTime date={msg.occurredAt} live={false} />
@@ -274,6 +310,13 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus }: ThreadMessag
                 <span className="font-mono text-[10px] truncate" title={msg.messageId}>{msg.messageId}</span>
               </>
             )}
+            {/* Outbound: explicit absolute sent time (always known). */}
+            {msg.direction === 'outbound' && (
+              <>
+                <span className="text-muted-foreground">Sent</span>
+                <span>{formatAbsolute(msg.occurredAt, timeZone)}</span>
+              </>
+            )}
             {msg.direction === 'outbound' && openStatus && (
               <>
                 <span className="text-muted-foreground">Opened</span>
@@ -282,7 +325,7 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus }: ThreadMessag
                     <span className="inline-flex items-center gap-1.5">
                       <Eye className="h-3.5 w-3.5 text-emerald-600" />
                       {openStatus.firstOpenedAt ? (
-                        <RelativeTime date={openStatus.firstOpenedAt} live={false} />
+                        <span>{formatAbsolute(openStatus.firstOpenedAt, timeZone)}</span>
                       ) : (
                         <span>opened</span>
                       )}
