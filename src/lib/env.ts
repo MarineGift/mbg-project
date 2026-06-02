@@ -66,10 +66,13 @@ const envSchema = z
     MAIL_SHARED_DISPLAY_NAME: z.string().default('Marinebio Group'),
 
     // ── MailCarrier 7 (receiving) ──
-    MAILCARRIER_HOST: z.string().min(1),
+    // NOTE: these are WORKER-ONLY (the web app never opens IMAP).
+    // They are optional here so the web build/runtime does not require them.
+    // The worker enforces them at startup via requireMailcarrierEnv() below.
+    MAILCARRIER_HOST: z.string().min(1).optional(),
     MAILCARRIER_PORT: z.coerce.number().int().min(1).max(65535).default(993),
-    MAILCARRIER_USERNAME: z.string().min(1),
-    MAILCARRIER_PASSWORD: z.string().min(1),
+    MAILCARRIER_USERNAME: z.string().min(1).optional(),
+    MAILCARRIER_PASSWORD: z.string().min(1).optional(),
     MAILCARRIER_USE_IDLE: z
       .union([z.boolean(), z.enum(['true', 'false'])])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
@@ -211,3 +214,36 @@ export const isProduction = (): boolean => env.NODE_ENV === 'production';
  */
 export const isUsingMockMailer = (): boolean =>
   env.TABS_MAILER_USE_MOCK || env.TABS_MAILER_HOST === 'mock';
+
+/**
+ * Worker-only guard for the MailCarrier (IMAP receiving) worker.
+ *
+ * MAILCARRIER_HOST / USERNAME / PASSWORD are optional in the base schema so the
+ * web app does not need them. The worker, however, cannot run without them, so
+ * call this at the top of the worker entrypoint (mailcarrier-worker.ts) to fail
+ * fast with a clear message instead of an opaque IMAP connection error.
+ *
+ * Returns the three values narrowed to non-optional `string`.
+ */
+export function requireMailcarrierEnv(): {
+  host: string;
+  username: string;
+  password: string;
+} {
+  const missing: string[] = [];
+  if (!env.MAILCARRIER_HOST) missing.push('MAILCARRIER_HOST');
+  if (!env.MAILCARRIER_USERNAME) missing.push('MAILCARRIER_USERNAME');
+  if (!env.MAILCARRIER_PASSWORD) missing.push('MAILCARRIER_PASSWORD');
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[env] MailCarrier worker requires the following variable(s): ${missing.join(', ')}`,
+    );
+  }
+
+  return {
+    host: env.MAILCARRIER_HOST as string,
+    username: env.MAILCARRIER_USERNAME as string,
+    password: env.MAILCARRIER_PASSWORD as string,
+  };
+}
