@@ -26,6 +26,10 @@ interface LogEngagementInput {
   direction?: string | null;
   summary?: string | null;
   notes?: string | null;
+  // Optional Task this activity belongs to (engagements.task_id FK -> app.tasks).
+  // null = activity sits directly on the deal timeline (HubSpot-style optional
+  // association, not a hard parent-child).
+  task_id?: string | null;
 }
 
 export async function logEngagement(
@@ -65,6 +69,22 @@ export async function logEngagement(
       .slice()
       .sort((a, b) => (roleRank[a.role] ?? 9) - (roleRank[b.role] ?? 9))[0]?.party_id ?? null;
 
+  // If a task was chosen, verify it belongs to THIS deal (not soft-deleted)
+  // before linking. null = activity stays directly on the deal timeline.
+  let taskId: string | null = null;
+  if (input.task_id) {
+    const { data: tRow } = await supabase
+      .schema('app')
+      .from('tasks' as never)
+      .select('id')
+      .eq('id', input.task_id)
+      .eq('deal_id', deal.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!tRow) return { ok: false, error: 'Task not found on this deal' };
+    taskId = (tRow as { id: string }).id;
+  }
+
   const { data, error } = await supabase
     .schema('app')
     .from('engagements' as never)
@@ -72,6 +92,7 @@ export async function logEngagement(
       organization_id: deal.organization_id,
       deal_id: deal.id,
       party_id: leadPartyId,
+      task_id: taskId,
       engagement_type_id: input.engagement_type_id,
       title,
       occurred_at: input.occurred_at,
