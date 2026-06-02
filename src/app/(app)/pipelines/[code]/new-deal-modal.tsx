@@ -161,7 +161,12 @@ export function NewDealModal({
     if (filled.length === 0) { setError('Add at least one company'); return; }
 
     const seen = new Set<string>();
-    const parties = [];
+    const parties: Array<{
+      partyId: string;
+      role: 'lead' | 'co_investor' | 'participant' | 'advisor' | 'primary';
+      commitmentAmount: number | null;
+      currency: string;
+    }> = [];
     for (const r of filled) {
       if (seen.has(r.partyId)) { setError('The same company is listed twice'); return; }
       seen.add(r.partyId);
