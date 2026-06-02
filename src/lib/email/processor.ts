@@ -1,23 +1,23 @@
 /**
  * lib/email/processor.ts
  *
- * Incoming-mail processing pipeline.
+ * 수신 메일 처리 파이프라인.
  *
- * Stages:
- *   [1] lock + look up the communications row
- *   [2] set ai_processing_status='processing'
- *   [3] call the classifier (Haiku) -> ClassificationOutput
- *       - if it violates the standard 10 categories, force 'other' + requires_human=true
- *   [4] call the reply drafter (Opus) -> ReplyDrafterOutput
- *       - on output validation failure, force requires_human_approval=true
- *       - if unrestored PII tokens are detected, force requires_human_approval=true
- *   [5] evaluate the auto-send-gate
+ * 단계:
+ *   [1] communications 행 lock + 조회
+ *   [2] ai_processing_status='processing' 갱신
+ *   [3] 분류기(Haiku) 호출 → ClassificationOutput
+ *       - 표준 10 카테고리 위반 시 'other'로 강제 + requires_human=true
+ *   [4] 회신가(Opus) 호출 → ReplyDrafterOutput
+ *       - 출력 검증 실패 시 requires_human_approval=true 강제
+ *       - 미복원 PII 토큰 검출 시 requires_human_approval=true 강제
+ *   [5] auto-send-gate 평가
  *   [6] ai.drafts INSERT (expires_at = NOW() + DRAFT_EXPIRY_DAYS)
- *   [7] update the communications.ai_draft_id FK + ai_processing_status='completed'
+ *   [7] communications.ai_draft_id FK 갱신 + ai_processing_status='completed'
  *
- * If any stage fails, communications.ai_processing_status='failed' is guaranteed to be set.
+ * 어느 단계가 실패해도 communications.ai_processing_status='failed' 갱신 보장.
  *
- * All AI calls go through ClaudeClient, so ai.runs logging and PII masking are applied automatically.
+ * AI 호출은 모두 ClaudeClient를 거치므로 ai.runs 자동 기록·PII 마스킹 적용.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -42,13 +42,13 @@ import {
 import {
   validateReplyDrafterOutput,
   type Language,
-  type PartyTypeCode,
+  type ModuleType,
   type ProcessedInbound,
   type ReplyDrafterOutput,
 } from '../../types/ai';
 
 /* ============================================================
- * 1. Error classes
+ * 1. 에러 클래스
  * ============================================================ */
 
 export class ProcessorError extends Error {
@@ -68,13 +68,13 @@ export class ProcessorCommunicationNotFoundError extends ProcessorError {
 }
 
 /* ============================================================
- * 2. Input
+ * 2. 입력
  * ============================================================ */
 
 export interface ProcessInboundOptions {
-  /** Force processing (even if an ai_draft_id already exists). Default false. */
+  /** 강제로 처리(이미 ai_draft_id가 있어도). 디폴트 false. */
   force?: boolean;
-  /** Used to inject ClaudeClient in unit tests. */
+  /** 단위 테스트에서 ClaudeClient를 주입할 때 사용. */
   claudeClient?: ClaudeClient;
 }
 
@@ -84,7 +84,7 @@ interface CommunicationContext {
   partyId?: string;
   contactId?: string;
   engagementId?: string;
-  partyType?: PartyTypeCode;
+  module?: ModuleType;
   fromAddress?: string;
   bodyPlain: string;
   subject: string;
@@ -94,7 +94,7 @@ interface CommunicationContext {
 }
 
 /* ============================================================
- * 3. processInbound - main entry point
+ * 3. processInbound — 메인 진입점
  * ============================================================ */
 
 export async function processInbound(
@@ -103,7 +103,7 @@ export async function processInbound(
   communicationId: string,
   options: ProcessInboundOptions = {},
 ): Promise<ProcessedInbound> {
-  // [1] look up
+  // [1] 조회
   const ctx = await fetchCommunicationContext(
     supabase,
     organizationId,
@@ -111,11 +111,11 @@ export async function processInbound(
     options.force ?? false,
   );
 
-  // [2] mark processing status
+  // [2] processing 상태 마킹
   await updateProcessingStatus(supabase, communicationId, 'processing');
 
   try {
-    // determine reply language
+    // 회신 언어 결정
     const language = resolveReplyLanguage({
       contactPreferred: ctx.contactPreferredLanguage,
       detectedFromInbound: ctx.languageDetected,
@@ -125,10 +125,10 @@ export async function processInbound(
     const claude =
       options.claudeClient ?? new ClaudeClient(supabase, organizationId);
 
-    // [3] classifier
+    // [3] 분류기
     const classification = await runClassifier(claude, ctx, language);
 
-    // [4] reply drafter
+    // [4] 회신가
     const replyResult = await runReplyDrafter(
       claude,
       ctx,
@@ -136,10 +136,10 @@ export async function processInbound(
       language,
     );
 
-    // [5] auto-send gate
+    // [5] 자동발송 게이트
     const gate = await evaluateAutoSend(supabase, {
       organizationId,
-      partyType: ctx.partyType,
+      module: ctx.module,
       partyId: ctx.partyId,
       classification,
       draftBody: replyResult.reply.bodyPlain,
@@ -153,12 +153,11 @@ export async function processInbound(
       reply: replyResult.reply,
       classifierRunId: classification.__runId,
       drafterRunId: replyResult.runId,
-      drafterAgentId: replyResult.agentId,
       gate,
       language,
     });
 
-    // [7] update communications
+    // [7] communications 갱신
     await updateProcessingComplete(
       supabase,
       communicationId,
@@ -178,14 +177,14 @@ export async function processInbound(
       autoSendBlockedReasons: gate.reasons.map((r) => String(r)),
     };
   } catch (err) {
-    // on failure, record status='failed' + error
+    // 실패 시 status='failed' + error 기록
     await markFailed(supabase, communicationId, err);
     throw err;
   }
 }
 
 /* ============================================================
- * 4. Per-stage helpers
+ * 4. 단계별 헬퍼
  * ============================================================ */
 
 async function fetchCommunicationContext(
@@ -198,7 +197,7 @@ async function fetchCommunicationContext(
     .schema('app')
     .from('communications')
     .select(
-      'id, organization_id, party_id, contact_id, engagement_id, module:party_type, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
+      'id, organization_id, party_id, contact_id, engagement_id, module, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
     )
     .eq('id', communicationId)
     .eq('organization_id', organizationId)
@@ -221,7 +220,7 @@ async function fetchCommunicationContext(
     );
   }
 
-  // look up auxiliary contact/party info (for determining reply language)
+  // contact·party 보조 정보 조회 (회신 언어 결정용)
   let contactPreferredLanguage: string | undefined;
   if (data.contact_id) {
     const { data: contact } = await supabase
@@ -252,7 +251,7 @@ async function fetchCommunicationContext(
     partyId: (data.party_id as string | null) ?? undefined,
     contactId: (data.contact_id as string | null) ?? undefined,
     engagementId: (data.engagement_id as string | null) ?? undefined,
-    partyType: (data.module as PartyTypeCode | null) ?? undefined,
+    module: (data.module as ModuleType | null) ?? undefined,
     fromAddress: (data.from_address as string | null) ?? undefined,
     bodyPlain: (data.body_plain as string | null) ?? '',
     subject: (data.subject as string | null) ?? '',
@@ -263,7 +262,7 @@ async function fetchCommunicationContext(
 }
 
 /* --------------------------------------------------------
- * Call the classifier + enforce the standard 10 categories
+ * Classifier 호출 + 표준 10 카테고리 강제
  * -------------------------------------------------------- */
 type ClassificationWithMeta = ClassificationOutput & { __runId: string };
 
@@ -303,7 +302,7 @@ async function runClassifier(
 
   let classification = validation.value;
 
-  // validate standard categories (validateClassificationOutput already does this, but re-check)
+  // 표준 카테고리 검증 (validateClassificationOutput이 이미 수행하지만 재확인)
   if (
     !(STANDARD_CATEGORIES as readonly string[]).includes(classification.category)
   ) {
@@ -329,13 +328,12 @@ function stripInternalFields(c: ClassificationWithMeta): ClassificationOutput {
 }
 
 /* --------------------------------------------------------
- * Call the Reply Drafter
+ * Reply Drafter 호출
  * -------------------------------------------------------- */
 
 interface ReplyResult {
   reply: ReplyDrafterOutput;
   runId: string;
-  agentId: string;
 }
 
 async function runReplyDrafter(
@@ -360,21 +358,20 @@ async function runReplyDrafter(
 
   const validation = validateReplyDrafterOutput(result.parsedJson);
   if (!validation.ok) {
-    // validation failed -> human review required + safe fallback response
+    // 검증 실패 → 사람 검토 필수 + 안전한 폴백 응답
     // eslint-disable-next-line no-console
     console.warn(
       `[processor:${ctx.id}] reply drafter output invalid: ${validation.reasons.join(',')}`,
     );
     return {
       runId: result.runId,
-      agentId: result.agentId,
       reply: buildFallbackReply(ctx, classification, language, validation.reasons),
     };
   }
 
   let reply = validation.value;
 
-  // if unrestored PII tokens remain in the body, force human review
+  // 미복원 PII 토큰이 본문에 있으면 사람 검토 강제
   if (
     hasUnrestoredTokens(reply.bodyPlain) ||
     (reply.bodyHtml && hasUnrestoredTokens(reply.bodyHtml))
@@ -394,7 +391,7 @@ async function runReplyDrafter(
     };
   }
 
-  return { runId: result.runId, agentId: result.agentId, reply };
+  return { runId: result.runId, reply };
 }
 
 function buildFallbackReply(
@@ -430,8 +427,6 @@ interface InsertDraftInput {
   reply: ReplyDrafterOutput;
   classifierRunId: string;
   drafterRunId: string;
-  /** ai.drafts.agent_id (NOT NULL) - the ai.agents.id of the reply-drafter agent */
-  drafterAgentId: string;
   gate: GateResult;
   language: Language;
 }
@@ -453,11 +448,9 @@ async function insertDraft(
     .from('drafts')
     .insert({
       organization_id: input.ctx.organizationId,
-      agent_id: input.drafterAgentId,
-      inbound_communication_id: input.ctx.id,
+      communication_id: input.ctx.id,
       party_id: input.ctx.partyId ?? null,
       engagement_id: input.ctx.engagementId ?? null,
-      party_type: input.ctx.partyType ?? null,
       classification_category: input.classification.category,
       confidence_score: input.classification.confidence,
       risk_flags: input.classification.riskFlags,
@@ -472,7 +465,7 @@ async function insertDraft(
       auto_send_evaluation_log: input.gate.evaluationLog,
       expires_at: expiresAt.toISOString(),
       ai_generated: true,
-      status: 'pending_review',
+      status: 'draft',
       classifier_run_id: input.classifierRunId,
       drafter_run_id: input.drafterRunId,
       language: input.language,
@@ -490,7 +483,7 @@ async function insertDraft(
 }
 
 /* --------------------------------------------------------
- * Status-update helper
+ * 상태 갱신 헬퍼
  * -------------------------------------------------------- */
 
 async function updateProcessingStatus(
@@ -499,16 +492,16 @@ async function updateProcessingStatus(
   status: AiProcessingStatus,
 ): Promise<void> {
   const update: Record<string, unknown> = {
-    external_data: undefined, // PostgREST ignores undefined
+    external_data: undefined, // PostgREST는 undefined를 무시
   };
-  // ai_processing_status has no direct column on communications, so it's kept in external_data
-  // however, if a future migration adds the column, update both.
+  // ai_processing_status는 communications에 직접 컬럼이 없으므로 external_data에 보관
+  // 단, 향후 마이그레이션으로 컬럼 추가 시 양쪽 갱신.
 
   await supabase
     .schema('app')
     .from('communications')
     .update({
-      // additional info in the external_data jsonb
+      // external_data jsonb에 추가 정보
       ...(status === 'processing'
         ? {
             external_data: {
