@@ -157,9 +157,10 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
   let checklists: any[] = [];
   let backers: any[] = [];
   let rewardTiers: any[] = [];
+  let activityTasks: Array<{ id: string; title: string }> = [];
 
   if (activeTab === 'activity') {
-    const [{ data: engData }, { data: typeData }] = await Promise.all([
+    const [{ data: engData }, { data: typeData }, { data: taskOpts }] = await Promise.all([
       supabase
         .schema('app')
         .from('engagements' as never)
@@ -173,9 +174,17 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
         .from('engagement_types' as never)
         .select('*')
         .order('sort_order', { ascending: true }),
+      supabase
+        .schema('app')
+        .from('tasks' as never)
+        .select('id, title')
+        .eq('deal_id', params.id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
     ]);
     engagements = (engData ?? []) as any[];
     engagementTypes = (typeData ?? []) as any[];
+    activityTasks = (taskOpts ?? []) as Array<{ id: string; title: string }>;
   }
 
   if (activeTab === 'tasks') {
@@ -313,6 +322,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               dealId={params.id}
               engagements={engagements}
               engagementTypes={engagementTypes}
+              tasks={activityTasks}
             />
           )}
           {activeTab === 'tasks' && (

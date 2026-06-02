@@ -47,6 +47,8 @@ interface Props {
   dealId: string;
   engagements: Engagement[];
   engagementTypes: EngagementType[];
+  /** Open tasks on this deal, for the optional "Task" selector. */
+  tasks?: Array<{ id: string; title: string }>;
 }
 
 // ============================================================
@@ -86,6 +88,7 @@ export function ActivityTabClient({
   dealId,
   engagements,
   engagementTypes,
+  tasks = [],
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -127,6 +130,7 @@ export function ActivityTabClient({
         pipelineCode={pipelineCode}
         dealId={dealId}
         engagementTypes={engagementTypes}
+        tasks={tasks}
       />
     </div>
   );
@@ -210,12 +214,14 @@ function LogActivityModal({
   pipelineCode,
   dealId,
   engagementTypes,
+  tasks,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pipelineCode: string;
   dealId: string;
   engagementTypes: EngagementType[];
+  tasks: Array<{ id: string; title: string }>;
 }) {
   // === All hooks first, before any conditional return ===
   // Prefer 'call' as default type, falling back to first available
@@ -224,6 +230,7 @@ function LogActivityModal({
 
   const [typeId, setTypeId] = useState<number>(defaultTypeId);
   const [title, setTitle] = useState('');
+  const [taskId, setTaskId] = useState<string>('');
   const [occurredAt, setOccurredAt] = useState<string>('');
   const [direction, setDirection] = useState<string>('outbound');
   const [summary, setSummary] = useState('');
@@ -236,6 +243,7 @@ function LogActivityModal({
     if (open) {
       setTypeId(defaultTypeId);
       setTitle('');
+      setTaskId('');
       setOccurredAt(toLocalDateTimeInputValue(new Date()));
       setDirection('outbound');
       setSummary('');
@@ -270,6 +278,7 @@ function LogActivityModal({
         direction: showDirection ? direction : null,
         summary: summary.trim() || null,
         notes: notes.trim() || null,
+        task_id: taskId || null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -344,7 +353,30 @@ function LogActivityModal({
             />
           </div>
 
-          {/* When */}
+          {/* Task (only when the deal has tasks) */}
+          {tasks.length > 0 && (
+            <div>
+              <label
+                htmlFor="act-task"
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                Task
+                <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
+              </label>
+              <select
+                id="act-task"
+                value={taskId}
+                onChange={(e) => setTaskId(e.target.value)}
+                disabled={isPending}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+              >
+                <option value="">No task (deal timeline)</option>
+                {tasks.map((t) => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label
               htmlFor="act-when"
