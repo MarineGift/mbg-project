@@ -188,6 +188,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
         onOpenChange={setOpen}
         pipelineCode={pipelineCode}
         dealId={dealId}
+        checklists={checklists}
       />
     </div>
   );
@@ -314,13 +315,16 @@ function AddTaskModal({
   onOpenChange,
   pipelineCode,
   dealId,
+  checklists,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pipelineCode: string;
   dealId: string;
+  checklists: Checklist[];
 }) {
   const [title, setTitle] = useState('');
+  const [checklistId, setChecklistId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [contactId, setContactId] = useState('');
@@ -332,6 +336,7 @@ function AddTaskModal({
   useEffect(() => {
     if (open) {
       setTitle('');
+      setChecklistId('');
       setDueDate('');
       setPriority('medium');
       setContactId('');
@@ -358,6 +363,7 @@ function AddTaskModal({
         pipelineCode,
         dealId,
         title: trimmedTitle,
+        checklist_id: checklistId || null,
         due_at: dueIso,
         priority,
         assigned_to_contact_id: contactId || null,
@@ -400,6 +406,33 @@ function AddTaskModal({
               disabled={isPending}
             />
           </div>
+
+          {/* Checklist item (only when the deal has checklist items) */}
+          {checklists.length > 0 && (
+            <div>
+              <label
+                htmlFor="task-checklist"
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                Checklist item
+                <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
+              </label>
+              <select
+                id="task-checklist"
+                value={checklistId}
+                onChange={(e) => setChecklistId(e.target.value)}
+                disabled={isPending}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+              >
+                <option value="">No checklist item (standalone)</option>
+                {checklists.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title || c.name || 'Checklist item'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Due date */}
           <div>

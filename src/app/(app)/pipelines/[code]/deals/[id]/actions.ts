@@ -107,6 +107,9 @@ interface AddTaskInput {
   priority?: 'low' | 'medium' | 'high';
   assigned_to_contact_id?: string | null;
   description?: string | null;
+  // Optional Checklist item this task belongs to (tasks.checklist_id FK
+  // -> app.deal_checklists). null = standalone ("Other tasks").
+  checklist_id?: string | null;
 }
 
 export async function addTask(
@@ -132,6 +135,23 @@ export async function addTask(
   if (dErr || !dealRow) return { ok: false, error: 'Deal not found or inaccessible' };
   const deal = dealRow as unknown as { id: string; organization_id: string };
 
+  // If a checklist item was chosen, verify it belongs to THIS deal (and is
+  // not soft-deleted) before linking, so a task can't point at another deal's
+  // checklist item.
+  let checklistId: string | null = null;
+  if (input.checklist_id) {
+    const { data: clRow } = await supabase
+      .schema('app')
+      .from('deal_checklists' as never)
+      .select('id')
+      .eq('id', input.checklist_id)
+      .eq('deal_id', deal.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!clRow) return { ok: false, error: 'Checklist item not found on this deal' };
+    checklistId = (clRow as { id: string }).id;
+  }
+
   const { data, error } = await supabase
     .schema('app')
     .from('tasks' as never)
@@ -144,6 +164,7 @@ export async function addTask(
       due_at: input.due_at ?? null,
       assigned_to_contact_id: input.assigned_to_contact_id ?? null,
       description: (input.description ?? '').trim() || null,
+      checklist_id: checklistId,
     } as never)
     .select('id')
     .single();
