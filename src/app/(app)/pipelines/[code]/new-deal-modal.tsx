@@ -1,23 +1,23 @@
 // src/app/(app)/pipelines/[code]/new-deal-modal.tsx
 //
-// Quick-create modal for a new deal. Fields: name / counterparty / value
-// (+ round, Investor pipeline only).
-// Counterparty uses server-side debounced search via the searchParties action.
+// Quick-create modal for a new deal.
+//   - Deal name
+//   - Companies: one or more rows (company search + role + commitment amount).
+//     A deal is many-to-many with parties (app.deal_parties); each row becomes
+//     one deal_parties row. Deal total = sum of commitments.
+//   - Round (Investor pipeline only): optional selector + inline "+ New".
 //
-// Round (2026-06-02): when pipelineCode === 'investor', an optional Round
-//   selector is shown. Picking a round sets deals.round_id on create. An
-//   inline "+ New" lets the user create a round on the spot (createRound),
-//   then router.refresh() reloads the rounds prop from the server page.
+// The company-section label adapts to the pipeline (Investors / Paper mills /
+// Filler suppliers / Companies).
 //
 // Hooks order: all React hooks declared at the top of each component, BEFORE
-// any conditional return -- avoids the "Rendered fewer hooks than expected"
-// runtime error when the selected-state branch is taken.
+// any conditional return.
 
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { Search, Plus, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,14 @@ interface PartyResult {
   country_code: string | null;
 }
 
+interface CompanyRow {
+  key: string;
+  partyId: string;
+  partyDisplay: string;
+  role: string;
+  amount: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,6 +54,12 @@ interface Props {
   stages: Stage[];
   /** Investor pipeline only; [] elsewhere. */
   rounds: RoundOption[];
+}
+
+let _rowSeq = 0;
+function blankRow(role: string): CompanyRow {
+  _rowSeq += 1;
+  return { key: 'r' + _rowSeq, partyId: '', partyDisplay: '', role, amount: '' };
 }
 
 export function NewDealModal({
@@ -57,11 +71,36 @@ export function NewDealModal({
   rounds,
 }: Props) {
   const router = useRouter();
+  const isInvestor = pipelineCode === 'investor';
+  const firstStage = stages[0];
+
+  const firstRole = isInvestor ? 'lead' : 'primary';
+  const addRole = isInvestor ? 'co_investor' : 'participant';
+
+  const roleOptions: Array<[string, string]> = isInvestor
+    ? [
+        ['lead', 'Lead'],
+        ['co_investor', 'Co-investor'],
+        ['participant', 'Participant'],
+        ['advisor', 'Advisor'],
+      ]
+    : [
+        ['primary', 'Primary'],
+        ['participant', 'Participant'],
+        ['advisor', 'Advisor'],
+      ];
+
+  const companyLabel =
+    pipelineCode === 'investor'
+      ? 'Investors'
+      : pipelineCode === 'paper_mill'
+        ? 'Paper mills'
+        : pipelineCode === 'filler_supplier'
+          ? 'Filler suppliers'
+          : 'Companies';
 
   const [dealName, setDealName] = useState('');
-  const [partyId, setPartyId] = useState('');
-  const [partyDisplay, setPartyDisplay] = useState('');
-  const [value, setValue] = useState('');
+  const [rows, setRows] = useState<CompanyRow[]>(() => [blankRow(firstRole)]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -71,21 +110,29 @@ export function NewDealModal({
   const [newRoundName, setNewRoundName] = useState('');
   const [creatingRound, startRoundTransition] = useTransition();
 
-  const isInvestor = pipelineCode === 'investor';
-  const firstStage = stages[0];
-
   useEffect(() => {
     if (!open) {
       setDealName('');
-      setPartyId('');
-      setPartyDisplay('');
-      setValue('');
+      setRows([blankRow(firstRole)]);
       setError(null);
       setRoundId('');
       setNewRoundMode(false);
       setNewRoundName('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const updateRow = (key: string, patch: Partial<CompanyRow>) =>
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const addRow = () => setRows((prev) => [...prev, blankRow(addRole)]);
+  const removeRow = (key: string) =>
+    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
+
+  // Live total of entered commitments (single currency assumed: USD).
+  const total = rows.reduce((sum, r) => {
+    const n = Number(r.amount);
+    return sum + (r.amount.trim() && Number.isFinite(n) && n >= 0 ? n : 0);
+  }, 0);
 
   const handleCreateRound = () => {
     const name = newRoundName.trim();
@@ -97,7 +144,6 @@ export function NewDealModal({
         setRoundId(res.roundId);
         setNewRoundMode(false);
         setNewRoundName('');
-        // reloads the rounds prop (server page) so the new option appears
         router.refresh();
       } else {
         setError(res.errorMessage ?? 'Failed to create round');
@@ -109,26 +155,39 @@ export function NewDealModal({
     setError(null);
     const trimmedName = dealName.trim();
     if (!trimmedName) { setError('Deal name is required'); return; }
-    if (!partyId) { setError('Please select a counterparty'); return; }
     if (!firstStage) { setError('No stages configured for this pipeline'); return; }
 
-    let amount: number | null = null;
-    if (value.trim()) {
-      const n = Number(value);
-      if (!Number.isFinite(n) || n < 0) {
-        setError('Value must be a positive number');
-        return;
+    const filled = rows.filter((r) => r.partyId);
+    if (filled.length === 0) { setError('Add at least one company'); return; }
+
+    const seen = new Set<string>();
+    const parties = [];
+    for (const r of filled) {
+      if (seen.has(r.partyId)) { setError('The same company is listed twice'); return; }
+      seen.add(r.partyId);
+      let amount: number | null = null;
+      if (r.amount.trim()) {
+        const n = Number(r.amount);
+        if (!Number.isFinite(n) || n < 0) {
+          setError('Each amount must be a non-negative number');
+          return;
+        }
+        amount = n;
       }
-      amount = n;
+      parties.push({
+        partyId: r.partyId,
+        role: r.role as 'lead' | 'co_investor' | 'participant' | 'advisor' | 'primary',
+        commitmentAmount: amount,
+        currency: 'USD',
+      });
     }
 
     startTransition(async () => {
       const result = await createDeal({
         pipelineCode,
         deal_name: trimmedName,
-        party_id: partyId,
         current_stage_id: firstStage.id,
-        value_amount: amount,
+        parties,
         round_id: isInvestor ? (roundId || null) : null,
       });
       if (!result.ok) {
@@ -142,7 +201,7 @@ export function NewDealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>New {pipelineName} deal</DialogTitle>
         </DialogHeader>
@@ -168,48 +227,80 @@ export function NewDealModal({
             />
           </div>
 
-          {/* Counterparty */}
+          {/* Companies (M:N) */}
           <div>
             <label className="mb-1 block text-sm font-medium text-foreground">
-              Counterparty <span className="text-rose-600">*</span>
+              {companyLabel} <span className="text-rose-600">*</span>
             </label>
-            <PartySearchInput
-              partyId={partyId}
-              partyDisplay={partyDisplay}
-              onSelect={(p) => {
-                setPartyId(p.id);
-                setPartyDisplay(p.party_name);
-              }}
-              onClear={() => {
-                setPartyId('');
-                setPartyDisplay('');
-              }}
-              disabled={isPending}
-            />
-          </div>
 
-          {/* Value */}
-          <div>
-            <label
-              htmlFor="deal-value"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Value (USD)
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                optional
-              </span>
-            </label>
-            <input
-              id="deal-value"
-              type="number"
-              min="0"
-              step="any"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="50000"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
-              disabled={isPending}
-            />
+            <div className="space-y-2">
+              {rows.map((row) => (
+                <div key={row.key} className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PartySearchInput
+                      partyId={row.partyId}
+                      partyDisplay={row.partyDisplay}
+                      onSelect={(p) =>
+                        updateRow(row.key, { partyId: p.id, partyDisplay: p.party_name })
+                      }
+                      onClear={() =>
+                        updateRow(row.key, { partyId: '', partyDisplay: '' })
+                      }
+                      disabled={isPending}
+                    />
+                  </div>
+                  <select
+                    value={row.role}
+                    onChange={(e) => updateRow(row.key, { role: e.target.value })}
+                    disabled={isPending}
+                    className="h-[38px] w-32 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                  >
+                    {roleOptions.map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={row.amount}
+                    onChange={(e) => updateRow(row.key, { amount: e.target.value })}
+                    placeholder="Amount"
+                    disabled={isPending}
+                    className="h-[38px] w-28 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.key)}
+                    disabled={isPending || rows.length <= 1}
+                    aria-label="Remove company"
+                    className="mt-1 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={addRow}
+                disabled={isPending}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add company
+              </button>
+              {total > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  Total:{' '}
+                  <span className="font-medium tabular-nums text-foreground">
+                    US${total.toLocaleString()}
+                  </span>
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {/* Round (Investor pipeline only) */}
@@ -314,7 +405,7 @@ export function NewDealModal({
 }
 
 // ============================================================
-// Counterparty search (debounced, server-side)
+// Counterparty search (debounced, server-side) - one per company row
 // ============================================================
 
 function PartySearchInput({
@@ -338,8 +429,6 @@ function PartySearchInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Click outside to close dropdown. Declared BEFORE the early return so
-  // React always counts the same number of hooks per render.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -354,7 +443,7 @@ function PartySearchInput({
   // === Now it's safe to branch on selected vs unselected ===
   if (partyId) {
     return (
-      <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+      <div className="flex h-[38px] items-center gap-2 rounded-md border bg-muted/30 px-3 text-sm">
         <span className="flex-1 truncate font-medium text-foreground">
           {partyDisplay}
         </span>
@@ -370,7 +459,6 @@ function PartySearchInput({
     );
   }
 
-  // Regular helper -- not a hook, can live below the conditional return
   const runSearch = (q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -399,7 +487,7 @@ function PartySearchInput({
           onFocus={() => runSearch(query)}
           placeholder="Search company name..."
           disabled={disabled}
-          className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+          className="h-[38px] w-full rounded-md border bg-background pl-9 pr-3 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
         />
       </div>
 
