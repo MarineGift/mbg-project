@@ -40,7 +40,7 @@ import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import { simpleParser, type Attachment, type ParsedMail } from 'mailparser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID, createHash } from 'node:crypto';
-import { env } from '../env';
+import { env, requireMailcarrierEnv } from '../env';
 import { maskPii } from '../ai/pii-masker';
 import {
   parseInboundMessage,
@@ -193,11 +193,9 @@ export class MailCarrierClient {
     kind?: SendingAddressKind,
   ): { username: string; password: string } {
     if (!kind) {
-      // Phase 1 backward compat
-      return {
-        username: env.MAILCARRIER_USERNAME,
-        password: env.MAILCARRIER_PASSWORD,
-      };
+      // Phase 1 backward compat (worker-only env; fail fast if unset)
+      const mc = requireMailcarrierEnv();
+      return { username: mc.username, password: mc.password };
     }
     switch (kind) {
       case 'personal':
@@ -240,7 +238,7 @@ export class MailCarrierClient {
     port?: number;
   }): IImapClient {
     // The account path uses per-account host/port; otherwise the existing single env values (backward compat).
-    const host = creds.host ?? env.MAILCARRIER_HOST;
+    const host = creds.host ?? requireMailcarrierEnv().host;
     const port = creds.port ?? env.MAILCARRIER_PORT;
     // 993: implicit TLS, 143: STARTTLS (ImapFlow negotiates automatically)
     const isImplicitTls = port === 993;
