@@ -770,7 +770,7 @@ export class MailCarrierClient {
 
     // PII pre-masking
     const bodyPlainRaw = parsed.text ?? '';
-    const { masked: maskedPlain, categories } = maskPii(bodyPlainRaw);
+    const { categories } = maskPii(bodyPlainRaw); // A-fix: store raw body; keep categories for AI-run metadata
 
     const channel = 'email';
     const direction = 'inbound';
@@ -795,7 +795,7 @@ export class MailCarrierClient {
         reply_to_address: headers.replyTo ?? null,
         subject: headers.subject,
         body_html: parsed.html || null,
-        body_plain: maskedPlain,
+        body_plain: bodyPlainRaw,
         status: 'received',
         occurred_at: headers.date.toISOString(),
         received_at: this.nowProvider().toISOString(),
@@ -807,7 +807,7 @@ export class MailCarrierClient {
           mailcarrier_received_at: this.nowProvider().toISOString(),
           mailcarrier_account_kind: this.kind,
           mailcarrier_account_username: this.username,
-          pii_masked: true,
+          pii_masked: false,
           pii_categories_detected: categories,
           thread_match: {
             matched_by: threadMatch.matchedBy,
@@ -848,7 +848,7 @@ export class MailCarrierClient {
       organizationId: this.organizationId,
       threadId,
       messageId: headers.messageId,
-      bodyText: maskedPlain,
+      bodyText: bodyPlainRaw,
       piiCategories: categories,
       fromAddress: headers.from.address,
     };

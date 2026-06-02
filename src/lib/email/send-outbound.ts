@@ -18,6 +18,7 @@ import type { SbClient } from '@/lib/supabase/server';
 import type { SendingAddressKind, AttachmentInput } from '@/types/email';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
 import { createEmailTracking } from '@/lib/actions/email-tracking';
+import { hasUnrestoredTokens, findUnrestoredTokens } from '@/lib/ai/pii-masker';
 
 /* ============================================================
  * Input / Output
@@ -95,7 +96,7 @@ export interface SendOutboundResult {
   communicationId?: string;
   messageId?: string;
   threadId?: string;
-  errorCode?: 'not_whitelisted' | 'database' | 'send_failed';
+  errorCode?: 'not_whitelisted' | 'database' | 'send_failed' | 'pii_tokens_present';
   errorMessage?: string;
 }
 
@@ -277,6 +278,22 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     if (sig) {
       finalBody = `${finalBody}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sig}`;
     }
+  }
+
+  // [3b] PII token guard (A-fix defense-in-depth): never send a body/subject that
+  // still contains unrestored {{PII_nnn}} tokens. Indicates an upstream mask/restore failure.
+  if (hasUnrestoredTokens(finalBody) || hasUnrestoredTokens(finalSubject)) {
+    const leakedTokens = [
+      ...findUnrestoredTokens(finalBody),
+      ...findUnrestoredTokens(finalSubject),
+    ];
+    console.error('[sendOutbound] blocked: unrestored PII tokens present:', leakedTokens);
+    return {
+      ok: false,
+      status: 'blocked',
+      errorCode: 'pii_tokens_present',
+      errorMessage: `Unrestored PII tokens present; send blocked: `,
+    };
   }
 
   // [4] insert communications (status='sending')
