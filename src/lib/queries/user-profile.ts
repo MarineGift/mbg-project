@@ -9,6 +9,7 @@ import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/auth';
 import type { Locale } from '@/i18n/routing';
+import { DEFAULT_TIMEZONE } from '@/lib/constants/timezones';
 
 export interface UserProfile {
   id: string;
@@ -17,6 +18,8 @@ export interface UserProfile {
   displayName: string | null;
   sendingEmail: string | null;
   preferredLanguage: Locale;
+  /** IANA timezone for absolute time display. Defaults to US Central. */
+  timezone: string;
   isOwner: boolean;
   organizationId: string;
   organizationName: string;
@@ -32,7 +35,7 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile | null> {
       .schema('app')
       .from('users' as never)
       .select(
-        'id, email, full_name, display_name, sending_email, preferred_language, created_at',
+        'id, email, full_name, display_name, sending_email, preferred_language, timezone, created_at',
       )
       .eq('id', auth.userId)
       .maybeSingle(),
@@ -53,6 +56,7 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile | null> {
     display_name: string | null;
     sending_email: string | null;
     preferred_language: string | null;
+    timezone: string | null;
     created_at: string;
   };
 
@@ -72,6 +76,7 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile | null> {
     displayName: u.display_name,
     sendingEmail: u.sending_email,
     preferredLanguage: lang,
+    timezone: u.timezone ?? DEFAULT_TIMEZONE,
     isOwner: auth.isOwner,
     organizationId: auth.organizationId,
     organizationName: org?.name ?? '(unknown)',
