@@ -59,7 +59,7 @@ interface Props {
 let _rowSeq = 0;
 function blankRow(role: string): CompanyRow {
   _rowSeq += 1;
-  return { key: 'r' + _rowSeq, partyId: '', partyDisplay: '', role, amount: '' };
+  return { key: 'r' + _rowSeq, partyId: '', partyDisplay: '', role, amount: '0' };
 }
 
 export function NewDealModal({

@@ -64,6 +64,55 @@ function contactDisplayName(c: any): string {
   return c.given_name || c.family_name || '';
 }
 
+// --- deal_parties helpers (M:N companies) ---
+
+const ROLE_ORDER: Record<string, number> = {
+  lead: 0, co_investor: 1, participant: 2, advisor: 3, primary: 4,
+};
+
+function roleLabel(role: string): string {
+  switch (role) {
+    case 'lead': return 'Lead';
+    case 'co_investor': return 'Co-investor';
+    case 'participant': return 'Participant';
+    case 'advisor': return 'Advisor';
+    case 'primary': return 'Primary';
+    default: return role;
+  }
+}
+
+function sortDealParties(dps: any[]): any[] {
+  return [...dps].sort(
+    (a, b) =>
+      (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) ||
+      (a.parties?.party_name ?? '').localeCompare(b.parties?.party_name ?? '')
+  );
+}
+
+function toNum(v: any): number | null {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sumCommitments(dps: any[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const p of dps) {
+    const n = toNum(p.commitment_amount);
+    if (n != null) {
+      const cur = p.currency || 'USD';
+      out[cur] = (out[cur] ?? 0) + n;
+    }
+  }
+  return out;
+}
+
+function fmtTotals(totals: Record<string, number>): string {
+  const e = Object.entries(totals);
+  if (e.length === 0) return '\u2014';
+  return e.map(([cur, sum]) => fmtMoney(sum, cur)).join(' \u00b7 ');
+}
+
 // ============================================================
 // Page (server component)
 // ============================================================
@@ -80,7 +129,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
       'source, last_activity_at, created_at, ' +
       'pipeline:pipelines(id, code, name), ' +
       'stage:stages(id, code, name), ' +
-      'party:parties(id, party_name, country_code, website)'
+      'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
+      '  parties ( id, party_name, country_code, website ) )'
     )
     .eq('id', params.id)
     .is('deleted_at', null)
@@ -88,6 +138,10 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
 
   if (!dealRow) notFound();
   const d = dealRow as any;
+
+  const dpSorted = sortDealParties((d.deal_parties ?? []) as any[]);
+  const leadParty = dpSorted[0] ?? null;
+  const commitmentTotals = sumCommitments(dpSorted);
 
   const isCrowdfunding = d.pipeline?.code === 'crowdfunding';
   const availableTabs: TabId[] = isCrowdfunding
@@ -193,11 +247,14 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
         <h1 className="mt-1 text-xl font-semibold text-foreground">{d.deal_name}</h1>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-muted-foreground">
-          {d.party && (
+          {leadParty && (
             <span>
-              {d.party.party_name}
-              {d.party.country_code && (
-                <span className="ml-1 opacity-60"> {'\u00b7'} {d.party.country_code}</span>
+              {leadParty.parties?.party_name ?? '(unknown)'}
+              {leadParty.parties?.country_code && (
+                <span className="ml-1 opacity-60"> {'\u00b7'} {leadParty.parties.country_code}</span>
+              )}
+              {dpSorted.length > 1 && (
+                <span className="ml-1 font-medium text-foreground">+{dpSorted.length - 1}</span>
               )}
             </span>
           )}
@@ -209,11 +266,11 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               </span>
             </>
           )}
-          {d.value_amount != null && (
+          {Object.keys(commitmentTotals).length > 0 && (
             <>
               <span className="mx-1 opacity-40">{'\u00b7'}</span>
               <span className="font-medium text-foreground tabular-nums">
-                {fmtMoney(d.value_amount, d.value_currency)}
+                {fmtTotals(commitmentTotals)}
               </span>
             </>
           )}
@@ -285,7 +342,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
 
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto border-l bg-muted/20 p-4">
           <PropertyCard deal={d} />
-          {d.party && <CompanyCard party={d.party} />}
+          {dpSorted.length > 0 && <CompaniesCard parties={dpSorted} />}
           {d.notes && <NotesCard notes={d.notes} />}
         </aside>
       </div>
@@ -476,7 +533,7 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
 function PropertyCard({ deal }: { deal: any }) {
   const rows: Array<[string, React.ReactNode]> = [
     ['Stage', deal.stage?.name ?? '\u2014'],
-    ['Value', fmtMoney(deal.value_amount, deal.value_currency)],
+    ['Commitments', fmtTotals(sumCommitments((deal.deal_parties ?? []) as any[]))],
     ['Probability', deal.probability_pct != null ? deal.probability_pct + '%' : '\u2014'],
     ['Close date', fmtDate(deal.expected_close_date)],
     ['Priority', deal.priority ? <span className="capitalize">{deal.priority}</span> : '\u2014'],
@@ -500,29 +557,49 @@ function PropertyCard({ deal }: { deal: any }) {
   );
 }
 
-function CompanyCard({ party }: { party: any }) {
+function CompaniesCard({ parties }: { parties: any[] }) {
   return (
     <div className="rounded-lg border bg-card">
       <div className="border-b px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Company
+        {parties.length > 1 ? 'Companies (' + parties.length + ')' : 'Company'}
       </div>
-      <div className="space-y-1 px-3 py-2 text-xs">
-        <div className="text-sm font-medium text-foreground">{party.party_name}</div>
-        {party.country_code && (
-          <div className="text-muted-foreground">{party.country_code}</div>
-        )}
-        {party.website && (
-          <a
-            href={party.website.startsWith('http') ? party.website : 'https://' + party.website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-foreground hover:underline"
-          >
-            {party.website.replace(/^https?:\/\//, '')}
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        )}
-      </div>
+      <ul className="divide-y">
+        {parties.map((p: any) => {
+          const party = p.parties ?? {};
+          const amt = toNum(p.commitment_amount);
+          return (
+            <li key={p.id} className="space-y-1 px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">
+                  {party.party_name ?? '(unknown)'}
+                </span>
+                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {roleLabel(p.role)}
+                </span>
+              </div>
+              {amt != null && (
+                <div className="tabular-nums text-foreground">
+                  {fmtMoney(amt, p.currency || 'USD')}
+                </div>
+              )}
+              {party.country_code && (
+                <div className="text-muted-foreground">{party.country_code}</div>
+              )}
+              {party.website && (
+                <a
+                  href={party.website.startsWith('http') ? party.website : 'https://' + party.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-foreground hover:underline"
+                >
+                  {party.website.replace(/^https?:\/\//, '')}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
