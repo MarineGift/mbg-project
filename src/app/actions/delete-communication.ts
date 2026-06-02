@@ -35,9 +35,16 @@ async function deleteFromImap(messageId: string, accountKind: string): Promise<v
     console.warn(`[deleteComm] No IMAP creds for kind=${accountKind}, skipping`);
     return;
   }
+  // MAILCARRIER_HOST is worker-only/optional in env; without it we cannot open
+  // IMAP, so skip the server-side delete (the DB soft-delete still proceeds).
+  const host = env.MAILCARRIER_HOST;
+  if (!host) {
+    console.warn('[deleteComm] MAILCARRIER_HOST unset, skipping IMAP delete');
+    return;
+  }
   const isImplicitTls = env.MAILCARRIER_PORT === 993;
   const client = new ImapFlow({
-    host: env.MAILCARRIER_HOST,
+    host,
     port: env.MAILCARRIER_PORT,
     secure: isImplicitTls,
     auth: { user: creds.username, pass: creds.password },

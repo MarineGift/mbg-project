@@ -42,29 +42,42 @@ type OpenStatusMap = Record<
   { firstOpenedAt: string | null; openCount: number }
 >;
 
-/** Absolute time, browser-local, 24h, seconds omitted: "2026-06-02 06:05". */
-function formatAbsolute(iso: string): string {
+/**
+ * Absolute time in the viewer's configured timeZone, 24h, no seconds: "2026-06-02 06:05".
+ * Uses Intl.DateTimeFormat so the timestamp reflects the user's chosen IANA timezone
+ * (app.users.timezone) rather than the browser's local zone. When timeZone is
+ * undefined, the runtime default zone is used.
+ */
+function formatAbsolute(iso: string, timeZone?: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
 }
 
 /**
  * Read/Sent indicator for an outbound row.
  * The absolute timestamp is rendered only after mount to keep server-side
- * markup (UTC) and client markup (browser-local) in agreement — no hydration
- * mismatch, and the time always reflects the viewer's local timezone.
+ * markup (UTC) and client markup (timezone-formatted) in agreement — no
+ * hydration mismatch, and the time always reflects the viewer's timezone.
  */
 function ReadIndicator({
   openedAt,
   openCount,
+  timeZone,
 }: {
   openedAt: string | null;
   openCount: number;
+  timeZone?: string;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -86,7 +99,7 @@ function ReadIndicator({
       Read
       {mounted && openedAt && (
         <span className="text-muted-foreground font-normal">
-          · {formatAbsolute(openedAt)}
+          · {formatAbsolute(openedAt, timeZone)}
         </span>
       )}
     </span>
@@ -97,9 +110,11 @@ interface Props {
   rows: readonly InboxRow[];
   /** Optional: read tracking per communication id. When provided, outbound rows show a Read/Sent indicator. */
   openStatuses?: OpenStatusMap;
+  /** Viewer's configured display timezone (IANA). Falls back to runtime default when unset. */
+  timeZone?: string;
 }
 
-export function InboxTable({ rows, openStatuses }: Props) {
+export function InboxTable({ rows, openStatuses, timeZone }: Props) {
   const t = useTranslations('inbox');
   const tPreview = useTranslations('drafts.preview');
 
@@ -248,6 +263,7 @@ export function InboxTable({ rows, openStatuses }: Props) {
                         <ReadIndicator
                           openedAt={openStatuses[row.id]?.firstOpenedAt ?? null}
                           openCount={openStatuses[row.id]?.openCount ?? 0}
+                          timeZone={timeZone}
                         />
                       )}
                       {row.hasDraft && (
