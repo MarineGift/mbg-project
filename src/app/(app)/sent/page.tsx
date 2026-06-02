@@ -4,6 +4,7 @@ import {
   parseInboxFilters,
   parseInboxPagination,
 } from '@/lib/queries/inbox';
+import { fetchOpenStatuses } from '@/lib/queries/open-status';
 import { InboxFiltersBar } from '@/components/inbox/inbox-filters';
 import { InboxSearchBar } from '@/components/inbox/inbox-search-bar';
 import { InboxTable } from '@/components/inbox/inbox-table';
@@ -22,6 +23,11 @@ export default async function SentPage({ searchParams }: PageProps) {
   const tNav = await getTranslations('nav');
 
   const result = await fetchInbox(filters, pagination);
+
+  // Read/open tracking for the visible rows (Sent list "Read" column).
+  // fetchOpenStatuses returns {} for ids without a tracking row, so this is
+  // safe even when the list also contains inbound messages.
+  const openStatuses = await fetchOpenStatuses(result.rows.map((r) => r.id));
 
   const isFiltered =
     filters.channel !== DEFAULT_SENT_FILTERS.channel ||
@@ -49,7 +55,7 @@ export default async function SentPage({ searchParams }: PageProps) {
         {result.rows.length === 0 ? (
           <InboxEmpty isFiltered={isFiltered} />
         ) : (
-          <InboxTable rows={result.rows} />
+          <InboxTable rows={result.rows} openStatuses={openStatuses} />
         )}
       </div>
 

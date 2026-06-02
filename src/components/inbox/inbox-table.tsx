@@ -1,10 +1,18 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Sparkles, Paperclip, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import {
+  Sparkles,
+  Paperclip,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  Eye,
+  Send,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { ChannelDirectionIcon } from './channel-direction-icon';
 import { InboxDeleteButton } from './inbox-delete-button';
@@ -24,11 +32,74 @@ import { deleteCommunicationsBulk } from '@/app/actions/delete-communication';
 import type { InboxRow } from '@/types/inbox';
 import { cn } from '@/lib/utils';
 
-interface Props {
-  rows: readonly InboxRow[];
+/**
+ * Open/read tracking map keyed by communication id.
+ * Shape mirrors OpenStatus from @/lib/queries/open-status, declared locally so
+ * this client component never imports the server-only module.
+ */
+type OpenStatusMap = Record<
+  string,
+  { firstOpenedAt: string | null; openCount: number }
+>;
+
+/** Absolute time, browser-local, 24h, seconds omitted: "2026-06-02 06:05". */
+function formatAbsolute(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
 }
 
-export function InboxTable({ rows }: Props) {
+/**
+ * Read/Sent indicator for an outbound row.
+ * The absolute timestamp is rendered only after mount to keep server-side
+ * markup (UTC) and client markup (browser-local) in agreement — no hydration
+ * mismatch, and the time always reflects the viewer's local timezone.
+ */
+function ReadIndicator({
+  openedAt,
+  openCount,
+}: {
+  openedAt: string | null;
+  openCount: number;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const opened = openCount > 0 && !!openedAt;
+
+  if (!opened) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Send className="h-3 w-3" />
+        Sent
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+      <Eye className="h-3 w-3" />
+      Read
+      {mounted && openedAt && (
+        <span className="text-muted-foreground font-normal">
+          · {formatAbsolute(openedAt)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface Props {
+  rows: readonly InboxRow[];
+  /** Optional: read tracking per communication id. When provided, outbound rows show a Read/Sent indicator. */
+  openStatuses?: OpenStatusMap;
+}
+
+export function InboxTable({ rows, openStatuses }: Props) {
   const t = useTranslations('inbox');
   const tPreview = useTranslations('drafts.preview');
 
@@ -173,6 +244,12 @@ export function InboxTable({ rows }: Props) {
                       <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{row.bodyPreview}</p>
                     )}
                     <div className="flex items-center gap-2 mt-1">
+                      {openStatuses && row.direction === 'outbound' && (
+                        <ReadIndicator
+                          openedAt={openStatuses[row.id]?.firstOpenedAt ?? null}
+                          openCount={openStatuses[row.id]?.openCount ?? 0}
+                        />
+                      )}
                       {row.hasDraft && (
                         <span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
                           <Sparkles className="h-3 w-3" />{t('aiDraft')}
