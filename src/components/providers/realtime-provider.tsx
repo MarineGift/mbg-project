@@ -69,7 +69,7 @@ export function RealtimeProvider({
   setTaskRef.current = setOpenTaskCount;
   useEffect(() => { setTaskRef.current(initialOpenTaskCount); }, [initialOpenTaskCount]);
 
-  // ── communications 변경 구독 (soft-delete 시 inbox 카운트 감소) ──────────
+  // communications change subscription (decrements the inbox count on soft-delete)
   const inboxCountRef = useRef(inboxUnreadCount);
   inboxCountRef.current = inboxUnreadCount;
 
@@ -129,7 +129,7 @@ export function RealtimeProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
-  // ── drafts 변경 구독 ────────────────────────────────────────────────────
+  // drafts change subscription
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
