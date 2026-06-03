@@ -250,12 +250,12 @@ export function TaskDetailClient({ task: initial }: Props) {
                   </dd>
                 </div>
               )}
-              {task.engagementId && task.engagementName && (
+              {task.engagementId && task.engagementName && task.engagementPipelineCode && (
                 <div className="flex items-center px-4 py-2.5 gap-3">
                   <dt className="w-28 shrink-0 text-muted-foreground">Engagement</dt>
                   <dd>
                     <Link
-                      href={`/engagements/${task.engagementId}`}
+                      href={`/pipelines/${task.engagementPipelineCode}/deals/${task.engagementId}`}
                       className="text-primary hover:underline"
                     >
                       {task.engagementName}

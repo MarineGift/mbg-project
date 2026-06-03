@@ -32,6 +32,7 @@ export interface TaskRow {
   partyTypeCode: PartyTypeCode | null;
   engagementId: string | null;
   engagementName: string | null;
+  engagementPipelineCode: string | null;
   assignedToUserId: string | null;
   createdAt: string;
   completedAt: string | null;

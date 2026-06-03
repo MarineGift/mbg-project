@@ -175,12 +175,7 @@ export default async function DashboardPage() {
               <div className="space-y-2">
                 {PARTY_TYPES.filter(m => engCounts[m] > 0).map(m => (
                   <div key={m} className="flex items-center justify-between text-sm">
-                    <Link
-                      href={`/${m}/engagements`}
-                      className={`font-medium hover:underline underline-offset-2 ${MODULE_COLORS[m]}`}
-                    >
-                      {PARTY_TYPE_LABELS[m]}
-                    </Link>
+                    <span className={`font-medium ${MODULE_COLORS[m]}`}>{PARTY_TYPE_LABELS[m]}</span>
                     <span className="tabular-nums text-muted-foreground font-mono text-xs">
                       {engCounts[m].toLocaleString()}
                     </span>
