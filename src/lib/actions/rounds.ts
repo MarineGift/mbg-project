@@ -10,6 +10,9 @@
  *
  * Follows the lib/actions/engagements.ts shape (zod + requireAuth + a typed
  * result object).
+ *
+ * Status set (2026-06-02): planned | open | closed | cancelled.
+ *   Mirrors the app.rounds rounds_status_chk CHECK constraint.
  */
 
 'use server';
@@ -32,6 +35,12 @@ export interface RoundActionResult {
 
 // Rounds only surface on the Investor board for now.
 const INVESTOR_PIPELINE_PATH = '/pipelines/investor';
+const INVESTOR_ROUNDS_PATH = '/pipelines/investor/rounds';
+
+function revalidateRounds() {
+  revalidatePath(INVESTOR_PIPELINE_PATH);
+  revalidatePath(INVESTOR_ROUNDS_PATH);
+}
 
 /* ============================================================
  * createRound
@@ -43,7 +52,7 @@ const roundCreateSchema = z.object({
   targetAmount: z.number().min(0).max(1e15).optional().nullable(),
   preMoneyValuation: z.number().min(0).max(1e15).optional().nullable(),
   currency: z.string().length(3).default('USD'),
-  status: z.enum(['open', 'closed', 'cancelled']).default('open'),
+  status: z.enum(['planned', 'open', 'closed', 'cancelled']).default('open'),
   openedAt: z.string().optional().nullable(),
   closedAt: z.string().optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
@@ -95,7 +104,7 @@ export async function createRound(
     };
   }
 
-  revalidatePath(INVESTOR_PIPELINE_PATH);
+  revalidateRounds();
   return { ok: true, roundId: (data as { id: string }).id };
 }
 
@@ -110,7 +119,7 @@ const roundUpdateSchema = z.object({
   targetAmount: z.number().min(0).max(1e15).optional().nullable(),
   preMoneyValuation: z.number().min(0).max(1e15).optional().nullable(),
   currency: z.string().length(3).optional(),
-  status: z.enum(['open', 'closed', 'cancelled']).optional(),
+  status: z.enum(['planned', 'open', 'closed', 'cancelled']).optional(),
   openedAt: z.string().optional().nullable(),
   closedAt: z.string().optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
@@ -162,7 +171,7 @@ export async function updateRound(
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  revalidatePath(INVESTOR_PIPELINE_PATH);
+  revalidateRounds();
   return { ok: true };
 }
 
@@ -197,6 +206,6 @@ export async function deleteRound(input: {
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  revalidatePath(INVESTOR_PIPELINE_PATH);
+  revalidateRounds();
   return { ok: true };
 }

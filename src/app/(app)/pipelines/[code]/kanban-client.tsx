@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   DndContext,
   DragEndEvent,
@@ -27,7 +28,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus } from 'lucide-react';
+import { Plus, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { moveDealStage } from './actions';
@@ -264,6 +265,15 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
                   </span>
                 ))}
               </div>
+              {pipeline.code === 'investor' ? (
+                <Link
+                  href="/pipelines/investor/rounds"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Rounds
+                </Link>
+              ) : null}
               <Button
                 size="sm"
                 onClick={() => setModalOpen(true)}
