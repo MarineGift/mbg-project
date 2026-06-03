@@ -5,6 +5,7 @@ import type { InvestorProfile } from '@/types/party-detail';
 
 interface Props {
   profile: InvestorProfile;
+  partyName?: string;
 }
 
 const DASH = <span className="text-muted-foreground">-</span>;
@@ -73,7 +74,7 @@ function Flags({ profile }: { profile: InvestorProfile }): ReactNode {
   );
 }
 
-export function InvestorProfileCard({ profile }: Props) {
+export function InvestorProfileCard({ profile, partyName }: Props) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -84,7 +85,9 @@ export function InvestorProfileCard({ profile }: Props) {
       </CardHeader>
       <CardContent>
         <dl>
-          <Row label="Fund Name">{profile.fundName || DASH}</Row>
+          {!!profile.fundName && profile.fundName.trim() !== (partyName ?? "").trim() && (
+            <Row label="Fund Name">{profile.fundName}</Row>
+          )}
           <Row label="Subtype">
             {profile.subtype ? (
               <span className="uppercase tracking-wide text-xs font-medium">
