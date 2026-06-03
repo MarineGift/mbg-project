@@ -231,6 +231,7 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     partyTypeCode: null,
     engagementId: r.deal_id,
     engagementName: deal?.deal_name ?? null,
+    engagementPipelineCode: deal?.pipeline?.code ?? null,
     assignedToUserId: r.assigned_to_user_id,
     createdAt: r.created_at,
     completedAt: r.completed_at,
