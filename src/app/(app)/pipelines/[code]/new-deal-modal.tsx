@@ -28,6 +28,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { createDeal, searchParties } from './actions';
 import { createRound } from '@/lib/actions/rounds';
+import { InlinePartyCreateDialog } from '@/components/parties/inline-party-create-dialog';
+import { isPartyType } from '@/types/party-type';
 
 type Stage = { id: string; code: string; name: string; sort_order: number };
 type RoundOption = { id: string; name: string };
@@ -75,7 +77,7 @@ export function NewDealModal({
   const firstStage = stages[0];
 
   const firstRole = isInvestor ? 'lead' : 'primary';
-  const addRole = isInvestor ? 'co_investor' : 'participant';
+  const addRole = isInvestor ? 'co_investor' : 'primary';
 
   const roleOptions: Array<[string, string]> = isInvestor
     ? [
@@ -240,11 +242,12 @@ export function NewDealModal({
 
             <div className="space-y-2">
               {rows.map((row) => (
-                <div key={row.key} className="flex items-start gap-2">
+                <div key={row.key} className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <div className="min-w-0 flex-1">
                     <PartySearchInput
                       partyId={row.partyId}
                       partyDisplay={row.partyDisplay}
+                      pipelineCode={pipelineCode}
                       onSelect={(p) =>
                         updateRow(row.key, { partyId: p.id, partyDisplay: p.party_name })
                       }
@@ -254,35 +257,39 @@ export function NewDealModal({
                       disabled={isPending}
                     />
                   </div>
-                  <select
-                    value={row.role}
-                    onChange={(e) => updateRow(row.key, { role: e.target.value })}
-                    disabled={isPending}
-                    className="h-[38px] w-32 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
-                  >
-                    {roleOptions.map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={row.amount}
-                    onChange={(e) => updateRow(row.key, { amount: e.target.value })}
-                    placeholder="Amount"
-                    disabled={isPending}
-                    className="h-[38px] w-28 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeRow(row.key)}
-                    disabled={isPending || rows.length <= 1}
-                    aria-label="Remove company"
-                    className="mt-1 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 items-start gap-2">
+                    {isInvestor && (
+                      <select
+                        value={row.role}
+                        onChange={(e) => updateRow(row.key, { role: e.target.value })}
+                        disabled={isPending}
+                        className="h-[38px] w-28 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5 sm:w-32"
+                      >
+                        {roleOptions.map(([v, l]) => (
+                          <option key={v} value={v}>{l}</option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={row.amount}
+                      onChange={(e) => updateRow(row.key, { amount: e.target.value })}
+                      placeholder="Amount"
+                      disabled={isPending}
+                      className="h-[38px] w-24 shrink-0 rounded-md border bg-background px-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5 sm:w-28"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.key)}
+                      disabled={isPending || rows.length <= 1}
+                      aria-label="Remove company"
+                      className="mt-2 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -416,12 +423,14 @@ export function NewDealModal({
 function PartySearchInput({
   partyId,
   partyDisplay,
+  pipelineCode,
   onSelect,
   onClear,
   disabled,
 }: {
   partyId: string;
   partyDisplay: string;
+  pipelineCode: string;
   onSelect: (p: PartyResult) => void;
   onClear: () => void;
   disabled?: boolean;
@@ -431,6 +440,7 @@ function PartySearchInput({
   const [results, setResults] = useState<PartyResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -532,8 +542,39 @@ function PartySearchInput({
               ))}
             </ul>
           )}
+
+          {!loading && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setRegisterOpen(true);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-1.5 border-t bg-blue-50 px-3 py-2.5 text-left text-sm font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                Register new company
+                {query.trim() ? ` "${query.trim()}"` : ''}
+              </span>
+            </button>
+          )}
         </div>
       )}
+
+      <InlinePartyCreateDialog
+        open={registerOpen}
+        onOpenChange={setRegisterOpen}
+        prefillName={query}
+        defaultPartyType={isPartyType(pipelineCode) ? pipelineCode : 'paper_mill'}
+        onCreated={(p) => {
+          onSelect(p);
+          setRegisterOpen(false);
+          setOpen(false);
+          setQuery('');
+        }}
+      />
     </div>
   );
 }

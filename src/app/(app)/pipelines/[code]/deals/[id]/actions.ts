@@ -239,3 +239,141 @@ export async function searchContacts(query: string): Promise<ContactResult[]> {
 
   return (data ?? []) as unknown as ContactResult[];
 }
+
+// ============================================================
+// updateTask  (deal-scoped: title / description / priority / due)
+// ============================================================
+
+interface UpdateTaskInput {
+  pipelineCode: string;
+  dealId: string;
+  taskId: string;
+  title?: string;
+  description?: string | null;
+  priority?: 'low' | 'medium' | 'high';
+  due_at?: string | null; // ISO or null
+  checklist_id?: string | null; // re-parent to a checklist (or detach with null)
+}
+
+export async function updateTask(
+  input: UpdateTaskInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.taskId) return { ok: false, error: 'Missing task' };
+  if (!input.dealId) return { ok: false, error: 'Missing deal' };
+
+  const supabase = await createSupabaseServerClient();
+
+  // If re-parenting, verify the checklist belongs to THIS deal.
+  let checklistId: string | null | undefined = undefined;
+  if (input.checklist_id !== undefined) {
+    if (input.checklist_id) {
+      const { data: clRow } = await supabase
+        .schema('app')
+        .from('deal_checklists' as never)
+        .select('id')
+        .eq('id', input.checklist_id)
+        .eq('deal_id', input.dealId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (!clRow) return { ok: false, error: 'Checklist item not found on this deal' };
+      checklistId = (clRow as { id: string }).id;
+    } else {
+      checklistId = null;
+    }
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (input.title !== undefined) {
+    const t = input.title.trim();
+    if (!t) return { ok: false, error: 'Title is required' };
+    updates.title = t;
+  }
+  if (input.description !== undefined) updates.description = (input.description ?? '').trim() || null;
+  if (input.priority !== undefined) updates.priority = input.priority;
+  if (input.due_at !== undefined) updates.due_at = input.due_at ?? null;
+  if (checklistId !== undefined) updates.checklist_id = checklistId;
+
+  if (Object.keys(updates).length === 0) return { ok: true };
+
+  const { error, data } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .update(updates as never)
+    .eq('id', input.taskId)
+    .eq('deal_id', input.dealId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: 'Task not found on this deal' };
+
+  revalidatePath('/pipelines/' + input.pipelineCode + '/deals/' + input.dealId);
+  return { ok: true };
+}
+
+// ============================================================
+// toggleTaskInDeal  (status pending <-> completed)
+// ============================================================
+
+interface ToggleTaskInput {
+  pipelineCode: string;
+  dealId: string;
+  taskId: string;
+  completed: boolean; // target state
+}
+
+export async function toggleTaskInDeal(
+  input: ToggleTaskInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.taskId) return { ok: false, error: 'Missing task' };
+  if (!input.dealId) return { ok: false, error: 'Missing deal' };
+
+  const supabase = await createSupabaseServerClient();
+  const { error, data } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .update({
+      status: input.completed ? 'completed' : 'pending',
+      completed_at: input.completed ? new Date().toISOString() : null,
+    } as never)
+    .eq('id', input.taskId)
+    .eq('deal_id', input.dealId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: 'Task not found on this deal' };
+
+  revalidatePath('/pipelines/' + input.pipelineCode + '/deals/' + input.dealId);
+  return { ok: true };
+}
+
+// ============================================================
+// deleteTaskInDeal  (soft delete)
+// ============================================================
+
+export async function deleteTaskInDeal(
+  input: { pipelineCode: string; dealId: string; taskId: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.taskId) return { ok: false, error: 'Missing task' };
+  if (!input.dealId) return { ok: false, error: 'Missing deal' };
+
+  const supabase = await createSupabaseServerClient();
+  const { error, data } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .update({ deleted_at: new Date().toISOString() } as never)
+    .eq('id', input.taskId)
+    .eq('deal_id', input.dealId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: 'Task not found on this deal' };
+
+  revalidatePath('/pipelines/' + input.pipelineCode + '/deals/' + input.dealId);
+  return { ok: true };
+}

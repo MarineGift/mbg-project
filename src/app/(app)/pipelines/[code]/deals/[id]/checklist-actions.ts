@@ -165,3 +165,41 @@ export async function deleteChecklistItem(
   revalidatePath(dealPath(input.pipelineCode, input.dealId));
   return { ok: true };
 }
+
+// ============================================================
+// updateChecklistItem  (rename / retitle)
+// ============================================================
+
+interface UpdateChecklistItemInput {
+  pipelineCode: string;
+  dealId: string;
+  itemId: string;
+  title: string;
+}
+
+export async function updateChecklistItem(
+  input: UpdateChecklistItemInput,
+): Promise<Result> {
+  const title = (input.title ?? '').trim();
+  if (!title) return { ok: false, error: 'Title is required' };
+  if (!input.itemId) return { ok: false, error: 'Missing item' };
+
+  const supabase = await createSupabaseServerClient();
+  const userId = await getUserId(supabase);
+
+  const { error, data } = await supabase
+    .schema('app')
+    .from('deal_checklists' as never)
+    .update({ title, updated_by: userId } as never)
+    .eq('id', input.itemId)
+    .eq('deal_id', input.dealId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: 'Checklist item not found on this deal' };
+
+  revalidatePath(dealPath(input.pipelineCode, input.dealId));
+  return { ok: true };
+}
