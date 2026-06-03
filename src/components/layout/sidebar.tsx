@@ -93,7 +93,9 @@ const TOP_ITEMS: readonly NavItem[] = [
   // but no longer have a top-level sidebar link. Explicit label avoids
   // touching the next-intl messages files; badge removed by design.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do' },
-  { href: '/contacts', labelKey: 'contacts',  icon: Users },
+  // Partners: parties registered under the 'partner' party type. (The old
+  // /contacts people-list route is left intact; only this nav entry changed.)
+  { href: '/partner/parties', labelKey: 'contacts', icon: Users, label: 'Partners' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
 ] as const;
 
