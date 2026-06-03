@@ -19,6 +19,7 @@ import {
   CircleDashed,
   Search,
   User,
+  Activity,
 } from 'lucide-react';
 import {
   Dialog,
@@ -45,6 +46,9 @@ interface Task {
   assigned_to_contact_id: string | null;
   assigned_to_user_id: string | null;
   estimated_minutes: number | null;
+  // Count of non-deleted engagements linked to this task (engagements.task_id).
+  // Attached server-side in the Tasks-tab fetch; absent => 0.
+  _activityCount?: number | null;
 }
 
 interface Checklist {
@@ -257,6 +261,16 @@ function TaskRow({ task: t }: { task: Task }) {
   const isOverdue = !!(due && !isDone && new Date(due).getTime() < Date.now());
   const dueRelative = due && !isDone ? fmtRelative(due) : '';
 
+  const activityCount = t._activityCount ?? 0;
+  const showPriority = !!(priority && priority !== 'medium');
+  const hasMeta = !!(
+    showPriority ||
+    due ||
+    t.assigned_to_contact_id ||
+    t.assigned_to_user_id ||
+    t.estimated_minutes != null
+  );
+
   return (
     <li className="flex items-start gap-3 px-4 py-2.5">
       <div className="mt-0.5">
@@ -295,6 +309,15 @@ function TaskRow({ task: t }: { task: Task }) {
             <>
               <span className="opacity-40">{'\u00b7'}</span>
               <span>{t.estimated_minutes}m est</span>
+            </>
+          )}
+          {activityCount > 0 && (
+            <>
+              {hasMeta && <span className="opacity-40">{'\u00b7'}</span>}
+              <span className="inline-flex items-center gap-1 text-foreground/70">
+                <Activity className="h-3 w-3" />
+                {activityCount} {activityCount === 1 ? 'activity' : 'activities'}
+              </span>
             </>
           )}
         </div>
