@@ -157,7 +157,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
   let checklists: any[] = [];
   let backers: any[] = [];
   let rewardTiers: any[] = [];
-  let activityTasks: Array<{ id: string; title: string }> = [];
+  let activityTasks: Array<{ id: string; title: string; checklist_id?: string | null }> = [];
 
   if (activeTab === 'activity') {
     const [{ data: engData }, { data: typeData }, { data: taskOpts }] = await Promise.all([
@@ -177,14 +177,25 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
       supabase
         .schema('app')
         .from('tasks' as never)
-        .select('id, title')
+        .select('id, title, checklist_id')
         .eq('deal_id', params.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: false }),
     ]);
     engagements = (engData ?? []) as any[];
     engagementTypes = (typeData ?? []) as any[];
-    activityTasks = (taskOpts ?? []) as Array<{ id: string; title: string }>;
+    activityTasks = (taskOpts ?? []) as Array<{ id: string; title: string; checklist_id?: string | null }>;
+
+    // checklists for the Activity composer's chained Checklist dropdown
+    const { data: clOpts } = await supabase
+      .schema('app')
+      .from('deal_checklists' as never)
+      .select('id, title')
+      .eq('deal_id', params.id)
+      .is('deleted_at', null)
+      .order('sort_order', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true });
+    checklists = (clOpts ?? []) as any[];
   }
 
   if (activeTab === 'tasks') {
@@ -341,6 +352,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               engagements={engagements}
               engagementTypes={engagementTypes}
               tasks={activityTasks}
+              checklists={checklists}
             />
           )}
           {activeTab === 'tasks' && (

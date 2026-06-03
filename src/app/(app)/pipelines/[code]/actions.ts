@@ -123,20 +123,35 @@ export async function createDeal(
 
   const nowIso = new Date().toISOString();
 
-  // 1) insert the deal (no party_id anymore)
+  // deals.party_id (legacy, NOT NULL) must hold exactly ONE company id, but all
+  // companies on a deal are equal level (no hierarchy). The full set lives in
+  // app.deal_parties (M:N). This single column just satisfies the NOT NULL
+  // constraint, so we use the first listed company -- it carries no special
+  // status; 'role' on each deal_parties row is just an attribute/condition value.
+  const anchorPartyId = parties[0]!.partyId;
+
+  // 1) insert the deal
+  // round_id is Investor-only. Omit the key entirely when there's no round so
+  // non-investor pipelines never reference deals.round_id (which may be absent
+  // from the live table -> PostgREST "schema cache" 42703).
+  const dealPayload: Record<string, unknown> = {
+    organization_id: pipeline.organization_id,
+    pipeline_id: pipeline.id,
+    current_stage_id: input.current_stage_id,
+    deal_name: name,
+    party_id: anchorPartyId,
+    last_activity_at: nowIso,
+    source: 'manual',
+    // status/priority/module_data fall back to their column defaults
+  };
+  if (input.round_id) {
+    dealPayload.round_id = input.round_id;
+  }
+
   const { data: dealRow, error: dealErr } = await supabase
     .schema('app')
     .from('deals' as never)
-    .insert({
-      organization_id: pipeline.organization_id,
-      pipeline_id: pipeline.id,
-      current_stage_id: input.current_stage_id,
-      deal_name: name,
-      round_id: input.round_id ?? null,
-      last_activity_at: nowIso,
-      source: 'manual',
-      // status/priority/module_data fall back to their column defaults
-    } as never)
+    .insert(dealPayload as never)
     .select('id')
     .single();
 

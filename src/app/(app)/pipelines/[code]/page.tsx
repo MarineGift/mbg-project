@@ -46,16 +46,22 @@ export default async function PipelinePage({ params }: Props) {
     .order('sort_order', { ascending: true });
 
   // 3) deals in this pipeline, with their companies (deal_parties) + round.
+  // round:rounds(...) embeds via deals.round_id, which is Investor-only and may
+  // be absent from the live table. Embedding it on a non-investor board makes
+  // PostgREST fail the whole select (-> 0 deals). So include it only for the
+  // investor pipeline.
+  const isInvestor = pipeline.code === 'investor';
+  const dealSelect =
+    'id, deal_name, current_stage_id, value_amount, value_currency, ' +
+    'last_activity_at, status, ' +
+    'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
+    '  parties ( party_name, country_code ) )' +
+    (isInvestor ? ', round:rounds(id, name)' : '');
+
   const { data: dealsData } = await supabase
     .schema('app')
     .from('deals' as never)
-    .select(
-      'id, deal_name, current_stage_id, value_amount, value_currency, ' +
-      'last_activity_at, status, ' +
-      'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
-      '  parties ( party_name, country_code ) ), ' +
-      'round:rounds(id, name)'
-    )
+    .select(dealSelect)
     .eq('pipeline_id', pipeline.id)
     .is('deleted_at', null)
     .order('last_activity_at', { ascending: false, nullsFirst: false });
