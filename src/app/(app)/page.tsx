@@ -55,11 +55,11 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
       .is('read_at' as never, null),
-    // To-Do card links to /todo -> count the To-Do engine (task_items),
+    // To-Do card links to /todo -> count the To-Do engine (todo_items),
     // NOT the deal-scoped app.tasks table.
     supabase
       .schema('app')
-      .from('task_items' as never)
+      .from('todo_items' as never)
       .select('id', { count: 'exact', head: true })
       .neq('status' as never, 'done')
       .is('archived_at' as never, null),

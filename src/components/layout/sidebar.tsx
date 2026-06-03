@@ -88,7 +88,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/drafts',   labelKey: 'drafts',    icon: Sparkles,    badgeKey: 'pendingDraftCount' },
   { href: '/inbox',    labelKey: 'inbox',     icon: Inbox,       badgeKey: 'inboxUnreadCount' },
   { href: '/sent',     labelKey: 'sent',      icon: Send },
-  // To-Do board (standalone task engine, app.task_items). The deal-scoped
+  // To-Do board (standalone task engine, app.todo_items). The deal-scoped
   // engagement tasks at /tasks stay as a route for reuse inside deal detail,
   // but no longer have a top-level sidebar link. Explicit label avoids
   // touching the next-intl messages files; badge removed by design.

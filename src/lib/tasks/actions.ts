@@ -38,7 +38,7 @@ export async function listBoards(): Promise<TaskBoard[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema('app')
-    .from('task_boards' as never)
+    .from('todo_boards' as never)
     .select('*')
     .order('position', { ascending: true });
   if (error) throw new Error(`listBoards: ${error.message}`);
@@ -50,13 +50,13 @@ export async function listBoard(boardId: string): Promise<BoardData> {
   const supabase = await createClient();
 
   const [boardR, statusR, groupR, itemR] = await Promise.all([
-    supabase.schema('app').from('task_boards' as never)
+    supabase.schema('app').from('todo_boards' as never)
       .select('*').eq('id', boardId).single(),
-    supabase.schema('app').from('task_status_options' as never)
+    supabase.schema('app').from('todo_status_options' as never)
       .select('*').eq('board_id', boardId).order('position', { ascending: true }),
-    supabase.schema('app').from('task_groups' as never)
+    supabase.schema('app').from('todo_groups' as never)
       .select('*').eq('board_id', boardId).order('position', { ascending: true }),
-    supabase.schema('app').from('task_items' as never)
+    supabase.schema('app').from('todo_items' as never)
       .select('*').eq('board_id', boardId).is('archived_at', null)
       .order('position', { ascending: true }),
   ]);
@@ -73,7 +73,7 @@ export async function listBoard(boardId: string): Promise<BoardData> {
   if (itemIds.length) {
     const depR = await supabase
       .schema('app')
-      .from('task_dependencies' as never)
+      .from('todo_dependencies' as never)
       .select('*').in('item_id', itemIds);
     if (depR.error) throw new Error(`listBoard.deps: ${depR.error.message}`);
     dependencies = (depR.data ?? []) as unknown as TaskDependency[];
@@ -128,7 +128,7 @@ export async function createItem(input: CreateItemInput): Promise<TaskItem> {
   };
   const { data, error } = await supabase
     .schema('app')
-    .from('task_items' as never)
+    .from('todo_items' as never)
     .insert(row as never).select().single();
   if (error) throw new Error(`createItem: ${error.message}`);
   return data as unknown as TaskItem;
@@ -143,7 +143,7 @@ export async function moveItem(
   const supabase = await createClient();
   const { error } = await supabase
     .schema('app')
-    .from('task_items' as never)
+    .from('todo_items' as never)
     .update({ status, position } as never)
     .eq('id', itemId);
   if (error) throw new Error(`moveItem: ${error.message}`);
@@ -181,7 +181,7 @@ export async function updateItem(itemId: string, patch: UpdateItemPatch): Promis
 
   const { error } = await supabase
     .schema('app')
-    .from('task_items' as never)
+    .from('todo_items' as never)
     .update(row as never)
     .eq('id', itemId);
   if (error) throw new Error(`updateItem: ${error.message}`);
@@ -191,7 +191,7 @@ export async function deleteItem(itemId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .schema('app')
-    .from('task_items' as never)
+    .from('todo_items' as never)
     .delete()
     .eq('id', itemId);
   if (error) throw new Error(`deleteItem: ${error.message}`);
@@ -206,7 +206,7 @@ export async function addUpdate(
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema('app')
-    .from('task_updates' as never)
+    .from('todo_updates' as never)
     .insert({ item_id: itemId, body, kind } as never)
     .select().single();
   if (error) throw new Error(`addUpdate: ${error.message}`);
