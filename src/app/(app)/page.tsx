@@ -2,9 +2,9 @@
  * app/(app)/page.tsx
  *
  * Unified dashboard.
- * Row 1: Quick stats (AI Drafts, Inbox, Tasks)
- * Row 2: Parties overview + Engagements overview
- * Row 3: Welcome card
+ * Row 1: Quick stats (AI Drafts, Inbox, Tasks) -- each card links to its screen.
+ * Row 2: Parties overview (per-type, linked) + Engagements overview.
+ * Row 3: Welcome card.
  */
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,29 +13,38 @@ import { requireAuthOrRedirect } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const PARTY_TYPE_LABELS: Record<string, string> = {
-  paper_mill: 'Paper Mills',
-  filler_supplier:     'Filler Suppliers',
-  investor:   'Investors',
-  partner:    'Partners',
-  customer:   'Customers',
+  paper_mill:      'Paper Mills',
+  filler_supplier: 'Filler Suppliers',
+  investor:        'Investors',
+  partner:         'Partners',
+  customer:        'Customers',
 };
 
 const MODULE_COLORS: Record<string, string> = {
-  paper_mill: 'text-blue-600 dark:text-blue-400',
-  filler_supplier:     'text-emerald-600 dark:text-emerald-400',
-  investor:   'text-purple-600 dark:text-purple-400',
-  partner:    'text-orange-600 dark:text-orange-400',
-  customer:   'text-rose-600 dark:text-rose-400',
+  paper_mill:      'text-blue-600 dark:text-blue-400',
+  filler_supplier: 'text-emerald-600 dark:text-emerald-400',
+  investor:        'text-purple-600 dark:text-purple-400',
+  partner:         'text-orange-600 dark:text-orange-400',
+  customer:        'text-rose-600 dark:text-rose-400',
 };
 
 const PARTY_TYPES = ['paper_mill', 'filler_supplier', 'investor', 'partner', 'customer'] as const;
 type PartyTypeCode = typeof PARTY_TYPES[number];
 
+// app.party_types lookup ids (1-8). Counts join on party_type_id, NOT a code string.
+const PARTY_TYPE_IDS: Record<PartyTypeCode, number> = {
+  investor:        1,
+  paper_mill:      2,
+  filler_supplier: 3,
+  partner:         6,
+  customer:        5,
+};
+
 export default async function DashboardPage() {
   const auth = await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
-  // ── Row 1: quick stats ─────────────────────────────────────────────────────
+  // Row 1: quick stats --------------------------------------------------------
   const [draftsRes, inboxRes, tasksRes] = await Promise.all([
     supabase
       .schema('ai')
@@ -48,24 +57,27 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
       .is('read_at' as never, null),
+    // Tasks card links to /todo, so count the To-Do engine (task_items), not
+    // the legacy deal-scoped app.tasks table.
     supabase
       .schema('app')
-      .from('tasks' as never)
+      .from('task_items' as never)
       .select('id', { count: 'exact', head: true })
-      .not('status' as never, 'in', '("done","cancelled")'),
+      .neq('status' as never, 'done')
+      .is('archived_at' as never, null),
   ]);
   const draftsCount = (draftsRes as any).count ?? 0;
   const inboxCount  = (inboxRes  as any).count ?? 0;
   const tasksCount  = (tasksRes  as any).count ?? 0;
 
-  // ── Row 2a: parties by module ──────────────────────────────────────────────
+  // Row 2a: parties by type (count on party_type_id) --------------------------
   const partyResults = await Promise.all(
     PARTY_TYPES.map(m =>
       supabase
         .schema('app')
         .from('parties' as never)
         .select('id', { count: 'exact', head: true })
-        .eq('party_type' as never, m)
+        .eq('party_type_id' as never, PARTY_TYPE_IDS[m])
         .is('deleted_at' as never, null),
     ),
   );
@@ -74,7 +86,7 @@ export default async function DashboardPage() {
   ) as Record<PartyTypeCode, number>;
   const partyTotal = PARTY_TYPES.reduce((s, m) => s + partyCounts[m], 0);
 
-  // ── Row 2b: engagements by module ──────────────────────────────────────────
+  // Row 2b: engagements (deals total) -----------------------------------------
   const dealsTotalRes = await supabase
     .schema('app')
     .from('deals' as never)
@@ -94,41 +106,47 @@ export default async function DashboardPage() {
         <p className="text-sm text-muted-foreground mt-1">{auth.email}</p>
       </header>
 
-      {/* ── Row 1: Quick stats ── */}
+      {/* Row 1: Quick stats (clickable) */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">AI Drafts</CardTitle>
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{draftsCount}</div>
-            <CardDescription className="mt-1">Pending review</CardDescription>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inbox</CardTitle>
-            <Inbox className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{inboxCount}</div>
-            <CardDescription className="mt-1">Unread inbound</CardDescription>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasks</CardTitle>
-            <CheckSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{tasksCount}</div>
-            <CardDescription className="mt-1">Open</CardDescription>
-          </CardContent>
-        </Card>
+        <Link href="/drafts" className="block rounded-xl transition-colors hover:bg-muted/40">
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">AI Drafts</CardTitle>
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold tabular-nums">{draftsCount}</div>
+              <CardDescription className="mt-1">Pending review</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/inbox" className="block rounded-xl transition-colors hover:bg-muted/40">
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Inbox</CardTitle>
+              <Inbox className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold tabular-nums">{inboxCount}</div>
+              <CardDescription className="mt-1">Unread inbound</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/todo" className="block rounded-xl transition-colors hover:bg-muted/40">
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tasks</CardTitle>
+              <CheckSquare className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold tabular-nums">{tasksCount}</div>
+              <CardDescription className="mt-1">Open</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
-      {/* ── Row 2: Parties + Engagements ── */}
+      {/* Row 2: Parties + Engagements */}
       <div className="grid gap-4 md:grid-cols-2">
 
         {/* Parties widget */}
@@ -187,13 +205,16 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* ── Row 3: Welcome ── */}
+      {/* Row 3: Welcome */}
       <Card>
         <CardHeader>
-          <CardTitle>Welcome</CardTitle>
+          <CardTitle>Welcome to URM Platform</CardTitle>
           <CardDescription>
-            Your unified relationship management dashboard. Counts update automatically.
-            Use the sidebar to navigate to AI Drafts, Inbox, Tasks, and per-module Parties &amp; Engagements.
+            Marinebio Group&apos;s unified relationship management for the paper &amp;
+            filler-mineral industry. Track investor outreach, run deal pipelines across
+            investors, paper mills, and filler suppliers, and nurture partner relationships
+            &mdash; all in one place. Counts update automatically; use the sidebar or the
+            cards above to navigate.
           </CardDescription>
         </CardHeader>
       </Card>
