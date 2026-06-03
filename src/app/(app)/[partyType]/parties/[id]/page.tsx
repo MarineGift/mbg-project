@@ -6,6 +6,8 @@
  *   - 2026-05-17: Phase 22a — PartyCommunicationsTimeline integrated
  *   - 2026-05-17: Phase 22a fix — parens around ?? / || mix
  *   - 2026-05-26: D6-5c-2b — Industry sections removed (industry schema deleted)
+ *   - 2026-06-03: Contacts tab -> 2-panel (PartyContactsPanel) with per-contact
+ *                 engagement activity (fetchContactActivities)
  */
 
 import { notFound, redirect } from 'next/navigation';
@@ -16,9 +18,10 @@ import {
   getPartyCommunicationStats,
   listTemplatesForCompose,
 } from '@/lib/queries/communications';
+import { fetchContactActivities } from '@/lib/queries/contact-activities';
 import { PartyHeader } from '@/components/parties/party-header';
 import { PartyStatsGrid } from '@/components/parties/party-stats-grid';
-import { PartyContactsList } from '@/components/parties/party-contacts-list';
+import { PartyContactsPanel } from '@/components/parties/party-contacts-panel';
 import { PartyTasksList } from '@/components/parties/party-tasks-list';
 import { PartyNotesCard } from '@/components/parties/party-notes-card';
 import { PartyMeetingsList } from '@/components/parties/party-meetings-list';
@@ -89,11 +92,13 @@ export default async function PartyDetailPage({ params }: PageProps) {
 
   // ──────────────────────────────────────────────────────────
   // Phase 22a — Communications timeline + stats + templates
+  // 2026-06-03 — per-contact engagement activity (for Contacts 2-panel)
   // ──────────────────────────────────────────────────────────
-  const [commTimeline, commStats, templates] = await Promise.all([
+  const [commTimeline, commStats, templates, contactActivities] = await Promise.all([
     getPartyCommunicationsTimeline(full.party.id, 100),
     getPartyCommunicationStats(full.party.id),
     listTemplatesForCompose(orgId, full.party.partyType),
+    fetchContactActivities(full.party.id),
   ]);
 
   // Default contact for "new email" button: first contact with an email
@@ -166,9 +171,10 @@ export default async function PartyDetailPage({ params }: PageProps) {
               </>
             }
             contacts={
-              <PartyContactsList
+              <PartyContactsPanel
                 contacts={full.contacts}
                 partyId={full.party.id}
+                activitiesByContact={contactActivities}
               />
             }
             tasks={
