@@ -40,7 +40,7 @@ import type {
   PartyTier,
   TimelineCommunicationItem,
   TimelineItem,
-  TimelineTaskItem,, InvestorProfile } from '@/types/party-detail';
+  TimelineTaskItem, InvestorProfile } from '@/types/party-detail';
 
 interface RawPartyRow {
   id: string;
