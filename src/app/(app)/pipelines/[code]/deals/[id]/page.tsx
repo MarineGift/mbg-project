@@ -197,6 +197,24 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
       .order('due_at', { ascending: true, nullsFirst: false });
     tasks = (ts ?? []) as any[];
 
+    // Activity (engagement) count per task -- engagements.task_id, non-deleted.
+    // No FK between engagements.task_id and tasks, so skip a PostgREST embed and
+    // tally in JS from a flat task_id select (counts distinct rows, not inflated).
+    const taskIds = tasks.map((t: any) => t.id).filter(Boolean) as string[];
+    if (taskIds.length > 0) {
+      const { data: engRows } = await supabase
+        .schema('app')
+        .from('engagements' as never)
+        .select('task_id')
+        .in('task_id', taskIds)
+        .is('deleted_at', null);
+      const counts: Record<string, number> = {};
+      for (const e of (engRows ?? []) as any[]) {
+        if (e.task_id) counts[e.task_id] = (counts[e.task_id] ?? 0) + 1;
+      }
+      tasks = tasks.map((t: any) => ({ ...t, _activityCount: counts[t.id] ?? 0 }));
+    }
+
     const checklistIds = Array.from(
       new Set(tasks.map((t: any) => t.checklist_id).filter(Boolean))
     ) as string[];
