@@ -40,8 +40,7 @@ import type {
   PartyTier,
   TimelineCommunicationItem,
   TimelineItem,
-  TimelineTaskItem,
-} from '@/types/party-detail';
+  TimelineTaskItem,, InvestorProfile } from '@/types/party-detail';
 
 interface RawPartyRow {
   id: string;
@@ -291,12 +290,28 @@ export async function fetchPartyDetail(
     (tasksRes.data ?? []) as unknown[],
   );
 
-  return {
-    party: detail,
+  // investor profile (1:1 via party_id) - only meaningful for investor parties
+  let investorProfile: InvestorProfile | null = null;
+  if (partyTypeCode === 'investor') {
+    const { data: ipRow } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .select(
+        'fund_name, subtype, fund_size_usd, aum_usd, fund_vintage_year, ' +
+        'ticket_min_usd, ticket_max_usd, sector_focus, geographic_focus, ' +
+        'is_lead_investor, is_strategic',
+      )
+      .eq('party_id', partyId)
+      .maybeSingle();
+    if (ipRow) investorProfile = mapInvestorProfile(ipRow);
+  }
+
+  return {    party: detail,
     contacts,
     engagements,
     tasks,
     timeline,
+    investorProfile,
   };
 }
 
@@ -558,5 +573,24 @@ function mapMeeting(raw: unknown): PartyMeeting {
     meetingUrl: (r.meeting_url as string | null) ?? null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+  };
+}
+
+function mapInvestorProfile(raw: unknown): InvestorProfile {
+  const r = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' ? v : v == null ? null : Number(v));
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+  return {
+    fundName: (r.fund_name as string | null) ?? null,
+    subtype: (r.subtype as string | null) ?? null,
+    fundSizeUsd: num(r.fund_size_usd),
+    aumUsd: num(r.aum_usd),
+    fundVintageYear: (r.fund_vintage_year as number | null) ?? null,
+    ticketMinUsd: num(r.ticket_min_usd),
+    ticketMaxUsd: num(r.ticket_max_usd),
+    sectorFocus: arr(r.sector_focus),
+    geographicFocus: arr(r.geographic_focus),
+    isLeadInvestor: (r.is_lead_investor as boolean) ?? false,
+    isStrategic: (r.is_strategic as boolean) ?? false,
   };
 }

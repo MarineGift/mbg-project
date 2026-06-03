@@ -115,10 +115,25 @@ export interface PartyTask {
   createdAt: string;
 }
 
+export interface InvestorProfile {
+  fundName: string | null;
+  subtype: string | null;
+  fundSizeUsd: number | null;
+  aumUsd: number | null;
+  fundVintageYear: number | null;
+  ticketMinUsd: number | null;
+  ticketMaxUsd: number | null;
+  sectorFocus: string[];
+  geographicFocus: string[];
+  isLeadInvestor: boolean;
+  isStrategic: boolean;
+}
+
 export interface PartyDetailFull {
   party: PartyDetail;
   contacts: PartyContact[];
   engagements: PartyEngagement[];
   tasks: PartyTask[];
   timeline: TimelineItem[];
+  investorProfile: InvestorProfile | null;
 }

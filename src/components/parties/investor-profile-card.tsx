@@ -1,0 +1,108 @@
+import type { ReactNode } from 'react';
+import { Banknote } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { InvestorProfile } from '@/types/party-detail';
+
+interface Props {
+  profile: InvestorProfile;
+}
+
+const DASH = <span className="text-muted-foreground">-</span>;
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 py-2 border-b border-border/50 last:border-0 sm:flex-row sm:items-start sm:gap-4">
+      <dt className="text-xs font-medium text-muted-foreground sm:w-40 sm:shrink-0 sm:pt-0.5">
+        {label}
+      </dt>
+      <dd className="text-sm break-words min-w-0 flex-1">{children}</dd>
+    </div>
+  );
+}
+
+function fmtUsd(n: number | null): ReactNode {
+  if (n == null) return DASH;
+  // compact USD: 1_500_000 -> "$1.5M", 250_000_000 -> "$250M", 2_000_000_000 -> "$2B"
+  const abs = Math.abs(n);
+  let out: string;
+  if (abs >= 1_000_000_000) out = `$${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  else if (abs >= 1_000_000) out = `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  else if (abs >= 1_000) out = `$${(n / 1_000).toFixed(0)}K`;
+  else out = `$${n}`;
+  return out;
+}
+
+function ticketRange(min: number | null, max: number | null): ReactNode {
+  if (min == null && max == null) return DASH;
+  if (min != null && max != null) return <>{fmtUsd(min)} – {fmtUsd(max)}</>;
+  return min != null ? <>from {fmtUsd(min)}</> : <>up to {fmtUsd(max)}</>;
+}
+
+function Tags({ items }: { items: string[] }): ReactNode {
+  if (!items || items.length === 0) return DASH;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((t) => (
+        <span
+          key={t}
+          className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-xs"
+        >
+          {t}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Flags({ profile }: { profile: InvestorProfile }): ReactNode {
+  const flags: string[] = [];
+  if (profile.isLeadInvestor) flags.push('Lead investor');
+  if (profile.isStrategic) flags.push('Strategic');
+  if (flags.length === 0) return DASH;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {flags.map((f) => (
+        <span
+          key={f}
+          className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2 py-0.5 text-xs"
+        >
+          {f}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function InvestorProfileCard({ profile }: Props) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Banknote className="h-4 w-4 text-muted-foreground" />
+          Investor Profile
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl>
+          <Row label="Fund Name">{profile.fundName || DASH}</Row>
+          <Row label="Subtype">
+            {profile.subtype ? (
+              <span className="uppercase tracking-wide text-xs font-medium">
+                {profile.subtype}
+              </span>
+            ) : (
+              DASH
+            )}
+          </Row>
+          <Row label="Fund Size">{fmtUsd(profile.fundSizeUsd)}</Row>
+          <Row label="AUM">{fmtUsd(profile.aumUsd)}</Row>
+          <Row label="Vintage Year">{profile.fundVintageYear ?? DASH}</Row>
+          <Row label="Ticket Size">{ticketRange(profile.ticketMinUsd, profile.ticketMaxUsd)}</Row>
+          <Row label="Sector Focus"><Tags items={profile.sectorFocus} /></Row>
+          <Row label="Geographic Focus"><Tags items={profile.geographicFocus} /></Row>
+          <Row label="Flags"><Flags profile={profile} /></Row>
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
