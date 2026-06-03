@@ -115,14 +115,14 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
     return () => { alive = false; };
   }, []);
 
-  // Realtime: subscribe to app.task_items for THIS board and merge changes into
+  // Realtime: subscribe to app.todo_items for THIS board and merge changes into
   // local state (no router.refresh, since the board lives in client state).
   // Same channel/postgres_changes pattern as RealtimeProvider; one .on per event.
   // Idempotent vs. our own optimistic writes: upsert-by-id replaces in place.
   // NOTE (DB, one-time): the table must be in the realtime publication and have
   // REPLICA IDENTITY FULL so UPDATE/DELETE carry enough row data + pass RLS:
-  //   alter publication supabase_realtime add table app.task_items;
-  //   alter table app.task_items replica identity full;
+  //   alter publication supabase_realtime add table app.todo_items;
+  //   alter table app.todo_items replica identity full;
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
@@ -146,17 +146,17 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
 
     const filter = `board_id=eq.${board.id}`;
     const channel = supabase
-      .channel(`task_items:board-${board.id}`)
+      .channel(`todo_items:board-${board.id}`)
       .on('postgres_changes' as never,
-        { event: 'INSERT', schema: 'app', table: 'task_items', filter },
+        { event: 'INSERT', schema: 'app', table: 'todo_items', filter },
         (payload: { new: Record<string, unknown> }) => upsert(payload.new),
       )
       .on('postgres_changes' as never,
-        { event: 'UPDATE', schema: 'app', table: 'task_items', filter },
+        { event: 'UPDATE', schema: 'app', table: 'todo_items', filter },
         (payload: { new: Record<string, unknown> }) => upsert(payload.new),
       )
       .on('postgres_changes' as never,
-        { event: 'DELETE', schema: 'app', table: 'task_items', filter },
+        { event: 'DELETE', schema: 'app', table: 'todo_items', filter },
         (payload: { old: Record<string, unknown> }) => removeById(payload.old),
       )
       .subscribe();
