@@ -19,7 +19,6 @@ import {
 import { PartyHeader } from '@/components/parties/party-header';
 import { PartyStatsGrid } from '@/components/parties/party-stats-grid';
 import { PartyContactsList } from '@/components/parties/party-contacts-list';
-import { PartyEngagementsList } from '@/components/parties/party-engagements-list';
 import { PartyTasksList } from '@/components/parties/party-tasks-list';
 import { PartyNotesCard } from '@/components/parties/party-notes-card';
 import { PartyMeetingsList } from '@/components/parties/party-meetings-list';
@@ -170,13 +169,6 @@ export default async function PartyDetailPage({ params }: PageProps) {
               <PartyContactsList
                 contacts={full.contacts}
                 partyId={full.party.id}
-              />
-            }
-            engagements={
-              <PartyEngagementsList
-                engagements={full.engagements}
-                partyId={full.party.id}
-                partyType={full.party.partyType}
               />
             }
             tasks={

@@ -10,7 +10,6 @@ const TAB_VALUES = [
   'activity',
   'communications',
   'contacts',
-  'engagements',
   'tasks',
   'notes',
 ] as const;
@@ -23,7 +22,6 @@ interface PartyDetailTabsProps {
   activity: ReactNode;
   communications: ReactNode;
   contacts: ReactNode;
-  engagements: ReactNode;
   tasks: ReactNode;
   notes: ReactNode;
 }
@@ -33,7 +31,6 @@ export function PartyDetailTabs({
   activity,
   communications,
   contacts,
-  engagements,
   tasks,
   notes,
 }: PartyDetailTabsProps) {
@@ -64,7 +61,6 @@ export function PartyDetailTabs({
         <TabsTrigger value="activity" className={TRIGGER}>Activity</TabsTrigger>
         <TabsTrigger value="communications" className={TRIGGER}>Communications</TabsTrigger>
         <TabsTrigger value="contacts" className={TRIGGER}>Contacts</TabsTrigger>
-        <TabsTrigger value="engagements" className={TRIGGER}>Engagements</TabsTrigger>
         <TabsTrigger value="tasks" className={TRIGGER}>Tasks</TabsTrigger>
         <TabsTrigger value="notes" className={TRIGGER}>Notes</TabsTrigger>
       </TabsList>
@@ -73,7 +69,6 @@ export function PartyDetailTabs({
       <TabsContent value="activity" className="space-y-4">{activity}</TabsContent>
       <TabsContent value="communications" className="space-y-4">{communications}</TabsContent>
       <TabsContent value="contacts" className="space-y-4">{contacts}</TabsContent>
-      <TabsContent value="engagements" className="space-y-4">{engagements}</TabsContent>
       <TabsContent value="tasks" className="space-y-4">{tasks}</TabsContent>
       <TabsContent value="notes" className="space-y-4">{notes}</TabsContent>
     </Tabs>
