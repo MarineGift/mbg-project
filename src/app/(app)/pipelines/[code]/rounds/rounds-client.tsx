@@ -70,7 +70,7 @@ function fmtDate(iso: string | null): string {
   // PG date 'YYYY-MM-DD' -> short display
   const d = new Date(iso + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
