@@ -136,7 +136,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
                   />
                 )}
                 {full.party.partyType === 'investor' && full.investorProfile && (
-                  <InvestorProfileCard profile={full.investorProfile} />
+                  <InvestorProfileCard profile={full.investorProfile} partyName={full.party.name} />
                 )}
                 {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
                   <CountryPeersPanel
