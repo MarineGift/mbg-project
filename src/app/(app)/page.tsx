@@ -2,8 +2,8 @@
  * app/(app)/page.tsx
  *
  * Unified dashboard.
- * Row 1: Quick stats (AI Drafts, Inbox, Tasks) -- each card links to its screen.
- * Row 2: Parties overview (per-type, linked) + Engagements overview.
+ * Row 1: Quick stats (AI Drafts, Inbox, To-Do) -- each card links to its screen.
+ * Row 2: Parties overview (per-type, linked) + Deals/Engagements overview.
  * Row 3: Welcome card.
  */
 import Link from 'next/link';
@@ -17,7 +17,6 @@ const PARTY_TYPE_LABELS: Record<string, string> = {
   filler_supplier: 'Filler Suppliers',
   investor:        'Investors',
   partner:         'Partners',
-  customer:        'Customers',
 };
 
 const MODULE_COLORS: Record<string, string> = {
@@ -25,10 +24,10 @@ const MODULE_COLORS: Record<string, string> = {
   filler_supplier: 'text-emerald-600 dark:text-emerald-400',
   investor:        'text-purple-600 dark:text-purple-400',
   partner:         'text-orange-600 dark:text-orange-400',
-  customer:        'text-rose-600 dark:text-rose-400',
 };
 
-const PARTY_TYPES = ['paper_mill', 'filler_supplier', 'investor', 'partner', 'customer'] as const;
+// Customers intentionally omitted (party_type 5 has no data / not used here).
+const PARTY_TYPES = ['paper_mill', 'filler_supplier', 'investor', 'partner'] as const;
 type PartyTypeCode = typeof PARTY_TYPES[number];
 
 // app.party_types lookup ids (1-8). Counts join on party_type_id, NOT a code string.
@@ -37,7 +36,6 @@ const PARTY_TYPE_IDS: Record<PartyTypeCode, number> = {
   paper_mill:      2,
   filler_supplier: 3,
   partner:         6,
-  customer:        5,
 };
 
 export default async function DashboardPage() {
@@ -45,7 +43,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   // Row 1: quick stats --------------------------------------------------------
-  const [draftsRes, inboxRes, tasksRes] = await Promise.all([
+  const [draftsRes, inboxRes, todoRes] = await Promise.all([
     supabase
       .schema('ai')
       .from('drafts' as never)
@@ -57,8 +55,8 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
       .is('read_at' as never, null),
-    // Tasks card links to /todo, so count the To-Do engine (task_items), not
-    // the legacy deal-scoped app.tasks table.
+    // To-Do card links to /todo -> count the To-Do engine (task_items),
+    // NOT the deal-scoped app.tasks table.
     supabase
       .schema('app')
       .from('task_items' as never)
@@ -68,7 +66,7 @@ export default async function DashboardPage() {
   ]);
   const draftsCount = (draftsRes as any).count ?? 0;
   const inboxCount  = (inboxRes  as any).count ?? 0;
-  const tasksCount  = (tasksRes  as any).count ?? 0;
+  const todoCount   = (todoRes   as any).count ?? 0;
 
   // Row 2a: parties by type (count on party_type_id) --------------------------
   const partyResults = await Promise.all(
@@ -86,18 +84,29 @@ export default async function DashboardPage() {
   ) as Record<PartyTypeCode, number>;
   const partyTotal = PARTY_TYPES.reduce((s, m) => s + partyCounts[m], 0);
 
-  // Row 2b: engagements (deals total) -----------------------------------------
-  const dealsTotalRes = await supabase
+  // Row 2b: deals with per-deal task + engagement counts ----------------------
+  // PostgREST embedded counts via FK: tasks.deal_id and engagements.deal_id.
+  const dealsRes = await supabase
     .schema('app')
     .from('deals' as never)
-    .select('id', { count: 'exact', head: true })
-    .is('deleted_at' as never, null);
-  const dealsTotal = (dealsTotalRes as { count: number | null }).count ?? 0;
-  const engResults = PARTY_TYPES.map(() => ({ count: dealsTotal }));
-  const engCounts = Object.fromEntries(
-    PARTY_TYPES.map((m, i) => [m, (engResults[i] as any).count ?? 0]),
-  ) as Record<PartyTypeCode, number>;
-  const engTotal = PARTY_TYPES.reduce((s, m) => s + engCounts[m], 0);
+    .select('id, deal_name, tasks(count), engagements(count)')
+    .is('deleted_at' as never, null)
+    .order('created_at' as never, { ascending: false });
+  type DealRow = {
+    id: string;
+    deal_name: string | null;
+    tasks: { count: number }[] | null;
+    engagements: { count: number }[] | null;
+  };
+  const dealRows = (((dealsRes as any).data ?? []) as DealRow[]).map(d => ({
+    id: d.id,
+    name: d.deal_name ?? '(untitled deal)',
+    taskCount: d.tasks?.[0]?.count ?? 0,
+    engCount: d.engagements?.[0]?.count ?? 0,
+  }));
+  const dealsTotal = dealRows.length;
+  const taskTotal  = dealRows.reduce((s, d) => s + d.taskCount, 0);
+  const engTotal   = dealRows.reduce((s, d) => s + d.engCount, 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -135,18 +144,18 @@ export default async function DashboardPage() {
         <Link href="/todo" className="block rounded-xl transition-colors hover:bg-muted/40">
           <Card className="h-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tasks</CardTitle>
+              <CardTitle className="text-sm font-medium">To-Do</CardTitle>
               <CheckSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold tabular-nums">{tasksCount}</div>
+              <div className="text-2xl font-bold tabular-nums">{todoCount}</div>
               <CardDescription className="mt-1">Open</CardDescription>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      {/* Row 2: Parties + Engagements */}
+      {/* Row 2: Parties + Deals/Engagements */}
       <div className="grid gap-4 md:grid-cols-2">
 
         {/* Parties widget */}
@@ -177,28 +186,37 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Engagements widget */}
+        {/* Deals / Engagements widget */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Engagements</CardTitle>
+            <CardTitle className="text-sm font-medium">Deals &amp; Engagements</CardTitle>
             <Handshake className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums mb-4">
-              {engTotal.toLocaleString()}
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-2xl font-bold tabular-nums">{dealsTotal.toLocaleString()}</span>
+              <span className="text-sm text-muted-foreground">deals</span>
             </div>
-            {engTotal === 0 ? (
-              <p className="text-xs text-muted-foreground">No engagements yet.</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {engTotal.toLocaleString()} engagements &middot; {taskTotal.toLocaleString()} tasks
+            </p>
+            {dealsTotal === 0 ? (
+              <p className="text-xs text-muted-foreground">No deals yet.</p>
             ) : (
               <div className="space-y-2">
-                {PARTY_TYPES.filter(m => engCounts[m] > 0).map(m => (
-                  <div key={m} className="flex items-center justify-between text-sm">
-                    <span className={`font-medium ${MODULE_COLORS[m]}`}>{PARTY_TYPE_LABELS[m]}</span>
-                    <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                      {engCounts[m].toLocaleString()}
+                {dealRows.slice(0, 6).map(d => (
+                  <div key={d.id} className="flex items-center justify-between text-sm gap-2">
+                    <span className="font-medium truncate">{d.name}</span>
+                    <span className="tabular-nums text-muted-foreground font-mono text-xs shrink-0">
+                      {d.taskCount} tasks &middot; {d.engCount} eng
                     </span>
                   </div>
                 ))}
+                {dealsTotal > 6 && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    +{(dealsTotal - 6).toLocaleString()} more
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
