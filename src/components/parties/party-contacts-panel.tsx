@@ -47,7 +47,7 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
   const t = useTranslations('partyDetail.contacts');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
-    contacts.length > 0 ? contacts[0].id : null,
+    contacts[0]?.id ?? null,
   );
 
   const selected = contacts.find((c) => c.id === selectedId) ?? null;

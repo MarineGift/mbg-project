@@ -92,13 +92,16 @@ export async function fetchContactActivities(
       attended: a.attended,
       response: a.response,
     };
-    if (!byContact[a.contact_id]) byContact[a.contact_id] = [];
-    byContact[a.contact_id].push(item);
+    const list = byContact[a.contact_id] ?? [];
+    list.push(item);
+    byContact[a.contact_id] = list;
   }
 
   // 4) sort each contact's list newest-first (attendee row order isn't guaranteed)
   for (const k of Object.keys(byContact)) {
-    byContact[k].sort((x, y) => {
+    const list = byContact[k];
+    if (!list) continue;
+    list.sort((x, y) => {
       const tx = x.occurredAt ? Date.parse(x.occurredAt) : 0;
       const ty = y.occurredAt ? Date.parse(y.occurredAt) : 0;
       return ty - tx;
