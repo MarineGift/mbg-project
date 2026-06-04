@@ -12,7 +12,6 @@ export async function GET(req: NextRequest) {
   const isFillerRole = role === 'filler_supplier';
   const selfCol = isFillerRole ? 'filler_party_id' : 'mill_party_id';
 
-  // party_type id -> code map (small, stable lookup)
   const { data: ptRows } = await supabase.schema('app')
     .from('party_types' as never)
     .select('id, code');
@@ -20,11 +19,9 @@ export async function GET(req: NextRequest) {
     ((ptRows ?? []) as { id: number; code: string }[]).map(r => [r.id, r.code]),
   );
 
-  // NOTE: product_grade is NOT a column on app.party_supply_links.
-  // grade (if any) is stored in extra_data.product_grade. volume_estimate is text.
   const { data, error } = await supabase.schema('app')
     .from('party_supply_links' as never)
-    .select(`id, link_type, volume_estimate, notes, extra_data,
+    .select(`id, link_type, product_grade, volume_estimate, notes,
       linked_filler:filler_party_id(id,party_name,party_type_id,country_code),
       linked_mill:mill_party_id(id,party_name,party_type_id,country_code)`)
     .eq(selfCol as never, partyId)
@@ -34,8 +31,6 @@ export async function GET(req: NextRequest) {
 
   const result = ((data ?? []) as any[]).map(row => {
     const linked = isFillerRole ? row.linked_mill : row.linked_filler;
-    const grade = row.extra_data && typeof row.extra_data === 'object'
-      ? (row.extra_data.product_grade ?? null) : null;
     return {
       id:             row.id,
       linked_id:      linked?.id ?? '',
@@ -43,7 +38,7 @@ export async function GET(req: NextRequest) {
       linked_module:  linked ? (codeById.get(linked.party_type_id) ?? '') : '',
       linked_country: linked?.country_code ?? null,
       link_type:      row.link_type,
-      product_grade:  grade,
+      product_grade:  row.product_grade ?? null,
       volume_estimate: row.volume_estimate ?? null,
       notes:          row.notes,
     };
@@ -52,7 +47,7 @@ export async function GET(req: NextRequest) {
 }
 
 const ALLOWED_INSERT_COLS = [
-  'filler_party_id', 'mill_party_id', 'organization_id', 'link_type',
+  'filler_party_id', 'mill_party_id', 'organization_id', 'link_type', 'product_grade',
   'confidence', 'active_since', 'active_until', 'volume_estimate', 'notes', 'extra_data',
 ];
 

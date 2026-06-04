@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Factory, Package, Plus, Trash2, TrendingUp, Loader2, X, MapPin } from "lucide-react";
+import { Factory, Package, Plus, Trash2, TrendingUp, Loader2, X, MapPin, Globe2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface SupplyLink {
@@ -178,10 +178,12 @@ function AddLinkModal({
   const isFillerPage = partyType === "filler_supplier";
   const linkedLabel = isFillerPage ? "Paper Mills" : "Filler suppliers";
 
+  const [scope, setScope] = useState<"country" | "all">("country");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [country, setCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const [supplyType, setSupplyType] = useState("active");
   const [grade, setGrade] = useState("");
@@ -191,7 +193,7 @@ function AddLinkModal({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/supply-links/candidates?partyId=${partyId}&role=${partyType}`);
+      const res = await fetch(`/api/supply-links/candidates?partyId=${partyId}&role=${partyType}&scope=${scope}`);
       if (res.ok) {
         const j = await res.json();
         setCandidates(j.candidates ?? []);
@@ -200,7 +202,7 @@ function AddLinkModal({
     } finally {
       setLoading(false);
     }
-  }, [partyId, partyType]);
+  }, [partyId, partyType, scope]);
 
   useEffect(() => {
     load();
@@ -214,9 +216,9 @@ function AddLinkModal({
         filler_party_id: isFillerPage ? partyId : c.id,
         mill_party_id: isFillerPage ? c.id : partyId,
         link_type: supplyType,
+        product_grade: grade || null,
         volume_estimate: volume.trim() || null,
         notes: notes.trim() || null,
-        extra_data: grade ? { product_grade: grade } : null,
       };
       const res = await fetch("/api/supply-links", {
         method: "POST",
@@ -234,6 +236,11 @@ function AddLinkModal({
     }
   }
 
+  const term = search.trim().toLowerCase();
+  const shown = term
+    ? candidates.filter((c) => c.name.toLowerCase().includes(term))
+    : candidates;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-background rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
@@ -241,7 +248,7 @@ function AddLinkModal({
           <h3 className="font-semibold text-sm flex items-center gap-1.5">
             <MapPin className="h-4 w-4 text-muted-foreground" />
             Add {linkedLabel}
-            {country ? ` in ${country}` : ""}
+            {scope === "country" && country ? ` in ${country}` : ""}
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded">
             <X className="h-4 w-4" />
@@ -249,6 +256,26 @@ function AddLinkModal({
         </div>
 
         <div className="px-5 py-4 space-y-3 border-b bg-muted/20">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setScope("country")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                scope === "country" ? "border-foreground bg-foreground text-background" : "border-input bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <MapPin className="h-3 w-3" /> This country{country ? ` (${country})` : ""}
+            </button>
+            <button
+              onClick={() => setScope("all")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                scope === "all" ? "border-foreground bg-foreground text-background" : "border-input bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <Globe2 className="h-3 w-3" /> Worldwide
+            </button>
+          </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Supply status (applied to each add)</label>
             <div className="flex flex-wrap gap-1.5">
@@ -306,20 +333,33 @@ function AddLinkModal({
         </div>
 
         <div className="p-3">
+          {scope === "all" && (
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Filter ${linkedLabel.toLowerCase()}...`}
+              className="w-full h-8 px-3 mb-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          )}
           <p className="px-1 pb-2 text-xs text-muted-foreground">
-            {linkedLabel} in the same country. Click + to register (you can add several).
+            {scope === "country"
+              ? `${linkedLabel} in the same country. Click + to register (you can add several).`
+              : `${linkedLabel} worldwide. Use the filter to narrow down, then click + to register.`}
           </p>
           {loading ? (
             <div className="flex justify-center py-6">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : candidates.length === 0 ? (
+          ) : shown.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground italic">
-              {country ? `No more ${linkedLabel.toLowerCase()} in ${country}.` : "This party has no country set."}
+              {scope === "country" && !country
+                ? "This party has no country set - try Worldwide."
+                : `No more ${linkedLabel.toLowerCase()} found.`}
             </p>
           ) : (
             <div className="divide-y max-h-[300px] overflow-y-auto border rounded-md">
-              {candidates.map((c) => (
+              {shown.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{c.name}</div>
