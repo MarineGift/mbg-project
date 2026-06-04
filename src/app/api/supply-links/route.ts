@@ -20,39 +20,52 @@ export async function GET(req: NextRequest) {
     ((ptRows ?? []) as { id: number; code: string }[]).map(r => [r.id, r.code]),
   );
 
+  // NOTE: product_grade is NOT a column on app.party_supply_links.
+  // grade (if any) is stored in extra_data.product_grade. volume_estimate is text.
   const { data, error } = await supabase.schema('app')
     .from('party_supply_links' as never)
-    .select(`id, link_type, product_grade, volume_estimate, notes,
+    .select(`id, link_type, volume_estimate, notes, extra_data,
       linked_filler:filler_party_id(id,party_name,party_type_id,country_code),
       linked_mill:mill_party_id(id,party_name,party_type_id,country_code)`)
-    .eq(selfCol as never, partyId);
+    .eq(selfCol as never, partyId)
+    .is('deleted_at' as never, null);
 
   if (error) return NextResponse.json([], { status: 500 });
 
   const result = ((data ?? []) as any[]).map(row => {
     const linked = isFillerRole ? row.linked_mill : row.linked_filler;
+    const grade = row.extra_data && typeof row.extra_data === 'object'
+      ? (row.extra_data.product_grade ?? null) : null;
     return {
       id:             row.id,
       linked_id:      linked?.id ?? '',
       linked_name:    linked?.party_name ?? '',
       linked_module:  linked ? (codeById.get(linked.party_type_id) ?? '') : '',
       linked_country: linked?.country_code ?? null,
-      linked_tier:    null,
       link_type:      row.link_type,
-      product_grade:  row.product_grade,
-      volume_estimate: row.volume_estimate,
+      product_grade:  grade,
+      volume_estimate: row.volume_estimate ?? null,
       notes:          row.notes,
     };
   });
   return NextResponse.json(result);
 }
 
+const ALLOWED_INSERT_COLS = [
+  'filler_party_id', 'mill_party_id', 'organization_id', 'link_type',
+  'confidence', 'active_since', 'active_until', 'volume_estimate', 'notes', 'extra_data',
+];
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const clean: Record<string, unknown> = {};
+  for (const k of ALLOWED_INSERT_COLS) {
+    if (k in body && body[k] !== undefined) clean[k] = body[k];
+  }
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.schema('app')
     .from('party_supply_links' as never)
-    .insert([body] as never)
+    .insert([clean] as never)
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
