@@ -106,28 +106,31 @@ export default async function DashboardPage() {
   const todoTotal = todoStages.reduce((s, st) => s + st.count, 0);
 
   // Row 2a: parties by type (dynamic from app.party_types) --------------------
-  const [partyTypesRes, partyRowsRes] = await Promise.all([
-    supabase
-      .schema('app')
-      .from('party_types' as never)
-      .select('id, code, display_name_en, sort_order')
-      .order('sort_order', { ascending: true }),
-    supabase
-      .schema('app')
-      .from('parties' as never)
-      .select('party_type_id')
-      .is('deleted_at' as never, null),
-  ]);
+  const { data: partyTypesData } = await supabase
+    .schema('app')
+    .from('party_types' as never)
+    .select('id, code, display_name_en, sort_order')
+    .order('sort_order', { ascending: true });
   type PartyTypeRow = { id: number; code: string; display_name_en: string | null; sort_order: number };
-  const partyTypeRows = ((partyTypesRes as any).data ?? []) as PartyTypeRow[];
-  const partyTypeIds = (((partyRowsRes as any).data ?? []) as Array<{ party_type_id: number | null }>);
+  const partyTypeRows = ((partyTypesData as any) ?? []) as PartyTypeRow[];
+  // Head counts per type — a plain select('party_type_id') caps at 1000 rows
+  // and undercounts (e.g. paper_mill 1067).
+  const partyCountResults = await Promise.all(
+    partyTypeRows.map((t) =>
+      supabase
+        .schema('app')
+        .from('parties' as never)
+        .select('id', { count: 'exact', head: true })
+        .eq('party_type_id' as never, t.id)
+        .is('deleted_at' as never, null)
+    )
+  );
   const partyCountByType = new Map<number, number>();
-  for (const r of partyTypeIds) {
-    if (r.party_type_id == null) continue;
-    partyCountByType.set(r.party_type_id, (partyCountByType.get(r.party_type_id) ?? 0) + 1);
-  }
-  // Build display stats; hide the technical 'default' type and zero-count types
-  // are kept so the list stays meaningful but not noisy.
+  partyTypeRows.forEach((t, i) => {
+    partyCountByType.set(t.id, (partyCountResults[i] as any).count ?? 0);
+  });
+  // Build display stats; hide the technical 'default' type. Zero-count types are
+  // kept so the list stays meaningful.
   type PartyStat = { code: string; label: string; color: string; count: number };
   const partyStats: PartyStat[] = partyTypeRows
     .filter((t) => t.code !== 'default')
