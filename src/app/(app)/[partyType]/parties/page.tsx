@@ -117,8 +117,18 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
-  const sortByScore = sortParam === 'score';
-  const sortDesc    = sortParam === 'name_desc';
+  const sortByScore = sortParam === 'score' || sortParam === 'score_asc';
+  const scoreAsc    = sortParam === 'score_asc';
+  // DB-orderable sorts (everything except score, which is computed in JS).
+  const DB_SORT: Record<string, { col: string; asc: boolean }> = {
+    name_asc:      { col: 'party_name',   asc: true  },
+    name_desc:     { col: 'party_name',   asc: false },
+    country_asc:   { col: 'country_code', asc: true  },
+    country_desc:  { col: 'country_code', asc: false },
+    location_asc:  { col: 'city',         asc: true  },
+    location_desc: { col: 'city',         asc: false },
+  };
+  const dbSort = DB_SORT[sortParam] ?? { col: 'party_name', asc: true };
   const page        = Math.max(1, Number(sp.page ?? 1));
   const pageSize    = (PAGE_SIZE_OPTIONS as readonly number[]).includes(Number(sp.perPage))
     ? Number(sp.perPage) : DEFAULT_PAGE_SIZE;
@@ -173,11 +183,13 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     totalCount = count ?? 0;
     const allParties = (idData ?? []) as unknown as PartyRow[];
     const scores = await fetchLeadScoresMany(allParties.map((p) => p.id));
-    const sorted = [...allParties].sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
+    const sorted = [...allParties].sort((a, b) =>
+      scoreAsc ? (scores[a.id] ?? 0) - (scores[b.id] ?? 0)
+               : (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
     parties = sorted.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
-      .order('party_name' as never, { ascending: !sortDesc })
+      .order(dbSort.col as never, { ascending: dbSort.asc, nullsFirst: false })
       .range(from, to);
     if (error) throw error;
     totalCount = count ?? 0;
@@ -209,6 +221,30 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Stats for link coverage (only filler/paper_mill)
   const linkedCount   = showLinks ? partyIds.filter(id => (supplyLinks[id]?.length ?? 0) > 0).length : 0;
   const unlinkedCount = showLinks ? partyIds.length - linkedCount : 0;
+
+  // Header sort: build an href that preserves the current filters and toggles
+  // the direction for the given column. `primary` is the value applied on first
+  // click; clicking again (when already primary) flips to `secondary`.
+  function buildSortHref(value: string): string {
+    const qs = new URLSearchParams();
+    if (countryFilter) qs.set('country', countryFilter);
+    if (searchQuery) qs.set('q', searchQuery);
+    if (pageSize !== DEFAULT_PAGE_SIZE) qs.set('perPage', String(pageSize));
+    if (value && value !== 'name_asc') qs.set('sort', value);
+    const s = qs.toString();
+    return `/${module}/parties${s ? `?${s}` : ''}`;
+  }
+  function sortHeader(primary: string, secondary: string) {
+    const isPrimary = sortParam === primary;
+    const isSecondary = sortParam === secondary;
+    const next = isPrimary ? secondary : primary;
+    const arrow = isPrimary ? '\u2191' : isSecondary ? '\u2193' : '';
+    return { href: buildSortHref(next), arrow, active: isPrimary || isSecondary };
+  }
+  const hName     = sortHeader('name_asc', 'name_desc');
+  const hScore    = sortHeader('score', 'score_asc');       // high first, then low
+  const hCountry  = sortHeader('country_asc', 'country_desc');
+  const hLocation = sortHeader('location_asc', 'location_desc');
 
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 h-full flex flex-col">
@@ -266,11 +302,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             <table className="w-full min-w-[520px]">
               <thead className="border-b bg-muted/30">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">Name</th>
-                  <th className="px-3 py-3 font-medium whitespace-nowrap w-16 text-center">Score</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">
+                    <Link href={hName.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hName.active ? 'text-foreground' : ''}`}>
+                      Name {hName.arrow && <span className="text-[10px]">{hName.arrow}</span>}
+                    </Link>
+                  </th>
+                  <th className="px-3 py-3 font-medium whitespace-nowrap w-16 text-center">
+                    <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
+                      Score {hScore.arrow && <span className="text-[10px]">{hScore.arrow}</span>}
+                    </Link>
+                  </th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
-                  <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">Country</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Location</th>
+                  <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">
+                    <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
+                      Country {hCountry.arrow && <span className="text-[10px]">{hCountry.arrow}</span>}
+                    </Link>
+                  </th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                      Location {hLocation.arrow && <span className="text-[10px]">{hLocation.arrow}</span>}
+                    </Link>
+                  </th>
                   {showLinks && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
                       {linkLabel}
