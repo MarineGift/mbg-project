@@ -117,7 +117,9 @@ export interface PartyTask {
 
 export interface InvestorProfile {
   fundName: string | null;
-  subtype: string | null;
+  typeCode: string | null;
+  typeName: string | null;
+  investorCategory: string | null;
   fundSizeUsd: number | null;
   aumUsd: number | null;
   fundVintageYear: number | null;
