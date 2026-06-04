@@ -1,0 +1,126 @@
+## Imerys (filler_supplier) — 37 rows
+  ba88da2e-ad77-4707-b3e4-7c5d2b22286c  Imerys
+  e3c8519a-e4d4-4f9b-b87a-909262b0b48a  Imerys
+  487a1831-06ac-494b-a412-553ca6994f80  Imerys
+  c90b0161-be82-4871-aad3-dd66b9fa5ffa  Imerys
+  508dd02c-c623-4324-8d4b-c3c089806cdf  Imerys
+  fe942456-3bcf-418a-b839-95550b3a2bc5  Imerys
+  eaeaafb5-9412-4912-9399-16166677f8f1  Imerys
+  00b422a5-09b0-4279-b17c-305768815e29  Imerys
+  bad381d5-d0e0-45bf-8972-31942f56e446  Imerys
+  18674ee7-b814-48df-9c7d-7f47088db814  Imerys
+  4048d953-419d-452a-8da3-761a65ac777c  Imerys
+  7eb98d5d-3dc7-4138-9fc9-c90b2747b496  Imerys
+  11429998-214d-4923-a452-1b026669dca2  Imerys
+  f5de06db-ac10-4e9a-b316-8b4bb4f74442  Imerys
+  dd936452-1782-44be-a24c-fb4d87c73954  Imerys
+  28b889dd-05e7-4aff-9958-83ffa0607caf  Imerys
+  e4903586-77f8-42ba-ac24-cdfd9f6a2beb  Imerys
+  5260fe79-d0b2-4717-ad63-770a89f7a2d8  Imerys
+  da377355-e182-45b3-b70e-9898604183c6  Imerys
+  5ede20fb-c1bb-4b6e-b350-fb3b35267409  Imerys
+  0b6f9ddf-02b8-48bd-9bf4-5c9578b934a5  Imerys
+  3bf6350b-4248-46b0-9991-66ebd88bcdd1  Imerys
+  2cdfff72-dce3-4325-ab4d-863d0bf0e278  Imerys
+  30158154-5cac-49c1-a103-47beb9c54721  Imerys
+  2cb0eeb7-46ed-49f9-8f1e-036660f66858  Imerys
+  bbe18809-ee5c-4161-990d-414a94545f8f  Imerys
+  24463c82-2d64-4e89-a700-13d409de9458  Imerys
+  781ee8f5-06f3-47d2-ad45-eab0437e13b5  Imerys
+  611627cf-7b9a-44ab-9fee-793b390a77c1  Imerys
+  0e333813-b84b-4094-a34c-a158876bd21c  Imerys
+  bb21b96f-d7d7-4d95-8635-5d18ec2592b0  Imerys
+  62b34ffc-557f-4f05-b67f-f409f7d2eef4  Imerys
+  20a36867-0cf8-4d8d-a229-08c1e6607181  Imerys
+  b56abde0-558d-443f-b55f-0a2edf04dda2  Imerys
+  fb4c1b46-bc3c-4e51-8ccd-76f1bce73eff  Imerys
+  e2a286db-3f18-44b9-bfbd-88d01201764d  Imerys
+  5b04d33c-4d8d-4c4d-bcc0-bc84a0915df3  Imerys (HQ)
+
+## [Other] Mid-tier mills (paper_mill) — 23 rows
+  168a531f-9227-4532-b199-da68ff1e2690  [Other] Mid-tier mills
+  bb2f563c-434f-4d33-845e-fe0309eec332  [Other] Mid-tier mills
+  62d29a37-088d-4c99-99e7-624725131e54  [Other] Mid-tier mills
+  01bcaab9-bb87-4207-b644-8efcbd26fd47  [Other] Mid-tier mills
+  2f8f41e0-7500-44bf-854e-fccd93a5ae0f  [Other] Mid-tier mills
+  d0ca14a0-778e-44f9-a979-17e992488d1c  [Other] Mid-tier mills
+  98c97c0a-b7f9-4ff5-a958-693d27a0e54b  [Other] Mid-tier mills
+  490d3bab-2ea9-4ad1-be6d-de7bdd94ac88  [Other] Mid-tier mills
+  fd8e60f8-3227-4fb2-a118-4135421b9431  [Other] Mid-tier mills
+  057ca3d3-0b8f-40c6-ad66-682bd995ab04  [Other] Mid-tier mills
+  8900527a-89d1-4574-ae9c-711b47a5599f  [Other] Mid-tier mills
+  da7d83fa-3f20-4a80-bdd4-5e6973f9f463  [Other] Mid-tier mills
+  4a9b30d9-8dca-41d4-aabe-058de4d43aae  [Other] Mid-tier mills
+  439dc5d2-fb0b-4275-9133-f77b5ce5db4f  [Other] Mid-tier mills
+  4cdb5eaf-a0b2-4857-a047-2ee3e57359cb  [Other] Mid-tier mills
+  55bed5df-f326-4806-8a7a-f416fc327524  [Other] Mid-tier mills
+  a7402ac1-de4b-4bb8-8a70-563fbd8ef514  [Other] Mid-tier mills
+  c92c2c06-6955-45af-9659-61a2f29a5606  [Other] Mid-tier mills
+  29f63bf9-6d46-4733-b065-682f56503a82  [Other] Mid-tier mills
+  77bacc32-ab93-4bf5-88a8-8b4944b03950  [Other] Mid-tier mills
+  10787fb4-65f1-47e3-bed2-1165cc3dd577  [Other] Mid-tier mills
+  dd3ee520-8e37-4978-8e53-465b21b9ac4f  [Other] Mid-tier mills
+  245b9f0c-15e2-4ed5-bec5-235f3e8567f0  [Other] Mid-tier mills
+
+## Multi-mill (paper_mill) — 23 rows
+  b1bc1bcf-47f1-474a-b662-913035348aee  Multi-mill
+  be7ad235-5a7b-41ec-866b-d1b339c5e973  Multi-mill
+  d89aa3f7-a282-4458-80e5-e47cd9b49b36  Multi-mill
+  ba2bffd3-5122-4c3c-bc7f-8315384d3eb1  Multi-mill
+  f5324b88-ad59-435a-a840-7086920fa224  Multi-mill
+  afb83637-c52a-47e5-9942-5ae45a4a1ae5  Multi-mill
+  56956eaf-5699-4e95-b56c-85a7e2dbfaec  Multi-mill
+  a6057c7d-7494-4dca-b6b0-213934833a5a  Multi-mill
+  230802ee-c71b-4a18-824b-c04ae72dd016  Multi-mill
+  746c13e2-3da9-4b3b-86db-e331c4f2a799  Multi-mill
+  55b8a037-469a-4138-af61-1b76b030bf95  Multi-mill
+  5360cc82-cc35-4c69-82ab-2b7ab6c130ae  Multi-mill
+  7e338bda-57fc-4c79-80c8-8c1de1245a10  Multi-mill
+  7ebfa5a7-f824-4e00-b694-b0421959019a  Multi-mill
+  09ec175f-d922-498f-92f5-b6f9c1957794  Multi-mill
+  31af2c9c-3b40-46cb-8142-e1a764841273  Multi-mill
+  b10689e9-16b6-4900-bcf3-2d57f14abb61  Multi-mill
+  c757c7bc-5c18-43f3-aee3-cb45a24ba1b1  Multi-mill
+  ffe1b19f-f88f-496e-927f-a0a5943a509a  Multi-mill
+  83aad864-a383-44e1-bd7c-632f112b40cb  Multi-mill
+  8c11eadb-9287-415d-84ab-08e5778445d8  Multi-mill
+  014a28e3-1bc9-4378-b168-01a9e8ae87b4  Multi-mill
+  746f4080-bf1a-49c5-b446-e129a1c2c9c0  Multi-mill
+
+## Schaefer Kalk (filler_supplier) — 13 rows
+  af1ce821-a5c9-4a74-86a4-1363c7571866  Schaefer Kalk
+  480de641-b159-400d-9445-ad2134250a6e  Schaefer Kalk
+  4a6a870f-d551-4f1d-957a-ec6ca14173bb  Schaefer Kalk
+  ef99ec81-52f9-42bf-957d-baeb94b2a48e  Schaefer Kalk
+  3e14add9-6357-4cea-92d4-23ae97185d2a  Schaefer Kalk
+  b32e2bec-3633-48a9-a39c-205306c59315  Schaefer Kalk
+  5c2b2982-5145-4e03-b4d3-8bf4c04c26d9  Schaefer Kalk
+  0d9601fa-3028-486f-8ef6-c725fcb2de7c  Schaefer Kalk
+  32f0083d-1fb0-49a6-974e-5260d6b28a2f  Schaefer Kalk
+  dcbb7d92-27b2-419a-822a-b8d39821a756  Schaefer Kalk
+  c4df4fb3-78f6-4cfd-a92b-46aa0f3893af  Schaefer Kalk
+  34e04bf4-87d3-425a-8f22-f6da912bfe5a  Schaefer Kalk
+  0a4aa883-68e5-4bb0-9abf-b3ce4673d66c  Schaefer Kalk (HQ)
+
+## [Sector] (paper_mill) — 3 rows
+  fd246c3b-7cb3-4517-92d4-27fe1b135afb  [Sector]
+  fd3117e7-6f2d-4e9d-ac61-989083b0f839  [Sector]
+  f8dfc960-8d74-4f24-891d-182f64e34826  [Sector]
+
+## Stora Enso Oyj (paper_mill) — 3 rows
+  9ad2d0b0-e649-481c-ba9b-ca5874f6dba9  Stora Enso Oyj
+  b89ac251-ec3d-4367-b222-4c2cc381d220  Stora Enso Oyj
+  24f1f75b-1ad7-4705-b023-a38c53c743f7  Stora Enso Oyj (Swedish-Finnish)
+
+## Brian Smith (investor) — 2 rows
+  92946630-319d-441d-b35b-08bdf8cbee07  Brian Smith
+  8797f968-4ea1-497a-a0bf-52aa3324a0c9  Brian Smith
+
+## Independent merchant site (paper_mill) — 2 rows
+  75191f3e-318a-4d87-9a31-51a5769daba3  Independent merchant site
+  6f11b482-3117-4e21-842a-f322f6ee4c36  Independent merchant site
+
+## Stora Enso multi-mill (paper_mill) — 2 rows
+  5e009bd8-57af-4017-801d-6e91b1678185  Stora Enso multi-mill
+  7e5e9b45-0532-493e-91c8-e47165e70ec9  Stora Enso multi-mill
+
