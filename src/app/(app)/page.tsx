@@ -8,7 +8,7 @@
  */
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sparkles, Inbox, CheckSquare, Building2, Handshake } from 'lucide-react';
+import { Inbox, CheckSquare, Building2, Handshake } from 'lucide-react';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   // Row 1: quick stats --------------------------------------------------------
-  const [draftsRes, inboxRes] = await Promise.all([
+  const [draftsRes, inboxRes, inboundRes, outboundRes] = await Promise.all([
     supabase
       .schema('ai')
       .from('drafts' as never)
@@ -55,9 +55,21 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
       .is('read_at' as never, null),
+    supabase
+      .schema('app')
+      .from('communications' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('direction', 'inbound'),
+    supabase
+      .schema('app')
+      .from('communications' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('direction', 'outbound'),
   ]);
-  const draftsCount = (draftsRes as any).count ?? 0;
-  const inboxCount  = (inboxRes  as any).count ?? 0;
+  const draftsCount   = (draftsRes   as any).count ?? 0;
+  const inboxCount    = (inboxRes    as any).count ?? 0;
+  const inboundCount  = (inboundRes  as any).count ?? 0;
+  const outboundCount = (outboundRes as any).count ?? 0;
 
   // To-Do per-status breakdown (Backlog / To Do / In Progress / Review / Done).
   // Mirrors the /todo board: pick the kind='todo' board (else the first), read
@@ -149,31 +161,44 @@ export default async function DashboardPage() {
       </header>
 
       {/* Row 1: Quick stats (clickable) */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link href="/drafts" className="block rounded-xl transition-colors hover:bg-muted/40">
-          <Card className="h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">AI Drafts</CardTitle>
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold tabular-nums">{draftsCount}</div>
-              <CardDescription className="mt-1">Pending review</CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/inbox" className="block rounded-xl transition-colors hover:bg-muted/40">
-          <Card className="h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Link href="/inbox" className="hover:underline underline-offset-2">
               <CardTitle className="text-sm font-medium">Inbox</CardTitle>
-              <Inbox className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold tabular-nums">{inboxCount}</div>
-              <CardDescription className="mt-1">Unread inbound</CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
+            </Link>
+            <Inbox className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums mb-4">{inboxCount.toLocaleString()}</div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <Link href="/inbox?direction=inbound" className="font-medium hover:underline underline-offset-2">
+                  Inbound
+                </Link>
+                <span className="tabular-nums text-muted-foreground font-mono text-xs">
+                  {inboundCount.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <Link href="/inbox?direction=outbound" className="font-medium hover:underline underline-offset-2">
+                  Outbound
+                </Link>
+                <span className="tabular-nums text-muted-foreground font-mono text-xs">
+                  {outboundCount.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <Link href="/inbox?hasDraft=1" className="font-medium hover:underline underline-offset-2">
+                  AI Drafts
+                </Link>
+                <span className="tabular-nums text-muted-foreground font-mono text-xs">
+                  {draftsCount.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Link href="/todo" className="block rounded-xl transition-colors hover:bg-muted/40">
           <Card className="h-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
