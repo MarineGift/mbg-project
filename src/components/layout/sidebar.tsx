@@ -348,6 +348,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
             {DIRECTORY_ITEMS.map((d) => {
               const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
               const href = `/${d.code}/parties`;
+              const partyCount = counts.parties[d.code] ?? 0;
               return (
                 <NavLink
                   key={d.code}
@@ -361,7 +362,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                   label={d.name}
                   active={isActive(pathname, href)}
                   collapsed={isCollapsed}
-                  badge={counts.parties[d.code] && counts.parties[d.code] > 0 ? counts.parties[d.code] : undefined}
+                  badge={partyCount > 0 ? partyCount : undefined}
                   onNavigate={onNavigate}
                 />
               );
