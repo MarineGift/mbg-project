@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   Sparkles, ArrowRight, AlertCircle,
-  PenLine, FileText, ChevronDown, ChevronRight, Eye, Send,
+  ChevronDown, ChevronRight, Eye, Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -135,16 +135,8 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2 items-center">
             <Button onClick={() => openReply('direct')} variant="default" size="sm">
-              <PenLine className="h-4 w-4 mr-1" />
-              Write manually
-            </Button>
-            <Button onClick={() => openReply('ai')} variant="secondary" size="sm">
-              <Sparkles className="h-4 w-4 mr-1" />
-              Use AI draft
-            </Button>
-            <Button onClick={() => openReply('template')} variant="outline" size="sm">
-              <FileText className="h-4 w-4 mr-1" />
-              Use template
+              <Send className="h-4 w-4 mr-1" />
+              Reply
             </Button>
             {!replyTarget.party && (
               <span className="text-xs text-muted-foreground ml-1">

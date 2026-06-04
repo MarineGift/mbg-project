@@ -26,7 +26,6 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Inbox,
-  Sparkles,
   CheckSquare,
   Settings as SettingsIcon,
   LayoutDashboard,
@@ -85,7 +84,8 @@ interface NavItem {
 
 const TOP_ITEMS: readonly NavItem[] = [
   { href: '/',         labelKey: 'dashboard', icon: LayoutDashboard },
-  { href: '/drafts',   labelKey: 'drafts',    icon: Sparkles,    badgeKey: 'pendingDraftCount' },
+  // AI Drafts moved into Inbox (Inbox shows Inbound / Outbound / AI Drafts),
+  // so the standalone /drafts sidebar item was removed.
   { href: '/inbox',    labelKey: 'inbox',     icon: Inbox,       badgeKey: 'inboxUnreadCount' },
   { href: '/sent',     labelKey: 'sent',      icon: Send },
   // To-Do board (standalone task engine, app.todo_items). The deal-scoped
@@ -117,7 +117,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
   const openTaskCount = useUiStore((s) => s.openTaskCount);
   const tNav = useTranslations('nav');
-  const tCommon = useTranslations('common');
   const pathname = usePathname();
 
   const badges = { pendingDraftCount, inboxUnreadCount, openTaskCount };
@@ -171,7 +170,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       <>
         <div className="flex h-14 items-center justify-between gap-2 px-3 border-b">
           {!isCollapsed && (
-            <span className="font-semibold text-sm truncate">{tCommon('appName')}</span>
+            <span className="font-semibold text-sm truncate">URM (Marinebio Group)</span>
           )}
           {mobile ? (
             <Button
