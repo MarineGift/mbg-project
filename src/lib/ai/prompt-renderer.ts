@@ -145,10 +145,10 @@ async function loadBrandVoice(
     .schema('ai')
     .from('brand_voice')
     .select(
-      'id, organization_id, module:party_type, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version',
+      'id, organization_id, party_type_id, language, tone_guidelines, do_say, dont_say, glossary, few_shot_examples, is_active, version, party_types:party_type_id!inner(code)',
     )
     .eq('organization_id', organizationId)
-    .eq('party_type', partyType)
+    .eq('party_types.code', partyType)
     .eq('language', language)
     .eq('is_active', true)
     .order('version', { ascending: false })
@@ -164,7 +164,7 @@ async function loadBrandVoice(
   return {
     id: data.id,
     organizationId: data.organization_id,
-    partyType: data.module,
+    partyType: (Array.isArray(data.party_types) ? data.party_types[0]?.code : (data.party_types as { code?: string } | null)?.code) ?? partyType,
     language: data.language,
     toneGuidelines: data.tone_guidelines ?? '',
     doSay: data.do_say ?? [],
