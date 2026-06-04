@@ -72,6 +72,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
+    country?: string; type?: string;
   }>;
 }
 
@@ -114,6 +115,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const sp = await searchParams;
   const searchQuery  = (sp.q ?? '').trim();
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
+  const typeFilter = ((sp as any).type ?? '').trim();
+  const isInvestor = moduleParam === 'investor';
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
@@ -156,6 +159,18 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const linkRole  = module === 'filler_supplier' ? 'filler_supplier' : 'paper_mill';
   const linkLabel = module === 'filler_supplier' ? 'Linked Paper Mill' : 'Linked Filler';
 
+  // Investor type (category) filter -> restrict to matching party ids.
+  let typeFilterIds: string[] | null = null;
+  if (isInvestor && typeFilter) {
+    const { data: tRows } = await supabase
+      .schema('app')
+      .from('v_investor_types' as never)
+      .select('party_id')
+      .eq('investor_category' as never, typeFilter);
+    typeFilterIds = ((tRows ?? []) as any[]).map((r) => r.party_id as string);
+    if (typeFilterIds.length === 0) typeFilterIds = ['00000000-0000-0000-0000-000000000000'];
+  }
+
   let query = supabase
     .schema('app')
     .from('parties' as never)
@@ -169,6 +184,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
 
   if (countryFilter) {
     query = query.eq('country_code' as never, countryFilter);
+  }
+
+  if (typeFilterIds) {
+    query = query.in('id' as never, typeFilterIds);
   }
 
   if (!showStubs) {
@@ -217,6 +236,30 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     fetchSavedViews('party', module),
     showLinks ? fetchSupplyLinks(supabase, partyIds, linkRole) : Promise.resolve({} as Record<string, string[]>),
   ]);
+
+  // Investor Type column data + filter-chip facet counts.
+  const investorTypeMap: Record<string, { type_name: string | null; category: string }> = {};
+  let investorFacets: { category: string; count: number }[] = [];
+  if (isInvestor) {
+    const [pageTypes, allTypes] = await Promise.all([
+      partyIds.length
+        ? supabase.schema('app').from('v_investor_types' as never)
+            .select('party_id, type_name, investor_category')
+            .in('party_id' as never, partyIds)
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.schema('app').from('v_investor_types' as never).select('investor_category'),
+    ]);
+    for (const r of ((pageTypes.data ?? []) as any[])) {
+      investorTypeMap[r.party_id] = { type_name: r.type_name ?? null, category: r.investor_category };
+    }
+    const counts = new Map<string, number>();
+    for (const r of ((allTypes.data ?? []) as any[])) {
+      counts.set(r.investor_category, (counts.get(r.investor_category) ?? 0) + 1);
+    }
+    investorFacets = [...counts.entries()]
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+  }
 
   // Stats for link coverage (only filler/paper_mill)
   const linkedCount   = showLinks ? partyIds.filter(id => (supplyLinks[id]?.length ?? 0) > 0).length : 0;
@@ -270,6 +313,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             country={countryFilter}
             q={searchQuery}
             sort={sortParam}
+            types={isInvestor ? investorFacets : undefined}
+            type={typeFilter}
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -312,6 +357,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Score {hScore.arrow && <span className="text-[10px]">{hScore.arrow}</span>}
                     </Link>
                   </th>
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">Type</th>
+                  )}
                   <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
@@ -359,6 +407,17 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       <td className="px-3 py-3 text-center">
                         <LeadScoreBadge score={score} size="sm" />
                       </td>
+                      {isInvestor && (
+                        <td className="px-4 py-3">
+                          {investorTypeMap[p.id]?.type_name ? (
+                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                              {investorTypeMap[p.id]!.type_name}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 flex-wrap">
                           {level && LevelIcon && (
