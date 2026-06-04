@@ -277,7 +277,7 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
   ];
 
   return (
-    <div className="p-5">
+    <div className="flex h-full flex-col p-5">
       <header className="mb-3 flex items-baseline gap-2.5">
         <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">{board.name}</h1>
         <span className="text-sm text-muted-foreground">{items.length} tasks</span>
@@ -312,6 +312,7 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
         })}
       </div>
 
+      <div className="min-h-0 flex-1">
       {view === 'kanban' && (
         <KanbanView
           cols={cols}
@@ -338,6 +339,7 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
           onEdit={openEdit}
         />
       )}
+      </div>
 
       {modal && (
         <TaskModal
@@ -401,7 +403,7 @@ function KanbanView(props: {
   }
 
   return (
-    <div className="flex min-w-full items-start gap-3 overflow-x-auto pb-2">
+    <div className="flex h-full min-w-full items-stretch gap-3 overflow-x-auto pb-2">
       {cols.map((col) => {
         const list = inCol(col.key);
         const isOver = overCol === col.key;
@@ -438,7 +440,7 @@ function KanbanView(props: {
               </button>
             </div>
 
-            <div className="scrollbar-thin flex min-h-12 flex-col gap-2 p-2">
+            <div className="scrollbar-thin flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto p-2">
               {list.map((it) => {
                 const p = priMeta(it.priority);
                 return (
