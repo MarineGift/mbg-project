@@ -142,21 +142,31 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   // Live counts fetched directly by the sidebar (the ui-store badge values are
   // never populated anywhere, so we query Supabase here instead).
   type SidebarCounts = {
-    inboxUnread: number;
-    inbound: number;
-    outbound: number;
-    drafts: number;
+    inboxUnread: number;     // unread inbound
+    inbound: number;         // total inbound
+    outboundUnread: number;  // unread outbound (usually 0)
+    outbound: number;        // total outbound
+    draftsPending: number;   // drafts pending review
+    draftsTotal: number;     // total drafts
     todoOpen: number;
     parties: Record<string, number>; // keyed by party_type code
   };
   const [counts, setCounts] = useState<SidebarCounts>({
-    inboxUnread: 0, inbound: 0, outbound: 0, drafts: 0, todoOpen: 0, parties: {},
+    inboxUnread: 0, inbound: 0, outboundUnread: 0, outbound: 0,
+    draftsPending: 0, draftsTotal: 0, todoOpen: 0, parties: {},
   });
 
   const badges = {
-    pendingDraftCount: counts.drafts,
+    pendingDraftCount: counts.draftsPending,
     inboxUnreadCount: counts.inboxUnread,
     openTaskCount: counts.todoOpen,
+  };
+
+  // A/B pairs for the inbox sub-items (shown as "A/B", e.g. unread/total).
+  const subPairs: Record<'inbound' | 'outbound' | 'drafts', [number, number]> = {
+    inbound:  [counts.inboxUnread, counts.inbound],
+    outbound: [counts.outboundUnread, counts.outbound],
+    drafts:   [counts.draftsPending, counts.draftsTotal],
   };
 
   const [pipelines, setPipelines] = useState<Pipeline[]>(STATIC_PIPELINES);
@@ -204,13 +214,15 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         const supabase = createSupabaseBrowserClient();
         const comm = () => supabase.schema('app').from('communications' as never);
         const [
-          unreadRes, inboundRes, outboundRes, draftsRes,
+          unreadRes, inboundRes, outboundUnreadRes, outboundRes, draftsPendingRes, draftsTotalRes,
           partyTypesRes, todoStatusRes, todoItemsRes,
         ] = await Promise.all([
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound').is('read_at' as never, null),
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound'),
+          comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound').is('read_at' as never, null),
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound'),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
+          supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }),
           supabase.schema('app').from('party_types' as never).select('id, code'),
           supabase.schema('app').from('todo_status_options' as never).select('id, name'),
           supabase.schema('app').from('todo_items' as never).select('status_option_id'),
@@ -245,8 +257,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         setCounts({
           inboxUnread: (unreadRes as any).count ?? 0,
           inbound: (inboundRes as any).count ?? 0,
+          outboundUnread: (outboundUnreadRes as any).count ?? 0,
           outbound: (outboundRes as any).count ?? 0,
-          drafts: (draftsRes as any).count ?? 0,
+          draftsPending: (draftsPendingRes as any).count ?? 0,
+          draftsTotal: (draftsTotalRes as any).count ?? 0,
           todoOpen,
           parties,
         });
@@ -328,9 +342,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                               aria-current={subActive ? 'page' : undefined}
                             >
                               <span className="flex-1 truncate">{sub.label}</span>
-                              {counts[sub.countKey] > 0 && (
+                              {subPairs[sub.countKey][1] > 0 && (
                                 <span className="tabular-nums text-xs text-muted-foreground">
-                                  {counts[sub.countKey] > 99 ? '99+' : counts[sub.countKey]}
+                                  {subPairs[sub.countKey][0]}/{subPairs[sub.countKey][1]}
                                 </span>
                               )}
                             </Link>
