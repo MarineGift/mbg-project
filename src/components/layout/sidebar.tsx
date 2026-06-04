@@ -21,8 +21,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Inbox,
@@ -103,6 +103,27 @@ const BOTTOM_ITEMS: readonly NavItem[] = [
   { href: '/settings', labelKey: 'settings', icon: SettingsIcon },
 ] as const;
 
+// Inbox sub-items, shown indented under the Inbox link. They map onto the inbox
+// page filters (direction + hasDraft) so the same list/query is reused.
+type InboxSubItem = { label: string; href: string; match: (sp: URLSearchParams) => boolean };
+const INBOX_SUBITEMS: readonly InboxSubItem[] = [
+  {
+    label: 'In Bound',
+    href: '/inbox?direction=inbound',
+    match: (sp) => !sp.get('hasDraft') && (sp.get('direction') ?? 'inbound') === 'inbound',
+  },
+  {
+    label: 'Out Bound',
+    href: '/inbox?direction=outbound',
+    match: (sp) => !sp.get('hasDraft') && sp.get('direction') === 'outbound',
+  },
+  {
+    label: 'AI Drafts',
+    href: '/inbox?hasDraft=1',
+    match: (sp) => !!sp.get('hasDraft'),
+  },
+] as const;
+
 interface SidebarProps {
   /** Mobile drawer open state (managed by AppShell). Ignored on desktop. */
   mobileOpen?: boolean;
@@ -118,6 +139,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   const openTaskCount = useUiStore((s) => s.openTaskCount);
   const tNav = useTranslations('nav');
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const badges = { pendingDraftCount, inboxUnreadCount, openTaskCount };
 
@@ -198,16 +220,43 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         <nav className="flex-1 overflow-y-auto py-2 px-2 scrollbar-thin">
           <ul className="space-y-0.5">
             {TOP_ITEMS.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                icon={<item.icon className="h-4 w-4 shrink-0" />}
-                label={item.label ?? tNav(item.labelKey)}
-                active={isActive(pathname, item.href)}
-                collapsed={isCollapsed}
-                badge={item.badgeKey ? badges[item.badgeKey] : undefined}
-                onNavigate={onNavigate}
-              />
+              <Fragment key={item.href}>
+                <NavLink
+                  href={item.href}
+                  icon={<item.icon className="h-4 w-4 shrink-0" />}
+                  label={item.label ?? tNav(item.labelKey)}
+                  active={isActive(pathname, item.href)}
+                  collapsed={isCollapsed}
+                  badge={item.badgeKey ? badges[item.badgeKey] : undefined}
+                  onNavigate={onNavigate}
+                />
+                {item.href === '/inbox' && !isCollapsed && (
+                  <li>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {INBOX_SUBITEMS.map((sub) => {
+                        const subActive = pathname === '/inbox' && sub.match(searchParams);
+                        return (
+                          <li key={sub.label}>
+                            <Link
+                              href={sub.href}
+                              onClick={onNavigate}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md py-1.5 pl-9 pr-2 text-sm transition-colors',
+                                subActive
+                                  ? 'bg-accent text-accent-foreground font-medium'
+                                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                              )}
+                              aria-current={subActive ? 'page' : undefined}
+                            >
+                              <span className="truncate">{sub.label}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                )}
+              </Fragment>
             ))}
           </ul>
 
