@@ -88,10 +88,10 @@ export function InvestorProfileCard({ profile, partyName }: Props) {
           {!!profile.fundName && profile.fundName.trim() !== (partyName ?? "").trim() && (
             <Row label="Fund Name">{profile.fundName}</Row>
           )}
-          <Row label="Subtype">
-            {profile.subtype ? (
-              <span className="uppercase tracking-wide text-xs font-medium">
-                {profile.subtype}
+          <Row label="Type">
+            {profile.typeName ? (
+              <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 text-xs font-medium">
+                {profile.typeName}
               </span>
             ) : (
               DASH

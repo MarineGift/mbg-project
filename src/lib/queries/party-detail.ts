@@ -297,9 +297,10 @@ export async function fetchPartyDetail(
       .schema('app')
       .from('investor_profile' as never)
       .select(
-        'fund_name, subtype, fund_size_usd, aum_usd, fund_vintage_year, ' +
+        'fund_name, investor_type_id, fund_size_usd, aum_usd, fund_vintage_year, ' +
         'ticket_min_usd, ticket_max_usd, sector_focus, geographic_focus, ' +
-        'is_lead_investor, is_strategic',
+        'is_lead_investor, is_strategic, ' +
+        'type:investor_type_id(code, display_name, category)',
       )
       .eq('party_id', partyId)
       .maybeSingle();
@@ -580,9 +581,13 @@ function mapInvestorProfile(raw: unknown): InvestorProfile {
   const r = raw as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === 'number' ? v : v == null ? null : Number(v));
   const arr = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+  const t = Array.isArray(r.type) ? ((r.type as unknown[])[0] ?? null) : (r.type ?? null);
+  const tt = t as { code?: string; display_name?: string; category?: string } | null;
   return {
     fundName: (r.fund_name as string | null) ?? null,
-    subtype: (r.subtype as string | null) ?? null,
+    typeCode: tt?.code ?? null,
+    typeName: tt?.display_name ?? null,
+    investorCategory: tt?.category ?? null,
     fundSizeUsd: num(r.fund_size_usd),
     aumUsd: num(r.aum_usd),
     fundVintageYear: (r.fund_vintage_year as number | null) ?? null,
