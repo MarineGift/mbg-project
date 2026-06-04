@@ -35,12 +35,18 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   // Row 1: quick stats --------------------------------------------------------
-  const [draftsRes, inboxRes, inboundRes, outboundRes] = await Promise.all([
+  const [
+    draftsPendingRes, draftsTotalRes, inboxRes, inboundRes, outboundUnreadRes, outboundRes,
+  ] = await Promise.all([
     supabase
       .schema('ai')
       .from('drafts' as never)
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending_review'),
+    supabase
+      .schema('ai')
+      .from('drafts' as never)
+      .select('id', { count: 'exact', head: true }),
     supabase
       .schema('app')
       .from('communications' as never)
@@ -56,12 +62,20 @@ export default async function DashboardPage() {
       .schema('app')
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
+      .eq('direction', 'outbound')
+      .is('read_at' as never, null),
+    supabase
+      .schema('app')
+      .from('communications' as never)
+      .select('id', { count: 'exact', head: true })
       .eq('direction', 'outbound'),
   ]);
-  const draftsCount   = (draftsRes   as any).count ?? 0;
-  const inboxCount    = (inboxRes    as any).count ?? 0;
-  const inboundCount  = (inboundRes  as any).count ?? 0;
-  const outboundCount = (outboundRes as any).count ?? 0;
+  const draftsPending  = (draftsPendingRes  as any).count ?? 0;
+  const draftsTotal    = (draftsTotalRes    as any).count ?? 0;
+  const inboxCount     = (inboxRes          as any).count ?? 0; // unread inbound
+  const inboundCount   = (inboundRes        as any).count ?? 0; // total inbound
+  const outboundUnread = (outboundUnreadRes as any).count ?? 0;
+  const outboundCount  = (outboundRes       as any).count ?? 0; // total outbound
 
   // To-Do per-status breakdown (Backlog / To Do / In Progress / Review / Done).
   // Mirrors the /todo board: pick the kind='todo' board (else the first), read
@@ -206,14 +220,16 @@ export default async function DashboardPage() {
             <Inbox className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums mb-4">{inboxCount.toLocaleString()}</div>
+            <div className="text-2xl font-bold tabular-nums mb-4">
+              {inboxCount.toLocaleString()}/{inboundCount.toLocaleString()}
+            </div>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <Link href="/inbox?direction=inbound" className="font-medium hover:underline underline-offset-2">
                   Inbound
                 </Link>
                 <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                  {inboundCount.toLocaleString()}
+                  {inboxCount.toLocaleString()}/{inboundCount.toLocaleString()}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -221,7 +237,7 @@ export default async function DashboardPage() {
                   Outbound
                 </Link>
                 <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                  {outboundCount.toLocaleString()}
+                  {outboundUnread.toLocaleString()}/{outboundCount.toLocaleString()}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -229,7 +245,7 @@ export default async function DashboardPage() {
                   AI Drafts
                 </Link>
                 <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                  {draftsCount.toLocaleString()}
+                  {draftsPending.toLocaleString()}/{draftsTotal.toLocaleString()}
                 </span>
               </div>
             </div>
