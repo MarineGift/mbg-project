@@ -308,13 +308,13 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
           ) : null}
 
           {/* Board */}
-          <div className="flex-1 overflow-x-auto overflow-y-hidden bg-muted/30">
+          <div className="flex-1 overflow-y-auto bg-muted/30">
             {stages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 No stages configured for this pipeline.
               </div>
             ) : (
-              <div className="flex h-full min-w-max gap-3 p-4">
+              <div className="flex flex-wrap content-start gap-3 p-4">
                 {stageBuckets.map(({ stage, deals: stageDeals, count, sums }) => (
                   <DroppableColumn
                     key={stage.id}
@@ -412,7 +412,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-lg border bg-card transition-colors',
+        'flex h-[26rem] w-[18rem] shrink-0 flex-col rounded-lg border bg-card transition-colors',
         isOver && 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10'
       )}
     >

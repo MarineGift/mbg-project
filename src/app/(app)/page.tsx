@@ -129,29 +129,52 @@ export default async function DashboardPage() {
   ) as Record<PartyTypeCode, number>;
   const partyTotal = PARTY_TYPES.reduce((s, m) => s + partyCounts[m], 0);
 
-  // Row 2b: deals with per-deal task + engagement counts ----------------------
+  // Row 2b: deals grouped per pipeline, each with deal / task / engagement totals.
   // PostgREST embedded counts via FK: tasks.deal_id and engagements.deal_id.
-  const dealsRes = await supabase
-    .schema('app')
-    .from('deals' as never)
-    .select('id, deal_name, tasks(count), engagements(count)')
-    .is('deleted_at' as never, null)
-    .order('created_at' as never, { ascending: false });
+  // Pipelines come from app.pipelines (dynamic; excludes the 'default' fallback).
+  const [pipelinesRes, dealsRes] = await Promise.all([
+    supabase
+      .schema('app')
+      .from('pipelines' as never)
+      .select('id, code, name, sort_order')
+      .eq('is_active', true)
+      .neq('code', 'default')
+      .order('sort_order', { ascending: true }),
+    supabase
+      .schema('app')
+      .from('deals' as never)
+      .select('id, pipeline_id, tasks(count), engagements(count)')
+      .is('deleted_at' as never, null),
+  ]);
+  type PipelineRow = { id: string; code: string; name: string; sort_order: number };
   type DealRow = {
     id: string;
-    deal_name: string | null;
+    pipeline_id: string | null;
     tasks: { count: number }[] | null;
     engagements: { count: number }[] | null;
   };
+  const pipelineRows = ((pipelinesRes as any).data ?? []) as PipelineRow[];
   const dealRows = (((dealsRes as any).data ?? []) as DealRow[]).map(d => ({
-    id: d.id,
-    name: d.deal_name ?? '(untitled deal)',
+    pipelineId: d.pipeline_id,
     taskCount: d.tasks?.[0]?.count ?? 0,
     engCount: d.engagements?.[0]?.count ?? 0,
   }));
   const dealsTotal = dealRows.length;
   const taskTotal  = dealRows.reduce((s, d) => s + d.taskCount, 0);
   const engTotal   = dealRows.reduce((s, d) => s + d.engCount, 0);
+
+  // Per-pipeline aggregation (deal / task / engagement counts).
+  type PipelineStat = { id: string; name: string; deals: number; tasks: number; engagements: number };
+  const pipelineStats: PipelineStat[] = pipelineRows.map((p) => {
+    const rows = dealRows.filter((d) => d.pipelineId === p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      deals: rows.length,
+      tasks: rows.reduce((s, d) => s + d.taskCount, 0),
+      engagements: rows.reduce((s, d) => s + d.engCount, 0),
+    };
+  });
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -278,23 +301,23 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground mb-4">
               {engTotal.toLocaleString()} engagements &middot; {taskTotal.toLocaleString()} tasks
             </p>
-            {dealsTotal === 0 ? (
-              <p className="text-xs text-muted-foreground">No deals yet.</p>
+            {pipelineStats.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No pipelines.</p>
             ) : (
               <div className="space-y-2">
-                {dealRows.slice(0, 6).map(d => (
-                  <div key={d.id} className="flex items-center justify-between text-sm gap-2">
-                    <span className="font-medium truncate">{d.name}</span>
+                {/* Header: Deal / Task / Engagement */}
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <span>Pipeline</span>
+                  <span className="font-mono">Deal / Task / Eng</span>
+                </div>
+                {pipelineStats.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm gap-2">
+                    <span className="font-medium truncate">{p.name}</span>
                     <span className="tabular-nums text-muted-foreground font-mono text-xs shrink-0">
-                      {d.taskCount} tasks &middot; {d.engCount} eng
+                      {p.deals} / {p.tasks} / {p.engagements}
                     </span>
                   </div>
                 ))}
-                {dealsTotal > 6 && (
-                  <p className="text-xs text-muted-foreground pt-1">
-                    +{(dealsTotal - 6).toLocaleString()} more
-                  </p>
-                )}
               </div>
             )}
           </CardContent>
