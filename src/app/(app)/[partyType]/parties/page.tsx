@@ -19,8 +19,8 @@ import { fetchSavedViews } from '@/lib/queries/saved-views';
 import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTier, PartyStatus } from '@/types/party-detail';
 import dynamic from 'next/dynamic';
-const CountryFilterBar = dynamic(
-  () => import('@/components/parties/country-filter-bar').then(m => ({ default: m.CountryFilterBar })),
+const PartiesFilterBar = dynamic(
+  () => import('@/components/parties/parties-filter-bar').then(m => ({ default: m.PartiesFilterBar })),
   { ssr: false, loading: () => null }
 );
 
@@ -116,7 +116,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
 
   const showStubs   = sp.include_stubs === '1';
-  const sortByScore = sp.sort === 'score';
+  const sortParam   = sp.sort ?? 'name_asc';
+  const sortByScore = sortParam === 'score';
+  const sortDesc    = sortParam === 'name_desc';
   const page        = Math.max(1, Number(sp.page ?? 1));
   const pageSize    = (PAGE_SIZE_OPTIONS as readonly number[]).includes(Number(sp.perPage))
     ? Number(sp.perPage) : DEFAULT_PAGE_SIZE;
@@ -175,7 +177,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     parties = sorted.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
-      .order('party_name' as never, { ascending: true })
+      .order('party_name' as never, { ascending: !sortDesc })
       .range(from, to);
     if (error) throw error;
     totalCount = count ?? 0;
@@ -204,10 +206,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     showLinks ? fetchSupplyLinks(supabase, partyIds, linkRole) : Promise.resolve({} as Record<string, string[]>),
   ]);
 
-  const sortHref = sortByScore
-    ? `/${module}/parties${pageSize !== DEFAULT_PAGE_SIZE ? `?perPage=${pageSize}` : ''}`
-    : `/${module}/parties?sort=score${pageSize !== DEFAULT_PAGE_SIZE ? `&perPage=${pageSize}` : ''}`;
-
   // Stats for link coverage (only filler/paper_mill)
   const linkedCount   = showLinks ? partyIds.filter(id => (supplyLinks[id]?.length ?? 0) > 0).length : 0;
   const unlinkedCount = showLinks ? partyIds.length - linkedCount : 0;
@@ -231,13 +229,15 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               <span className="text-xs text-muted-foreground/70">· Sorted by score</span>
             )}
           </p>
-          <CountryFilterBar countries={distinctCountries} current={countryFilter} />
+          <PartiesFilterBar
+            countries={distinctCountries}
+            country={countryFilter}
+            q={searchQuery}
+            sort={sortParam}
+          />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
-          <Button asChild variant={sortByScore ? 'default' : 'outline'} size="sm">
-            <Link href={sortHref}>{sortByScore ? 'By name' : 'Sort by score'}</Link>
-          </Button>
           <Button asChild size="sm">
             <Link href={`/${module}/parties/new`}>
               <Plus className="h-4 w-4" />
