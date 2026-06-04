@@ -43,7 +43,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   // Row 1: quick stats --------------------------------------------------------
-  const [draftsRes, inboxRes, todoRes] = await Promise.all([
+  const [draftsRes, inboxRes] = await Promise.all([
     supabase
       .schema('ai')
       .from('drafts' as never)
@@ -55,18 +55,51 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
       .is('read_at' as never, null),
-    // To-Do card links to /todo -> count the To-Do engine (todo_items),
-    // NOT the deal-scoped app.tasks table.
-    supabase
-      .schema('app')
-      .from('todo_items' as never)
-      .select('id', { count: 'exact', head: true })
-      .neq('status' as never, 'done')
-      .is('archived_at' as never, null),
   ]);
   const draftsCount = (draftsRes as any).count ?? 0;
   const inboxCount  = (inboxRes  as any).count ?? 0;
-  const todoCount   = (todoRes   as any).count ?? 0;
+
+  // To-Do per-status breakdown (Backlog / To Do / In Progress / Review / Done).
+  // Mirrors the /todo board: pick the kind='todo' board (else the first), read
+  // its status options (label/color/order) and count its items per status.
+  type TodoStage = { key: string; label: string; color: string | null; count: number };
+  let todoStages: TodoStage[] = [];
+  {
+    const { data: boardsData } = await supabase
+      .schema('app')
+      .from('todo_boards' as never)
+      .select('id, kind, position')
+      .order('position', { ascending: true });
+    const boards = (boardsData ?? []) as Array<{ id: string; kind: string; position: number }>;
+    const board = boards.find((b) => b.kind === 'todo') ?? boards[0];
+    if (board) {
+      const [optsRes, itemsRes] = await Promise.all([
+        supabase
+          .schema('app')
+          .from('todo_status_options' as never)
+          .select('key, label, color, position')
+          .eq('board_id', board.id)
+          .order('position', { ascending: true }),
+        supabase
+          .schema('app')
+          .from('todo_items' as never)
+          .select('status')
+          .eq('board_id', board.id)
+          .is('archived_at', null),
+      ]);
+      const opts = (optsRes.data ?? []) as Array<{ key: string; label: string; color: string | null; position: number }>;
+      const items = (itemsRes.data ?? []) as Array<{ status: string }>;
+      const counts = new Map<string, number>();
+      for (const it of items) counts.set(it.status, (counts.get(it.status) ?? 0) + 1);
+      todoStages = opts.map((o) => ({
+        key: o.key,
+        label: o.label,
+        color: o.color,
+        count: counts.get(o.key) ?? 0,
+      }));
+    }
+  }
+  const todoTotal = todoStages.reduce((s, st) => s + st.count, 0);
 
   // Row 2a: parties by type (count on party_type_id) --------------------------
   const partyResults = await Promise.all(
@@ -148,8 +181,28 @@ export default async function DashboardPage() {
               <CheckSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold tabular-nums">{todoCount}</div>
-              <CardDescription className="mt-1">Open</CardDescription>
+              <div className="text-2xl font-bold tabular-nums mb-4">{todoTotal.toLocaleString()}</div>
+              {todoStages.length === 0 ? (
+                <CardDescription>No board found.</CardDescription>
+              ) : (
+                <div className="space-y-2">
+                  {todoStages.map((st) => (
+                    <div key={st.key} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 font-medium">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ background: st.color ?? '#94a3b8' }}
+                          aria-hidden
+                        />
+                        {st.label}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground font-mono text-xs">
+                        {st.count.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </Link>
