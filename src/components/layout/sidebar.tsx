@@ -93,7 +93,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   // engagement tasks at /tasks stay as a route for reuse inside deal detail,
   // but no longer have a top-level sidebar link. Explicit label avoids
   // touching the next-intl messages files; badge removed by design.
-  { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do' },
+  { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
 ] as const;
 
@@ -103,21 +103,24 @@ const BOTTOM_ITEMS: readonly NavItem[] = [
 
 // Inbox sub-items, shown indented under the Inbox link. They map onto the inbox
 // page filters (direction + hasDraft) so the same list/query is reused.
-type InboxSubItem = { label: string; href: string; match: (sp: URLSearchParams) => boolean };
+type InboxSubItem = { label: string; href: string; countKey: 'inbound' | 'outbound' | 'drafts'; match: (sp: URLSearchParams) => boolean };
 const INBOX_SUBITEMS: readonly InboxSubItem[] = [
   {
     label: 'In Bound',
     href: '/inbox?direction=inbound',
+    countKey: 'inbound',
     match: (sp) => !sp.get('hasDraft') && (sp.get('direction') ?? 'inbound') === 'inbound',
   },
   {
     label: 'Out Bound',
     href: '/inbox?direction=outbound',
+    countKey: 'outbound',
     match: (sp) => !sp.get('hasDraft') && sp.get('direction') === 'outbound',
   },
   {
     label: 'AI Drafts',
     href: '/inbox?hasDraft=1',
+    countKey: 'drafts',
     match: (sp) => !!sp.get('hasDraft'),
   },
 ] as const;
@@ -132,14 +135,29 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
-  const pendingDraftCount = useUiStore((s) => s.pendingDraftCount);
-  const inboxUnreadCount = useUiStore((s) => s.inboxUnreadCount);
-  const openTaskCount = useUiStore((s) => s.openTaskCount);
   const tNav = useTranslations('nav');
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const badges = { pendingDraftCount, inboxUnreadCount, openTaskCount };
+  // Live counts fetched directly by the sidebar (the ui-store badge values are
+  // never populated anywhere, so we query Supabase here instead).
+  type SidebarCounts = {
+    inboxUnread: number;
+    inbound: number;
+    outbound: number;
+    drafts: number;
+    todoOpen: number;
+    parties: Record<string, number>; // keyed by party_type code
+  };
+  const [counts, setCounts] = useState<SidebarCounts>({
+    inboxUnread: 0, inbound: 0, outbound: 0, drafts: 0, todoOpen: 0, parties: {},
+  });
+
+  const badges = {
+    pendingDraftCount: counts.drafts,
+    inboxUnreadCount: counts.inboxUnread,
+    openTaskCount: counts.todoOpen,
+  };
 
   const [pipelines, setPipelines] = useState<Pipeline[]>(STATIC_PIPELINES);
   useEffect(() => {
@@ -172,6 +190,62 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       } catch (e) {
         // Keep STATIC_PIPELINES as the fallback if anything fails.
         console.warn('[sidebar] live pipelines fetch failed, using static fallback:', e);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Fetch badge counts (inbox / inbound / outbound / drafts / open todos /
+  // parties per type). All defensive: any failure leaves that count at 0.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const comm = () => supabase.schema('app').from('communications' as never);
+        const [
+          unreadRes, inboundRes, outboundRes, draftsRes,
+          partyTypesRes, partyRowsRes, todoStatusRes, todoItemsRes,
+        ] = await Promise.all([
+          comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound').is('read_at' as never, null),
+          comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound'),
+          comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound'),
+          supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
+          supabase.schema('app').from('party_types' as never).select('id, code'),
+          supabase.schema('app').from('parties' as never).select('party_type_id').is('deleted_at' as never, null),
+          supabase.schema('app').from('todo_status_options' as never).select('id, name'),
+          supabase.schema('app').from('todo_items' as never).select('status_option_id'),
+        ]);
+        if (!alive) return;
+
+        // Parties per type code
+        const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string }>;
+        const idToCode = new Map<number, string>(typeRows.map((t) => [t.id, t.code]));
+        const partyRows = ((partyRowsRes as any).data ?? []) as Array<{ party_type_id: number | null }>;
+        const parties: Record<string, number> = {};
+        for (const r of partyRows) {
+          if (r.party_type_id == null) continue;
+          const code = idToCode.get(r.party_type_id);
+          if (!code) continue;
+          parties[code] = (parties[code] ?? 0) + 1;
+        }
+
+        // Open todos = items whose status option name is not "Done"
+        const statusRows = ((todoStatusRes as any).data ?? []) as Array<{ id: string; name: string }>;
+        const doneIds = new Set(statusRows.filter((s) => /done/i.test(s.name)).map((s) => s.id));
+        const todoRows = ((todoItemsRes as any).data ?? []) as Array<{ status_option_id: string | null }>;
+        const todoOpen = todoRows.filter((t) => !t.status_option_id || !doneIds.has(t.status_option_id)).length;
+
+        setCounts({
+          inboxUnread: (unreadRes as any).count ?? 0,
+          inbound: (inboundRes as any).count ?? 0,
+          outbound: (outboundRes as any).count ?? 0,
+          drafts: (draftsRes as any).count ?? 0,
+          todoOpen,
+          parties,
+        });
+      } catch (e) {
+        console.warn('[sidebar] counts fetch failed:', e);
       }
     })();
     return () => { alive = false; };
@@ -246,7 +320,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                               )}
                               aria-current={subActive ? 'page' : undefined}
                             >
-                              <span className="truncate">{sub.label}</span>
+                              <span className="flex-1 truncate">{sub.label}</span>
+                              {counts[sub.countKey] > 0 && (
+                                <span className="tabular-nums text-xs text-muted-foreground">
+                                  {counts[sub.countKey] > 99 ? '99+' : counts[sub.countKey]}
+                                </span>
+                              )}
                             </Link>
                           </li>
                         );
@@ -282,6 +361,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                   label={d.name}
                   active={isActive(pathname, href)}
                   collapsed={isCollapsed}
+                  badge={counts.parties[d.code] && counts.parties[d.code] > 0 ? counts.parties[d.code] : undefined}
                   onNavigate={onNavigate}
                 />
               );
@@ -420,7 +500,7 @@ function NavLink({
             )}
             aria-label={`${badge} pending`}
           >
-            {badge > 99 ? '99+' : badge}
+            {collapsed ? (badge > 99 ? '99+' : badge) : badge.toLocaleString()}
           </span>
         )}
       </Link>
