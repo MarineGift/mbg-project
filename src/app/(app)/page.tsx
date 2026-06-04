@@ -111,7 +111,7 @@ export default async function DashboardPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">URM Platform</h1>
+        <h1 className="text-2xl font-semibold">URM (Marinebio Group)</h1>
         <p className="text-sm text-muted-foreground mt-1">{auth.email}</p>
       </header>
 
@@ -226,7 +226,7 @@ export default async function DashboardPage() {
       {/* Row 3: Welcome */}
       <Card>
         <CardHeader>
-          <CardTitle>Welcome to URM Platform</CardTitle>
+          <CardTitle>Welcome to Marinebio Group</CardTitle>
           <CardDescription>
             Marinebio Group&apos;s unified relationship management for the paper &amp;
             filler-mineral industry. Track investor outreach, run deal pipelines across
