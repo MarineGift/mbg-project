@@ -205,30 +205,36 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         const comm = () => supabase.schema('app').from('communications' as never);
         const [
           unreadRes, inboundRes, outboundRes, draftsRes,
-          partyTypesRes, partyRowsRes, todoStatusRes, todoItemsRes,
+          partyTypesRes, todoStatusRes, todoItemsRes,
         ] = await Promise.all([
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound').is('read_at' as never, null),
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound'),
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound'),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
           supabase.schema('app').from('party_types' as never).select('id, code'),
-          supabase.schema('app').from('parties' as never).select('party_type_id').is('deleted_at' as never, null),
           supabase.schema('app').from('todo_status_options' as never).select('id, name'),
           supabase.schema('app').from('todo_items' as never).select('status_option_id'),
         ]);
         if (!alive) return;
 
-        // Parties per type code
+        // Parties per type code — head counts per type (a plain select() caps at
+        // 1000 rows and would undercount, e.g. paper_mill 1067).
         const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string }>;
-        const idToCode = new Map<number, string>(typeRows.map((t) => [t.id, t.code]));
-        const partyRows = ((partyRowsRes as any).data ?? []) as Array<{ party_type_id: number | null }>;
+        const partyCountResults = await Promise.all(
+          typeRows.map((t) =>
+            supabase
+              .schema('app')
+              .from('parties' as never)
+              .select('id', { count: 'exact', head: true })
+              .eq('party_type_id' as never, t.id)
+              .is('deleted_at' as never, null)
+          )
+        );
+        if (!alive) return;
         const parties: Record<string, number> = {};
-        for (const r of partyRows) {
-          if (r.party_type_id == null) continue;
-          const code = idToCode.get(r.party_type_id);
-          if (!code) continue;
-          parties[code] = (parties[code] ?? 0) + 1;
-        }
+        typeRows.forEach((t, i) => {
+          parties[t.code] = (partyCountResults[i] as any).count ?? 0;
+        });
 
         // Open todos = items whose status option name is not "Done"
         const statusRows = ((todoStatusRes as any).data ?? []) as Array<{ id: string; name: string }>;
@@ -300,6 +306,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                   active={isActive(pathname, item.href)}
                   collapsed={isCollapsed}
                   badge={item.badgeKey ? badges[item.badgeKey] : undefined}
+                  badgeText={item.href === '/inbox' ? `${counts.inboxUnread}/${counts.inbound}` : undefined}
                   onNavigate={onNavigate}
                 />
                 {item.href === '/inbox' && !isCollapsed && (
@@ -465,6 +472,7 @@ function NavLink({
   active,
   collapsed,
   badge,
+  badgeText,
   onNavigate,
 }: {
   href: string;
@@ -473,6 +481,8 @@ function NavLink({
   active: boolean;
   collapsed: boolean;
   badge?: number;
+  /** Optional expanded-state label inside the pill (e.g. "70/74"); collapsed still shows the number. */
+  badgeText?: string;
   onNavigate?: () => void;
 }) {
   return (
@@ -501,7 +511,7 @@ function NavLink({
             )}
             aria-label={`${badge} pending`}
           >
-            {collapsed ? (badge > 99 ? '99+' : badge) : badge.toLocaleString()}
+            {collapsed ? (badge > 99 ? '99+' : badge) : (badgeText ?? badge.toLocaleString())}
           </span>
         )}
       </Link>
