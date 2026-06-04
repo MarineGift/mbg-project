@@ -279,18 +279,18 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
   return (
     <div className="p-5">
       <header className="mb-3 flex items-baseline gap-2.5">
-        <h1 className="m-0 text-xl font-bold tracking-tight">{board.name}</h1>
-        <span className="text-sm text-slate-400">{items.length} tasks</span>
+        <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">{board.name}</h1>
+        <span className="text-sm text-muted-foreground">{items.length} tasks</span>
         <button
           type="button"
           onClick={() => openCreate(firstColKey)}
-          className="ml-auto rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-sm font-semibold text-background hover:bg-foreground/90"
         >
           + New
         </button>
       </header>
 
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
+      <div className="mb-4 flex gap-1 border-b">
         {TABS.map((t) => {
           const active = view === t.key;
           return (
@@ -300,12 +300,12 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
               onClick={() => setView(t.key)}
               className={
                 'relative -mb-px px-3.5 py-2 text-sm font-semibold transition-colors ' +
-                (active ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600')
+                (active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')
               }
             >
               {t.label}
               {active && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-emerald-600" />
+                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" />
               )}
             </button>
           );
@@ -401,7 +401,7 @@ function KanbanView(props: {
   }
 
   return (
-    <div className="flex items-start gap-3.5 overflow-x-auto pb-2">
+    <div className="flex min-w-full items-start gap-3 overflow-x-auto pb-2">
       {cols.map((col) => {
         const list = inCol(col.key);
         const isOver = overCol === col.key;
@@ -415,30 +415,30 @@ function KanbanView(props: {
             onDragLeave={() => setOverCol((c) => (c === col.key ? null : c))}
             onDrop={() => onDrop(col.key)}
             className={
-              'flex w-[280px] shrink-0 flex-col rounded-xl border transition-colors ' +
-              (isOver ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white')
+              'flex min-w-[18rem] flex-1 flex-col rounded-lg border bg-card transition-colors ' +
+              (isOver ? 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10' : '')
             }
           >
-            <div className="flex items-center gap-2 px-3 pb-2 pt-3">
+            <div className="flex items-center gap-2 border-b px-3 py-2">
               <span
-                className="h-2.5 w-2.5 rounded-full"
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ background: col.color ?? '#94a3b8' }}
               />
-              <span className="text-sm font-bold">{col.label}</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-px text-[11px] text-slate-400">
+              <span className="truncate text-sm font-medium text-foreground">{col.label}</span>
+              <span className="ml-1 tabular-nums text-xs text-muted-foreground">
                 {list.length}
               </span>
               <button
                 type="button"
                 onClick={() => { setComposing(col.key); setDraft(''); }}
                 aria-label="add task"
-                className="ml-auto text-lg leading-none text-slate-400 hover:text-emerald-600"
+                className="ml-auto text-lg leading-none text-muted-foreground hover:text-foreground"
               >
                 +
               </button>
             </div>
 
-            <div className="flex min-h-10 flex-col gap-2.5 px-2.5 pb-3 pt-1">
+            <div className="scrollbar-thin flex min-h-12 flex-col gap-2 p-2">
               {list.map((it) => {
                 const p = priMeta(it.priority);
                 return (
@@ -452,7 +452,7 @@ function KanbanView(props: {
                       setTimeout(() => setJustDragged(false), 0);
                     }}
                     onClick={() => { if (!justDragged) onEdit(it); }}
-                    className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 hover:border-emerald-500 hover:shadow-md active:cursor-grabbing"
+                    className="cursor-pointer rounded-md border bg-background p-3 text-sm shadow-sm transition hover:border-foreground/20 hover:shadow active:cursor-grabbing"
                   >
                     <div className="mb-1.5 flex items-center gap-1.5">
                       <span
@@ -464,12 +464,12 @@ function KanbanView(props: {
                         {p.label}
                       </span>
                       {it.due_date && (
-                        <span className="ml-auto text-[10.5px] text-slate-400">
+                        <span className="ml-auto text-[10.5px] text-muted-foreground">
                           {it.due_date}
                         </span>
                       )}
                     </div>
-                    <div className="break-keep text-sm font-semibold leading-snug">
+                    <div className="line-clamp-2 break-keep text-sm font-medium leading-tight text-foreground">
                       {it.title}
                     </div>
                   </div>
@@ -487,7 +487,7 @@ function KanbanView(props: {
                     if (e.key === 'Escape') { setComposing(null); setDraft(''); }
                   }}
                   onBlur={() => commitAdd(col.key)}
-                  className="w-full rounded-lg border border-emerald-500 px-2.5 py-2 text-sm outline-none"
+                  className="w-full rounded-md border bg-background px-2.5 py-2 text-sm outline-none focus:border-foreground/30 focus:ring-2 focus:ring-foreground/5"
                 />
               )}
             </div>

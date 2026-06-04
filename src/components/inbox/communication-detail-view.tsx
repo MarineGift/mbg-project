@@ -134,60 +134,35 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
             <CardTitle className="text-sm">Reply</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2 items-center">
-            {replyTarget.party ? (
-              <>
-                <Button onClick={() => openReply('direct')} variant="default" size="sm">
-                  <PenLine className="h-4 w-4 mr-1" />
-                  Write manually
-                </Button>
-                <Button onClick={() => openReply('ai')} variant="secondary" size="sm">
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  Use AI draft
-                </Button>
-                <Button onClick={() => openReply('template')} variant="outline" size="sm">
-                  <FileText className="h-4 w-4 mr-1" />
-                  Use template
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button asChild variant="default" size="sm">
-                  <Link
-                    href={
-                      '/compose?' +
-                      new URLSearchParams({
-                        to: replyTarget.fromAddress ?? '',
-                        subject: replyTarget.subject
-                          ? (replyTarget.subject.toLowerCase().startsWith('re:')
-                              ? replyTarget.subject
-                              : 'Re: ' + replyTarget.subject)
-                          : '',
-                        inReplyTo: replyTarget.messageId ?? '',
-                        threadId: replyTarget.threadId ?? '',
-                      }).toString()
-                    }
-                  >
-                    <PenLine className="h-4 w-4 mr-1" />
-                    Write manually
-                  </Link>
-                </Button>
-                <span className="text-xs text-muted-foreground ml-1">
-                  No party registered - AI / Template disabled.
-                </span>
-              </>
+            <Button onClick={() => openReply('direct')} variant="default" size="sm">
+              <PenLine className="h-4 w-4 mr-1" />
+              Write manually
+            </Button>
+            <Button onClick={() => openReply('ai')} variant="secondary" size="sm">
+              <Sparkles className="h-4 w-4 mr-1" />
+              Use AI draft
+            </Button>
+            <Button onClick={() => openReply('template')} variant="outline" size="sm">
+              <FileText className="h-4 w-4 mr-1" />
+              Use template
+            </Button>
+            {!replyTarget.party && (
+              <span className="text-xs text-muted-foreground ml-1">
+                Sender is not a registered party.
+              </span>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Reply dialog mount (only when party present) */}
-      {isReplyable && replyTarget.party && (
+      {/* Reply dialog mount (always; partyId optional) */}
+      {isReplyable && (
         <ComposeEmailDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           mode="reply"
           initialTab={initialTab}
-          partyId={replyTarget.party.id}
+          partyId={replyTarget.party?.id ?? null}
           defaultTo={replyTarget.fromAddress ?? ''}
           defaultSubject={
             replyTarget.subject

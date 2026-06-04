@@ -37,6 +37,7 @@ import {
   type ComposePayload,
   type ComposeMode,
 } from "@/lib/actions/email-compose";
+import { sendOutboundManual } from "@/lib/actions/communications";
 import { uploadAttachment, type UploadedAttachment } from "@/lib/actions/upload-attachment";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
@@ -70,7 +71,7 @@ interface ComposeEmailDialogProps {
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
 
-  partyId: string;
+  partyId?: string | null;
   mode?: ComposeMode;
 
   contactId?: string | null;
@@ -174,7 +175,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     try {
       const result = await generateAIReply({
         communicationId: effectiveOriginalCommunicationId,
-        partyId: props.partyId,
+        partyId: props.partyId ?? "",
         contactId: props.contactId,
         tone: aiTone,
       });
@@ -276,32 +277,62 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
 
     setSending(true);
     try {
-      const payload: ComposePayload = {
-        mode: finalMode,
-        partyId: props.partyId,
-        contactId: props.contactId ?? null,
-        to: to.trim(),
-        subject: subject.trim(),
-        body,
-        templateId:
-          activeTab === "template" && selectedTemplateId
-            ? selectedTemplateId
-            : props.templateId,
-        replyToMessageId: props.replyToMessageId,
-        threadId: props.threadId,
-        attachmentPaths,
-        attachments: attachmentsMeta,
-        useSignature,
-        fromKind,
-      };
+      let ok: boolean;
+      let errMsg: string | undefined;
 
-      const result = await sendEmail(payload);
+      if (props.partyId) {
+        // Party-linked: full path (merge fields + template + signature).
+        const payload: ComposePayload = {
+          mode: finalMode,
+          partyId: props.partyId,
+          contactId: props.contactId ?? null,
+          to: to.trim(),
+          subject: subject.trim(),
+          body,
+          templateId:
+            activeTab === "template" && selectedTemplateId
+              ? selectedTemplateId
+              : props.templateId,
+          replyToMessageId: props.replyToMessageId,
+          threadId: props.threadId,
+          attachmentPaths,
+          attachments: attachmentsMeta,
+          useSignature,
+          fromKind,
+        };
+        const result = await sendEmail(payload);
+        ok = result.success;
+        errMsg = result.error;
+      } else {
+        // No registered party (e.g. reply to an unknown sender). Use the proven
+        // manual outbound path, which supports a null party. The 3-mode UI still
+        // applies: Template/AI fill the body client-side; this just sends it.
+        const result = await sendOutboundManual({
+          fromKind,
+          to: to.trim(),
+          cc: undefined,
+          subject: subject.trim(),
+          bodyPlain: body,
+          partyId: null,
+          contactId: props.contactId ?? null,
+          inReplyTo: props.replyToMessageId ?? null,
+          threadId: props.threadId ?? null,
+          attachments: attachmentsMeta,
+        });
+        if (result.ok) {
+          ok = true;
+          errMsg = undefined;
+        } else {
+          ok = false;
+          errMsg = result.errorMessage ?? undefined;
+        }
+      }
 
-      if (result.success) {
+      if (ok) {
         toast.success("Email sent.");
         handleOpenChange(false);
       } else {
-        toast.error(result.error ?? "Send failed.");
+        toast.error(errMsg ?? "Send failed.");
       }
     } finally {
       setSending(false);
