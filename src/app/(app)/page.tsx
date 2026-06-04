@@ -12,6 +12,9 @@ import { Inbox, CheckSquare, Building2, Handshake } from 'lucide-react';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+// Optional display overrides by party-type code. Falls back to the DB
+// display_name_en when a code isn't listed here, so new types appear with their
+// own label automatically.
 const PARTY_TYPE_LABELS: Record<string, string> = {
   paper_mill:      'Paper Mills',
   filler_supplier: 'Filler Suppliers',
@@ -25,18 +28,7 @@ const MODULE_COLORS: Record<string, string> = {
   investor:        'text-purple-600 dark:text-purple-400',
   partner:         'text-orange-600 dark:text-orange-400',
 };
-
-// Customers intentionally omitted (party_type 5 has no data / not used here).
-const PARTY_TYPES = ['paper_mill', 'filler_supplier', 'investor', 'partner'] as const;
-type PartyTypeCode = typeof PARTY_TYPES[number];
-
-// app.party_types lookup ids (1-8). Counts join on party_type_id, NOT a code string.
-const PARTY_TYPE_IDS: Record<PartyTypeCode, number> = {
-  investor:        1,
-  paper_mill:      2,
-  filler_supplier: 3,
-  partner:         6,
-};
+const FALLBACK_PARTY_COLOR = 'text-foreground';
 
 export default async function DashboardPage() {
   const auth = await requireAuthOrRedirect();
@@ -113,21 +105,39 @@ export default async function DashboardPage() {
   }
   const todoTotal = todoStages.reduce((s, st) => s + st.count, 0);
 
-  // Row 2a: parties by type (count on party_type_id) --------------------------
-  const partyResults = await Promise.all(
-    PARTY_TYPES.map(m =>
-      supabase
-        .schema('app')
-        .from('parties' as never)
-        .select('id', { count: 'exact', head: true })
-        .eq('party_type_id' as never, PARTY_TYPE_IDS[m])
-        .is('deleted_at' as never, null),
-    ),
-  );
-  const partyCounts = Object.fromEntries(
-    PARTY_TYPES.map((m, i) => [m, (partyResults[i] as any).count ?? 0]),
-  ) as Record<PartyTypeCode, number>;
-  const partyTotal = PARTY_TYPES.reduce((s, m) => s + partyCounts[m], 0);
+  // Row 2a: parties by type (dynamic from app.party_types) --------------------
+  const [partyTypesRes, partyRowsRes] = await Promise.all([
+    supabase
+      .schema('app')
+      .from('party_types' as never)
+      .select('id, code, display_name_en, sort_order')
+      .order('sort_order', { ascending: true }),
+    supabase
+      .schema('app')
+      .from('parties' as never)
+      .select('party_type_id')
+      .is('deleted_at' as never, null),
+  ]);
+  type PartyTypeRow = { id: number; code: string; display_name_en: string | null; sort_order: number };
+  const partyTypeRows = ((partyTypesRes as any).data ?? []) as PartyTypeRow[];
+  const partyTypeIds = (((partyRowsRes as any).data ?? []) as Array<{ party_type_id: number | null }>);
+  const partyCountByType = new Map<number, number>();
+  for (const r of partyTypeIds) {
+    if (r.party_type_id == null) continue;
+    partyCountByType.set(r.party_type_id, (partyCountByType.get(r.party_type_id) ?? 0) + 1);
+  }
+  // Build display stats; hide the technical 'default' type and zero-count types
+  // are kept so the list stays meaningful but not noisy.
+  type PartyStat = { code: string; label: string; color: string; count: number };
+  const partyStats: PartyStat[] = partyTypeRows
+    .filter((t) => t.code !== 'default')
+    .map((t) => ({
+      code: t.code,
+      label: PARTY_TYPE_LABELS[t.code] ?? t.display_name_en ?? t.code,
+      color: MODULE_COLORS[t.code] ?? FALLBACK_PARTY_COLOR,
+      count: partyCountByType.get(t.id) ?? 0,
+    }));
+  const partyTotal = partyStats.reduce((s, p) => s + p.count, 0);
 
   // Row 2b: deals grouped per pipeline, each with deal / task / engagement totals.
   // PostgREST embedded counts via FK: tasks.deal_id and engagements.deal_id.
@@ -270,16 +280,16 @@ export default async function DashboardPage() {
               {partyTotal.toLocaleString()}
             </div>
             <div className="space-y-2">
-              {PARTY_TYPES.map(m => (
-                <div key={m} className="flex items-center justify-between text-sm">
+              {partyStats.map((p) => (
+                <div key={p.code} className="flex items-center justify-between text-sm">
                   <Link
-                    href={`/${m}/parties`}
-                    className={`font-medium hover:underline underline-offset-2 ${MODULE_COLORS[m]}`}
+                    href={`/${p.code}/parties`}
+                    className={`font-medium hover:underline underline-offset-2 ${p.color}`}
                   >
-                    {PARTY_TYPE_LABELS[m]}
+                    {p.label}
                   </Link>
                   <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                    {partyCounts[m].toLocaleString()}
+                    {p.count.toLocaleString()}
                   </span>
                 </div>
               ))}
