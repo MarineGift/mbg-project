@@ -269,6 +269,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   <th className="px-4 py-3 font-medium whitespace-nowrap">Name</th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap w-16 text-center">Score</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
+                  <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">Country</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Location</th>
                   {showLinks && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
@@ -283,7 +284,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </thead>
               <tbody>
                 {parties.map((p) => {
-                  const location  = [p.city, p.country_code].filter(Boolean).join(', ');
+                  const location  = p.city ?? '';
                   const tags      = p.industry_tags ?? [];
                   const level     = p.party_level as PartyLevel | null;
                   const score     = scores[p.id] ?? 0;
@@ -320,6 +321,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                             </span>
                           ) : (!level && <span className="text-sm text-muted-foreground">-</span>)}
                         </div>
+                      </td>
+                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                        {p.country_code ?? '-'}
                       </td>
                       <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
                         {location || '-'}
