@@ -16,6 +16,7 @@ type Forecast = { deal_count: number; total_value: number; weighted_forecast: nu
 type DealRow = {
   id: string; deal_name: string; value_amount: number | null; value_currency: string | null;
   status: string; current_stage_id: string | null; pipeline_id: string | null;
+  deal_parties: Array<{ parties: { party_name: string } | null }> | null;
 };
 
 const fmtMoney = (n: number | null, cur: string | null) =>
@@ -39,7 +40,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       supabase.schema('app').from('campaign_forecast' as never)
         .select('deal_count, total_value, weighted_forecast').eq('campaign_id', params.id).maybeSingle(),
       supabase.schema('app').from('deals' as never)
-        .select('id, deal_name, value_amount, value_currency, status, current_stage_id, pipeline_id')
+        .select('id, deal_name, value_amount, value_currency, status, current_stage_id, pipeline_id, deal_parties ( parties ( party_name ) )')
         .eq('campaign_id', params.id).is('deleted_at', null)
         .order('value_amount', { ascending: false, nullsFirst: false }),
       supabase.schema('app').from('stages' as never).select('id, name'),
@@ -92,6 +93,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
             <thead className="bg-muted/30 text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Deal</th>
+                <th className="px-4 py-2 text-left font-medium">Companies</th>
                 <th className="px-4 py-2 text-left font-medium">Pipeline</th>
                 <th className="px-4 py-2 text-left font-medium">Stage</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -100,7 +102,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
             </thead>
             <tbody className="divide-y">
               {deals.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No deals linked yet.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No deals linked yet.</td></tr>
               )}
               {deals.map((d) => {
                 const p = d.pipeline_id ? pipeline.get(d.pipeline_id) : undefined;
@@ -113,6 +115,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
                         </Link>
                       ) : d.deal_name}
                     </td>
+                    <td className="px-4 py-2 text-muted-foreground">{companyLabel(d.deal_parties)}</td>
                     <td className="px-4 py-2 text-muted-foreground">{p?.name ?? '-'}</td>
                     <td className="px-4 py-2 text-muted-foreground">{d.current_stage_id ? (stageName.get(d.current_stage_id) ?? '-') : '-'}</td>
                     <td className="px-4 py-2 text-muted-foreground">{d.status}</td>
@@ -126,6 +129,13 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       </div>
     </div>
   );
+}
+
+function companyLabel(parties: Array<{ parties: { party_name: string } | null }> | null): string {
+  const names = (parties ?? []).map((p) => p.parties?.party_name).filter(Boolean) as string[];
+  if (names.length === 0) return '-';
+  if (names.length === 1) return names[0];
+  return names[0] + ' +' + (names.length - 1);
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

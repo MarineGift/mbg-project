@@ -75,6 +75,8 @@ interface CreateDealInput {
   parties: CreateDealPartyInput[];
   // Optional fundraising round (Investor pipeline only). FK -> app.rounds.
   round_id?: string | null;
+  // Optional campaign grouping (any pipeline). FK -> app.campaigns.
+  campaign_id?: string | null;
 }
 
 export async function createDeal(
@@ -146,6 +148,9 @@ export async function createDeal(
   };
   if (input.round_id) {
     dealPayload.round_id = input.round_id;
+  }
+  if (input.campaign_id) {
+    dealPayload.campaign_id = input.campaign_id;
   }
 
   const { data: dealRow, error: dealErr } = await supabase
