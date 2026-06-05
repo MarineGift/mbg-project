@@ -33,6 +33,7 @@ import {
   X,
   Send,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -95,6 +96,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   // touching the next-intl messages files; badge removed by design.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
+  { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns' },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [
