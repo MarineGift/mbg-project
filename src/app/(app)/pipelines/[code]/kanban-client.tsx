@@ -186,36 +186,33 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
     setActiveDealId(null);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDealId(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const dealId = String(active.id);
-    const newStageId = String(over.id);
-
+  // Shared stage-move logic, used by drag-and-drop AND the Gantt's clickable
+  // stage cells. Optimistic update -> persist -> rollback on failure. Because
+  // the Gantt and Kanban share this same optimisticDeals state, a move made in
+  // the Gantt is reflected on the Kanban immediately (and saved to the DB).
+  const applyStageMove = (dealId: string, newStageId: string) => {
     const current = optimisticDeals.find((d) => d.id === dealId);
     if (!current || current.current_stage_id === newStageId) return;
-
     const previousStageId = current.current_stage_id;
-
     setOptimisticDeals((prev) =>
-      prev.map((d) =>
-        d.id === dealId ? { ...d, current_stage_id: newStageId } : d
-      )
+      prev.map((d) => (d.id === dealId ? { ...d, current_stage_id: newStageId } : d))
     );
-
     startTransition(async () => {
       const result = await moveDealStage(dealId, newStageId, pipeline.code);
       if (!result.ok) {
         console.error('Failed to move deal:', result.error);
         setOptimisticDeals((prev) =>
-          prev.map((d) =>
-            d.id === dealId ? { ...d, current_stage_id: previousStageId } : d
-          )
+          prev.map((d) => (d.id === dealId ? { ...d, current_stage_id: previousStageId } : d))
         );
       }
     });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDealId(null);
+    const { active, over } = event;
+    if (!over) return;
+    applyStageMove(String(active.id), String(over.id));
   };
 
   const visibleDeals = useMemo(() => {
@@ -401,7 +398,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
           )}
           {view === 'gantt' && (
             <div className="flex-1 overflow-y-auto bg-background">
-              <DealGantt campaigns={campaigns} deals={visibleDeals} stages={stages} onOpen={(id) => router.push('/pipelines/' + pipeline.code + '/deals/' + id)} />
+              <DealGantt campaigns={campaigns} deals={visibleDeals} stages={stages} onStageChange={applyStageMove} onOpen={(id) => router.push('/pipelines/' + pipeline.code + '/deals/' + id)} />
             </div>
           )}
         </div>
