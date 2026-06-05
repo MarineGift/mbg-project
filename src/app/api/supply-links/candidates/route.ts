@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     .select('id, party_name, country_code')
     .eq('party_type_id' as never, linkedTypeId)
     .is('deleted_at' as never, null);
-  if (scope === 'country') q = q.eq('country_code' as never, country);
+  if (scope === 'country' && country) q = q.eq('country_code' as never, country);
   const { data: candRows, error } = await q
     .order('party_name' as never, { ascending: true })
     .limit(1000);
