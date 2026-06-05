@@ -27,7 +27,6 @@ import { PartyNotesCard } from '@/components/parties/party-notes-card';
 import { PartyMeetingsList } from '@/components/parties/party-meetings-list';
 import { ActivityTimeline } from '@/components/parties/activity-timeline';
 import { PartySequencePanel } from '@/components/parties/party-sequence-panel';
-import { CountryPeersPanel } from '@/components/parties/country-peers-panel';
 import { PartyCommunicationsTimeline } from '@/components/parties/party-communications-timeline';
 import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
@@ -137,13 +136,6 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 )}
                 {full.party.partyType === 'investor' && full.investorProfile && (
                   <InvestorProfileCard profile={full.investorProfile} partyName={full.party.name} />
-                )}
-                {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
-                  <CountryPeersPanel
-                    partyId={full.party.id}
-                    country={partyCountry}
-                    currentModule={urlModule as 'paper_mill' | 'filler_supplier'}
-                  />
                 )}
               </>
             }
