@@ -33,6 +33,7 @@ import {
   X,
   Send,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -57,9 +58,9 @@ const FALLBACK_DOT = 'bg-zinc-400';
 // Static fallback list -- used as the initial state and if the live fetch
 // fails. Matches app.pipelines for marinebiogroup (default excluded).
 const STATIC_PIPELINES: Pipeline[] = [
-  { id: 'static-1', code: 'investor',         name: 'Investors',        sort_order: 1 },
+  { id: 'static-1', code: 'investors',        name: 'Investors',        sort_order: 1 },
   { id: 'static-2', code: 'paper_mill',       name: 'Paper Mill',       sort_order: 2 },
-  { id: 'static-3', code: 'filler_supplier',  name: 'Filler Suppliers', sort_order: 3 },
+  { id: 'static-3', code: 'filler_suppliers', name: 'Filler Suppliers', sort_order: 3 },
   { id: 'static-4', code: 'crowdfunding',     name: 'Crowdfunding',     sort_order: 4 },
   { id: 'static-5', code: 'government_grant', name: 'Government Grant', sort_order: 5 },
 ];
@@ -95,6 +96,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   // touching the next-intl messages files; badge removed by design.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
+  { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns' },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [

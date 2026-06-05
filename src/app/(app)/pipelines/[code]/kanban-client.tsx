@@ -163,7 +163,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
 
-  const showRounds = pipeline.code === 'investor' && rounds.length > 0;
+  const showRounds = pipeline.code === 'investors' && rounds.length > 0;
 
   useEffect(() => {
     setOptimisticDeals(deals);
@@ -272,9 +272,9 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                   </span>
                 ))}
               </div>
-              {pipeline.code === 'investor' ? (
+              {pipeline.code === 'investors' ? (
                 <Link
-                  href="/pipelines/investor/rounds"
+                  href="/pipelines/investors/rounds"
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Layers className="h-3.5 w-3.5" />
