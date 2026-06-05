@@ -87,11 +87,23 @@ export function DealGantt({
   }, [deals]);
   const standalone = useMemo(() => deals.filter((d) => !d.campaign_id), [deals]);
 
-  const dated = campaigns.filter((c) => {
+  // Only campaigns that have at least one deal in THIS pipeline (campaigns have
+  // no pipeline_id of their own; membership is derived from the board's deals).
+  const pipelineCampaignIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const d of deals) if (d.campaign_id) ids.add(d.campaign_id);
+    return ids;
+  }, [deals]);
+  const pcampaigns = useMemo(
+    () => campaigns.filter((c) => pipelineCampaignIds.has(c.id)),
+    [campaigns, pipelineCampaignIds]
+  );
+
+  const dated = pcampaigns.filter((c) => {
     const s = parse(c.start_date), e = parse(c.end_date);
     return s && e && e.getTime() >= s.getTime();
   });
-  const undated = campaigns.filter((c) => !dated.includes(c));
+  const undated = pcampaigns.filter((c) => !dated.includes(c));
 
   let min = 0, max = 0;
   if (dated.length) {
@@ -113,10 +125,10 @@ export function DealGantt({
     }
   }
 
-  if (campaigns.length === 0) {
+  if (pcampaigns.length === 0 && standalone.length === 0) {
     return (
       <div className="p-6 text-sm text-muted-foreground">
-        No campaigns yet. Create a campaign (with a start and end date) on the <b>Campaigns</b> page, then attach deals to it. Each campaign shows here with a stage axis and its participating companies.
+        No campaigns in this pipeline yet. Attach a deal in this pipeline to a campaign (New deal &rarr; &ldquo;Part of a campaign&rdquo;), and it will appear here as a campaign with a stage axis and its participating companies.
       </div>
     );
   }
@@ -273,6 +285,15 @@ export function DealCalendar({
   });
 
   type Ev = { label: string; color: string; dealId?: string };
+  const pipelineCampaignIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const d of deals) if (d.campaign_id) ids.add(d.campaign_id);
+    return ids;
+  }, [deals]);
+  const pcampaigns = useMemo(
+    () => campaigns.filter((c) => pipelineCampaignIds.has(c.id)),
+    [campaigns, pipelineCampaignIds]
+  );
   const byDay = useMemo(() => {
     const m = new Map<string, Ev[]>();
     const add = (date: Date | null, ev: Ev) => {
@@ -282,7 +303,7 @@ export function DealCalendar({
       arr.push(ev);
       m.set(k, arr);
     };
-    for (const c of campaigns) {
+    for (const c of pcampaigns) {
       add(parse(c.start_date), { label: '▶ ' + c.name, color: c.color ?? '#64748b' });
       add(parse(c.end_date), { label: '■ ' + c.name, color: c.color ?? '#64748b' });
     }
@@ -290,7 +311,7 @@ export function DealCalendar({
       add(keyDate(d), { label: companyLabel(d), color: stageColor(stageMap.get(d.current_stage_id)), dealId: d.id });
     }
     return m;
-  }, [campaigns, deals, stageMap]);
+  }, [pcampaigns, deals, stageMap]);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
