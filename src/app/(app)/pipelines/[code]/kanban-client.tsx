@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { moveDealStage } from './actions';
 import { NewDealModal } from './new-deal-modal';
+import { DealCalendar, DealGantt } from './deal-timeline-views';
 
 // ============================================================
 // Types
@@ -41,7 +42,7 @@ import { NewDealModal } from './new-deal-modal';
 type Pipeline = { id: string; code: string; name: string; description: string | null };
 type Stage = { id: string; code: string; name: string; sort_order: number };
 type RoundOption = { id: string; name: string };
-type CampaignOption = { id: string; name: string; color: string | null };
+type CampaignOption = { id: string; name: string; color: string | null; start_date: string | null; end_date: string | null };
 
 type DealPartyRow = {
   id: string;
@@ -61,6 +62,9 @@ type Deal = {
   last_activity_at: string | null;
   status: string;
   campaign_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  expected_close_date: string | null;
   deal_parties: DealPartyRow[] | null;
   round: { id: string; name: string } | null;
 };
@@ -161,6 +165,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
 
   const [roundFilter, setRoundFilter] = useState<string>('all');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const [view, setView] = useState<'kanban' | 'calendar' | 'gantt'>('kanban');
   const [modalOpen, setModalOpen] = useState(false);
 
   const showRounds = pipeline.code === 'investors' && rounds.length > 0;
@@ -314,6 +319,21 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
             </div>
           </div>
 
+          {/* View tabs */}
+          <div className="flex items-center gap-1 border-b bg-background px-6">
+            {(['kanban', 'calendar', 'gantt'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={'border-b-2 px-3 py-2 text-sm capitalize transition-colors ' + (view === v ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {view === 'kanban' && (
+          <>
           {/* Round filter bar (Investor only) */}
           {showRounds ? (
             <div className="flex items-center gap-2 border-b bg-background px-6 py-2 text-xs">
@@ -371,6 +391,19 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
               </div>
             )}
           </div>
+          </>
+          )}
+
+          {view === 'calendar' && (
+            <div className="flex-1 overflow-y-auto bg-background">
+              <DealCalendar campaigns={campaigns} deals={visibleDeals} stages={stages} onOpen={(id) => router.push('/pipelines/' + pipeline.code + '/deals/' + id)} />
+            </div>
+          )}
+          {view === 'gantt' && (
+            <div className="flex-1 overflow-y-auto bg-background">
+              <DealGantt campaigns={campaigns} deals={visibleDeals} stages={stages} onOpen={(id) => router.push('/pipelines/' + pipeline.code + '/deals/' + id)} />
+            </div>
+          )}
         </div>
 
         <DragOverlay dropAnimation={null}>

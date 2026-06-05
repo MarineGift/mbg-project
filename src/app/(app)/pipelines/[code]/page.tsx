@@ -53,6 +53,7 @@ export default async function PipelinePage({ params }: Props) {
   const isInvestor = pipeline.code === 'investors';
   const dealSelect =
     'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
+    'start_date, end_date, expected_close_date, ' +
     'last_activity_at, status, ' +
     'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
     '  parties ( party_name, country_code ) )' +
@@ -76,11 +77,11 @@ export default async function PipelinePage({ params }: Props) {
   const { data: campaignsData } = await supabase
     .schema('app')
     .from('campaigns' as never)
-    .select('id, name, color')
+    .select('id, name, color, start_date, end_date')
     .eq('status', 'active')
     .order('created_at', { ascending: false });
   const campaigns = (campaignsData ?? []) as unknown as Array<{
-    id: string; name: string; color: string | null;
+    id: string; name: string; color: string | null; start_date: string | null; end_date: string | null;
   }>;
 
   return (
@@ -100,6 +101,9 @@ export default async function PipelinePage({ params }: Props) {
         last_activity_at: string | null;
         status: string;
         campaign_id: string | null;
+        start_date: string | null;
+        end_date: string | null;
+        expected_close_date: string | null;
         deal_parties: Array<{
           id: string;
           party_id: string;
