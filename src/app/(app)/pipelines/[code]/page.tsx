@@ -52,7 +52,7 @@ export default async function PipelinePage({ params }: Props) {
   // investor pipeline.
   const isInvestor = pipeline.code === 'investor';
   const dealSelect =
-    'id, deal_name, current_stage_id, value_amount, value_currency, ' +
+    'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
     'last_activity_at, status, ' +
     'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
     '  parties ( party_name, country_code ) )' +
@@ -72,10 +72,22 @@ export default async function PipelinePage({ params }: Props) {
       ? (await listRounds()).map((r) => ({ id: r.id, name: r.name }))
       : [];
 
+  // 5) Campaigns (all pipelines): for the New Deal modal standalone/campaign choice.
+  const { data: campaignsData } = await supabase
+    .schema('app')
+    .from('campaigns' as never)
+    .select('id, name, color')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+  const campaigns = (campaignsData ?? []) as unknown as Array<{
+    id: string; name: string; color: string | null;
+  }>;
+
   return (
     <KanbanClient
       pipeline={pipeline}
       rounds={rounds}
+      campaigns={campaigns}
       stages={(stagesData ?? []) as unknown as Array<{
         id: string; code: string; name: string; sort_order: number;
       }>}
@@ -87,6 +99,7 @@ export default async function PipelinePage({ params }: Props) {
         value_currency: string;
         last_activity_at: string | null;
         status: string;
+        campaign_id: string | null;
         deal_parties: Array<{
           id: string;
           party_id: string;

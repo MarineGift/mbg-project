@@ -41,6 +41,7 @@ import { NewDealModal } from './new-deal-modal';
 type Pipeline = { id: string; code: string; name: string; description: string | null };
 type Stage = { id: string; code: string; name: string; sort_order: number };
 type RoundOption = { id: string; name: string };
+type CampaignOption = { id: string; name: string; color: string | null };
 
 type DealPartyRow = {
   id: string;
@@ -59,6 +60,7 @@ type Deal = {
   value_currency: string;
   last_activity_at: string | null;
   status: string;
+  campaign_id: string | null;
   deal_parties: DealPartyRow[] | null;
   round: { id: string; name: string } | null;
 };
@@ -69,6 +71,8 @@ interface Props {
   deals: Deal[];
   /** Investor pipeline only; [] elsewhere. */
   rounds: RoundOption[];
+  /** All active campaigns (any pipeline) for the New Deal modal. */
+  campaigns: CampaignOption[];
 }
 
 // ============================================================
@@ -148,7 +152,7 @@ function mergeTotals(into: Record<string, number>, add: Record<string, number>):
 // Component
 // ============================================================
 
-export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
+export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Props) {
   const router = useRouter();
 
   const [optimisticDeals, setOptimisticDeals] = useState<Deal[]>(deals);
@@ -156,6 +160,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
   const [, startTransition] = useTransition();
 
   const [roundFilter, setRoundFilter] = useState<string>('all');
+  const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
 
   const showRounds = pipeline.code === 'investor' && rounds.length > 0;
@@ -209,9 +214,11 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
   };
 
   const visibleDeals = useMemo(() => {
-    if (roundFilter === 'all') return optimisticDeals;
-    return optimisticDeals.filter((d) => d.round?.id === roundFilter);
-  }, [optimisticDeals, roundFilter]);
+    let list = optimisticDeals;
+    if (roundFilter !== 'all') list = list.filter((d) => d.round?.id === roundFilter);
+    if (campaignFilter !== 'all') list = list.filter((d) => d.campaign_id === campaignFilter);
+    return list;
+  }, [optimisticDeals, roundFilter, campaignFilter]);
 
   const stageBuckets = useMemo(() => {
     const byStage = new Map<string, Deal[]>();
@@ -274,6 +281,28 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
                   Rounds
                 </Link>
               ) : null}
+              {campaigns.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={campaignFilter}
+                    onChange={(e) => setCampaignFilter(e.target.value)}
+                    className="rounded-md border bg-background px-2 py-1.5 text-sm text-muted-foreground focus:text-foreground focus:outline-none"
+                  >
+                    <option value="all">All campaigns</option>
+                    {campaigns.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {campaignFilter !== 'all' && (
+                    <Link
+                      href={'/campaigns/' + campaignFilter}
+                      className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      View detail
+                    </Link>
+                  )}
+                </div>
+              )}
               <Button
                 size="sm"
                 onClick={() => setModalOpen(true)}
@@ -357,6 +386,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds }: Props) {
         pipelineName={pipeline.name}
         stages={stages}
         rounds={rounds}
+        campaigns={campaigns}
       />
     </>
   );
