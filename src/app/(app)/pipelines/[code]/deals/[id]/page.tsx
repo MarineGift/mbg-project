@@ -28,6 +28,7 @@ const TAB_LABELS = {
   activity: 'Activity',
   tasks: 'Tasks',
   checklist: 'Checklist',
+  history: 'History',
   backers: 'Backers',
 } as const;
 type TabId = keyof typeof TAB_LABELS;
@@ -145,11 +146,32 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
 
   const isCrowdfunding = d.pipeline?.code === 'crowdfunding';
   const availableTabs: TabId[] = isCrowdfunding
-    ? ['activity', 'tasks', 'checklist', 'backers']
-    : ['activity', 'tasks', 'checklist'];
+    ? ['activity', 'tasks', 'checklist', 'history', 'backers']
+    : ['activity', 'tasks', 'checklist', 'history'];
   const rawTab = Array.isArray(searchParams.tab) ? searchParams.tab[0] : searchParams.tab;
   const activeTab: TabId =
     rawTab && (availableTabs as string[]).includes(rawTab) ? (rawTab as TabId) : 'activity';
+
+  // Stage history (for the History tab). Stage names are resolved from the
+  // deal's pipeline stages, so we don't depend on multi-FK embeds.
+  const { data: pipeStages } = await supabase
+    .schema('app')
+    .from('stages' as never)
+    .select('id, name, sort_order')
+    .eq('pipeline_id', d.pipeline?.id)
+    .order('sort_order', { ascending: true });
+  const stageNameById = new Map<string, string>(
+    ((pipeStages ?? []) as Array<{ id: string; name: string }>).map((st) => [st.id, st.name])
+  );
+  const { data: stageHistory } = await supabase
+    .schema('app')
+    .from('deal_stage_history' as never)
+    .select('id, changed_at, from_stage_id, to_stage_id')
+    .eq('deal_id', params.id)
+    .order('changed_at', { ascending: false });
+  const stageHistoryRows = (stageHistory ?? []) as Array<{
+    id: string; changed_at: string; from_stage_id: string | null; to_stage_id: string;
+  }>;
 
   let engagements: any[] = [];
   let engagementTypes: any[] = [];
@@ -369,6 +391,38 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               dealId={params.id}
               items={checklists}
             />
+          )}
+          {activeTab === 'history' && (
+            <div>
+              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Stage history</h3>
+              {stageHistoryRows.length === 0 ? (
+                <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
+                  No stage changes recorded yet. Moving this deal between stages (on the board, the Gantt, or by drag-and-drop) will appear here.
+                </div>
+              ) : (
+                <ol className="space-y-2">
+                  {stageHistoryRows.map((h) => (
+                    <li key={h.id} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+                      <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                        {new Date(h.changed_at).toLocaleString()}
+                      </span>
+                      <span className="text-foreground">
+                        {h.from_stage_id ? (
+                          <>
+                            Moved to <b>{stageNameById.get(h.to_stage_id) ?? '-'}</b>{' '}
+                            <span className="text-muted-foreground">
+                              (from {stageNameById.get(h.from_stage_id) ?? '-'})
+                            </span>
+                          </>
+                        ) : (
+                          <>Created at <b>{stageNameById.get(h.to_stage_id) ?? '-'}</b></>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           )}
           {activeTab === 'backers' && (
             <BackersPanel

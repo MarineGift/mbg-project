@@ -68,11 +68,13 @@ export function DealGantt({
   deals,
   stages,
   onOpen,
+  onStageChange,
 }: {
   campaigns: TimelineCampaign[];
   deals: TimelineDeal[];
   stages: TimelineStage[];
   onOpen: (id: string) => void;
+  onStageChange?: (dealId: string, stageId: string) => void;
 }) {
   const ordered = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
   const dealsByCampaign = useMemo(() => {
@@ -162,17 +164,26 @@ export function DealGantt({
           {ordered.map((s, i) => {
             const reached = idx >= 0 && i <= idx;
             const isCurrent = i === idx;
-            return (
+            const cellStyle = {
+              backgroundColor: reached ? stageColor(s) : '#e2e8f0',
+              opacity: reached && !isCurrent ? 0.5 : 1,
+              outline: isCurrent ? '2px solid #0f172a' : 'none',
+              outlineOffset: isCurrent ? '1px' : '0',
+            };
+            return onStageChange ? (
+              <button
+                key={s.id}
+                onClick={() => onStageChange(d.id, s.id)}
+                title={'Move to ' + (i + 1) + '. ' + s.name}
+                className="h-3.5 min-w-0 flex-1 cursor-pointer rounded-sm transition hover:brightness-90"
+                style={cellStyle}
+              />
+            ) : (
               <div
                 key={s.id}
                 title={i + 1 + '. ' + s.name}
                 className="h-3.5 min-w-0 flex-1 rounded-sm"
-                style={{
-                  backgroundColor: reached ? stageColor(s) : '#e2e8f0',
-                  opacity: reached && !isCurrent ? 0.5 : 1,
-                  outline: isCurrent ? '2px solid #0f172a' : 'none',
-                  outlineOffset: isCurrent ? '1px' : '0',
-                }}
+                style={cellStyle}
               />
             );
           })}
