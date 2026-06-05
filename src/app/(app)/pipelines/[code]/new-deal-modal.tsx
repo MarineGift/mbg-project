@@ -33,6 +33,7 @@ import { isPartyType } from '@/types/party-type';
 
 type Stage = { id: string; code: string; name: string; sort_order: number };
 type RoundOption = { id: string; name: string };
+type CampaignOption = { id: string; name: string; color?: string | null };
 
 interface PartyResult {
   id: string;
@@ -56,6 +57,8 @@ interface Props {
   stages: Stage[];
   /** Investor pipeline only; [] elsewhere. */
   rounds: RoundOption[];
+  /** All active campaigns (any pipeline). */
+  campaigns: CampaignOption[];
 }
 
 let _rowSeq = 0;
@@ -71,9 +74,10 @@ export function NewDealModal({
   pipelineName,
   stages,
   rounds,
+  campaigns,
 }: Props) {
   const router = useRouter();
-  const isInvestor = pipelineCode === 'investor';
+  const isInvestor = pipelineCode === 'investors';
   const firstStage = stages[0];
 
   const firstRole = isInvestor ? 'lead' : 'primary';
@@ -112,6 +116,10 @@ export function NewDealModal({
   const [newRoundName, setNewRoundName] = useState('');
   const [creatingRound, startRoundTransition] = useTransition();
 
+  // Campaign vs standalone (all pipelines)
+  const [dealMode, setDealMode] = useState<'standalone' | 'campaign'>('standalone');
+  const [campaignId, setCampaignId] = useState('');
+
   useEffect(() => {
     if (!open) {
       setDealName('');
@@ -120,6 +128,8 @@ export function NewDealModal({
       setRoundId('');
       setNewRoundMode(false);
       setNewRoundName('');
+      setDealMode('standalone');
+      setCampaignId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -189,6 +199,11 @@ export function NewDealModal({
       });
     }
 
+    if (dealMode === 'campaign' && !campaignId) {
+      setError('Select a campaign, or choose Standalone deal');
+      return;
+    }
+
     startTransition(async () => {
       const result = await createDeal({
         pipelineCode,
@@ -196,6 +211,7 @@ export function NewDealModal({
         current_stage_id: firstStage.id,
         parties,
         round_id: isInvestor ? (roundId || null) : null,
+        campaign_id: dealMode === 'campaign' ? (campaignId || null) : null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -313,6 +329,45 @@ export function NewDealModal({
                 </span>
               ) : null}
             </div>
+          </div>
+
+          {/* Standalone vs Campaign (all pipelines) */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-foreground">
+              Deal type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDealMode('standalone')}
+                disabled={isPending}
+                className={'flex-1 rounded-md border px-3 py-2 text-sm ' + (dealMode === 'standalone' ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+              >
+                Standalone deal
+              </button>
+              <button
+                type="button"
+                onClick={() => setDealMode('campaign')}
+                disabled={isPending}
+                className={'flex-1 rounded-md border px-3 py-2 text-sm ' + (dealMode === 'campaign' ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+              >
+                Part of a campaign
+              </button>
+            </div>
+
+            {dealMode === 'campaign' && (
+              <select
+                value={campaignId}
+                onChange={(e) => setCampaignId(e.target.value)}
+                disabled={isPending}
+                className="mt-2 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+              >
+                <option value="">Select a campaign...</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Round (Investor pipeline only) */}

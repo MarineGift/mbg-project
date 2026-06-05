@@ -50,7 +50,7 @@ export default async function PipelinePage({ params }: Props) {
   // be absent from the live table. Embedding it on a non-investor board makes
   // PostgREST fail the whole select (-> 0 deals). So include it only for the
   // investor pipeline.
-  const isInvestor = pipeline.code === 'investor';
+  const isInvestor = pipeline.code === 'investors';
   const dealSelect =
     'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
     'last_activity_at, status, ' +
@@ -68,11 +68,11 @@ export default async function PipelinePage({ params }: Props) {
 
   // 4) Investor pipeline only: rounds list for the filter + modal selector.
   const rounds =
-    pipeline.code === 'investor'
+    pipeline.code === 'investors'
       ? (await listRounds()).map((r) => ({ id: r.id, name: r.name }))
       : [];
 
-  // 5) Campaigns (all pipelines): for the New Deal modal standalone/campaign choice.
+  // Campaigns (all pipelines) for the New Deal modal + board filter.
   const { data: campaignsData } = await supabase
     .schema('app')
     .from('campaigns' as never)
