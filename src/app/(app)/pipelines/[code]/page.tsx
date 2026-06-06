@@ -2,14 +2,18 @@
 // Server component: resolves the pipeline by code (RLS scopes to org),
 // fetches stages + deals, hands off to the client kanban.
 //
-// Round dimension (2026-06-02):
-//   - deals embeds round:rounds(id, name) via deals.round_id FK.
-//   - Investor pipeline only: full rounds list passed down (filter + selector).
+// Round dimension (2026-06-05 fix):
+//   - We deliberately do NOT use a PostgREST embed for the round
+//     (previously: round:rounds(id, name) via deals.round_id). deals<->rounds
+//     has more than one FK path, so PostgREST treats the embed as AMBIGUOUS and
+//     fails the WHOLE select -> the investor board showed 0 deals even though
+//     deals existed. We now select the raw round_id and join the round name in
+//     memory from the rounds list that the investor board already fetches.
 //
 // Multi-company / Stage 1-B (2026-06-02):
-//   - deals.party_id was dropped. Companies now live in app.deal_parties (M:N),
-//     each row carrying role + commitment_amount. The deal embeds them as
-//     deal_parties(...). The card shows every company + the summed commitment.
+//   - Companies live in app.deal_parties (M:N), each row carrying role +
+//     commitment_amount. The deal embeds them as deal_parties(...). The card
+//     shows every company + the summed commitment.
 
 import { notFound } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -45,21 +49,17 @@ export default async function PipelinePage({ params }: Props) {
     .eq('pipeline_id', pipeline.id)
     .order('sort_order', { ascending: true });
 
-  // 3) deals in this pipeline, with their companies (deal_parties) + round.
-  // round:rounds(...) embeds via deals.round_id, which is Investor-only and may
-  // be absent from the live table. Embedding it on a non-investor board makes
-  // PostgREST fail the whole select (-> 0 deals). So include it only for the
-  // investor pipeline.
-  const isInvestor = pipeline.code === 'investors';
+  // 3) deals in this pipeline, with their companies (deal_parties).
+  // NOTE: round is joined in memory below (no embed) to avoid the ambiguous
+  // deals<->rounds relationship that zeroed out the investor board.
   const dealSelect =
     'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
     'start_date, end_date, expected_close_date, ' +
-    'last_activity_at, status, ' +
+    'last_activity_at, status, round_id, ' +
     'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
-    '  parties ( party_name, country_code ) )' +
-    (isInvestor ? ', round:rounds(id, name)' : '');
+    '  parties ( party_name, country_code ) )';
 
-  const { data: dealsData } = await supabase
+  const { data: dealsData, error: dealsErr } = await supabase
     .schema('app')
     .from('deals' as never)
     .select(dealSelect)
@@ -67,11 +67,23 @@ export default async function PipelinePage({ params }: Props) {
     .is('deleted_at', null)
     .order('last_activity_at', { ascending: false, nullsFirst: false });
 
+  if (dealsErr) {
+    // Surface the real reason in the server log instead of silently showing 0.
+    console.error('[pipeline board] deals query failed:', dealsErr.message);
+  }
+
   // 4) Investor pipeline only: rounds list for the filter + modal selector.
   const rounds =
     pipeline.code === 'investors'
       ? (await listRounds()).map((r) => ({ id: r.id, name: r.name }))
       : [];
+
+  // Join round name onto each deal in memory (replaces the fragile embed).
+  const roundMap = new Map(rounds.map((r) => [r.id, r]));
+  const deals = ((dealsData ?? []) as Array<Record<string, unknown>>).map((d) => {
+    const rid = d.round_id as string | null | undefined;
+    return { ...d, round: rid ? roundMap.get(rid) ?? null : null };
+  });
 
   // Campaigns (all pipelines) for the New Deal modal + board filter.
   const { data: campaignsData } = await supabase
@@ -92,7 +104,7 @@ export default async function PipelinePage({ params }: Props) {
       stages={(stagesData ?? []) as unknown as Array<{
         id: string; code: string; name: string; sort_order: number;
       }>}
-      deals={(dealsData ?? []) as unknown as Array<{
+      deals={deals as unknown as Array<{
         id: string;
         deal_name: string;
         current_stage_id: string;

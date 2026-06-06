@@ -32,7 +32,7 @@ export type TimelineCampaign = {
 const PALETTE = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#dc2626', '#0ea5e9', '#db2777', '#65a30d'];
 function stageColor(stage: TimelineStage | undefined): string {
   if (!stage) return '#94a3b8';
-  return PALETTE[Math.abs(stage.sort_order) % PALETTE.length];
+  return PALETTE[Math.abs(stage.sort_order) % PALETTE.length]!;
 }
 function parse(d: string | null): Date | null {
   if (!d) return null;
@@ -50,7 +50,7 @@ function companyNames(d: TimelineDeal): string[] {
 function companyLabel(d: TimelineDeal): string {
   const n = companyNames(d);
   if (n.length === 0) return d.deal_name;
-  return n.length === 1 ? n[0] : n[0] + '  +' + (n.length - 1);
+  return n.length === 1 ? n[0]! : n[0]! + '  +' + (n.length - 1);
 }
 function companyTitle(d: TimelineDeal): string {
   const n = companyNames(d);
@@ -109,8 +109,8 @@ export function DealGantt({
 
   let min = 0, max = 0;
   if (dated.length) {
-    min = parse(dated[0].start_date)!.getTime();
-    max = parse(dated[0].end_date)!.getTime();
+    min = parse(dated[0]!.start_date)!.getTime();
+    max = parse(dated[0]!.end_date)!.getTime();
     for (const c of dated) {
       min = Math.min(min, parse(c.start_date)!.getTime());
       max = Math.max(max, parse(c.end_date)!.getTime());

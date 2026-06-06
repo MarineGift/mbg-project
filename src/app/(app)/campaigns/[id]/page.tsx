@@ -134,7 +134,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
 function companyLabel(parties: Array<{ parties: { party_name: string } | null }> | null): string {
   const names = (parties ?? []).map((p) => p.parties?.party_name).filter(Boolean) as string[];
   if (names.length === 0) return '-';
-  if (names.length === 1) return names[0];
+  if (names.length === 1) return names[0]!;
   return names[0] + ' +' + (names.length - 1);
 }
 

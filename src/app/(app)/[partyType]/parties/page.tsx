@@ -181,7 +181,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   }
   let typeFilterIds: string[] | null = null;
   if (isInvestor && typeFilter) {
-    typeFilterIds = Object.keys(investorCatAll).filter((id) => investorCatAll[id].category === typeFilter);
+    typeFilterIds = Object.keys(investorCatAll).filter((id) => investorCatAll[id]?.category === typeFilter);
     if (typeFilterIds.length === 0) typeFilterIds = ['00000000-0000-0000-0000-000000000000'];
   }
 
