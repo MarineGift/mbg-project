@@ -8,6 +8,7 @@
 //              combined with a country)
 //   ?sort=     name_asc (default) | name_desc | score
 //   ?type=     investor_category filter (investor list only; see `types`)
+//   ?grade=    account-score tier filter (A / B / C)
 // Resetting any of these always clears ?page so results start at page 1.
 
 import { useState } from 'react';
@@ -34,6 +35,13 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: 'score',     label: 'Score (high \u2192 low)' },
 ];
 
+const GRADE_OPTIONS: { value: string; label: string }[] = [
+  { value: '',  label: 'All tiers' },
+  { value: 'A', label: 'Tier A' },
+  { value: 'B', label: 'Tier B' },
+  { value: 'C', label: 'Tier C' },
+];
+
 /** Investor type facet (category + count) for the type-filter chips. */
 export type InvestorFacet = { category: string; count: number };
 
@@ -45,13 +53,15 @@ interface Props {
   q: string;
   /** Current ?sort= value (name_asc | name_desc | score). */
   sort: string;
+  /** Current ?grade= value (account tier A/B/C, or ''). */
+  grade?: string;
   /** Investor type facets. When provided (investor list), render type chips. */
   types?: InvestorFacet[];
   /** Current ?type= value (investor_category, or ''). */
   type?: string;
 }
 
-export function PartiesFilterBar({ countries, country, q, sort, types, type = '' }: Props) {
+export function PartiesFilterBar({ countries, country, q, sort, grade = '', types, type = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -85,6 +95,13 @@ export function PartiesFilterBar({ countries, country, q, sort, types, type = ''
     applyParams((sp) => {
       if (value && value !== 'name_asc') sp.set('sort', value);
       else sp.delete('sort');
+    });
+  }
+
+  function setGrade(value: string) {
+    applyParams((sp) => {
+      if (value) sp.set('grade', value);
+      else sp.delete('grade');
     });
   }
 
@@ -155,6 +172,20 @@ export function PartiesFilterBar({ countries, country, q, sort, types, type = ''
           </button>
         </div>
 
+        {/* Tier (account-score grade) */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Tier</span>
+          <select
+            value={GRADE_OPTIONS.some((o) => o.value === grade) ? grade : ''}
+            onChange={(e) => setGrade(e.target.value)}
+            className="h-9 cursor-pointer rounded-md border border-input bg-background pl-2 pr-6 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {GRADE_OPTIONS.map((o) => (
+              <option key={o.value || 'all'} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Sort */}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Sort</span>
@@ -177,6 +208,18 @@ export function PartiesFilterBar({ countries, country, q, sort, types, type = ''
             className="inline-flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
           >
             <span className="font-medium">{COUNTRY_NAMES[country] ?? country}</span>
+            <X className="h-3 w-3" />
+          </button>
+        )}
+
+        {/* Active grade pill (quick clear) */}
+        {grade && (
+          <button
+            type="button"
+            onClick={() => setGrade('')}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
+          >
+            <span className="font-medium">Tier {grade}</span>
             <X className="h-3 w-3" />
           </button>
         )}
