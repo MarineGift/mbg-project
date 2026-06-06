@@ -352,12 +352,13 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-                {stageBuckets.map(({ stage, deals: stageDeals, count, sums }) => (
+                {stageBuckets.map(({ stage, deals: stageDeals, count, sums }, i) => (
                   <DroppableColumn
                     key={stage.id}
                     stage={stage}
                     count={count}
                     sums={sums}
+                    accent={STAGE_PALETTE[i % STAGE_PALETTE.length]!}
                   >
                     {stageDeals.length === 0 ? (
                       <div className="px-2 py-6 text-center text-xs text-muted-foreground/70">
@@ -446,15 +447,32 @@ function RoundPill({
 // Column (droppable)
 // ============================================================
 
+// Pastel accents cycled by column order so stages are visually distinct.
+// [top accent bar, header background+text] — light & dark variants.
+const STAGE_PALETTE: Array<{ bar: string; head: string }> = [
+  { bar: 'bg-rose-300 dark:bg-rose-700',       head: 'bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100' },
+  { bar: 'bg-amber-300 dark:bg-amber-700',     head: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100' },
+  { bar: 'bg-emerald-300 dark:bg-emerald-700', head: 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100' },
+  { bar: 'bg-sky-300 dark:bg-sky-700',         head: 'bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100' },
+  { bar: 'bg-violet-300 dark:bg-violet-700',   head: 'bg-violet-50 text-violet-900 dark:bg-violet-950/40 dark:text-violet-100' },
+  { bar: 'bg-fuchsia-300 dark:bg-fuchsia-700', head: 'bg-fuchsia-50 text-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-100' },
+  { bar: 'bg-teal-300 dark:bg-teal-700',       head: 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100' },
+  { bar: 'bg-orange-300 dark:bg-orange-700',   head: 'bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100' },
+  { bar: 'bg-indigo-300 dark:bg-indigo-700',   head: 'bg-indigo-50 text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-100' },
+  { bar: 'bg-lime-300 dark:bg-lime-700',       head: 'bg-lime-50 text-lime-900 dark:bg-lime-950/40 dark:text-lime-100' },
+];
+
 function DroppableColumn({
   stage,
   count,
   sums,
+  accent,
   children,
 }: {
   stage: Stage;
   count: number;
   sums: Record<string, number>;
+  accent: { bar: string; head: string };
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
@@ -463,21 +481,22 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-[26rem] w-full shrink-0 flex-col rounded-lg border bg-card transition-colors',
+        'flex h-[26rem] w-full shrink-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
         isOver && 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10'
       )}
     >
-      <div className="border-b px-3 py-2">
+      <div className={cn('h-1 w-full', accent.bar)} />
+      <div className={cn('border-b px-3 py-2', accent.head)}>
         <div className="flex items-baseline justify-between">
-          <span className="truncate text-sm font-medium text-foreground">
+          <span className="truncate text-sm font-semibold">
             {stage.name}
           </span>
-          <span className="ml-2 tabular-nums text-xs text-muted-foreground">
+          <span className="ml-2 tabular-nums text-xs opacity-70">
             {count}
           </span>
         </div>
         {Object.keys(sums).length > 0 ? (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
+          <div className="mt-0.5 text-[11px] opacity-70">
             {fmtTotals(sums)}
           </div>
         ) : null}
