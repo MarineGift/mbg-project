@@ -355,7 +355,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     const isPrimary = sortParam === primary;
     const isSecondary = sortParam === secondary;
     const next = isPrimary ? secondary : primary;
-    const arrow = isPrimary ? '\u2191' : isSecondary ? '\u2193' : '';
+    // up when active-primary, down when active-secondary, up-down (dim) when
+    // sortable but inactive -> the arrow always signals "this column sorts".
+    const arrow = isPrimary ? '\u2191' : isSecondary ? '\u2193' : '\u2195';
     return { href: buildSortHref(next), arrow, active: isPrimary || isSecondary };
   }
   const hName     = sortHeader('name_asc', 'name_desc');
@@ -428,34 +430,34 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         <Card className="flex-1 flex flex-col">
           <div className="overflow-x-auto flex-1">
             <table className="w-full min-w-[520px]">
-              <thead className="border-b bg-muted/30">
-                <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className="border-b bg-indigo-50/80 dark:bg-indigo-950/30">
+                <tr className="text-left text-xs uppercase tracking-wide font-semibold text-indigo-700/80 dark:text-indigo-300">
                   <th className="px-4 py-3 font-medium whitespace-nowrap">
                     <Link href={hName.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hName.active ? 'text-foreground' : ''}`}>
-                      Name {hName.arrow && <span className="text-[10px]">{hName.arrow}</span>}
+                      Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                     <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
-                      Score {hScore.arrow && <span className="text-[10px]">{hScore.arrow}</span>}
+                      Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
                     </Link>
                   </th>
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">
                       <Link href={hType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hType.active ? 'text-foreground' : ''}`}>
-                        Type {hType.arrow && <span className="text-[10px]">{hType.arrow}</span>}
+                        Type <span className={`text-[10px] ${hType.active ? '' : 'opacity-40'}`}>{hType.arrow}</span>
                       </Link>
                     </th>
                   )}
                   <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
-                      Country {hCountry.arrow && <span className="text-[10px]">{hCountry.arrow}</span>}
+                      Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
                     </Link>
                   </th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                     <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location {hLocation.arrow && <span className="text-[10px]">{hLocation.arrow}</span>}
+                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
                     </Link>
                   </th>
                   {showLinks && (
