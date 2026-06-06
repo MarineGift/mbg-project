@@ -79,7 +79,7 @@ interface NavItem {
   href: string;
   labelKey: string;
   icon: typeof Inbox;
-  badgeKey?: 'pendingDraftCount' | 'inboxUnreadCount' | 'openTaskCount';
+  badgeKey?: 'pendingDraftCount' | 'inboxUnreadCount' | 'openTaskCount' | 'sentCount' | 'calendarUpcomingCount' | 'campaignsActiveCount';
   /** Optional explicit label; bypasses tNav(labelKey) when set. */
   label?: string;
 }
@@ -89,14 +89,14 @@ const TOP_ITEMS: readonly NavItem[] = [
   // AI Drafts moved into Inbox (Inbox shows Inbound / Outbound / AI Drafts),
   // so the standalone /drafts sidebar item was removed.
   { href: '/inbox',    labelKey: 'inbox',     icon: Inbox,       badgeKey: 'inboxUnreadCount' },
-  { href: '/sent',     labelKey: 'sent',      icon: Send },
+  { href: '/sent',     labelKey: 'sent',      icon: Send,        badgeKey: 'sentCount' },
   // To-Do board (standalone task engine, app.todo_items). The deal-scoped
   // engagement tasks at /tasks stay as a route for reuse inside deal detail,
   // but no longer have a top-level sidebar link. Explicit label avoids
-  // touching the next-intl messages files; badge removed by design.
+  // touching the next-intl messages files.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
-  { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays },
-  { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns' },
+  { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays, badgeKey: 'calendarUpcomingCount' },
+  { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [
@@ -151,17 +151,24 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
     draftsPending: number;   // drafts pending review
     draftsTotal: number;     // total drafts
     todoOpen: number;
+    sent: number;             // outbound messages (non-deleted)
+    calendarUpcoming: number; // events starting now or later
+    campaignsActive: number;  // campaigns with status='active'
     parties: Record<string, number>; // keyed by party_type code
   };
   const [counts, setCounts] = useState<SidebarCounts>({
     inboxUnread: 0, inbound: 0, outboundUnread: 0, outbound: 0,
-    draftsPending: 0, draftsTotal: 0, todoOpen: 0, parties: {},
+    draftsPending: 0, draftsTotal: 0, todoOpen: 0,
+    sent: 0, calendarUpcoming: 0, campaignsActive: 0, parties: {},
   });
 
   const badges = {
     pendingDraftCount: counts.draftsPending,
     inboxUnreadCount: counts.inboxUnread,
     openTaskCount: counts.todoOpen,
+    sentCount: counts.sent,
+    calendarUpcomingCount: counts.calendarUpcoming,
+    campaignsActiveCount: counts.campaignsActive,
   };
 
   // A/B pairs for the inbox sub-items (shown as "A/B", e.g. unread/total).
@@ -231,7 +238,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         const comm = () => supabase.schema('app').from('communications' as never);
         const [
           unreadRes, inboundRes, outboundUnreadRes, outboundRes, draftsPendingRes, draftsTotalRes,
-          partyTypesRes, todoStatusRes, todoItemsRes,
+          partyTypesRes, todoOpenRes, sentRes, calendarRes, campaignsRes,
         ] = await Promise.all([
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound').is('read_at' as never, null),
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'inbound'),
@@ -240,8 +247,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }),
           supabase.schema('app').from('party_types' as never).select('id, code'),
-          supabase.schema('app').from('todo_status_options' as never).select('id, name'),
-          supabase.schema('app').from('todo_items' as never).select('status_option_id'),
+          // Open To-Do items: todo_items.status is plain text (todo/backlog/
+          // in_progress/review/done); open = not 'done' and not archived. The old
+          // status_option_id column does not exist (42703 broke this badge).
+          supabase.schema('app').from('todo_items' as never).select('id', { count: 'exact', head: true }).neq('status' as never, 'done').is('archived_at' as never, null),
+          // Sent: outbound, non-deleted.
+          comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound').is('deleted_at' as never, null),
+          // Calendar: events starting now or later.
+          supabase.schema('app').from('calendar_events' as never).select('id', { count: 'exact', head: true }).gte('start_at' as never, new Date().toISOString()),
+          // Campaigns: active.
+          supabase.schema('app').from('campaigns' as never).select('id', { count: 'exact', head: true }).eq('status', 'active'),
         ]);
         if (!alive) return;
 
@@ -268,11 +283,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           parties[t.code] = (partyCountResults[i] as any).count ?? 0;
         });
 
-        // Open todos = items whose status option name is not "Done"
-        const statusRows = ((todoStatusRes as any).data ?? []) as Array<{ id: string; name: string }>;
-        const doneIds = new Set(statusRows.filter((s) => /done/i.test(s.name)).map((s) => s.id));
-        const todoRows = ((todoItemsRes as any).data ?? []) as Array<{ status_option_id: string | null }>;
-        const todoOpen = todoRows.filter((t) => !t.status_option_id || !doneIds.has(t.status_option_id)).length;
+        // Open todos = items not in the 'done' status (computed by the head
+        // count query above).
+        const todoOpen = (todoOpenRes as any).count ?? 0;
 
         setCounts({
           inboxUnread: (unreadRes as any).count ?? 0,
@@ -282,6 +295,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           draftsPending: (draftsPendingRes as any).count ?? 0,
           draftsTotal: (draftsTotalRes as any).count ?? 0,
           todoOpen,
+          sent: (sentRes as any).count ?? 0,
+          calendarUpcoming: (calendarRes as any).count ?? 0,
+          campaignsActive: (campaignsRes as any).count ?? 0,
           parties,
         });
       } catch (e) {
