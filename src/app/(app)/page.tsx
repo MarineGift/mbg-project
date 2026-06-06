@@ -137,6 +137,10 @@ export default async function DashboardPage() {
         .select('id', { count: 'exact', head: true })
         .eq('party_type_id' as never, t.id)
         .is('deleted_at' as never, null)
+        // Match the directory + sidebar default view: hide auto-created stub
+        // parties (notes ILIKE 'Auto-created%'), so e.g. paper_mill shows 717
+        // instead of 1,033.
+        .or('notes.is.null,notes.not.ilike.Auto-created%')
     )
   );
   const partyCountByType = new Map<number, number>();
