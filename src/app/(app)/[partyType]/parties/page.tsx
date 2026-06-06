@@ -126,6 +126,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const gradeFilter: '' | AccountTier =
     gradeRaw === 'A' || gradeRaw === 'B' || gradeRaw === 'C' ? (gradeRaw as AccountTier) : '';
 
+  // Investment-stage (round) filter for the investor list: ?stage=<code>
+  // (e.g. 'series_a'), matched against the investor's investor_stage_focus set.
+  const stageFilter = (((sp as any).stage ?? '') as string).trim();
+
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
   const sortByScore = sortParam === 'score' || sortParam === 'score_asc';
@@ -187,6 +191,43 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
   }
+  // Investor INVESTMENT STAGES (the rounds they invest in): party -> stages, via
+  // parties -> investor_profile -> investor_stage_focus -> investment_stages.
+  // Powers the Stage filter chips + per-row stage badges so you can pull e.g.
+  // every Series A investor fast. Mirrors the investor-type lookup above.
+  const investorStageAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
+  let stageFacets: { code: string; label: string; count: number }[] = [];
+  if (isInvestor) {
+    const [{ data: profRows }, { data: stageRows }, { data: focusRows }] = await Promise.all([
+      supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
+      supabase.schema('app').from('investment_stages' as never).select('id, code, label_en, sort_order'),
+      supabase.schema('app').from('investor_stage_focus' as never).select('investor_profile_id, stage_id'),
+    ]);
+    const profileToParty = new Map<string, string>();
+    for (const r of ((profRows ?? []) as any[])) if (r.party_id) profileToParty.set(r.id, r.party_id);
+    const stageById = new Map<number, { code: string; label: string; sort: number }>();
+    for (const r of ((stageRows ?? []) as any[])) {
+      stageById.set(r.id, { code: r.code, label: r.label_en ?? r.code, sort: r.sort_order ?? 9999 });
+    }
+    const facet = new Map<string, { label: string; sort: number; parties: Set<string> }>();
+    for (const r of ((focusRows ?? []) as any[])) {
+      const pid = profileToParty.get(r.investor_profile_id);
+      const st = stageById.get(r.stage_id);
+      if (!pid || !st) continue;
+      const arr = investorStageAll[pid] ?? [];
+      if (!arr.some((s) => s.code === st.code)) arr.push({ code: st.code, label: st.label, sort: st.sort });
+      investorStageAll[pid] = arr;
+      const f = facet.get(st.code) ?? { label: st.label, sort: st.sort, parties: new Set<string>() };
+      f.parties.add(pid);
+      facet.set(st.code, f);
+    }
+    for (const k of Object.keys(investorStageAll)) investorStageAll[k]!.sort((a, b) => a.sort - b.sort);
+    stageFacets = [...facet.entries()]
+      .map(([code, v]) => ({ code, label: v.label, count: v.parties.size, sort: v.sort }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ code, label, count }) => ({ code, label, count }));
+  }
+
   let typeFilterIds: string[] | null = null;
   if (isInvestor && typeFilter) {
     typeFilterIds = Object.keys(investorCatAll).filter((id) => investorCatAll[id]?.category === typeFilter);
@@ -221,7 +262,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - score sort   (score lives in app.account_scores, not app.parties)
   //   - investor type sort
   //   - grade filter (A/B/C, derived from the account score)
-  const needMemory = sortByScore || sortByType || gradeFilter !== '';
+  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '';
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -236,6 +277,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     let working = allParties;
     if (gradeFilter) {
       working = working.filter((p) => (scores[p.id]?.tier ?? 'C') === gradeFilter);
+    }
+    if (stageFilter) {
+      working = working.filter((p) => (investorStageAll[p.id] ?? []).some((s) => s.code === stageFilter));
     }
 
     if (sortByScore) {
@@ -254,7 +298,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       working = [...working].sort((a, b) => a.party_name.localeCompare(b.party_name));
     }
 
-    totalCount = gradeFilter ? working.length : (count ?? 0);
+    totalCount = (gradeFilter || stageFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
@@ -302,6 +346,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (pageSize !== DEFAULT_PAGE_SIZE) qs.set('perPage', String(pageSize));
     if (typeFilter) qs.set('type', typeFilter);
     if (gradeFilter) qs.set('grade', gradeFilter);
+    if (stageFilter) qs.set('stage', stageFilter);
     if (value && value !== 'name_asc') qs.set('sort', value);
     const s = qs.toString();
     return `/${module}/parties${s ? `?${s}` : ''}`;
@@ -349,6 +394,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             grade={gradeFilter}
             types={isInvestor ? investorFacets : undefined}
             type={typeFilter}
+            stages={isInvestor ? stageFacets : undefined}
+            stage={stageFilter}
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -449,13 +496,24 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </td>
                       {isInvestor && (
                         <td className="px-4 py-3">
-                          {investorCatAll[p.id]?.type_name ? (
-                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                              {investorCatAll[p.id]!.type_name}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
-                          )}
+                          <div className="space-y-1">
+                            {investorCatAll[p.id]?.type_name ? (
+                              <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                {investorCatAll[p.id]!.type_name}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                            {(investorStageAll[p.id] ?? []).length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {(investorStageAll[p.id] ?? []).map((s) => (
+                                  <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                    {s.label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       )}
                       <td className="px-4 py-3">
