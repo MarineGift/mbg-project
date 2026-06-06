@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createAppBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Locale = 'ko' | 'en' | 'ja';
 
@@ -55,7 +55,7 @@ const INTENSITY_STYLE: Record<string, string> = {
 };
 
 export default function PaperTypeFilter({ locale = 'ko' }: { locale?: Locale }) {
-  const supabase = useMemo(() => createAppBrowserClient(), []);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [types, setTypes] = useState<PaperType[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [mills, setMills] = useState<MillRow[]>([]);
