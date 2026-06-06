@@ -37,7 +37,7 @@ const GRADE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /** Investor type facet (category + count) for the type-filter chips. */
-export type InvestorFacet = { category: string; count: number };
+export type InvestorFacet = { category: string; count: number; label?: string };
 
 /** Investment-stage facet (stage code + label + count) for the stage chips. */
 export type StageFacet = { code: string; label: string; count: number };
@@ -56,13 +56,15 @@ interface Props {
   types?: InvestorFacet[];
   /** Current ?type= value (investor_category, or ''). */
   type?: string;
+  /** Optional heading shown before the type chips (e.g. 'Paper', 'Mineral'). */
+  typeLabel?: string;
   /** Investment-stage facets. When provided (investor list), render stage chips. */
   stages?: StageFacet[];
   /** Current ?stage= value (investment_stages.code, or ''). */
   stage?: string;
 }
 
-export function PartiesFilterBar({ countries, country, q, grade = '', types, type = '', stages, stage = '' }: Props) {
+export function PartiesFilterBar({ countries, country, q, grade = '', types, type = '', typeLabel, stages, stage = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -216,6 +218,7 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
       {/* Investor type chips (only on the investor list, when facets passed) */}
       {types && types.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
+          {typeLabel && <span className="mr-0.5 text-xs font-medium text-muted-foreground">{typeLabel}:</span>}
           <button
             type="button"
             onClick={() => setType('')}
@@ -244,7 +247,7 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
                     : 'border-input bg-background text-muted-foreground hover:bg-muted',
                 ].join(' ')}
               >
-                {t.category} <span className="opacity-60">{t.count}</span>
+                {t.label ?? t.category} <span className="opacity-60">{t.count}</span>
               </button>
             );
           })}

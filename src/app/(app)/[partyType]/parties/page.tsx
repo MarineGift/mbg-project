@@ -119,6 +119,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
   const typeFilter = ((sp as any).type ?? '').trim();
   const isInvestor = moduleParam === 'investor';
+  const isPaperMill = moduleParam === 'paper_mill';
+  const isFiller = moduleParam === 'filler_supplier';
 
   // Account-score grade filter (A/B/C). Named `grade` to avoid colliding with
   // the party `tier` concept (tier_1/2/3/cold) shown in the Level/Tier column.
@@ -228,10 +230,65 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .map(({ code, label, count }) => ({ code, label, count }));
   }
 
+  // Paper-mill paper-type facets (via app.v_paper_mill_types).
+  let paperTypeFacets: { category: string; label: string; count: number }[] = [];
+  if (isPaperMill) {
+    const { data } = await supabase
+      .schema('app')
+      .from('v_paper_mill_types' as never)
+      .select('mill_id, type_code, label_en');
+    const facet = new Map<string, { label: string; mills: Set<string> }>();
+    for (const r of ((data ?? []) as any[])) {
+      const f = facet.get(r.type_code) ?? { label: r.label_en ?? r.type_code, mills: new Set<string>() };
+      f.mills.add(r.mill_id);
+      facet.set(r.type_code, f);
+    }
+    paperTypeFacets = [...facet.entries()]
+      .map(([code, v]) => ({ category: code, label: v.label, count: v.mills.size }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  // Filler mineral-class facets (via app.v_filler_classes).
+  const MINERAL_LABEL: Record<string, string> = {
+    gcc: 'GCC', pcc: 'PCC', both: 'Both', kaolin: 'Kaolin',
+    talc: 'Talc', lime: 'Lime', unknown: 'Unknown',
+  };
+  let mineralFacets: { category: string; label: string; count: number }[] = [];
+  if (isFiller) {
+    const { data } = await supabase
+      .schema('app')
+      .from('v_filler_classes' as never)
+      .select('supplier_id, mineral_class');
+    const counts = new Map<string, number>();
+    for (const r of ((data ?? []) as any[])) {
+      const k = (r.mineral_class ?? 'unknown') as string;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    mineralFacets = [...counts.entries()]
+      .map(([code, count]) => ({ category: code, label: MINERAL_LABEL[code] ?? code, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
   let typeFilterIds: string[] | null = null;
-  if (isInvestor && typeFilter) {
-    typeFilterIds = Object.keys(investorCatAll).filter((id) => investorCatAll[id]?.category === typeFilter);
-    if (typeFilterIds.length === 0) typeFilterIds = ['00000000-0000-0000-0000-000000000000'];
+  if (typeFilter) {
+    if (isInvestor) {
+      typeFilterIds = Object.keys(investorCatAll).filter((id) => investorCatAll[id]?.category === typeFilter);
+    } else if (isPaperMill) {
+      const { data } = await supabase
+        .schema('app')
+        .from('v_paper_mill_types' as never)
+        .select('mill_id')
+        .eq('type_code' as never, typeFilter);
+      typeFilterIds = [...new Set(((data ?? []) as any[]).map((r) => r.mill_id as string))];
+    } else if (isFiller) {
+      const { data } = await supabase
+        .schema('app')
+        .from('v_filler_classes' as never)
+        .select('supplier_id')
+        .eq('mineral_class' as never, typeFilter);
+      typeFilterIds = [...new Set(((data ?? []) as any[]).map((r) => r.supplier_id as string))];
+    }
+    if (typeFilterIds && typeFilterIds.length === 0) typeFilterIds = ['00000000-0000-0000-0000-000000000000'];
   }
 
   let query = supabase
@@ -394,8 +451,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             q={searchQuery}
             sort={sortParam}
             grade={gradeFilter}
-            types={isInvestor ? investorFacets : undefined}
+            types={isInvestor ? investorFacets : isPaperMill ? paperTypeFacets : isFiller ? mineralFacets : undefined}
             type={typeFilter}
+            typeLabel={isPaperMill ? 'Paper' : isFiller ? 'Mineral' : undefined}
             stages={isInvestor ? stageFacets : undefined}
             stage={stageFilter}
           />
