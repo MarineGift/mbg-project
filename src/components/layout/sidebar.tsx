@@ -242,6 +242,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
               .select('id', { count: 'exact', head: true })
               .eq('party_type_id' as never, t.id)
               .is('deleted_at' as never, null)
+              // match the directory page default view: hide auto-created stub
+              // parties (notes ILIKE 'Auto-created%'), so e.g. paper_mill counts
+              // 717 here too instead of 1033.
+              .or('notes.is.null,notes.not.ilike.Auto-created%')
           )
         );
         if (!alive) return;
