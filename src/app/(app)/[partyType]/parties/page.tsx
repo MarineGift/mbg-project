@@ -557,7 +557,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full whitespace-nowrap">
                               <AlertTriangle className="h-3 w-3" />
-                              {'\ubbf8\uc5f0\uacb0'}
+                              {'Unlinked'}
                             </span>
                           )}
                         </td>
