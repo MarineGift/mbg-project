@@ -28,7 +28,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Layers } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { moveDealStage } from './actions';
@@ -274,15 +274,6 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                   </span>
                 ))}
               </div>
-              {pipeline.code === 'investors' ? (
-                <Link
-                  href="/pipelines/investors/rounds"
-                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <Layers className="h-3.5 w-3.5" />
-                  Rounds
-                </Link>
-              ) : null}
               {campaigns.length > 0 && (
                 <div className="flex items-center gap-2">
                   <select
@@ -360,7 +351,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                 No stages configured for this pipeline.
               </div>
             ) : (
-              <div className="flex flex-wrap content-start gap-3 p-4">
+              <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                 {stageBuckets.map(({ stage, deals: stageDeals, count, sums }) => (
                   <DroppableColumn
                     key={stage.id}
@@ -472,7 +463,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-[26rem] w-[18rem] shrink-0 flex-col rounded-lg border bg-card transition-colors',
+        'flex h-[26rem] w-full shrink-0 flex-col rounded-lg border bg-card transition-colors',
         isOver && 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10'
       )}
     >
