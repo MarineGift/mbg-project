@@ -181,22 +181,36 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         const { data, error } = await supabase
           .schema('app')
           .from('pipelines' as never)
-          .select('id, code, name, sort_order, deals(count)')
+          .select('id, code, name, sort_order')
           .eq('is_active', true)
           .neq('code', 'default')
           .order('sort_order', { ascending: true });
         if (!alive) return;
         if (!error && data) {
-          setPipelines(
-            (data as unknown as Array<Pipeline & { deals?: Array<{ count: number }> }>).map(
-              (p) => ({
-                id: p.id,
-                code: p.code,
-                name: p.name,
-                sort_order: p.sort_order,
-                dealCount: p.deals && p.deals.length > 0 ? p.deals[0]!.count : 0,
-              })
+          const base = data as unknown as Pipeline[];
+          // Per-pipeline deal count, EXCLUDING soft-deleted deals. The previous
+          // `deals(count)` embed had no deleted_at filter, so it over-counted
+          // (e.g. seeded-then-deleted deals). This mirrors the directory's
+          // non-deleted head-count pattern below so the badge matches the board.
+          const countResults = await Promise.all(
+            base.map((p) =>
+              supabase
+                .schema('app')
+                .from('deals' as never)
+                .select('id', { count: 'exact', head: true })
+                .eq('pipeline_id' as never, p.id)
+                .is('deleted_at' as never, null)
             )
+          );
+          if (!alive) return;
+          setPipelines(
+            base.map((p, i) => ({
+              id: p.id,
+              code: p.code,
+              name: p.name,
+              sort_order: p.sort_order,
+              dealCount: (countResults[i] as any).count ?? 0,
+            }))
           );
         }
       } catch (e) {

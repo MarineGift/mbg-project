@@ -2,6 +2,8 @@
  * app/(app)/[partyType]/parties/page.tsx
  * Phase 8 + responsive + Phase 20d (lead score) + pagination + Phase 20f (saved views)
  * Phase 23: supply links column (connected mills / fillers)
+ * Feature A: account scoring -> directory now reads app.v_account_scores
+ *            (A/B/C tier + 0..100 score), with score sort + grade filter.
  */
 
 import Link from 'next/link';
@@ -11,10 +13,10 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { LeadScoreBadge } from '@/components/common/lead-score-badge';
+import { AccountScoreBadge } from '@/components/common/account-score-badge';
 import { PaginationBar } from '@/components/common/pagination-bar';
 import { SavedViewsDropdown } from '@/components/common/saved-views-dropdown';
-import { fetchLeadScoresMany } from '@/lib/queries/lead-score';
+import { fetchAccountScoresMany, type AccountScore, type AccountTier } from '@/lib/queries/account-score';
 import { fetchSavedViews } from '@/lib/queries/saved-views';
 import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTier, PartyStatus } from '@/types/party-detail';
@@ -72,7 +74,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
-    country?: string; type?: string;
+    country?: string; type?: string; grade?: string;
   }>;
 }
 
@@ -117,6 +119,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
   const typeFilter = ((sp as any).type ?? '').trim();
   const isInvestor = moduleParam === 'investor';
+
+  // Account-score grade filter (A/B/C). Named `grade` to avoid colliding with
+  // the party `tier` concept (tier_1/2/3/cold) shown in the Level/Tier column.
+  const gradeRaw = (((sp as any).grade ?? '') as string).trim().toUpperCase();
+  const gradeFilter: '' | AccountTier =
+    gradeRaw === 'A' || gradeRaw === 'B' || gradeRaw === 'C' ? (gradeRaw as AccountTier) : '';
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
@@ -208,29 +216,46 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     query = query.or('notes.is.null,notes.not.ilike.Auto-created%');
   }
 
+  // We must process in memory (fetch the full candidate set, then slice) when
+  // ordering or filtering by something the DB query can't do directly:
+  //   - score sort   (score lives in app.account_scores, not app.parties)
+  //   - investor type sort
+  //   - grade filter (A/B/C, derived from the account score)
+  const needMemory = sortByScore || sortByType || gradeFilter !== '';
+
   let parties: PartyRow[];
   let totalCount: number;
+  let scores: Record<string, AccountScore> = {};
 
-  if (sortByScore) {
+  if (needMemory) {
     const { data: idData, count } = await query;
-    totalCount = count ?? 0;
     const allParties = (idData ?? []) as unknown as PartyRow[];
-    const scores = await fetchLeadScoresMany(allParties.map((p) => p.id));
-    const sorted = [...allParties].sort((a, b) =>
-      scoreAsc ? (scores[a.id] ?? 0) - (scores[b.id] ?? 0)
-               : (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
-    parties = sorted.slice(from, to + 1);
-  } else if (sortByType) {
-    const { data: idData, count } = await query;
-    totalCount = count ?? 0;
-    const allParties = (idData ?? []) as unknown as PartyRow[];
-    const sorted = [...allParties].sort((a, b) => {
-      const ca = investorCatAll[a.id]?.category ?? '';
-      const cb = investorCatAll[b.id]?.category ?? '';
-      const cmp = ca.localeCompare(cb);
-      return (typeAsc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
-    });
-    parties = sorted.slice(from, to + 1);
+    // scores for the full candidate set (needed to filter/sort by score)
+    scores = await fetchAccountScoresMany(allParties.map((p) => p.id));
+
+    let working = allParties;
+    if (gradeFilter) {
+      working = working.filter((p) => (scores[p.id]?.tier ?? 'C') === gradeFilter);
+    }
+
+    if (sortByScore) {
+      working = [...working].sort((a, b) =>
+        scoreAsc ? (scores[a.id]?.score ?? 0) - (scores[b.id]?.score ?? 0)
+                 : (scores[b.id]?.score ?? 0) - (scores[a.id]?.score ?? 0));
+    } else if (sortByType) {
+      working = [...working].sort((a, b) => {
+        const ca = investorCatAll[a.id]?.category ?? '';
+        const cb = investorCatAll[b.id]?.category ?? '';
+        const cmp = ca.localeCompare(cb);
+        return (typeAsc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
+      });
+    } else {
+      // grade-filter-only: keep a stable name ordering
+      working = [...working].sort((a, b) => a.party_name.localeCompare(b.party_name));
+    }
+
+    totalCount = gradeFilter ? working.length : (count ?? 0);
+    parties = working.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
       .order(dbSort.col as never, { ascending: dbSort.asc, nullsFirst: false })
@@ -254,13 +279,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     ((countryData ?? []) as any[]).map((r) => r.country_code as string).filter(Boolean)
   )].sort();
 
-  
-
-  const [scores, savedViews, supplyLinks] = await Promise.all([
-    fetchLeadScoresMany(partyIds),
+  const [savedViews, supplyLinks, pageScores] = await Promise.all([
     fetchSavedViews('party', module),
     showLinks ? fetchSupplyLinks(supabase, partyIds, linkRole) : Promise.resolve({} as Record<string, string[]>),
+    // In memory mode `scores` already covers the page; in DB mode fetch just
+    // the visible page's scores.
+    needMemory ? Promise.resolve(scores) : fetchAccountScoresMany(partyIds),
   ]);
+  scores = pageScores;
 
   // Stats for link coverage (only filler/paper_mill)
   const linkedCount   = showLinks ? partyIds.filter(id => (supplyLinks[id]?.length ?? 0) > 0).length : 0;
@@ -275,6 +301,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (searchQuery) qs.set('q', searchQuery);
     if (pageSize !== DEFAULT_PAGE_SIZE) qs.set('perPage', String(pageSize));
     if (typeFilter) qs.set('type', typeFilter);
+    if (gradeFilter) qs.set('grade', gradeFilter);
     if (value && value !== 'name_asc') qs.set('sort', value);
     const s = qs.toString();
     return `/${module}/parties${s ? `?${s}` : ''}`;
@@ -307,6 +334,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                 {unlinkedCount} unlinked — sales targets
               </span>
             )}
+            {gradeFilter && (
+              <span className="text-xs text-muted-foreground/70">· Tier {gradeFilter} only</span>
+            )}
             {sortByScore && (
               <span className="text-xs text-muted-foreground/70">· Sorted by score</span>
             )}
@@ -316,6 +346,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             country={countryFilter}
             q={searchQuery}
             sort={sortParam}
+            grade={gradeFilter}
             types={isInvestor ? investorFacets : undefined}
             type={typeFilter}
           />
@@ -336,7 +367,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       {totalCount === 0 ? (
         <Card className="flex-1">
           <CardContent className="py-16 text-center">
-            <p className="text-muted-foreground mb-4">No parties registered.</p>
+            <p className="text-muted-foreground mb-4">
+              {gradeFilter ? `No Tier ${gradeFilter} parties.` : 'No parties registered.'}
+            </p>
             <Button asChild>
               <Link href={`/${module}/parties/new`}>
                 <Plus className="h-4 w-4" />Add first party
@@ -355,7 +388,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name {hName.arrow && <span className="text-[10px]">{hName.arrow}</span>}
                     </Link>
                   </th>
-                  <th className="px-3 py-3 font-medium whitespace-nowrap w-16 text-center">
+                  <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                     <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
                       Score {hScore.arrow && <span className="text-[10px]">{hScore.arrow}</span>}
                     </Link>
@@ -394,7 +427,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   const location  = p.city ?? '';
                   const tags      = p.industry_tags ?? [];
                   const level     = p.party_level as PartyLevel | null;
-                  const score     = scores[p.id] ?? 0;
+                  const acc       = scores[p.id];
                   const linked    = supplyLinks[p.id] ?? [];
                   const hasLinks  = linked.length > 0;
                   const LevelIcon = level === 'group_hq' ? Building2
@@ -412,7 +445,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </Link>
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <LeadScoreBadge score={score} size="sm" />
+                        <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                       </td>
                       {isInvestor && (
                         <td className="px-4 py-3">
