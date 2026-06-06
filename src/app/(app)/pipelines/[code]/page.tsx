@@ -52,10 +52,15 @@ export default async function PipelinePage({ params }: Props) {
   // 3) deals in this pipeline, with their companies (deal_parties).
   // NOTE: round is joined in memory below (no embed) to avoid the ambiguous
   // deals<->rounds relationship that zeroed out the investor board.
+  // NOTE: app.deals has NO round_id column (verified against information_schema).
+  // Selecting it returned PostgREST 42703 (undefined column), which failed the
+  // WHOLE deals query -> the board rendered 0 deals even though the deals exist
+  // and are correctly staged. Until a real round linkage (column or junction)
+  // is added, we drop round_id here and treat round as null below.
   const dealSelect =
     'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
     'start_date, end_date, expected_close_date, ' +
-    'last_activity_at, status, round_id, ' +
+    'last_activity_at, status, ' +
     'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
     '  parties ( party_name, country_code ) )';
 
@@ -78,12 +83,14 @@ export default async function PipelinePage({ params }: Props) {
       ? (await listRounds()).map((r) => ({ id: r.id, name: r.name }))
       : [];
 
-  // Join round name onto each deal in memory (replaces the fragile embed).
-  const roundMap = new Map(rounds.map((r) => [r.id, r]));
-  const deals = ((dealsData ?? []) as Array<Record<string, unknown>>).map((d) => {
-    const rid = d.round_id as string | null | undefined;
-    return { ...d, round: rid ? roundMap.get(rid) ?? null : null };
-  });
+  // Round name join: app.deals has no round_id, so there is nothing to join on.
+  // Set round to null for every deal (the round filter defaults to 'all', so the
+  // board still shows everything). Re-enable this once a round linkage exists.
+  void rounds; // kept for the filter UI / New Deal modal selector
+  const deals = ((dealsData ?? []) as Array<Record<string, unknown>>).map((d) => ({
+    ...d,
+    round: null as { id: string; name: string } | null,
+  }));
 
   // Campaigns (all pipelines) for the New Deal modal + board filter.
   const { data: campaignsData } = await supabase
