@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createAppBrowserClient } from '@/lib/supabase/client';
 
 type Locale = 'ko' | 'en' | 'ja';
 
@@ -55,7 +55,7 @@ const INTENSITY_STYLE: Record<string, string> = {
 };
 
 export default function PaperTypeFilter({ locale = 'ko' }: { locale?: Locale }) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => createAppBrowserClient(), []);
   const [types, setTypes] = useState<PaperType[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [mills, setMills] = useState<MillRow[]>([]);
@@ -70,7 +70,6 @@ export default function PaperTypeFilter({ locale = 'ko' }: { locale?: Locale }) 
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
-        .schema('app')
         .from('paper_types')
         .select('id,code,category,label_ko,label_en,label_ja,filler_relevance,sort_order')
         .eq('is_active', true)
@@ -83,7 +82,6 @@ export default function PaperTypeFilter({ locale = 'ko' }: { locale?: Locale }) 
     async (code: string) => {
       setLoading(true);
       const { data, error } = await supabase
-        .schema('app')
         .from('v_paper_mill_types')
         .select(
           'mill_id,party_name,country_code,city,filler_use_intensity,type_code,label_ko,label_en,label_ja,is_primary',
@@ -123,7 +121,7 @@ export default function PaperTypeFilter({ locale = 'ko' }: { locale?: Locale }) 
               {CATEGORY_LABEL[cat]?.[locale] ?? cat}
             </div>
             <div className="flex flex-wrap gap-2">
-              {grouped[cat].map((t) => (
+              {(grouped[cat] ?? []).map((t) => (
                 <button
                   key={t.code}
                   type="button"
