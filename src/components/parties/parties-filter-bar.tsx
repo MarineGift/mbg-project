@@ -29,12 +29,6 @@ const COUNTRY_NAMES: Record<string, string> = {
   ZA:'South Africa',
 };
 
-const SORT_OPTIONS: { value: string; label: string }[] = [
-  { value: 'name_asc',  label: 'Name (A \u2192 Z)' },
-  { value: 'name_desc', label: 'Name (Z \u2192 A)' },
-  { value: 'score',     label: 'Score (high \u2192 low)' },
-];
-
 const GRADE_OPTIONS: { value: string; label: string }[] = [
   { value: '',  label: 'All tiers' },
   { value: 'A', label: 'Tier A' },
@@ -54,8 +48,8 @@ interface Props {
   country: string;
   /** Current ?q= value. */
   q: string;
-  /** Current ?sort= value (name_asc | name_desc | score). */
-  sort: string;
+  /** Current ?sort= value. Header columns drive sorting; kept optional for compat. */
+  sort?: string;
   /** Current ?grade= value (account tier A/B/C, or ''). */
   grade?: string;
   /** Investor type facets. When provided (investor list), render type chips. */
@@ -68,7 +62,7 @@ interface Props {
   stage?: string;
 }
 
-export function PartiesFilterBar({ countries, country, q, sort, grade = '', types, type = '', stages, stage = '' }: Props) {
+export function PartiesFilterBar({ countries, country, q, grade = '', types, type = '', stages, stage = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -95,13 +89,6 @@ export function PartiesFilterBar({ countries, country, q, sort, grade = '', type
     applyParams((sp) => {
       if (code) sp.set('country', code);
       else sp.delete('country');
-    });
-  }
-
-  function setSort(value: string) {
-    applyParams((sp) => {
-      if (value && value !== 'name_asc') sp.set('sort', value);
-      else sp.delete('sort');
     });
   }
 
@@ -197,20 +184,6 @@ export function PartiesFilterBar({ countries, country, q, sort, grade = '', type
           >
             {GRADE_OPTIONS.map((o) => (
               <option key={o.value || 'all'} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Sort */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Sort</span>
-          <select
-            value={SORT_OPTIONS.some((o) => o.value === sort) ? sort : 'name_asc'}
-            onChange={(e) => setSort(e.target.value)}
-            className="h-9 cursor-pointer rounded-md border border-input bg-background pl-2 pr-6 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
