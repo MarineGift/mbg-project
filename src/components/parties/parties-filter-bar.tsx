@@ -45,6 +45,9 @@ const GRADE_OPTIONS: { value: string; label: string }[] = [
 /** Investor type facet (category + count) for the type-filter chips. */
 export type InvestorFacet = { category: string; count: number };
 
+/** Investment-stage facet (stage code + label + count) for the stage chips. */
+export type StageFacet = { code: string; label: string; count: number };
+
 interface Props {
   countries: string[];
   /** Current ?country= value (uppercase code or ''). */
@@ -59,9 +62,13 @@ interface Props {
   types?: InvestorFacet[];
   /** Current ?type= value (investor_category, or ''). */
   type?: string;
+  /** Investment-stage facets. When provided (investor list), render stage chips. */
+  stages?: StageFacet[];
+  /** Current ?stage= value (investment_stages.code, or ''). */
+  stage?: string;
 }
 
-export function PartiesFilterBar({ countries, country, q, sort, grade = '', types, type = '' }: Props) {
+export function PartiesFilterBar({ countries, country, q, sort, grade = '', types, type = '', stages, stage = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -112,12 +119,20 @@ export function PartiesFilterBar({ countries, country, q, sort, grade = '', type
     });
   }
 
+  function setStage(value: string) {
+    applyParams((sp) => {
+      if (value) sp.set('stage', value);
+      else sp.delete('stage');
+    });
+  }
+
   function clearSearch() {
     setTerm('');
     applyParams((sp) => sp.delete('q'));
   }
 
   const totalTypes = (types ?? []).reduce((s, t) => s + t.count, 0);
+  const totalStages = (stages ?? []).reduce((s, t) => s + t.count, 0);
 
   return (
     <div className="space-y-2">
@@ -257,6 +272,45 @@ export function PartiesFilterBar({ countries, country, q, sort, grade = '', type
                 ].join(' ')}
               >
                 {t.category} <span className="opacity-60">{t.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Investment-stage (round) chips: pull e.g. every Series A investor fast */}
+      {stages && stages.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs font-medium text-muted-foreground">Stage:</span>
+          <button
+            type="button"
+            onClick={() => setStage('')}
+            aria-pressed={!stage}
+            className={[
+              'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+              !stage
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-input bg-background text-muted-foreground hover:bg-muted',
+            ].join(' ')}
+          >
+            All <span className="opacity-60">{totalStages}</span>
+          </button>
+          {stages.map((s) => {
+            const active = stage === s.code;
+            return (
+              <button
+                key={s.code}
+                type="button"
+                onClick={() => setStage(s.code)}
+                aria-pressed={active}
+                className={[
+                  'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+                  active
+                    ? 'border-sky-600 bg-sky-600 text-white'
+                    : 'border-input bg-background text-muted-foreground hover:bg-muted',
+                ].join(' ')}
+              >
+                {s.label} <span className="opacity-60">{s.count}</span>
               </button>
             );
           })}
