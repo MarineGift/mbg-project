@@ -14,21 +14,6 @@
 import { useState } from 'react';
 import { Globe, Search, X } from 'lucide-react';
 
-const COUNTRY_NAMES: Record<string, string> = {
-  AR:'Argentina', AT:'Austria', AU:'Australia', BD:'Bangladesh',
-  BE:'Belgium',   BR:'Brazil',  CA:'Canada',   CH:'Switzerland',
-  CL:'Chile',     CN:'China',   CO:'Colombia', DE:'Germany',
-  DZ:'Algeria',   EG:'Egypt',   ES:'Spain',    FI:'Finland',
-  FR:'France',    GB:'UK',      ID:'Indonesia', IN:'India',
-  IR:'Iran',      IT:'Italy',   JP:'Japan',    KR:'Korea',
-  LK:'Sri Lanka', MA:'Morocco', MX:'Mexico',   MY:'Malaysia',
-  NG:'Nigeria',   NO:'Norway',  PH:'Philippines', PK:'Pakistan',
-  PL:'Poland',    PT:'Portugal', RU:'Russia',  SA:'Saudi Arabia',
-  SE:'Sweden',    SK:'Slovakia', TH:'Thailand', TN:'Tunisia',
-  TR:'Turkey',    US:'USA',     UY:'Uruguay',  VN:'Vietnam',
-  ZA:'South Africa',
-};
-
 const GRADE_OPTIONS: { value: string; label: string }[] = [
   { value: '',  label: 'All tiers' },
   { value: 'A', label: 'Tier A' },
@@ -37,13 +22,15 @@ const GRADE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /** Investor type facet (category + count) for the type-filter chips. */
-export type InvestorFacet = { category: string; count: number; label?: string };
+export type InvestorFacet = { category: string; count: number; label?: string; parent?: string | null };
 
 /** Investment-stage facet (stage code + label + count) for the stage chips. */
 export type StageFacet = { code: string; label: string; count: number };
 
 interface Props {
   countries: string[];
+  /** code -> display name, sourced from app.countries (no hardcoding). */
+  countryNames?: Record<string, string>;
   /** Current ?country= value (uppercase code or ''). */
   country: string;
   /** Current ?q= value. */
@@ -64,11 +51,11 @@ interface Props {
   stage?: string;
 }
 
-export function PartiesFilterBar({ countries, country, q, grade = '', types, type = '', typeLabel, stages, stage = '' }: Props) {
+export function PartiesFilterBar({ countries, countryNames = {}, country, q, grade = '', types, type = '', typeLabel, stages, stage = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
-    (COUNTRY_NAMES[a] ?? a).localeCompare(COUNTRY_NAMES[b] ?? b)
+    (countryNames[a] ?? a).localeCompare(countryNames[b] ?? b)
   );
 
   function applyParams(mutate: (sp: URLSearchParams) => void) {
@@ -137,7 +124,7 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
             <option value="">All countries</option>
             {sortedCountries.map((cc) => (
               <option key={cc} value={cc}>
-                {cc} &mdash; {COUNTRY_NAMES[cc] ?? cc}
+                {cc} &mdash; {countryNames[cc] ?? cc}
               </option>
             ))}
           </select>
@@ -197,7 +184,7 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
             onClick={() => setCountry('')}
             className="inline-flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
           >
-            <span className="font-medium">{COUNTRY_NAMES[country] ?? country}</span>
+            <span className="font-medium">{countryNames[country] ?? country}</span>
             <X className="h-3 w-3" />
           </button>
         )}
@@ -234,6 +221,7 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
           </button>
           {types.map((t) => {
             const active = type === t.category;
+            const isChild = !!t.parent;
             return (
               <button
                 key={t.category}
@@ -242,11 +230,15 @@ export function PartiesFilterBar({ countries, country, q, grade = '', types, typ
                 aria-pressed={active}
                 className={[
                   'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+                  isChild ? '-ml-0.5' : '',
                   active
                     ? 'border-foreground bg-foreground text-background'
-                    : 'border-input bg-background text-muted-foreground hover:bg-muted',
+                    : isChild
+                      ? 'border-dashed border-input bg-muted/40 text-muted-foreground hover:bg-muted'
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted',
                 ].join(' ')}
               >
+                {isChild && <span className="opacity-50">&#x2514;</span>}
                 {t.label ?? t.category} <span className="opacity-60">{t.count}</span>
               </button>
             );
