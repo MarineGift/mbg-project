@@ -124,7 +124,7 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
             <option value="">All countries</option>
             {sortedCountries.map((cc) => (
               <option key={cc} value={cc}>
-                {cc} &mdash; {countryNames[cc] ?? cc}
+                {countryNames[cc] ?? cc}
               </option>
             ))}
           </select>
