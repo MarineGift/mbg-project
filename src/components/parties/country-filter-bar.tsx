@@ -33,7 +33,7 @@ export function CountryFilterBar({ countries, countryNames = {}, current }: Prop
         <option value="">All countries</option>
         {sorted.map((cc) => (
           <option key={cc} value={cc}>
-            {cc} — {countryNames[cc] ?? cc}
+            {countryNames[cc] ?? cc}
           </option>
         ))}
       </select>
