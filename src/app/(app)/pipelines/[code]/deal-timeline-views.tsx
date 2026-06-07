@@ -56,6 +56,14 @@ function companyTitle(d: TimelineDeal): string {
   const n = companyNames(d);
   return (n.length ? n.join(', ') + ' \u2014 ' : '') + d.deal_name;
 }
+// Sort rows so headquarters "(HQ)" companies float to the top of each group,
+// then alphabetically by company label.
+function hqFirst(a: TimelineDeal, b: TimelineDeal): number {
+  const ah = companyNames(a).some((n) => n.includes('(HQ)')) ? 0 : 1;
+  const bh = companyNames(b).some((n) => n.includes('(HQ)')) ? 0 : 1;
+  if (ah !== bh) return ah - bh;
+  return companyLabel(a).localeCompare(companyLabel(b));
+}
 
 const NAME_W = 'w-52';
 const LABEL_W = 'w-44';
@@ -85,9 +93,10 @@ export function DealGantt({
       arr.push(d);
       m.set(d.campaign_id, arr);
     }
+    for (const arr of m.values()) arr.sort(hqFirst);
     return m;
   }, [deals]);
-  const standalone = useMemo(() => deals.filter((d) => !d.campaign_id), [deals]);
+  const standalone = useMemo(() => [...deals].filter((d) => !d.campaign_id).sort(hqFirst), [deals]);
 
   // Only campaigns that have at least one deal in THIS pipeline (campaigns have
   // no pipeline_id of their own; membership is derived from the board's deals).
