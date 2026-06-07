@@ -30,7 +30,7 @@ const fmtMoney = (n: number | null, cur: string | null) => (cur ? cur + ' ' : ''
 const inputCls = 'w-full rounded-md border px-3 py-2 text-sm bg-background';
 
 export function CampaignDetailClient({
-  campaign, forecast, deals, pipelines, stages, partyTypeMap,
+  campaign, forecast, deals, pipelines, stages, partyTypeMap, existingPartyIds,
 }: {
   campaign: Campaign;
   forecast: Forecast;
@@ -38,9 +38,11 @@ export function CampaignDetailClient({
   pipelines: PipelineOpt[];
   stages: Stage[];
   partyTypeMap: Record<string, string>;
+  existingPartyIds: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const existingSet = new Set(existingPartyIds);
 
   const pipelineById = new Map(pipelines.map((p) => [p.id, p]));
   const stagesByPipeline = new Map<string, Stage[]>();
@@ -78,8 +80,10 @@ export function CampaignDetailClient({
   // ---- add companies ----
   const [addOpen, setAddOpen] = useState(false);
   const defaultPipeline = deals.find((d) => d.pipeline_id)?.pipeline_id;
-  const defaultCode = (defaultPipeline && pipelineById.get(defaultPipeline)?.code) || pipelines[0]?.code || '';
-  const [pipelineCode, setPipelineCode] = useState(defaultCode);
+  // This campaign's deals already live in a pipeline -> reuse it (no picker).
+  const pipelineCode = (defaultPipeline && pipelineById.get(defaultPipeline)?.code) || pipelines[0]?.code || '';
+  const pipelineName = (defaultPipeline && pipelineById.get(defaultPipeline)?.name)
+    || pipelines.find((p) => p.code === pipelineCode)?.name || '';
   const [companyQuery, setCompanyQuery] = useState('');
   const [results, setResults] = useState<PartyHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -89,18 +93,23 @@ export function CampaignDetailClient({
   useEffect(() => {
     if (!addOpen) return;
     const q = companyQuery.trim();
+    if (!q) { setResults([]); setSearching(false); return; }   // only search when typing
     let active = true;
     setSearching(true);
     const t = setTimeout(async () => {
       const res = await searchPartiesForCampaign({ query: q, limit: 30 });
       if (!active) return;
-      setResults(res.ok ? res.parties : []);
+      // hide companies already in this campaign or already picked
+      const hits = (res.ok ? res.parties : []).filter(
+        (p) => !existingSet.has(p.id) && !selected.has(p.id),
+      );
+      setResults(hits);
       setSearching(false);
     }, 250);
     return () => { active = false; clearTimeout(t); };
   }, [companyQuery, addOpen]);
 
-  const resetAdd = () => { setCompanyQuery(''); setResults([]); setSelected(new Map()); setAddError(null); setPipelineCode(defaultCode); };
+  const resetAdd = () => { setCompanyQuery(''); setResults([]); setSelected(new Map()); setAddError(null); };
 
   const submitAdd = () => {
     if (selected.size === 0) { setAddError('Pick at least one company'); return; }
@@ -262,18 +271,20 @@ export function CampaignDetailClient({
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Add companies</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <select className={inputCls} value={pipelineCode} onChange={(e) => setPipelineCode(e.target.value)}>
-              {pipelines.length === 0 && <option value="">No pipelines</option>}
-              {pipelines.map((p) => <option key={p.code} value={p.code}>Place in: {p.name} (stage 1)</option>)}
-            </select>
+            <p className="text-xs text-muted-foreground">
+              Adds to <span className="font-medium text-foreground">{pipelineName || 'this pipeline'}</span> at stage 1.
+            </p>
             <div className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
               <Search className="h-4 w-4 text-muted-foreground" />
               <input value={companyQuery} onChange={(e) => setCompanyQuery(e.target.value)}
                 placeholder="Search companies by name..." className="w-full bg-transparent text-sm focus:outline-none" />
             </div>
-            {(searching || results.length > 0) && (
+            {companyQuery.trim() !== '' && (
               <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
                 {searching && <div className="px-3 py-2 text-xs text-muted-foreground">Searching...</div>}
+                {!searching && results.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">No matches (already-added companies are hidden).</div>
+                )}
                 {!searching && results.map((r) => {
                   const picked = selected.has(r.id);
                   const typeCode = r.party_type_id != null ? (partyTypeMap[String(r.party_type_id)] ?? '') : '';

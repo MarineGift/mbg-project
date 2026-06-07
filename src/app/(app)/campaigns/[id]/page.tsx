@@ -16,7 +16,7 @@ type Campaign = {
 type DealRow = {
   id: string; deal_name: string; value_amount: number | null; value_currency: string | null;
   status: string; current_stage_id: string | null; pipeline_id: string | null;
-  deal_parties: Array<{ parties: { party_name: string } | null }> | null;
+  deal_parties: Array<{ party_id: string; parties: { party_name: string } | null }> | null;
 };
 
 export default async function CampaignDetailPage({ params }: { params: { id: string } }) {
@@ -37,7 +37,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       supabase.schema('app').from('campaign_forecast' as never)
         .select('deal_count, total_value, weighted_forecast').eq('campaign_id', params.id).maybeSingle(),
       supabase.schema('app').from('deals' as never)
-        .select('id, deal_name, value_amount, value_currency, status, current_stage_id, pipeline_id, deal_parties ( parties ( party_name ) )')
+        .select('id, deal_name, value_amount, value_currency, status, current_stage_id, pipeline_id, deal_parties ( party_id, parties ( party_name ) )')
         .eq('campaign_id', params.id).is('deleted_at', null)
         .order('value_amount', { ascending: false, nullsFirst: false }),
       supabase.schema('app').from('stages' as never)
@@ -61,6 +61,13 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
     companies: (d.deal_parties ?? []).map((p) => p.parties?.party_name).filter(Boolean) as string[],
   }));
 
+  // party ids already in this campaign -> hidden from the Add-company search
+  const existingPartyIds = Array.from(new Set(
+    ((dealsData ?? []) as unknown as DealRow[])
+      .flatMap((d) => (d.deal_parties ?? []).map((p) => p.party_id))
+      .filter(Boolean) as string[],
+  ));
+
   const pipelines = ((pipelinesData ?? []) as unknown as Array<{ id: string; code: string; name: string; sort_order: number }>)
     .map((p) => ({ id: p.id, code: p.code, name: p.name }));
 
@@ -78,6 +85,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       pipelines={pipelines}
       stages={stages}
       partyTypeMap={partyTypeMap}
+      existingPartyIds={existingPartyIds}
     />
   );
 }
