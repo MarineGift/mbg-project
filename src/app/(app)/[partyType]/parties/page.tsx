@@ -18,6 +18,7 @@ import { PaginationBar } from '@/components/common/pagination-bar';
 import { SavedViewsDropdown } from '@/components/common/saved-views-dropdown';
 import { fetchAccountScoresMany, type AccountScore, type AccountTier } from '@/lib/queries/account-score';
 import { fetchSavedViews } from '@/lib/queries/saved-views';
+import { fetchCountryNames } from '@/lib/queries/countries';
 import type { PartyTypeCode } from '@/types/ai';
 import type { PartyTier, PartyStatus } from '@/types/party-detail';
 import dynamic from 'next/dynamic';
@@ -230,22 +231,39 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .map(({ code, label, count }) => ({ code, label, count }));
   }
 
-  // Paper-mill paper-type facets (via app.v_paper_mill_types).
-  let paperTypeFacets: { category: string; label: string; count: number }[] = [];
+  // Paper-mill paper-type facets.
+  // The active facet SET + display order + parent come from app.paper_types
+  // (so deactivated types like market_pulp / specialty(other) never leak in,
+  // and 2-level sub-grades sit right after their parent). Mill counts come
+  // from app.v_paper_mill_types.
+  let paperTypeFacets: { category: string; label: string; count: number; parent?: string | null }[] = [];
   if (isPaperMill) {
-    const { data } = await supabase
-      .schema('app')
-      .from('v_paper_mill_types' as never)
-      .select('mill_id, type_code, label_en');
-    const facet = new Map<string, { label: string; mills: Set<string> }>();
-    for (const r of ((data ?? []) as any[])) {
-      const f = facet.get(r.type_code) ?? { label: r.label_en ?? r.type_code, mills: new Set<string>() };
-      f.mills.add(r.mill_id);
-      facet.set(r.type_code, f);
+    const [{ data: typeRows }, { data: linkRows }] = await Promise.all([
+      supabase
+        .schema('app')
+        .from('paper_types' as never)
+        .select('id, code, label_en, sort_order, parent_id')
+        .eq('is_active' as never, true)
+        .order('sort_order' as never),
+      supabase
+        .schema('app')
+        .from('v_paper_mill_types' as never)
+        .select('mill_id, type_code'),
+    ]);
+    const idToCode = new Map<string, string>();
+    for (const t of ((typeRows ?? []) as any[])) idToCode.set(t.id, t.code);
+    const millsByCode = new Map<string, Set<string>>();
+    for (const r of ((linkRows ?? []) as any[])) {
+      const s = millsByCode.get(r.type_code) ?? new Set<string>();
+      s.add(r.mill_id);
+      millsByCode.set(r.type_code, s);
     }
-    paperTypeFacets = [...facet.entries()]
-      .map(([code, v]) => ({ category: code, label: v.label, count: v.mills.size }))
-      .sort((a, b) => b.count - a.count);
+    paperTypeFacets = ((typeRows ?? []) as any[]).map((t) => ({
+      category: t.code,
+      label: t.label_en ?? t.code,
+      count: millsByCode.get(t.code)?.size ?? 0,
+      parent: t.parent_id ? (idToCode.get(t.parent_id) ?? null) : null,
+    }));
   }
 
   // Filler mineral-class facets (via app.v_filler_classes).
@@ -380,12 +398,13 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     ((countryData ?? []) as any[]).map((r) => r.country_code as string).filter(Boolean)
   )].sort();
 
-  const [savedViews, supplyLinks, pageScores] = await Promise.all([
+  const [savedViews, supplyLinks, pageScores, countryNames] = await Promise.all([
     fetchSavedViews('party', module),
     showLinks ? fetchSupplyLinks(supabase, partyIds, linkRole) : Promise.resolve({} as Record<string, string[]>),
     // In memory mode `scores` already covers the page; in DB mode fetch just
     // the visible page's scores.
     needMemory ? Promise.resolve(scores) : fetchAccountScoresMany(partyIds),
+    fetchCountryNames(),
   ]);
   scores = pageScores;
 
@@ -447,6 +466,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
           </p>
           <PartiesFilterBar
             countries={distinctCountries}
+            countryNames={countryNames}
             country={countryFilter}
             q={searchQuery}
             sort={sortParam}
@@ -592,7 +612,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </div>
                       </td>
                       <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                        {p.country_code ?? '-'}
+                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
                         {location || '-'}
