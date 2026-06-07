@@ -1,10 +1,11 @@
 // src/app/(app)/campaigns/[id]/page.tsx
-// Campaign detail: info, forecast rollup, and the deals that belong to it.
+// Campaign detail (server): fetch campaign, forecast, deals, pipelines, stages,
+// party types -> hand off to the client which provides campaign edit + in-page
+// Deal Party CRUD (add company, move stage, remove).
 
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { CampaignDetailClient } from './campaign-detail-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,15 +13,11 @@ type Campaign = {
   id: string; name: string; campaign_type: string | null; description: string | null;
   status: string; start_date: string | null; end_date: string | null; color: string | null;
 };
-type Forecast = { deal_count: number; total_value: number; weighted_forecast: number };
 type DealRow = {
   id: string; deal_name: string; value_amount: number | null; value_currency: string | null;
   status: string; current_stage_id: string | null; pipeline_id: string | null;
   deal_parties: Array<{ parties: { party_name: string } | null }> | null;
 };
-
-const fmtMoney = (n: number | null, cur: string | null) =>
-  (cur ? cur + ' ' : '') + (n ?? 0).toLocaleString();
 
 export default async function CampaignDetailPage({ params }: { params: { id: string } }) {
   const supabase = await createSupabaseServerClient();
@@ -35,7 +32,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
   const campaign = (campaignData ?? null) as Campaign | null;
   if (!campaign) notFound();
 
-  const [{ data: forecastData }, { data: dealsData }, { data: stagesData }, { data: pipelinesData }] =
+  const [{ data: forecastData }, { data: dealsData }, { data: stagesData }, { data: pipelinesData }, { data: partyTypes }] =
     await Promise.all([
       supabase.schema('app').from('campaign_forecast' as never)
         .select('deal_count, total_value, weighted_forecast').eq('campaign_id', params.id).maybeSingle(),
@@ -43,106 +40,44 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
         .select('id, deal_name, value_amount, value_currency, status, current_stage_id, pipeline_id, deal_parties ( parties ( party_name ) )')
         .eq('campaign_id', params.id).is('deleted_at', null)
         .order('value_amount', { ascending: false, nullsFirst: false }),
-      supabase.schema('app').from('stages' as never).select('id, name'),
-      supabase.schema('app').from('pipelines' as never).select('id, code, name'),
+      supabase.schema('app').from('stages' as never)
+        .select('id, name, pipeline_id, sort_order').eq('is_active', true),
+      supabase.schema('app').from('pipelines' as never)
+        .select('id, code, name, sort_order').eq('is_active', true).order('sort_order', { ascending: true }),
+      supabase.schema('app').from('party_types' as never).select('id, code'),
     ]);
 
-  const forecast = (forecastData ?? { deal_count: 0, total_value: 0, weighted_forecast: 0 }) as Forecast;
-  const deals = (dealsData ?? []) as unknown as DealRow[];
-  const stageName = new Map(
-    ((stagesData ?? []) as unknown as Array<{ id: string; name: string }>).map((s) => [s.id, s.name]),
-  );
-  const pipeline = new Map(
-    ((pipelinesData ?? []) as unknown as Array<{ id: string; code: string; name: string }>).map((p) => [p.id, p]),
+  const forecast = (forecastData ?? { deal_count: 0, total_value: 0, weighted_forecast: 0 }) as
+    { deal_count: number; total_value: number; weighted_forecast: number };
+
+  const deals = ((dealsData ?? []) as unknown as DealRow[]).map((d) => ({
+    id: d.id,
+    deal_name: d.deal_name,
+    value_amount: d.value_amount,
+    value_currency: d.value_currency,
+    status: d.status,
+    current_stage_id: d.current_stage_id,
+    pipeline_id: d.pipeline_id,
+    companies: (d.deal_parties ?? []).map((p) => p.parties?.party_name).filter(Boolean) as string[],
+  }));
+
+  const pipelines = ((pipelinesData ?? []) as unknown as Array<{ id: string; code: string; name: string; sort_order: number }>)
+    .map((p) => ({ id: p.id, code: p.code, name: p.name }));
+
+  const stages = ((stagesData ?? []) as unknown as Array<{ id: string; name: string; pipeline_id: string; sort_order: number }>);
+
+  const partyTypeMap = Object.fromEntries(
+    ((partyTypes ?? []) as unknown as Array<{ id: number; code: string }>).map((t) => [t.id, t.code]),
   );
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b bg-background px-6 py-4">
-        <Link href="/campaigns" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ChevronLeft className="h-3 w-3" /> Campaigns
-        </Link>
-        <h1 className="mt-1 flex items-center gap-2 text-xl font-semibold text-foreground">
-          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: campaign.color ?? '#94a3b8' }} />
-          {campaign.name}
-        </h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          <span>{campaign.campaign_type ?? 'campaign'}</span>
-          <span className="opacity-40">·</span>
-          <span>{campaign.status}</span>
-          <span className="opacity-40">·</span>
-          <span>{campaign.start_date ?? '?'} ~ {campaign.end_date ?? '?'}</span>
-        </div>
-        {campaign.description ? (
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{campaign.description}</p>
-        ) : null}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="mb-6 grid grid-cols-3 gap-3">
-          <Stat label="Deals" value={String(forecast.deal_count)} />
-          <Stat label="Total value" value={fmtMoney(forecast.total_value, null)} />
-          <Stat label="Weighted forecast" value={fmtMoney(forecast.weighted_forecast, null)} />
-        </div>
-
-        <div className="rounded-lg border bg-card">
-          <div className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Deals in this campaign
-          </div>
-          <table className="w-full text-sm">
-            <thead className="bg-muted/30 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">Deal</th>
-                <th className="px-4 py-2 text-left font-medium">Companies</th>
-                <th className="px-4 py-2 text-left font-medium">Pipeline</th>
-                <th className="px-4 py-2 text-left font-medium">Stage</th>
-                <th className="px-4 py-2 text-left font-medium">Status</th>
-                <th className="px-4 py-2 text-right font-medium">Value</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {deals.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No deals linked yet.</td></tr>
-              )}
-              {deals.map((d) => {
-                const p = d.pipeline_id ? pipeline.get(d.pipeline_id) : undefined;
-                return (
-                  <tr key={d.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-2 font-medium">
-                      {p ? (
-                        <Link href={'/pipelines/' + p.code + '/deals/' + d.id} className="hover:underline">
-                          {d.deal_name}
-                        </Link>
-                      ) : d.deal_name}
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground">{companyLabel(d.deal_parties)}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{p?.name ?? '-'}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{d.current_stage_id ? (stageName.get(d.current_stage_id) ?? '-') : '-'}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{d.status}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{fmtMoney(d.value_amount, d.value_currency)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function companyLabel(parties: Array<{ parties: { party_name: string } | null }> | null): string {
-  const names = (parties ?? []).map((p) => p.parties?.party_name).filter(Boolean) as string[];
-  if (names.length === 0) return '-';
-  if (names.length === 1) return names[0]!;
-  return names[0] + ' +' + (names.length - 1);
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
-    </div>
+    <CampaignDetailClient
+      campaign={campaign}
+      forecast={forecast}
+      deals={deals}
+      pipelines={pipelines}
+      stages={stages}
+      partyTypeMap={partyTypeMap}
+    />
   );
 }
