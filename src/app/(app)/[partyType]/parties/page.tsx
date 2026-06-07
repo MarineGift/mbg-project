@@ -515,6 +515,19 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {showLinks && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
+                      {linkLabel}
+                    </th>
+                  )}
+                  {!showLinks && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
+                  )}
+                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
+                    </Link>
+                  </th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                     <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
                       Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
@@ -533,19 +546,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
                     </Link>
                   </th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
-                    </Link>
-                  </th>
-                  {showLinks && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
-                      {linkLabel}
-                    </th>
-                  )}
-                  {!showLinks && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
-                  )}
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
                 </tr>
               </thead>
@@ -570,6 +570,48 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
+                      </td>
+                      {showLinks && (
+                        <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
+                          {hasLinks ? (
+                            <div className="flex flex-wrap gap-1">
+                              {linked.slice(0, 2).map((name) => (
+                                <span key={name} className="inline-flex px-1.5 py-0.5 text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded whitespace-nowrap max-w-[120px] truncate">
+                                  {name}
+                                </span>
+                              ))}
+                              {linked.length > 2 && (
+                                <span className="inline-flex px-1.5 py-0.5 text-xs text-emerald-600 font-medium whitespace-nowrap">
+                                  +{linked.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full whitespace-nowrap">
+                              <AlertTriangle className="h-3 w-3" />
+                              {'Unlinked'}
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {!showLinks && (
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <div className="flex flex-wrap gap-1 max-w-[280px]">
+                            {tags.slice(0, 2).map((tag) => (
+                              <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                {tag}
+                              </span>
+                            ))}
+                            {tags.length > 2 && (
+                              <span className="inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
+                                +{tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                        {location || '-'}
                       </td>
                       <td className="px-3 py-3 text-center">
                         <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
@@ -614,48 +656,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                         {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
-                      {showLinks && (
-                        <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
-                          {hasLinks ? (
-                            <div className="flex flex-wrap gap-1">
-                              {linked.slice(0, 2).map((name) => (
-                                <span key={name} className="inline-flex px-1.5 py-0.5 text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded whitespace-nowrap max-w-[120px] truncate">
-                                  {name}
-                                </span>
-                              ))}
-                              {linked.length > 2 && (
-                                <span className="inline-flex px-1.5 py-0.5 text-xs text-emerald-600 font-medium whitespace-nowrap">
-                                  +{linked.length - 2}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" />
-                              {'Unlinked'}
-                            </span>
-                          )}
-                        </td>
-                      )}
-                      {!showLinks && (
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <div className="flex flex-wrap gap-1 max-w-[280px]">
-                            {tags.slice(0, 2).map((tag) => (
-                              <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
-                                {tag}
-                              </span>
-                            ))}
-                            {tags.length > 2 && (
-                              <span className="inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
-                                +{tags.length - 2}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
                       <td className="px-4 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
                           <a href={p.website} target="_blank" rel="noopener noreferrer"
