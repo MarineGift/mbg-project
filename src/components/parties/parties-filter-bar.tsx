@@ -27,6 +27,9 @@ export type InvestorFacet = { category: string; count: number; label?: string; p
 /** Investment-stage facet (stage code + label + count) for the stage chips. */
 export type StageFacet = { code: string; label: string; count: number };
 
+/** Sector focus facet (sector code + label + count) for the sector chips. */
+export type SectorFacet = { code: string; label: string; count: number };
+
 interface Props {
   countries: string[];
   /** code -> display name, sourced from app.countries (no hardcoding). */
@@ -49,9 +52,13 @@ interface Props {
   stages?: StageFacet[];
   /** Current ?stage= value (investment_stages.code, or ''). */
   stage?: string;
+  /** Sector focus facets. When provided (investor list), render sector chips. */
+  sectors?: SectorFacet[];
+  /** Current ?sector= value (sectors.code, or ''). */
+  sector?: string;
 }
 
-export function PartiesFilterBar({ countries, countryNames = {}, country, q, grade = '', types, type = '', typeLabel, stages, stage = '' }: Props) {
+export function PartiesFilterBar({ countries, countryNames = {}, country, q, grade = '', types, type = '', typeLabel, stages, stage = '', sectors, sector = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -101,6 +108,12 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
       else sp.delete('stage');
     });
   }
+  function setSector(value: string) {
+    applyParams((sp) => {
+      if (value) sp.set('sector', value);
+      else sp.delete('sector');
+    });
+  }
 
   function clearSearch() {
     setTerm('');
@@ -109,6 +122,7 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
 
   const totalTypes = (types ?? []).reduce((s, t) => s + t.count, 0);
   const totalStages = (stages ?? []).reduce((s, t) => s + t.count, 0);
+  const totalSectors = (sectors ?? []).reduce((s, t) => s + t.count, 0);
 
   return (
     <div className="space-y-2">
@@ -275,6 +289,45 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
                   'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
                   active
                     ? 'border-sky-600 bg-sky-600 text-white'
+                    : 'border-input bg-background text-muted-foreground hover:bg-muted',
+                ].join(' ')}
+              >
+                {s.label} <span className="opacity-60">{s.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sector focus chips: pull e.g. every advanced-materials investor fast */}
+      {sectors && sectors.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs font-medium text-muted-foreground">Sector:</span>
+          <button
+            type="button"
+            onClick={() => setSector('')}
+            aria-pressed={!sector}
+            className={[
+              'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+              !sector
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-input bg-background text-muted-foreground hover:bg-muted',
+            ].join(' ')}
+          >
+            All <span className="opacity-60">{totalSectors}</span>
+          </button>
+          {sectors.map((s) => {
+            const active = sector === s.code;
+            return (
+              <button
+                key={s.code}
+                type="button"
+                onClick={() => setSector(s.code)}
+                aria-pressed={active}
+                className={[
+                  'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+                  active
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
                     : 'border-input bg-background text-muted-foreground hover:bg-muted',
                 ].join(' ')}
               >

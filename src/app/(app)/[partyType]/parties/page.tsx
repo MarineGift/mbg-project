@@ -134,6 +134,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Investment-stage (round) filter for the investor list: ?stage=<code>
   // (e.g. 'series_a'), matched against the investor's investor_stage_focus set.
   const stageFilter = (((sp as any).stage ?? '') as string).trim();
+  // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
+  // matched against the investor's investor_sector_focus set.
+  const sectorFilter = (((sp as any).sector ?? '') as string).trim();
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
@@ -230,6 +233,42 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     }
     for (const k of Object.keys(investorStageAll)) investorStageAll[k]!.sort((a, b) => a.sort - b.sort);
     stageFacets = [...facet.entries()]
+      .map(([code, v]) => ({ code, label: v.label, count: v.parties.size, sort: v.sort }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ code, label, count }) => ({ code, label, count }));
+  }
+  // Investor SECTOR FOCUS (what they invest in): party -> sectors, via
+  // parties -> investor_profile -> investor_sector_focus -> sectors.
+  // Powers the Sector filter chips so you can pull e.g. every advanced-materials
+  // investor fast. Controlled vocabulary (app.sectors), mirrors the stage plumbing.
+  const investorSectorAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
+  let sectorFacets: { code: string; label: string; count: number }[] = [];
+  if (isInvestor) {
+    const [{ data: profRows2 }, { data: sectorRows }, { data: secFocusRows }] = await Promise.all([
+      supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
+      supabase.schema('app').from('sectors' as never).select('id, code, label_en, sort_order'),
+      supabase.schema('app').from('investor_sector_focus' as never).select('investor_profile_id, sector_id'),
+    ]);
+    const profileToParty2 = new Map<string, string>();
+    for (const r of ((profRows2 ?? []) as any[])) if (r.party_id) profileToParty2.set(r.id, r.party_id);
+    const sectorById = new Map<number, { code: string; label: string; sort: number }>();
+    for (const r of ((sectorRows ?? []) as any[])) {
+      sectorById.set(r.id, { code: r.code, label: r.label_en ?? r.code, sort: r.sort_order ?? 9999 });
+    }
+    const sFacet = new Map<string, { label: string; sort: number; parties: Set<string> }>();
+    for (const r of ((secFocusRows ?? []) as any[])) {
+      const pid = profileToParty2.get(r.investor_profile_id);
+      const sc = sectorById.get(r.sector_id);
+      if (!pid || !sc) continue;
+      const arr = investorSectorAll[pid] ?? [];
+      if (!arr.some((s) => s.code === sc.code)) arr.push({ code: sc.code, label: sc.label, sort: sc.sort });
+      investorSectorAll[pid] = arr;
+      const f = sFacet.get(sc.code) ?? { label: sc.label, sort: sc.sort, parties: new Set<string>() };
+      f.parties.add(pid);
+      sFacet.set(sc.code, f);
+    }
+    for (const k of Object.keys(investorSectorAll)) investorSectorAll[k]!.sort((a, b) => a.sort - b.sort);
+    sectorFacets = [...sFacet.entries()]
       .map(([code, v]) => ({ code, label: v.label, count: v.parties.size, sort: v.sort }))
       .sort((a, b) => a.sort - b.sort)
       .map(({ code, label, count }) => ({ code, label, count }));
@@ -341,7 +380,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - score sort   (score lives in app.account_scores, not app.parties)
   //   - investor type sort
   //   - grade filter (A/B/C, derived from the account score)
-  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '';
+  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '';
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -360,6 +399,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (stageFilter) {
       working = working.filter((p) => (investorStageAll[p.id] ?? []).some((s) => s.code === stageFilter));
     }
+    if (sectorFilter) {
+      working = working.filter((p) => (investorSectorAll[p.id] ?? []).some((s) => s.code === sectorFilter));
+    }
 
     if (sortByScore) {
       working = [...working].sort((a, b) =>
@@ -377,7 +419,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       working = [...working].sort((a, b) => a.party_name.localeCompare(b.party_name));
     }
 
-    totalCount = (gradeFilter || stageFilter) ? working.length : (count ?? 0);
+    totalCount = (gradeFilter || stageFilter || sectorFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
@@ -427,6 +469,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (typeFilter) qs.set('type', typeFilter);
     if (gradeFilter) qs.set('grade', gradeFilter);
     if (stageFilter) qs.set('stage', stageFilter);
+    if (sectorFilter) qs.set('sector', sectorFilter);
     if (value && value !== 'name_asc') qs.set('sort', value);
     const s = qs.toString();
     return `/${module}/parties${s ? `?${s}` : ''}`;
@@ -463,10 +506,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </span>
             )}
             {gradeFilter && (
-              <span className="text-xs text-muted-foreground/70">鸚?Tier {gradeFilter} only</span>
+              <span className="text-xs text-muted-foreground/70">勇?Tier {gradeFilter} only</span>
             )}
             {sortByScore && (
-              <span className="text-xs text-muted-foreground/70">鸚?Sorted by score</span>
+              <span className="text-xs text-muted-foreground/70">勇?Sorted by score</span>
             )}
           </p>
           <PartiesFilterBar
@@ -481,6 +524,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             typeLabel={isPaperMill ? 'Paper' : isFiller ? 'Mineral' : undefined}
             stages={isInvestor ? stageFacets : undefined}
             stage={stageFilter}
+            sectors={isInvestor ? sectorFacets : undefined}
+            sector={sectorFilter}
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
