@@ -68,7 +68,7 @@ interface PartyRow {
   id: string; party_name: string; tier: PartyTier | null; status: PartyStatus;
   party_level: PartyLevel | null; parent_party_id: string | null;
   country_code: string | null; city: string | null;
-  industry_tags: string[] | null; website: string | null; created_at: string;
+  interest_tags: string[] | null; website: string | null; created_at: string;
 }
 
 interface PageProps {
@@ -80,7 +80,7 @@ interface PageProps {
 }
 
 /** Fetch supply link names for a set of party IDs.
- *  Returns map: partyId → linked party names[] */
+ *  Returns map: partyId ??linked party names[] */
 async function fetchSupplyLinks(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   partyIds: string[],
@@ -97,7 +97,7 @@ async function fetchSupplyLinks(
       .select(`${selfCol}, linked:${linkedCol}(party_name)`)
       .in(selfCol as never, partyIds);
 
-    if (error) return {}; // table may not exist yet → silent fallback
+    if (error) return {}; // table may not exist yet ??silent fallback
 
     const map: Record<string, string[]> = {};
     for (const row of (data ?? []) as any[]) {
@@ -313,7 +313,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, party_name, status, country_code, city, website, created_at',
+      'id, party_name, status, country_code, city, website, interest_tags, created_at',
       { count: 'exact' },
     )
     .eq('party_type_id' as never, partyTypeId)
@@ -454,14 +454,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             {showLinks && unlinkedCount > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-600 font-medium text-xs">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                {unlinkedCount} unlinked — sales targets
+                {unlinkedCount} unlinked ??sales targets
               </span>
             )}
             {gradeFilter && (
-              <span className="text-xs text-muted-foreground/70">· Tier {gradeFilter} only</span>
+              <span className="text-xs text-muted-foreground/70">쨌 Tier {gradeFilter} only</span>
             )}
             {sortByScore && (
-              <span className="text-xs text-muted-foreground/70">· Sorted by score</span>
+              <span className="text-xs text-muted-foreground/70">쨌 Sorted by score</span>
             )}
           </p>
           <PartiesFilterBar
@@ -552,7 +552,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               <tbody>
                 {parties.map((p) => {
                   const location  = p.city ?? '';
-                  const tags      = p.industry_tags ?? [];
+                  const tags      = p.interest_tags ?? [];
                   const level     = p.party_level as PartyLevel | null;
                   const acc       = scores[p.id];
                   const linked    = supplyLinks[p.id] ?? [];
