@@ -18,7 +18,7 @@
  *                 close_date -> expected_close_date + a pipeline_stages
  *                 JOIN to get the stage name. The openEngagements count
  *                 filter's status enum values were matched to the actual schema.
- *   - 2026-05-14: Phase 6 — industry_paper_company_id /
+ *   - 2026-05-14: Phase 6 ??industry_paper_company_id /
  *                 Added the industry_filler_supplier_id FK column to the SELECT + mapping.
  */
 
@@ -55,7 +55,7 @@ interface RawPartyRow {
   source: string | null;
   created_at: string;
   updated_at: string;
-  // ▼ Phase 6 (2026-05-14)
+  // ??Phase 6 (2026-05-14)
 }
 
 const TIMELINE_LIMIT = 30;
@@ -164,7 +164,7 @@ export async function fetchPartyDetail(
     supabase
       .schema('app')
       .from('contacts' as never)
-      .select('id, full_name, email, title_text, phone_e164, is_primary', {
+      .select('id, full_name, email, title_text, phone_e164, is_primary, notes', {
         count: 'exact',
       })
       .eq('party_id', partyId)
@@ -267,7 +267,7 @@ export async function fetchPartyDetail(
     source: p.source,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
-    // ▼ Phase 6 (2026-05-14)
+    // ??Phase 6 (2026-05-14)
     industryPaperCompanyId: null,
     industryFillerSupplierId: null,
     counts: {
@@ -328,6 +328,7 @@ function mapContact(raw: unknown): PartyContact {
     email: (r.email as string | null) ?? null,
     jobTitle: (r.title_text as string | null) ?? null,
     phone: (r.phone_e164 as string | null) ?? null,
+    notes: (r.notes as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
   };
 }
