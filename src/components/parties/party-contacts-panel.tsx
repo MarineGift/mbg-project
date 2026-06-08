@@ -143,7 +143,7 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                         </a>
                       )}
                       {selected.phone && (
-                        
+                        <a
                           href={`tel:${selected.phone}`}
                           className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
                         >

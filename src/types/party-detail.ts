@@ -8,7 +8,7 @@
  *   - 2026-05-11: aligned with the DB schema - removed the single industry/tags field,
  *                 split into industryTags/interestTags arrays.
  *                 (actual DB columns: industry_tags ARRAY, interest_tags ARRAY)
- *   - 2026-05-14: Phase 6 — industryPaperCompanyId /
+ *   - 2026-05-14: Phase 6 ??industryPaperCompanyId /
  *                 added the industryFillerSupplierId FK field.
  */
 
@@ -43,7 +43,7 @@ export interface PartyDetail {
   createdAt: string;
   updatedAt: string;
 
-  /** ▼ Phase 6 - FK linking to the industry master DB */
+  /** ??Phase 6 - FK linking to the industry master DB */
   industryPaperCompanyId: number | null;
   industryFillerSupplierId: number | null;
 
@@ -92,6 +92,7 @@ export interface PartyContact {
   email: string | null;
   jobTitle: string | null;
   phone: string | null;
+  notes: string | null;
   isPrimary: boolean;
 }
 
