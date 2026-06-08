@@ -149,6 +149,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     country_desc:  { col: 'country_code', asc: false },
     location_asc:  { col: 'city',         asc: true  },
     location_desc: { col: 'city',         asc: false },
+    state_asc:     { col: 'region',       asc: true  },
+    state_desc:    { col: 'region',       asc: false },
   };
   const dbSort = DB_SORT[sortParam] ?? { col: 'party_name', asc: true };
   const page        = Math.max(1, Number(sp.page ?? 1));
@@ -442,6 +444,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const hScore    = sortHeader('score', 'score_asc');       // high first, then low
   const hCountry  = sortHeader('country_asc', 'country_desc');
   const hLocation = sortHeader('location_asc', 'location_desc');
+  const hState    = sortHeader('state_asc', 'state_desc');
   const hType     = sortHeader('type_asc', 'type_desc');
 
   return (
@@ -460,10 +463,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </span>
             )}
             {gradeFilter && (
-              <span className="text-xs text-muted-foreground/70">夷?Tier {gradeFilter} only</span>
+              <span className="text-xs text-muted-foreground/70">鸚?Tier {gradeFilter} only</span>
             )}
             {sortByScore && (
-              <span className="text-xs text-muted-foreground/70">夷?Sorted by score</span>
+              <span className="text-xs text-muted-foreground/70">鸚?Sorted by score</span>
             )}
           </p>
           <PartiesFilterBar
@@ -541,7 +544,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                     </Link>
                   </th>
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">State</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
+                        State <span className={`text-[10px] ${hState.active ? '' : 'opacity-40'}`}>{hState.arrow}</span>
+                      </Link>
+                    </th>
                   )}
                   <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                     <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
