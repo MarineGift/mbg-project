@@ -21,6 +21,22 @@ const GRADE_OPTIONS: { value: string; label: string }[] = [
   { value: 'C', label: 'Tier C' },
 ];
 
+// Sector chips to surface in the investor directory filter. We intentionally
+// show only the sectors aligned with the mbg thesis (natural materials /
+// CaCO3 filler / eco / biomanufacturing) and hide the rest to reduce noise.
+// The underlying data (app.sectors) is untouched; revisit this list when
+// priorities change. Keyed by display label (app.sectors.label_en) so it
+// matches the rendered chip text exactly.
+const VISIBLE_SECTOR_LABELS = new Set([
+  'Advanced Materials',
+  'Industrial & Manufacturing',
+  'Deep Tech',
+  'Climate & Sustainability',
+  'Life Science',
+  'Consumer & CPG',
+  'Healthcare & Bio',
+]);
+
 /** Investor type facet (category + count) for the type-filter chips. */
 export type InvestorFacet = { category: string; count: number; label?: string; parent?: string | null };
 
@@ -316,7 +332,7 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
           >
             All <span className="opacity-60">{totalSectors}</span>
           </button>
-          {sectors.map((s) => {
+          {sectors.filter((s) => VISIBLE_SECTOR_LABELS.has(s.label)).map((s) => {
             const active = sector === s.code;
             return (
               <button
