@@ -415,8 +415,17 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         return (typeAsc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
       });
     } else {
-      // grade-filter-only: keep a stable name ordering
-      working = [...working].sort((a, b) => a.party_name.localeCompare(b.party_name));
+      // Honor the column sort (name/country/location/state) in memory too, so
+      // Location/State/Country sorting still works while a sector/stage/grade
+      // filter has forced the in-memory path. dbSort.col is one of:
+      //   party_name | country_code | city | region  (all present on PartyRow)
+      const col = dbSort.col as 'party_name' | 'country_code' | 'city' | 'region';
+      working = [...working].sort((a, b) => {
+        const av = ((a[col] ?? '') as string).toLowerCase();
+        const bv = ((b[col] ?? '') as string).toLowerCase();
+        const cmp = av.localeCompare(bv);
+        return (dbSort.asc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
+      });
     }
 
     totalCount = (gradeFilter || stageFilter || sectorFilter) ? working.length : (count ?? 0);
@@ -506,10 +515,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </span>
             )}
             {gradeFilter && (
-              <span className="text-xs text-muted-foreground/70">勇?Tier {gradeFilter} only</span>
+              <span className="text-xs text-muted-foreground/70">??Tier {gradeFilter} only</span>
             )}
             {sortByScore && (
-              <span className="text-xs text-muted-foreground/70">勇?Sorted by score</span>
+              <span className="text-xs text-muted-foreground/70">??Sorted by score</span>
             )}
           </p>
           <PartiesFilterBar
