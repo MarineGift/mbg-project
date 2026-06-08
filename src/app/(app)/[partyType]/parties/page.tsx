@@ -64,10 +64,12 @@ const PARTY_LEVEL_COLORS: Record<PartyLevel, string> = {
   plant:          'bg-teal-100 text-teal-700',
 };
 
+const US_STATES: Record<string, string> = { AL:'Alabama', AK:'Alaska', AZ:'Arizona', AR:'Arkansas', CA:'California', CO:'Colorado', CT:'Connecticut', DE:'Delaware', FL:'Florida', GA:'Georgia', HI:'Hawaii', ID:'Idaho', IL:'Illinois', IN:'Indiana', IA:'Iowa', KS:'Kansas', KY:'Kentucky', LA:'Louisiana', ME:'Maine', MD:'Maryland', MA:'Massachusetts', MI:'Michigan', MN:'Minnesota', MS:'Mississippi', MO:'Missouri', MT:'Montana', NE:'Nebraska', NV:'Nevada', NH:'New Hampshire', NJ:'New Jersey', NM:'New Mexico', NY:'New York', NC:'North Carolina', ND:'North Dakota', OH:'Ohio', OK:'Oklahoma', OR:'Oregon', PA:'Pennsylvania', RI:'Rhode Island', SC:'South Carolina', SD:'South Dakota', TN:'Tennessee', TX:'Texas', UT:'Utah', VT:'Vermont', VA:'Virginia', WA:'Washington', WV:'West Virginia', WI:'Wisconsin', WY:'Wyoming', DC:'District of Columbia', BC:'British Columbia', ON:'Ontario', QC:'Quebec' };
+
 interface PartyRow {
   id: string; party_name: string; tier: PartyTier | null; status: PartyStatus;
   party_level: PartyLevel | null; parent_party_id: string | null;
-  country_code: string | null; city: string | null;
+  country_code: string | null; city: string | null; region: string | null;
   interest_tags: string[] | null; website: string | null; created_at: string;
 }
 
@@ -313,7 +315,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, party_name, status, country_code, city, website, interest_tags, created_at',
+      'id, party_name, status, country_code, city, region, website, interest_tags, created_at',
       { count: 'exact' },
     )
     .eq('party_type_id' as never, partyTypeId)
@@ -458,10 +460,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </span>
             )}
             {gradeFilter && (
-              <span className="text-xs text-muted-foreground/70">쨌 Tier {gradeFilter} only</span>
+              <span className="text-xs text-muted-foreground/70">夷?Tier {gradeFilter} only</span>
             )}
             {sortByScore && (
-              <span className="text-xs text-muted-foreground/70">쨌 Sorted by score</span>
+              <span className="text-xs text-muted-foreground/70">夷?Sorted by score</span>
             )}
           </p>
           <PartiesFilterBar
@@ -523,16 +525,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   {!showLinks && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
-                    </Link>
-                  </th>
-                  <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
-                    <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
-                      Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
-                    </Link>
-                  </th>
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">
                       <Link href={hType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hType.active ? 'text-foreground' : ''}`}>
@@ -540,7 +532,25 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">Stage</th>
+                  )}
+                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
+                    </Link>
+                  </th>
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">State</th>
+                  )}
+                  <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
+                    <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
+                      Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
+                    </Link>
+                  </th>
+                  {!isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
+                  )}
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell w-16">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
                       Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
@@ -610,49 +620,60 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         </td>
                       )}
+                      {isInvestor && (
+                        <td className="px-4 py-3">
+                          {investorCatAll[p.id]?.type_name ? (
+                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                              {investorCatAll[p.id]!.type_name}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      {isInvestor && (
+                        <td className="px-4 py-3">
+                          {(investorStageAll[p.id] ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {(investorStageAll[p.id] ?? []).map((s) => (
+                                <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                  {s.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
                         {location || '-'}
                       </td>
+                      {isInvestor && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                          {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
+                        </td>
+                      )}
                       <td className="px-3 py-3 text-center">
                         <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                       </td>
-                      {isInvestor && (
+                      {!isInvestor && (
                         <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            {investorCatAll[p.id]?.type_name ? (
-                              <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                {investorCatAll[p.id]!.type_name}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {level && LevelIcon && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${PARTY_LEVEL_COLORS[level]}`}>
+                                <LevelIcon className="h-3 w-3" />
+                                {PARTY_LEVEL_LABELS[level]}
                               </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
                             )}
-                            {(investorStageAll[p.id] ?? []).length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {(investorStageAll[p.id] ?? []).map((s) => (
-                                  <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                                    {s.label}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                            {p.tier ? (
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${TIER_COLORS[p.tier]}`}>
+                                {TIER_LABELS[p.tier]}
+                              </span>
+                            ) : (!level && <span className="text-sm text-muted-foreground">-</span>)}
                           </div>
                         </td>
                       )}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {level && LevelIcon && (
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${PARTY_LEVEL_COLORS[level]}`}>
-                              <LevelIcon className="h-3 w-3" />
-                              {PARTY_LEVEL_LABELS[level]}
-                            </span>
-                          )}
-                          {p.tier ? (
-                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${TIER_COLORS[p.tier]}`}>
-                              {TIER_LABELS[p.tier]}
-                            </span>
-                          ) : (!level && <span className="text-sm text-muted-foreground">-</span>)}
-                        </div>
-                      </td>
                       <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                         {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
                       </td>
