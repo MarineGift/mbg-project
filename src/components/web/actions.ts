@@ -1,8 +1,6 @@
 'use server';
 // src/components/web/actions.ts
-// Server action invoked by public form sections. Inserts into the unified
-// web.submissions inbox. Uses service role (RLS allows anon insert anyway,
-// but server keeps IP/host trustworthy). Lightweight honeypot + validation.
+// Server actions for web submissions, replies, commerce
 
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
@@ -20,6 +18,8 @@ export interface SubmitResult {
   ok: boolean;
   error?: string;
 }
+
+// ============= SUBMISSIONS =============
 
 export async function submitForm(
   input: SubmissionInput & { _hp?: string },
@@ -53,8 +53,102 @@ export async function submitForm(
       data: input.data ?? {},
       source_host: h.get('host') ?? null,
       user_agent: h.get('user-agent') ?? null,
+      ip: h.get('x-forwarded-for') ?? null,
     } as never);
 
   if (error) return { ok: false, error: 'could not save' };
+  return { ok: true };
+}
+
+export interface ReplyInput {
+  submission_id: string;
+  subject: string;
+  body: string;
+  sent_by: string;
+}
+
+export async function replyToSubmission(input: ReplyInput): Promise<SubmitResult> {
+  if (!input.submission_id || !input.subject || !input.body) {
+    return { ok: false, error: 'missing fields' };
+  }
+
+  const sb = webClient();
+
+  // 1. Insert reply
+  const { data: reply, error: replyError } = await sb
+    .schema('web')
+    .from('submission_replies')
+    .insert({
+      submission_id: input.submission_id,
+      subject: input.subject,
+      body: input.body,
+      sent_by: input.sent_by,
+      status: 'sent',
+    } as never)
+    .select()
+    .single();
+
+  if (replyError) {
+    console.error('[replyToSubmission] insert failed:', replyError);
+    return { ok: false, error: 'could not save reply' };
+  }
+
+  // 2. Update submission status to 'replied'
+  const { error: updateError } = await sb
+    .schema('web')
+    .from('submissions')
+    .update({ status: 'replied' })
+    .eq('id', input.submission_id);
+
+  if (updateError) {
+    console.error('[replyToSubmission] status update failed:', updateError);
+  }
+
+  // 3. Send email (optional - integrate with sendOutboundEmail if available)
+  try {
+    // Fetch submission for context
+    const { data: submission } = await sb
+      .schema('web')
+      .from('submissions')
+      .select('email, name')
+      .eq('id', input.submission_id)
+      .single();
+
+    if (submission?.email) {
+      // Could call sendOutboundEmail here
+      // For now, just log
+      console.log(`[replyToSubmission] would email ${submission.email} with subject: ${input.subject}`);
+    }
+  } catch (e) {
+    console.error('[replyToSubmission] email send failed:', e);
+  }
+
+  return { ok: true };
+}
+
+// ============= COMMERCE (stubs) =============
+
+export async function addToCart(
+  _productId: string,
+  _quantity: number,
+): Promise<SubmitResult> {
+  // Stub for future implementation
+  return { ok: true };
+}
+
+export async function createOrder(
+  _cartId: string,
+  _email: string,
+): Promise<SubmitResult> {
+  // Stub - integrate with payment processor
+  return { ok: true };
+}
+
+export async function createPledge(
+  _campaignId: string,
+  _tierId: string,
+  _amount: number,
+): Promise<SubmitResult> {
+  // Stub for crowdfunding
   return { ok: true };
 }

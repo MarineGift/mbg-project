@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 
 export const revalidate = 0
@@ -33,28 +32,40 @@ const statusLabel: Record<string, string> = {
   spam: '스팸',
 }
 
+function webClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  )
+}
+
 export default async function WebInboxPage({
   searchParams,
 }: {
   searchParams: { status?: string }
 }) {
-  const supabase = createServerComponentClient({ cookies })
   const status = searchParams.status || 'new'
+  const sb = webClient()
 
-  const { data: submissions } = await supabase
-    .schema('web')
-    .from('submissions')
-    .select('*')
-    .eq('status', status === 'all' ? undefined : status)
+  const query = sb.schema('web').from('submissions').select('*')
+  
+  if (status !== 'all') {
+    query.eq('status', status)
+  }
+
+  const { data: submissionsData } = await query
     .order('created_at', { ascending: false })
     .limit(50)
 
-  // count by status
+  const submissions = submissionsData ?? []
+
+  // Count by status
   const countByStatus = {
-    new: submissions?.filter((s: Submission) => s.status === 'new').length || 0,
-    read: submissions?.filter((s: Submission) => s.status === 'read').length || 0,
-    replied: submissions?.filter((s: Submission) => s.status === 'replied').length || 0,
-    all: submissions?.length || 0,
+    new: submissions.filter((s: Submission) => s.status === 'new').length,
+    read: submissions.filter((s: Submission) => s.status === 'read').length,
+    replied: submissions.filter((s: Submission) => s.status === 'replied').length,
+    all: submissions.length,
   }
 
   return (
@@ -87,7 +98,7 @@ export default async function WebInboxPage({
         </div>
 
         {/* Submissions List */}
-        {submissions && submissions.length > 0 ? (
+        {submissions.length > 0 ? (
           <div className="space-y-3">
             {submissions.map((sub: Submission) => {
               const colors = statusColors[sub.status]
@@ -123,7 +134,9 @@ export default async function WebInboxPage({
                     {/* Status Badge */}
                     <div className="flex flex-col items-end gap-2">
                       <span
-                        className={`inline-block px-2.5 py-1 rounded text-xs font-medium ${colors.bg} ${colors.text}`}
+                        className={`inline-block px-2.5 py-1 rounded text-xs font-medium ${
+                          colors?.bg || 'bg-gray-100'
+                        } ${colors?.text || 'text-gray-800'}`}
                       >
                         {statusLabel[sub.status]}
                       </span>
