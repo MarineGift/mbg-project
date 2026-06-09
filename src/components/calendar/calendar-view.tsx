@@ -21,6 +21,13 @@ interface Props {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MAX_CHIPS_PER_DAY = 3
 
+// CRM-internal item types that are hidden by default (toggle to show)
+const CRM_TYPES: ReadonlyArray<CalendarItem['type']> = ['task', 'communication']
+
+function isCrmItem(item: CalendarItem): boolean {
+  return CRM_TYPES.includes(item.type)
+}
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -262,6 +269,18 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
 
   const [view,  setView]  = useState<ViewMode>('month')
   const [pivot, setPivot] = useState(startOfDay(new Date()))   // current month/week anchor
+  const [showCrm, setShowCrm] = useState(false)                // tasks + communications hidden by default
+
+  // ── Filtered items (hide CRM items unless toggled) ──
+  const visibleItems = useMemo(
+    () => (showCrm ? items : items.filter(i => !isCrmItem(i))),
+    [items, showCrm],
+  )
+
+  const crmCount = useMemo(
+    () => items.filter(isCrmItem).length,
+    [items],
+  )
 
   // ── Navigation ──────────────────────────
   function navigate(dir: 1 | -1) {
@@ -323,6 +342,20 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Tasks / Communications toggle */}
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-border accent-blue-600"
+              checked={showCrm}
+              onChange={e => setShowCrm(e.target.checked)}
+            />
+            Tasks &amp; logs
+            {crmCount > 0 && (
+              <span className="text-muted-foreground/70">({crmCount})</span>
+            )}
+          </label>
+
           {/* Sync */}
           <Button
             variant="outline" size="sm"
@@ -369,7 +402,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
         <MonthGrid
           year={pivot.getFullYear()}
           month={pivot.getMonth()}
-          items={items}
+          items={visibleItems}
           today={today}
           onDayClick={d => onCreateEvent?.(d)}
           onItemClick={item => onItemClick?.(item)}
@@ -377,7 +410,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
       ) : (
         <WeekGrid
           weekStart={weekStart}
-          items={items}
+          items={visibleItems}
           today={today}
           onSlotClick={d => onCreateEvent?.(d)}
           onItemClick={item => onItemClick?.(item)}
