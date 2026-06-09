@@ -1,7 +1,6 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { ReactNode } from 'react'
 
 export const revalidate = 0
 
@@ -50,16 +49,11 @@ export default async function WebInboxPage({
     .order('created_at', { ascending: false })
     .limit(50)
 
-  const { data: counts } = await supabase
-    .schema('web')
-    .from('submissions')
-    .select('status', { count: 'exact', head: true })
-
-  // count by status (simple client-side for now)
+  // count by status
   const countByStatus = {
-    new: submissions?.filter(s => s.status === 'new').length || 0,
-    read: submissions?.filter(s => s.status === 'read').length || 0,
-    replied: submissions?.filter(s => s.status === 'replied').length || 0,
+    new: submissions?.filter((s: Submission) => s.status === 'new').length || 0,
+    read: submissions?.filter((s: Submission) => s.status === 'read').length || 0,
+    replied: submissions?.filter((s: Submission) => s.status === 'replied').length || 0,
     all: submissions?.length || 0,
   }
 
@@ -76,7 +70,7 @@ export default async function WebInboxPage({
 
         {/* Filter Tabs */}
         <div className="mb-6 flex gap-2 border-b border-slate-200">
-          {['new', 'read', 'replied', 'all'].map(tab => (
+          {(['new', 'read', 'replied', 'all'] as const).map(tab => (
             <Link
               key={tab}
               href={`/admin/web-inbox?status=${tab}`}
@@ -87,7 +81,7 @@ export default async function WebInboxPage({
               }`}
             >
               {tab === 'all' ? '전체' : statusLabel[tab]}
-              {' '}({countByStatus[tab as keyof typeof countByStatus]})
+              {' '}({countByStatus[tab]})
             </Link>
           ))}
         </div>
@@ -95,49 +89,50 @@ export default async function WebInboxPage({
         {/* Submissions List */}
         {submissions && submissions.length > 0 ? (
           <div className="space-y-3">
-            {submissions.map((sub: Submission) => (
-              <Link
-                key={sub.id}
-                href={`/admin/web-inbox/${sub.id}`}
-                className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-teal-300 hover:shadow-md transition"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  {/* Main Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      {sub.status === 'new' && (
-                        <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                      )}
-                      <h3 className="font-semibold text-slate-900 truncate">
-                        {sub.name} {sub.company ? `(${sub.company})` : ''}
-                      </h3>
+            {submissions.map((sub: Submission) => {
+              const colors = statusColors[sub.status]
+              return (
+                <Link
+                  key={sub.id}
+                  href={`/admin/web-inbox/${sub.id}`}
+                  className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-teal-300 hover:shadow-md transition"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Main Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        {sub.status === 'new' && (
+                          <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                        )}
+                        <h3 className="font-semibold text-slate-900 truncate">
+                          {sub.name} {sub.company ? `(${sub.company})` : ''}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-slate-600 line-clamp-2">
+                        {sub.message}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span>{sub.email}</span>
+                        {sub.interest && <span>•</span>}
+                        {sub.interest && <span>{sub.interest}</span>}
+                        <span>•</span>
+                        <span>{new Date(sub.created_at).toLocaleDateString('ko-KR')}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-slate-600 line-clamp-2">
-                      {sub.message}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                      <span>{sub.email}</span>
-                      {sub.interest && <span>•</span>}
-                      {sub.interest && <span>{sub.interest}</span>}
-                      <span>•</span>
-                      <span>{new Date(sub.created_at).toLocaleDateString('ko-KR')}</span>
-                    </div>
-                  </div>
 
-                  {/* Status Badge */}
-                  <div className="flex flex-col items-end gap-2">
-                    <span
-                      className={`inline-block px-2.5 py-1 rounded text-xs font-medium ${
-                        statusColors[sub.status].bg
-                      } ${statusColors[sub.status].text}`}
-                    >
-                      {statusLabel[sub.status]}
-                    </span>
-                    <span className="text-xs text-slate-400">{sub.form_type}</span>
+                    {/* Status Badge */}
+                    <div className="flex flex-col items-end gap-2">
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded text-xs font-medium ${colors.bg} ${colors.text}`}
+                      >
+                        {statusLabel[sub.status]}
+                      </span>
+                      <span className="text-xs text-slate-400">{sub.form_type}</span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            })}
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
