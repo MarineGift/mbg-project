@@ -72,6 +72,7 @@ export async function getCalendarConnections(): Promise<ConnectionSummary[]> {
     )
     .eq('organization_id', orgId)
     .eq('user_id', user.id)
+    .eq('is_active', true)            // hide soft-disconnected connections
     .order('created_at')
 
   if (error) throw error
