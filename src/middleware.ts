@@ -30,7 +30,7 @@ export function middleware(req: NextRequest) {
   if (isCrmHost(host)) {
     const slug = req.nextUrl.searchParams.get('site') || 'marinebiogroup';
     const url = req.nextUrl.clone();
-    url.pathname = /site$((pathname === '/' ? '' : pathname));
+    url.pathname = /site${ pathname === '/' ? '' : pathname };
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('x-mbg-site', slug);
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
@@ -38,7 +38,7 @@ export function middleware(req: NextRequest) {
 
   // public host -> site renderer
   const url = req.nextUrl.clone();
-  url.pathname = /site$((pathname === '/' ? '' : pathname));
+  url.pathname = /site${ pathname === '/' ? '' : pathname };
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-mbg-site', host.split(':')[0]);
   return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
