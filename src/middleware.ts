@@ -8,7 +8,6 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const host = req.headers.get('host') ?? '';
 
-  // Framework paths
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -18,7 +17,6 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // /admin -> CRM
   if (pathname.startsWith('/admin')) {
     const url = req.nextUrl.clone();
     const requestHeaders = new Headers(req.headers);
@@ -26,21 +24,20 @@ export function middleware(req: NextRequest) {
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
-  // localhost -> marinebiogroup site
   if (isCrmHost(host)) {
     const slug = req.nextUrl.searchParams.get('site') || 'marinebiogroup';
     const url = req.nextUrl.clone();
-    url.pathname = /site${ pathname === '/' ? '' : pathname };
+    url.pathname = `/site` + (pathname === '/' ? '' : pathname);
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('x-mbg-site', slug);
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
-  // public host -> site renderer
   const url = req.nextUrl.clone();
-  url.pathname = /site${ pathname === '/' ? '' : pathname };
+  url.pathname = `/site` + (pathname === '/' ? '' : pathname);
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.set('x-mbg-site', host.split(':')[0]);
+  const siteName = (host || '').split(':')[0] || 'marinebiogroup';
+  requestHeaders.set('x-mbg-site', siteName);
   return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
 }
 

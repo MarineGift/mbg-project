@@ -1,62 +1,53 @@
-import { createClient } from '@supabase/supabase-js'
-import { Storefront } from '@/components/web/sections/Storefront'
-import type { Product } from '@/lib/web/types'
+import { resolveSiteBySlug, loadPage } from '@/lib/web/tenant';
+import { SectionRenderer } from '@/components/web/SectionRenderer';
+import { SiteChrome } from '@/components/web/SiteChrome';
 
-function webClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  )
-}
+export const dynamic = 'force-dynamic';
 
 export default async function ShopPage() {
-  const sb = webClient()
-
-  // Get site
-  const { data: site } = await sb
-    .schema('web')
-    .from('sites')
-    .select('*')
-    .eq('slug', 'marinebiogroup')
-    .single()
-
+  // 1. Resolve site by slug
+  const site = await resolveSiteBySlug('marinebiogroup');
   if (!site) {
-    return <div className="p-8 text-center">Site not found</div>
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Site Not Found</h1>
+        </div>
+      </div>
+    );
   }
 
-  // Get products
-  const { data: products } = await sb
-    .schema('web')
-    .from('products')
-    .select('*')
-    .eq('site_id', site.id)
-    .eq('status', 'active')
-
-  // Get images for each product
-  const productList = (products || []) as Product[]
-  for (const product of productList) {
-    const { data: images } = await sb
-      .schema('web')
-      .from('product_images')
-      .select('*')
-      .eq('product_id', product.id)
-      .order('sort_order', { ascending: true })
-    product.images = images as any
-    product.image = images?.[0]?.url || null
+  // 2. Load shop page
+  const rendered = await loadPage(site, '/shop');
+  if (!rendered) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Shop Not Found</h1>
+          <a href="/" className="mt-4 inline-block text-blue-600">
+            Back Home
+          </a>
+        </div>
+      </div>
+    );
   }
 
-  const section = {
-    id: 'shop-storefront',
-    type: 'storefront',
-    config: { title: 'Our Products', show_categories: true },
-  }
+  const { sections, products = [] } = rendered;
 
   return (
-    <Storefront
-      section={section as any}
-      site={site as any}
-      products={productList}
-    />
-  )
+    <SiteChrome site={site}>
+      <div className="min-h-screen bg-gray-50">
+        {sections.map((section) => (
+          <SectionRenderer
+            key={section.id}
+            section={section}
+            site={site}
+            page={rendered.page}
+            collections={{}}
+            products={products}
+          />
+        ))}
+      </div>
+    </SiteChrome>
+  );
 }
