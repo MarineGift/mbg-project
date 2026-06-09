@@ -1,5 +1,5 @@
 // src/lib/calendar/microsoft-client.ts
-// Microsoft Graph API wrapper - OAuth2 + calendarView delta
+// Microsoft Graph API wrapper - OAuth2 + calendarView (full range)
 
 const MS_AUTH_BASE    = 'https://login.microsoftonline.com/common/oauth2/v2.0'
 const MS_GRAPH_BASE   = 'https://graph.microsoft.com/v1.0'
@@ -116,47 +116,54 @@ export async function getMicrosoftUserInfo(accessToken: string): Promise<Microso
 }
 
 // ─────────────────────────────────────────────
-// Events — calendarView delta
+// Events — calendarView (full range, no delta)
+//
+// We use the plain /me/calendarView endpoint instead of
+// /me/calendarView/delta. The delta endpoint silently returns only a
+// very narrow default window when the time range is supplied via query
+// string, which caused most Outlook events to be missed. Plain
+// calendarView accepts startDateTime / endDateTime as query params and
+// expands recurring events into instances. We always fetch the full
+// +/- 1 year window; the event volume is small enough that a full
+// fetch on every sync is fine.
 // ─────────────────────────────────────────────
 
 interface FetchMsEventsOptions {
   accessToken: string
-  deltaLink?:  string     // incremental sync
-  timeMin?:    string     // ISO (full sync)
-  timeMax?:    string     // ISO (full sync)
+  deltaLink?:  string     // kept for signature compatibility; unused now
+  timeMin?:    string     // ISO
+  timeMax?:    string     // ISO
 }
+
+const MS_EVENT_SELECT = [
+  'id','subject','bodyPreview','location','start','end',
+  'isAllDay','isCancelled','recurrence','seriesMasterId',
+  'organizer','attendees','onlineMeeting','onlineMeetingUrl',
+].join(',')
 
 export async function fetchMicrosoftEvents(
   opts: FetchMsEventsOptions
 ): Promise<MicrosoftEventListResponse> {
-  let url: string
+  const timeMin = opts.timeMin ?? new Date(
+    Date.now() - 365 * 24 * 60 * 60 * 1000
+  ).toISOString()
+  const timeMax = opts.timeMax ?? new Date(
+    Date.now() + 365 * 24 * 60 * 60 * 1000
+  ).toISOString()
 
-  if (opts.deltaLink) {
-    url = opts.deltaLink
-  } else {
-    const timeMin = opts.timeMin ?? new Date(
-      Date.now() - 365 * 24 * 60 * 60 * 1000
-    ).toISOString()
-    const timeMax = opts.timeMax ?? new Date(
-      Date.now() + 365 * 24 * 60 * 60 * 1000
-    ).toISOString()
-
-    const params = new URLSearchParams({
-      startDateTime: timeMin,
-      endDateTime:   timeMax,
-      $select:       [
-        'id','subject','bodyPreview','location','start','end',
-        'isAllDay','isCancelled','recurrence','seriesMasterId',
-        'organizer','attendees','onlineMeeting','onlineMeetingUrl',
-      ].join(','),
-    })
-    url = `${MS_GRAPH_BASE}/me/calendarView/delta?${params}`
-  }
+  const params = new URLSearchParams({
+    startDateTime: timeMin,
+    endDateTime:   timeMax,
+    $select:       MS_EVENT_SELECT,
+    $orderby:      'start/dateTime',
+    $top:          '999',
+  })
+  const url = `${MS_GRAPH_BASE}/me/calendarView?${params}`
 
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${opts.accessToken}`,
-      Prefer: 'odata.maxpagesize=999',
+      Prefer: 'outlook.timezone="UTC", odata.maxpagesize=999',
     },
   })
 
@@ -168,26 +175,41 @@ export async function fetchMicrosoftEvents(
   return res.json()
 }
 
+/** Follow an absolute @odata.nextLink page URL. */
+async function fetchMicrosoftPage(
+  accessToken: string,
+  pageUrl: string
+): Promise<MicrosoftEventListResponse> {
+  const res = await fetch(pageUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: 'outlook.timezone="UTC", odata.maxpagesize=999',
+    },
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Microsoft Graph API error ${res.status}: ${err}`)
+  }
+  return res.json()
+}
+
 /** collect all pages */
 export async function fetchAllMicrosoftEvents(
   opts: Omit<FetchMsEventsOptions, 'nextLink'>
 ): Promise<{ events: MicrosoftEvent[]; deltaLink: string }> {
   const allEvents: MicrosoftEvent[] = []
-  let finalDeltaLink = ''
-  let currentUrl: string | undefined
 
-  // First fetch
+  // First page (full range)
   let page = await fetchMicrosoftEvents(opts)
   allEvents.push(...(page.value ?? []))
 
+  // Follow nextLink pages (absolute URLs that already encode the range)
   while (page['@odata.nextLink']) {
-    page = await fetchMicrosoftEvents({
-      accessToken: opts.accessToken,
-      deltaLink:   page['@odata.nextLink'],
-    })
+    page = await fetchMicrosoftPage(opts.accessToken, page['@odata.nextLink'])
     allEvents.push(...(page.value ?? []))
   }
 
-  finalDeltaLink = page['@odata.deltaLink'] ?? ''
-  return { events: allEvents, deltaLink: finalDeltaLink }
+  // No delta token in this mode: return empty so the engine always
+  // performs a full fetch next time.
+  return { events: allEvents, deltaLink: '' }
 }
