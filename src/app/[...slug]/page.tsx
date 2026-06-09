@@ -11,25 +11,12 @@ export default async function ContentPage({ params }: { params: { slug: string[]
   const path = '/' + (params.slug?.join('/') || '');
   const rendered = await loadPage(site, path);
 
-  if (!rendered) {
-    return (
-      <SiteChrome site={site}>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold">Page not found</h1>
-            <a href="/" className="mt-4 inline-block text-blue-600">Back Home</a>
-          </div>
-        </div>
-      </SiteChrome>
-    );
-  }
-
-  const { sections } = rendered;
+  if (!rendered) return <div className="text-center p-8">Page not found</div>;
 
   return (
     <SiteChrome site={site}>
       <div>
-        {sections.map((section) => (
+        {rendered.sections.map((section) => (
           <SectionRenderer
             key={section.id}
             section={section}
