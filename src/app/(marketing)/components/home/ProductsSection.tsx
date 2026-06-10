@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 
 import { useState } from 'react';
@@ -282,8 +282,8 @@ export default function ProductsSection() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div>
                     <img
-                      src={filteredProducts[selectedProduct].image}
-                      alt={filteredProducts[selectedProduct].title}
+                      src={filteredProducts[selectedProduct]!.image}
+                      alt={filteredProducts[selectedProduct]!.title}
                       className="w-full h-80 object-cover object-top rounded-xl"
                     />
                   </div>
@@ -291,22 +291,22 @@ export default function ProductsSection() {
                   <div>
                     <div className="mb-4">
                       <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                        {filteredProducts[selectedProduct].category}
+                        {filteredProducts[selectedProduct]!.category}
                       </span>
                     </div>
                     
                     <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                      {filteredProducts[selectedProduct].title}
+                      {filteredProducts[selectedProduct]!.title}
                     </h2>
                     
                     <p className="text-gray-600 mb-6 leading-relaxed">
-                      {filteredProducts[selectedProduct].detailedInfo.overview}
+                      {filteredProducts[selectedProduct]!.detailedInfo.overview}
                     </p>
                     
                     <div className="mb-6">
                       <h3 className="text-xl font-semibold text-gray-900 mb-3">Key Benefits</h3>
                       <ul className="space-y-2">
-                        {filteredProducts[selectedProduct].detailedInfo.keyBenefits.map((benefit, index) => (
+                        {filteredProducts[selectedProduct]!.detailedInfo.keyBenefits.map((benefit, index) => (
                           <li key={index} className="flex items-start text-gray-700">
                             <i className="ri-check-line text-green-500 mr-2 mt-1"></i>
                             {benefit}
@@ -317,12 +317,12 @@ export default function ProductsSection() {
                     
                     <div className="mb-6">
                       <h3 className="text-xl font-semibold text-gray-900 mb-3">Key Ingredients</h3>
-                      <p className="text-gray-700">{filteredProducts[selectedProduct].detailedInfo.ingredients}</p>
+                      <p className="text-gray-700">{filteredProducts[selectedProduct]!.detailedInfo.ingredients}</p>
                     </div>
                     
                     <div className="mb-8">
                       <h3 className="text-xl font-semibold text-gray-900 mb-3">Usage Instructions</h3>
-                      <p className="text-gray-700">{filteredProducts[selectedProduct].detailedInfo.usage}</p>
+                      <p className="text-gray-700">{filteredProducts[selectedProduct]!.detailedInfo.usage}</p>
                     </div>
                     
                     <button 
@@ -341,4 +341,3 @@ export default function ProductsSection() {
     </section>
   );
 }
-

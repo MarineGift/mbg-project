@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 
 import { useState, useEffect } from 'react';
@@ -85,10 +85,10 @@ export default function HeroSection() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center text-white">
               <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
-                {videos[currentSlide].title}
+                {videos[currentSlide]!.title}
               </h1>
               <p className="text-xl md:text-2xl mb-8 text-blue-100 max-w-3xl mx-auto leading-relaxed">
-                {videos[currentSlide].description}
+                {videos[currentSlide]!.description}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button 
@@ -148,4 +148,3 @@ export default function HeroSection() {
     </section>
   );
 }
-
