@@ -58,9 +58,9 @@ export default function Header() {
             <button onClick={() => scrollToSection('contact')} className={`font-medium transition-colors whitespace-nowrap cursor-pointer ${isScrolled ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-blue-200'}`}>
               Contact
             </button>
-            <Link href="/urm/dashboard" className={`font-medium transition-colors whitespace-nowrap cursor-pointer ${isScrolled ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-blue-200'}`}>
+            <a href="https://urm.marinebiogroup.com" className={`font-medium transition-colors whitespace-nowrap cursor-pointer ${isScrolled ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-blue-200'}`}>
               CRM
-            </Link>
+            </a>
             <Link href="/videos" className={`font-medium transition-colors whitespace-nowrap cursor-pointer ${isScrolled ? 'text-gray-700 hover:text-blue-600' : 'text-white hover:text-blue-200'}`}>
               Videos
             </Link>
@@ -96,9 +96,9 @@ export default function Header() {
             <button onClick={() => scrollToSection('contact')} className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 cursor-pointer">
               Contact
             </button>
-            <Link href="/urm/dashboard" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 cursor-pointer">
+            <a href="https://urm.marinebiogroup.com" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 cursor-pointer">
               CRM
-            </Link>
+            </a>
             <Link href="/videos" className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 cursor-pointer">
               Videos
             </Link>
