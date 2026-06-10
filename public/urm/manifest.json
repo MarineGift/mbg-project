@@ -1,0 +1,37 @@
+{
+  "name": "URM - Unified Relationship Management",
+  "short_name": "URM",
+  "description": "Investor Relations & Supplier Intelligence CRM System",
+  "start_url": "/urm/dashboard",
+  "scope": "/urm",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#4285f4",
+  "icons": [
+    {
+      "src": "/icons/urm-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/urm-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/urm-192.svg",
+      "sizes": "192x192",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/icons/urm-512.svg",
+      "sizes": "512x512",
+      "form_factor": "wide"
+    }
+  ]
+}

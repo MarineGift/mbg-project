@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <style>
+      .mbg-bg { fill: #ffffff; }
+      .mbg-primary { fill: #1a73e8; }
+      .mbg-accent { fill: #34a853; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect class="mbg-bg" width="192" height="192"/>
+  
+  <!-- Rounded container -->
+  <rect class="mbg-primary" x="10" y="10" width="172" height="172" rx="40"/>
+  
+  <!-- Water wave pattern -->
+  <path class="mbg-accent" d="M 50 80 Q 60 70 70 80 T 90 80 T 110 80 T 130 80 L 130 120 Q 120 110 110 120 T 90 120 T 70 120 T 50 120 Z" opacity="0.8"/>
+  
+  <!-- Bio molecule circles -->
+  <circle class="mbg-accent" cx="70" cy="60" r="8" opacity="0.7"/>
+  <circle class="mbg-accent" cx="90" cy="50" r="6" opacity="0.7"/>
+  <circle class="mbg-accent" cx="110" cy="60" r="8" opacity="0.7"/>
+  
+  <!-- Connecting lines -->
+  <line x1="70" y1="60" x2="90" y2="50" stroke="#34a853" stroke-width="2" opacity="0.5"/>
+  <line x1="90" y1="50" x2="110" y2="60" stroke="#34a853" stroke-width="2" opacity="0.5"/>
+</svg>
