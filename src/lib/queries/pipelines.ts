@@ -2,25 +2,35 @@
  * lib/queries/pipelines.ts
  *
  * All read APIs for pipeline / stage / stage-history.
- * URM: the single source for pipeline_definitions / pipeline_stages / engagement_stage_history.
+ *
+ * Rewritten 2026-06-10 for the normalized schema (D9 cleanup):
+ *   - app.pipelines  (id, code, name, is_default, is_active, sort_order)
+ *   - app.stages     (pipeline_id FK -> pipelines.id, is_active soft delete,
+ *                     NO deleted_at, NO stage_type column)
+ *   - app.deal_stage_history (deal_id, from/to_stage_id, changed_at,
+ *                     changed_by, notes -- NOT moved_at/engagement_id)
+ *
+ * The old implementation queried app.pipeline_definitions /
+ * stages.pipeline_definition_id / deleted_at, none of which exist anymore;
+ * every function here silently returned empty results at runtime.
+ *
+ * Type-compat note: KanbanStage.pipelineDefinitionId is kept as the field
+ * name (mapped from stages.pipeline_id) and stageType is now DERIVED from
+ * is_won / is_lost flags, so no consumer-side type changes are needed.
  *
  * Responsibilities:
- *   - fetchPipelineForModule:    default pipeline per module (guaranteed to be 1 - after Stage 25 cleanup)
- *   - fetchStages:               all stages of a pipeline (sort_order)
- *   - fetchFirstStage:           the first stage of a pipeline (for createEngagement)
- *   - fetchStageHistory:         an engagement's stage-change history (includes stage name lookup)
- *   - fetchAllPipelinesForModule: for admin/select (both default + non-default)
+ *   - fetchPipelineByCode:        pipeline lookup by code (sidebar/kanban key)
+ *   - fetchStages:                all active stages of a pipeline (sort_order)
+ *   - fetchFirstStage:            the first stage of a pipeline (for createEngagement)
+ *   - fetchStageHistory:          a deal's stage-change history (with stage name lookup)
+ *   - fetchAllPipelines:          for admin/select (both default + non-default)
+ *   - fetchPipelineById:          single lookup by id
  *
- * Mutations are handled by actions/engagements.ts (moveEngagementStage / createEngagement) +
- *                actions/pipeline-stages.ts (stage CRUD).
- *
- * Stage 25 (2026-05-21): consolidated the inline pipeline/stage/history queries from
- *                        queries/engagements.ts and actions/engagements.ts into this file.
+ * Mutations are handled by actions/engagements.ts + actions/pipeline-stages.ts.
  */
 
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { PartyTypeCode } from '@/types/ai';
 import type {
   EngagementStageHistoryItem,
   KanbanStage,
@@ -36,8 +46,9 @@ export interface RawPipelineDef {
   name: string;
 }
 
-interface RawPipelineDefDetail {
+interface RawPipelineDetail {
   id: string;
+  code: string;
   name: string;
   is_default: boolean;
   is_active: boolean;
@@ -45,10 +56,9 @@ interface RawPipelineDefDetail {
 
 export interface RawPipelineStage {
   id: string;
-  pipeline_definition_id: string;
+  pipeline_id: string;
   code: string;
   name: string;
-  stage_type: PipelineStageType;
   sort_order: number;
   default_probability_pct: number;
   is_terminal: boolean;
@@ -65,23 +75,32 @@ interface RawStageHistoryRow {
   id: string;
   from_stage_id: string | null;
   to_stage_id: string | null;
-  moved_at: string;
-  moved_by_user_id: string | null;
-  duration_in_previous_stage_seconds: number | null;
-  reason: string | null;
+  changed_at: string;
+  changed_by: string | null;
+  notes: string | null;
 }
+
+const STAGE_SELECT =
+  'id, pipeline_id, code, name, sort_order, default_probability_pct, is_terminal, is_won, is_lost, color_hex';
 
 /* ============================================================
  * Mapper — raw → camelCase
  * ============================================================ */
 
+/** stages has no stage_type column anymore — derive it from the flags. */
+function deriveStageType(r: RawPipelineStage): PipelineStageType {
+  if (r.is_won) return 'closed_won';
+  if (r.is_lost) return 'closed_lost';
+  return 'other';
+}
+
 export function mapStage(r: RawPipelineStage): KanbanStage {
   return {
     id: r.id,
-    pipelineDefinitionId: r.pipeline_definition_id,
+    pipelineDefinitionId: r.pipeline_id,
     code: r.code,
     name: r.name,
-    stageType: r.stage_type,
+    stageType: deriveStageType(r),
     sortOrder: r.sort_order,
     defaultProbabilityPct: r.default_probability_pct,
     isTerminal: r.is_terminal,
@@ -92,45 +111,40 @@ export function mapStage(r: RawPipelineStage): KanbanStage {
 }
 
 /* ============================================================
- * 1. fetchPipelineForModule
- *    The module's default pipeline (guaranteed to be exactly 1 after Stage 25 cleanup).
+ * 1. fetchPipelineByCode
+ *    Pipeline lookup by its code (the key used by the sidebar
+ *    and /pipelines/[code] routes).
  * ============================================================ */
 
-export async function fetchPipelineForModule(
-  module: PartyTypeCode,
+export async function fetchPipelineByCode(
+  code: string,
 ): Promise<{ id: string; name: string } | null> {
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
     .schema('app')
-    .from('pipeline_definitions' as never)
+    .from('pipelines' as never)
     .select('id, name')
-    .eq('party_type', module)
-    .eq('is_default', true)
+    .eq('code', code)
     .eq('is_active', true)
-    .is('deleted_at', null)
     .maybeSingle();
 
   return (data as RawPipelineDef | null) ?? null;
 }
 
 /* ============================================================
- * 2. fetchStages - all stages of a pipeline (in sort_order)
+ * 2. fetchStages - all active stages of a pipeline (in sort_order)
  * ============================================================ */
 
-export async function fetchStages(
-  pipelineDefinitionId: string,
-): Promise<KanbanStage[]> {
+export async function fetchStages(pipelineId: string): Promise<KanbanStage[]> {
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
     .schema('app')
     .from('stages' as never)
-    .select(
-      'id, pipeline_definition_id, code, name, stage_type, sort_order, default_probability_pct, is_terminal, is_won, is_lost, color_hex',
-    )
-    .eq('pipeline_definition_id', pipelineDefinitionId)
-    .is('deleted_at', null)
+    .select(STAGE_SELECT)
+    .eq('pipeline_id', pipelineId)
+    .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
   return ((data ?? []) as unknown as RawPipelineStage[]).map(mapStage);
@@ -141,7 +155,7 @@ export async function fetchStages(
  * ============================================================ */
 
 export async function fetchFirstStage(
-  pipelineDefinitionId: string,
+  pipelineId: string,
 ): Promise<{ id: string } | null> {
   const supabase = await createSupabaseServerClient();
 
@@ -149,8 +163,8 @@ export async function fetchFirstStage(
     .schema('app')
     .from('stages' as never)
     .select('id')
-    .eq('pipeline_definition_id', pipelineDefinitionId)
-    .is('deleted_at', null)
+    .eq('pipeline_id', pipelineId)
+    .eq('is_active', true)
     .order('sort_order', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -159,14 +173,16 @@ export async function fetchFirstStage(
 }
 
 /* ============================================================
- * 4. fetchStageHistory - an engagement's stage-change history.
- *    Includes stage name lookup (only the current pipeline's stages - history from other pipelines
- *    is left unresolved as '(unknown stage)').
+ * 4. fetchStageHistory - a deal's stage-change history.
+ *    Reads app.deal_stage_history (deal_id / changed_at / changed_by /
+ *    notes). duration is not stored in the new schema -> null.
+ *    Stage names are resolved against the current pipeline's stages;
+ *    history rows pointing at other pipelines resolve to '(unknown stage)'.
  * ============================================================ */
 
 export async function fetchStageHistory(
-  engagementId: string,
-  pipelineDefinitionId: string | null,
+  dealId: string,
+  pipelineId: string | null,
   limit = 50,
 ): Promise<EngagementStageHistoryItem[]> {
   const supabase = await createSupabaseServerClient();
@@ -176,20 +192,17 @@ export async function fetchStageHistory(
     supabase
       .schema('app')
       .from('deal_stage_history' as never)
-      .select(
-        'id, from_stage_id, to_stage_id, moved_at, moved_by_user_id, duration_in_previous_stage_seconds, reason',
-      )
-      .eq('engagement_id', engagementId)
-      .order('moved_at', { ascending: false })
+      .select('id, from_stage_id, to_stage_id, changed_at, changed_by, notes')
+      .eq('deal_id', dealId)
+      .order('changed_at', { ascending: false })
       .limit(limit),
 
-    pipelineDefinitionId
+    pipelineId
       ? supabase
           .schema('app')
           .from('stages' as never)
           .select('id, name')
-          .eq('pipeline_definition_id', pipelineDefinitionId)
-          .is('deleted_at', null)
+          .eq('pipeline_id', pipelineId)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ]);
 
@@ -211,38 +224,33 @@ export async function fetchStageHistory(
     toStageName: h.to_stage_id
       ? (stageNameById.get(h.to_stage_id) ?? '(unknown stage)')
       : '(unknown stage)',
-    movedAt: h.moved_at,
-    movedByUserId: h.moved_by_user_id,
-    durationSeconds: h.duration_in_previous_stage_seconds,
-    reason: h.reason,
+    movedAt: h.changed_at,
+    movedByUserId: h.changed_by,
+    durationSeconds: null,
+    reason: h.notes,
   }));
 }
 
 /* ============================================================
- * 5. fetchAllPipelinesForModule
- *    For admin/select. Both default + non-default.
- *    After Stage 25 cleanup only 1 per module is active, but
- *    prepared for future multi-pipeline (e.g. 'Enterprise' vs 'SMB' funnel).
+ * 5. fetchAllPipelines
+ *    For admin/select. Both default + non-default, active first.
  * ============================================================ */
 
-export async function fetchAllPipelinesForModule(
-  module: PartyTypeCode,
-): Promise<
-  { id: string; name: string; isDefault: boolean; isActive: boolean }[]
+export async function fetchAllPipelines(): Promise<
+  { id: string; code: string; name: string; isDefault: boolean; isActive: boolean }[]
 > {
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
     .schema('app')
-    .from('pipeline_definitions' as never)
-    .select('id, name, is_default, is_active')
-    .eq('party_type', module)
-    .is('deleted_at', null)
-    .order('is_default', { ascending: false })
-    .order('created_at', { ascending: true });
+    .from('pipelines' as never)
+    .select('id, code, name, is_default, is_active')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
 
-  return ((data ?? []) as unknown as RawPipelineDefDetail[]).map((r) => ({
+  return ((data ?? []) as unknown as RawPipelineDetail[]).map((r) => ({
     id: r.id,
+    code: r.code,
     name: r.name,
     isDefault: r.is_default,
     isActive: r.is_active,
@@ -250,7 +258,7 @@ export async function fetchAllPipelinesForModule(
 }
 
 /* ============================================================
- * fetchPipelineById -- single lookup by id (fix-round 1)
+ * fetchPipelineById -- single lookup by id
  * ============================================================ */
 
 export async function fetchPipelineById(
