@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Readdy-migrated marketing pages (served from src/app/(marketing)/...).
+// These pass through on every host so they work on www/apex domains
+// and remain reachable on the CRM host for testing.
+const MARKETING_PATHS = ['/home', '/paper-filler', '/videos'];
+
 function isCrmHost(host: string, req: NextRequest): boolean {
   const h = host.split(':')[0] ?? '';
   if (h.startsWith('urm.')) return true;
@@ -36,13 +41,32 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Marketing (readdy) pages: always pass through, on any host.
+  if (
+    MARKETING_PATHS.some(
+      (p) => pathname === p || pathname.startsWith(p + '/')
+    )
+  ) {
+    return NextResponse.next();
+  }
+
   if (isCrmHost(host, req)) {
     return NextResponse.next();
   }
 
+  // Non-CRM hosts (www.marinebiogroup.com, marinebiogroup.com, marinebio.kr):
+  // root now serves the readdy homepage instead of the /site CMS.
+  if (pathname === '/') {
+    const url = req.nextUrl.clone();
+    url.pathname = '/home';
+    return NextResponse.rewrite(url);
+  }
+
+  // All other paths on marketing hosts keep the legacy /site CMS rewrite
+  // (e.g. /shop, CMS pages) so nothing existing breaks.
   const slug = siteSlugForHost(host, req);
   const url = req.nextUrl.clone();
-  url.pathname = `/site` + (pathname === '/' ? '' : pathname);
+  url.pathname = `/site` + pathname;
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-mbg-site', slug);
   return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
