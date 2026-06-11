@@ -30,6 +30,15 @@ interface LogEngagementInput {
   // null = activity sits directly on the deal timeline (HubSpot-style optional
   // association, not a hard parent-child).
   task_id?: string | null;
+  // Optional attendees/participants for meeting/call/message/consultation.
+  // Each is either a registered contact (contact_id) or a free-typed person
+  // (name/email). Stored in app.engagement_participants after the engagement
+  // is created. Empty/omitted = "attendees unknown" (attach later).
+  participants?: Array<{
+    contact_id?: string | null;
+    name?: string | null;
+    email?: string | null;
+  }>;
 }
 
 export async function logEngagement(
@@ -105,6 +114,31 @@ export async function logEngagement(
 
   if (error) return { ok: false, error: error.message };
 
+  const engagementId = (data as any).id as string;
+
+  // Save participants (best-effort; never fail the whole log on a participant
+  // hiccup). Only rows with a contact_id OR a name/email are kept.
+  const rawParts = input.participants ?? [];
+  const partRows = rawParts
+    .map((p) => ({
+      organization_id: deal.organization_id,
+      engagement_id: engagementId,
+      contact_id: p.contact_id ?? null,
+      email: (p.email ?? '').trim() || null,
+      name: (p.name ?? '').trim() || null,
+    }))
+    .filter((p) => p.contact_id || p.email || p.name);
+  if (partRows.length > 0) {
+    const { error: partErr } = await supabase
+      .schema('app')
+      .from('engagement_participants' as never)
+      .insert(partRows as never);
+    if (partErr) {
+      // keep the engagement; surface a soft warning via console
+      console.error('[logEngagement] participants insert error:', partErr.message);
+    }
+  }
+
   await supabase
     .schema('app')
     .from('deals' as never)
@@ -113,7 +147,7 @@ export async function logEngagement(
 
   revalidatePath('/pipelines/' + input.pipelineCode + '/deals/' + input.dealId);
   revalidatePath('/pipelines/' + input.pipelineCode);
-  return { ok: true, engagementId: (data as any).id };
+  return { ok: true, engagementId };
 }
 
 // ============================================================
@@ -240,9 +274,44 @@ export async function searchContacts(query: string): Promise<ContactResult[]> {
   return (data ?? []) as unknown as ContactResult[];
 }
 
-// ============================================================
-// updateTask  (deal-scoped: title / description / priority / due)
-// ============================================================
+// Party-scoped contact search for the Activity composer's participant picker.
+// Returns the given company's contacts (optionally filtered by query).
+export async function searchPartyContacts(
+  partyId: string,
+  query: string,
+): Promise<ContactResult[]> {
+  if (!partyId) return [];
+  const supabase = await createSupabaseServerClient();
+  const q = (query ?? '').trim();
+
+  let qb = supabase
+    .schema('app')
+    .from('contacts' as never)
+    .select(
+      'id, full_name, given_name, family_name, email, title_text, ' +
+      'firm:parties!party_id(party_name)'
+    )
+    .eq('party_id', partyId)
+    .is('deleted_at', null)
+    .eq('is_active', true);
+
+  if (q) {
+    const pattern = '%' + q + '%';
+    qb = qb.or(
+      'full_name.ilike.' + pattern +
+      ',given_name.ilike.' + pattern +
+      ',family_name.ilike.' + pattern +
+      ',email.ilike.' + pattern
+    );
+  }
+
+  const { data } = await qb
+    .order('is_primary', { ascending: false })
+    .order('full_name', { ascending: true, nullsFirst: false })
+    .limit(20);
+
+  return (data ?? []) as unknown as ContactResult[];
+}
 
 interface UpdateTaskInput {
   pipelineCode: string;

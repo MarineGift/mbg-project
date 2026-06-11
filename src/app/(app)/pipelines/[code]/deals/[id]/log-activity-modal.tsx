@@ -19,7 +19,7 @@
 
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -28,12 +28,15 @@ import {
   Calendar,
   FileText,
   MessageSquare,
+  Users,
+  X,
+  Loader2,
   Activity as ActivityIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
-import { logEngagement } from './actions';
+import { logEngagement, searchPartyContacts } from './actions';
 
 interface EngagementType {
   id: number;
@@ -182,6 +185,7 @@ export function ActivityTabClient({
         engagementTypes={engagementTypes}
         tasks={tasks}
         checklists={checklists}
+        partyId={partyId}
       />
 
       {/* Timeline */}
@@ -221,12 +225,14 @@ function ActivityComposer({
   engagementTypes,
   tasks,
   checklists,
+  partyId = null,
 }: {
   pipelineCode: string;
   dealId: string;
   engagementTypes: EngagementType[];
   tasks: TaskOption[];
   checklists: ChecklistOption[];
+  partyId?: string | null;
 }) {
   const router = useRouter();
   const dealBase = '/pipelines/' + pipelineCode + '/deals/' + dealId;
@@ -239,6 +245,68 @@ function ActivityComposer({
   const [summary, setSummary] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // ----- participants (meeting/call/message/consultation only) -----
+  type Participant = { contact_id?: string | null; name?: string | null; email?: string | null };
+  const PARTICIPANT_TYPE_CODES = new Set(['meeting', 'call', 'message', 'consultation']);
+  const selectedTypeCode = (engagementTypes.find((t) => t.id === typeId)?.code ?? '').toLowerCase();
+  const showParticipants = partyId != null && PARTICIPANT_TYPE_CODES.has(selectedTypeCode);
+
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [pQuery, setPQuery] = useState('');
+  const [pResults, setPResults] = useState<
+    Array<{ id: string; full_name: string | null; email: string | null; title_text: string | null }>
+  >([]);
+  const [pSearching, setPSearching] = useState(false);
+  const [pOpen, setPOpen] = useState(false);
+  const pDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showParticipants || !partyId) {
+      setPResults([]);
+      setPOpen(false);
+      return;
+    }
+    if (pDebounce.current) clearTimeout(pDebounce.current);
+    pDebounce.current = setTimeout(async () => {
+      setPSearching(true);
+      const rows = await searchPartyContacts(partyId, pQuery);
+      setPSearching(false);
+      setPResults(
+        rows.map((r) => ({ id: r.id, full_name: r.full_name, email: r.email, title_text: r.title_text })),
+      );
+      setPOpen(true);
+    }, 200);
+    return () => {
+      if (pDebounce.current) clearTimeout(pDebounce.current);
+    };
+  }, [pQuery, partyId, showParticipants]);
+
+  function addContactParticipant(r: { id: string; full_name: string | null; email: string | null }) {
+    setParticipants((prev) =>
+      prev.some((p) => p.contact_id === r.id)
+        ? prev
+        : [...prev, { contact_id: r.id, name: r.full_name, email: r.email }],
+    );
+    setPQuery('');
+    setPResults([]);
+    setPOpen(false);
+  }
+  function addFreeParticipant() {
+    const v = pQuery.trim();
+    if (!v) return;
+    const isEmail = v.includes('@');
+    setParticipants((prev) => [
+      ...prev,
+      isEmail ? { email: v, name: null } : { name: v, email: null },
+    ]);
+    setPQuery('');
+    setPResults([]);
+    setPOpen(false);
+  }
+  function removeParticipant(idx: number) {
+    setParticipants((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   // Tasks shown in the Task dropdown: filtered to the chosen checklist (if any).
   const visibleTasks = useMemo(() => {
@@ -270,10 +338,13 @@ function ActivityComposer({
         occurred_at: occurredIso,
         summary: summary.trim() || null,
         task_id: taskId || null, // empty = log directly to the deal
+        participants: showParticipants ? participants : undefined,
       });
       if (!r.ok) { setError(r.error); return; }
       setTitle('');
       setSummary('');
+      setParticipants([]);
+      setPQuery('');
       router.refresh();
     });
   }
@@ -388,6 +459,88 @@ function ActivityComposer({
           className="min-w-0 flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
         />
       </div>
+
+      {/* Participants (meeting / call / message / consultation only) */}
+      {showParticipants && (
+        <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Participants (optional)
+          </div>
+
+          {participants.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {participants.map((p, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 rounded-full bg-background border px-2 py-0.5 text-xs"
+                >
+                  {p.name || p.email || 'Unknown'}
+                  {!p.contact_id && (
+                    <span className="text-muted-foreground">(unlinked)</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeParticipant(idx)}
+                    disabled={isPending}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Remove participant"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="relative">
+            <input
+              value={pQuery}
+              onChange={(e) => setPQuery(e.target.value)}
+              onFocus={() => pResults.length > 0 && setPOpen(true)}
+              onBlur={() => setTimeout(() => setPOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addFreeParticipant();
+                }
+              }}
+              placeholder="Search this company's contacts, or type a name/email + Enter"
+              disabled={isPending}
+              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+            />
+            {pSearching && (
+              <Loader2 className="absolute right-2 top-2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+            {pOpen && pResults.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-md border bg-popover shadow-md">
+                {pResults.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-accent"
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      addContactParticipant(r);
+                    }}
+                  >
+                    <span className="font-medium">
+                      {r.full_name || r.email || '(no name)'}
+                      {r.title_text ? (
+                        <span className="font-normal text-muted-foreground"> &middot; {r.title_text}</span>
+                      ) : null}
+                    </span>
+                    {r.email && <span className="text-xs text-muted-foreground">{r.email}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Not sure who attended? Leave this empty and log it; attach contacts later.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200">
