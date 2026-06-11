@@ -141,7 +141,7 @@ export function ComposeForm({
         if (cancelled) return;
         if (res.ok) {
           setDealOptions(res.deals);
-          setSelectedDealId(res.deals.length === 1 ? res.deals[0].dealId : NO_DEAL);
+          setSelectedDealId(res.deals.length === 1 ? (res.deals[0]?.dealId ?? NO_DEAL) : NO_DEAL);
         } else {
           setDealOptions([]);
           setSelectedDealId(NO_DEAL);

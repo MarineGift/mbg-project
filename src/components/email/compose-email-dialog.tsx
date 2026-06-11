@@ -155,7 +155,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       setDealOptions(res.deals);
       // auto-select when exactly one open deal and nothing preset
       setDealId((prev) =>
-        prev !== NO_DEAL ? prev : res.deals.length === 1 ? res.deals[0].dealId : NO_DEAL,
+        prev !== NO_DEAL ? prev : res.deals.length === 1 ? (res.deals[0]?.dealId ?? NO_DEAL) : NO_DEAL,
       );
     });
     return () => {

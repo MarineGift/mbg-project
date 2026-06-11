@@ -168,7 +168,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
     if (c) {
       composeContactId = c.id;
       composeContactName =
-        c.full_name ?? [c.given_name, c.family_name].filter(Boolean).join(' ') || null;
+        c.full_name ?? ([c.given_name, c.family_name].filter(Boolean).join(' ') || null);
       composeContactEmail = c.email ?? null;
     }
   }
