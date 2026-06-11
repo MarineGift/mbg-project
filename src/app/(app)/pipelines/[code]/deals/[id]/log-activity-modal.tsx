@@ -31,6 +31,8 @@ import {
   Activity as ActivityIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Send } from 'lucide-react';
+import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import { logEngagement } from './actions';
 
 interface EngagementType {
@@ -71,6 +73,12 @@ interface Props {
   engagementTypes: EngagementType[];
   tasks?: TaskOption[];
   checklists?: ChecklistOption[];
+  /** Compose ("Send Email") context for this deal */
+  partyId?: string | null;
+  contactId?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  templates?: unknown[];
 }
 
 // ============================================================
@@ -123,9 +131,49 @@ export function ActivityTabClient({
   engagementTypes,
   tasks = [],
   checklists = [],
+  partyId = null,
+  contactId = null,
+  contactName = null,
+  contactEmail = null,
+  templates = [],
 }: Props) {
+  const [composeOpen, setComposeOpen] = useState(false);
   return (
     <div className="space-y-4">
+      {/* Send Email -> opens the real Compose dialog (Manual / Template / AI),
+          pre-linked to this deal so the sent mail auto-logs as an engagement. */}
+      <div className="flex items-center justify-between rounded-lg border bg-card p-3">
+        <div className="text-sm text-muted-foreground">
+          {contactEmail
+            ? <>Send an email to <span className="font-medium text-foreground">{contactName || contactEmail}</span> and log it on this deal.</>
+            : partyId
+              ? 'Compose an email for this deal. Add a recipient in the dialog.'
+              : 'No company linked to this deal yet.'}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => setComposeOpen(true)}
+          disabled={!partyId}
+        >
+          <Send className="mr-1 h-4 w-4" />
+          Send Email
+        </Button>
+      </div>
+
+      {partyId && (
+        <ComposeEmailDialog
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          mode="new"
+          partyId={partyId}
+          dealId={dealId}
+          contactId={contactId}
+          contactName={contactName}
+          defaultTo={contactEmail ?? ''}
+          templates={templates}
+        />
+      )}
+
       <ActivityComposer
         pipelineCode={pipelineCode}
         dealId={dealId}

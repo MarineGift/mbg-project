@@ -15,6 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { ActivityTabClient } from './log-activity-modal';
 import { TasksTabClient } from './add-task-modal';
 import { ChecklistTabClient } from './checklist-tab';
@@ -143,6 +144,36 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
   const dpSorted = sortDealParties((d.deal_parties ?? []) as any[]);
   const leadParty = dpSorted[0] ?? null;
   const commitmentTotals = sumCommitments(dpSorted);
+
+  // Compose recipient context: the lead party's primary (or most-recent) contact.
+  // Drives the "Send Email" dialog on the Activity tab.
+  let composeContactId: string | null = null;
+  let composeContactName: string | null = null;
+  let composeContactEmail: string | null = null;
+  if (leadParty?.party_id) {
+    const { data: pc } = await supabase
+      .schema('app')
+      .from('contacts' as never)
+      .select('id, full_name, given_name, family_name, email, is_primary, updated_at')
+      .eq('party_id', leadParty.party_id)
+      .is('deleted_at', null)
+      .not('email', 'is', null)
+      .order('is_primary', { ascending: false })
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const c = pc as
+      | { id: string; full_name: string | null; given_name: string | null; family_name: string | null; email: string | null }
+      | null;
+    if (c) {
+      composeContactId = c.id;
+      composeContactName =
+        c.full_name ?? [c.given_name, c.family_name].filter(Boolean).join(' ') || null;
+      composeContactEmail = c.email ?? null;
+    }
+  }
+  // Templates for the Template tab of the compose dialog.
+  const composeTemplates = await listEmailTemplates();
 
   const isCrowdfunding = d.pipeline?.code === 'crowdfunding';
   const availableTabs: TabId[] = isCrowdfunding
@@ -375,6 +406,19 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               engagementTypes={engagementTypes}
               tasks={activityTasks}
               checklists={checklists}
+              partyId={leadParty?.party_id ?? null}
+              contactId={composeContactId}
+              contactName={composeContactName}
+              contactEmail={composeContactEmail}
+              templates={composeTemplates.map((t) => ({
+                id: t.id,
+                name: t.name,
+                category: t.category,
+                subject: t.subject,
+                body_plain: t.bodyPlain,
+                body_html: t.bodyHtml,
+                module: t.module,
+              }))}
             />
           )}
           {activeTab === 'tasks' && (
