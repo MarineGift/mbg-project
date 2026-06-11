@@ -87,6 +87,9 @@ const composeSchema = z.object({
   /** Party link (if present, stored in communications.party_id) */
   partyId: z.string().uuid().optional().nullable(),
   contactId: z.string().uuid().optional().nullable(),
+  /** Deal link (if present, stored in communications.deal_id; the DB trigger
+   *  logs the message as an engagement on that deal's Activity timeline) */
+  dealId: z.string().uuid().optional().nullable(),
   /** Starts a new thread - if null, the auto-generated message-id starts the thread */
   inReplyTo: z.string().max(500).optional().nullable(),
   threadId: z.string().max(500).optional().nullable(),
@@ -201,6 +204,7 @@ export async function sendOutboundManual(
     references: parsed.data.inReplyTo ? [parsed.data.inReplyTo] : undefined,
     partyId: parsed.data.partyId ?? null,
     contactId: parsed.data.contactId ?? null,
+    dealId: parsed.data.dealId ?? null,
     threadId: parsed.data.threadId ?? null,
     attachments: parsed.data.attachments ?? [],
     traceLabel: `manual-compose:${auth.userId}`,

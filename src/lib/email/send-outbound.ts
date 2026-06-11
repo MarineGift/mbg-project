@@ -77,6 +77,10 @@ export interface SendOutboundInput {
   // linkage / flags
   partyId?: string | null;
   contactId?: string | null;
+  /** explicit deal chosen in the compose UI; stored on communications.deal_id.
+   *  The DB trigger (trg_comm_log_engagement) turns every party/deal-linked
+   *  communication into an app.engagements row on the deal timeline. */
+  dealId?: string | null;
   threadId?: string | null;
   /** urmHeaders.autoSend; true for the AI auto-send path */
   autoSend?: boolean;
@@ -303,6 +307,7 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     direction: 'outbound',
     party_id: input.partyId ?? null,
     contact_id: input.contactId ?? null,
+    deal_id: input.dealId ?? null,
     from_address: input.fromAddress,
     from_name: input.fromName,
     to_addresses: [input.to],

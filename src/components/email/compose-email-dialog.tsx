@@ -6,7 +6,7 @@
 // All UI English, ASCII-clean.
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,10 @@ import {
   type ComposeMode,
 } from "@/lib/actions/email-compose";
 import { sendOutboundManual } from "@/lib/actions/communications";
+import {
+  listOpenDealsForParty,
+  type OpenDealOption,
+} from "@/lib/actions/compose-recipients";
 import { uploadAttachment, type UploadedAttachment } from "@/lib/actions/upload-attachment";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
@@ -73,6 +77,9 @@ interface ComposeEmailDialogProps {
 
   partyId?: string | null;
   mode?: ComposeMode;
+
+  /** preselect a deal for engagement logging (optional) */
+  dealId?: string | null;
 
   contactId?: string | null;
   contactName?: string | null;
@@ -130,6 +137,32 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [fromKind, setFromKind] = useState<SendingAddressKind>('shared');
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
+
+  // ?? Deal linkage (engagement auto-log) ??????????????????
+  const NO_DEAL = "__none__";
+  const [dealId, setDealId] = useState<string>(props.dealId ?? NO_DEAL);
+  const [dealOptions, setDealOptions] = useState<OpenDealOption[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!props.open || !props.partyId) {
+      setDealOptions([]);
+      return;
+    }
+    // fresh open: reset to the preset (or none) before loading options
+    setDealId(props.dealId ?? NO_DEAL);
+    listOpenDealsForParty(props.partyId).then((res) => {
+      if (cancelled || !res.ok) return;
+      setDealOptions(res.deals);
+      // auto-select when exactly one open deal and nothing preset
+      setDealId((prev) =>
+        prev !== NO_DEAL ? prev : res.deals.length === 1 ? res.deals[0].dealId : NO_DEAL,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open, props.partyId]);
 
   // ?? Template tab state ??????????????????????????????????
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
@@ -286,6 +319,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           mode: finalMode,
           partyId: props.partyId,
           contactId: props.contactId ?? null,
+          dealId: dealId !== NO_DEAL ? dealId : null,
           to: to.trim(),
           subject: subject.trim(),
           body,
@@ -315,6 +349,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           bodyPlain: body,
           partyId: null,
           contactId: props.contactId ?? null,
+          dealId: dealId !== NO_DEAL ? dealId : null,
           inReplyTo: props.replyToMessageId ?? null,
           threadId: props.threadId ?? null,
           attachments: attachmentsMeta,
@@ -396,6 +431,26 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Deal linkage: logs this email on the deal's Activity timeline */}
+        {props.partyId && dealOptions.length > 0 && (
+          <div className="space-y-1">
+            <Label htmlFor="dealLink">Link to deal</Label>
+            <Select value={dealId} onValueChange={setDealId}>
+              <SelectTrigger id="dealLink">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_DEAL}>No deal (log on company only)</SelectItem>
+                {dealOptions.map((d) => (
+                  <SelectItem key={d.dealId} value={d.dealId}>
+                    {d.dealName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b -mx-6 px-6">

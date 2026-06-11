@@ -22,6 +22,7 @@ export interface ComposePayload {
   mode: ComposeMode;
   partyId: string;
   contactId?: string | null;       // <- Fix: explicit contact_id
+  dealId?: string | null;          // explicit deal linkage (engagement auto-log)
   to: string;
   subject: string;
   body: string;                    // HTML or plain (the raw template in template mode)
@@ -129,6 +130,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
         : undefined,
     partyId: payload.partyId,
     contactId: payload.contactId ?? null,
+    dealId: payload.dealId ?? null,
     threadId: payload.threadId ?? null,
     attachments: attachmentMetas,
     traceLabel: `dialog-compose:${user.id}`,
