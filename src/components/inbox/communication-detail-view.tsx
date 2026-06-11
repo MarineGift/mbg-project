@@ -15,6 +15,7 @@ import { ChannelDirectionIcon } from './channel-direction-icon';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { StatusBadge } from '@/components/common/status-badge';
+import { DealReassignPicker } from '@/components/inbox/deal-reassign-picker';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import type { CommunicationDetail } from '@/types/communication-detail';
@@ -113,6 +114,15 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
             {thread.length} {thread.length === 1 ? 'message' : 'messages'}
           </span>
         </div>
+        {partyContext && (
+          <div className="mt-2">
+            <DealReassignPicker
+              communicationId={root?.id ?? rootId}
+              partyId={partyContext.id}
+              currentDealId={root?.dealId ?? latest?.dealId ?? null}
+            />
+          </div>
+        )}
       </div>
 
       {/* Messages */}

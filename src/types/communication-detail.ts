@@ -43,6 +43,8 @@ export interface CommunicationDetail {
     name: string;
     partyType: PartyTypeCode;
   } | null;
+  /** Currently linked deal id (communications.deal_id), if any */
+  dealId: string | null;
   /** Contact summary */
   contact: {
     id: string;

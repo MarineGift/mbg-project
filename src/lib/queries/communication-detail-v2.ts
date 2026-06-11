@@ -18,7 +18,7 @@ export async function fetchCommunicationDetailV2(
       'subject, body_plain, body_html, ' +
       'message_id, thread_id, in_reply_to, ' +
       'occurred_at, sent_at, received_at, ai_generated, ' +
-      'external_data, ' +
+      'external_data, deal_id, ' +
       'parties:party_id ( id, name:party_name, party_types(code) ), ' +
       'contacts:contact_id ( id, given_name, family_name, email )',
     )
@@ -74,6 +74,7 @@ export async function fetchCommunicationDetailV2(
     aiGenerated:      r.ai_generated    ?? false,
     aiDraftId:        r.ai_draft_id     ?? null,
     party:   party   ? { id: party.id,   name: party.name,   partyType: (Array.isArray(party.party_types) ? party.party_types[0]?.code : party.party_types?.code) ?? null } : null,
+    dealId:  r.deal_id ?? null,
     contact: contact ? {
       id:       contact.id,
       fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,
@@ -106,7 +107,7 @@ export async function fetchMessagesInThread(
       'subject, body_plain, body_html, ' +
       'message_id, thread_id, in_reply_to, ' +
       'occurred_at, sent_at, received_at, ai_generated, ' +
-      'ai_draft_id, external_data, ' +
+      'ai_draft_id, external_data, deal_id, ' +
       'parties:party_id ( id, name:party_name, party_types(code) ), ' +
       'contacts:contact_id ( id, given_name, family_name, email )',
     )
@@ -182,6 +183,7 @@ export async function fetchMessagesInThread(
           ? (party.party_types[0] as { code: string } | undefined)?.code
           : (party.party_types as { code: string } | null)?.code) as NonNullable<CommunicationDetail['party']>['partyType'],
       } : null,
+      dealId: (r.deal_id as string | null) ?? null,
       contact: contact ? {
         id: contact.id as string,
         fullName: [contact.given_name, contact.family_name].filter(Boolean).join(' ') || null,
