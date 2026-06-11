@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Mail,
   ArrowUpRight,
@@ -55,6 +56,7 @@ export function PartyCommunicationsTimeline(
   } = props;
 
   const [composeOpen, setComposeOpen] = useState(false);
+  const router = useRouter();
   const [replyContext, setReplyContext] = useState<{
     messageId: string;
     communicationId: string;
@@ -169,6 +171,7 @@ export function PartyCommunicationsTimeline(
         defaultSubject={replyContext?.subject}
         templates={templates}
         orgId={orgId}
+        onSent={() => router.refresh()}
       />
     </div>
   );

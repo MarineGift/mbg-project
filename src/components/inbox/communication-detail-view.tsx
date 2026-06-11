@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
@@ -81,6 +82,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
 
   // Reply dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
+  const router = useRouter();
   const [initialTab, setInitialTab] = useState<'direct' | 'template' | 'ai'>('direct');
   function openReply(tab: 'direct' | 'template' | 'ai') {
     setInitialTab(tab);
@@ -178,6 +180,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           threadId={replyTarget.threadId ?? undefined}
           originalCommunicationId={replyTarget.id}
           templates={templates ?? []}
+          onSent={() => router.refresh()}
         />
       )}
     </div>

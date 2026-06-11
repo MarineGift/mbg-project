@@ -74,6 +74,9 @@ interface ComposeEmailDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
+  /** Called after an email is actually sent (not on cancel/close). Use it to
+   *  refresh the surrounding view so the new activity appears immediately. */
+  onSent?: () => void;
 
   partyId?: string | null;
   mode?: ComposeMode;
@@ -365,6 +368,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
 
       if (ok) {
         toast.success("Email sent.");
+        props.onSent?.();
         handleOpenChange(false);
       } else {
         toast.error(errMsg ?? "Send failed.");

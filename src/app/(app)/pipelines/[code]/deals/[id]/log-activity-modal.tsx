@@ -137,6 +137,7 @@ export function ActivityTabClient({
   contactEmail = null,
   templates = [],
 }: Props) {
+  const router = useRouter();
   const [composeOpen, setComposeOpen] = useState(false);
   return (
     <div className="space-y-4">
@@ -171,6 +172,7 @@ export function ActivityTabClient({
           contactName={contactName}
           defaultTo={contactEmail ?? ''}
           templates={templates}
+          onSent={() => router.refresh()}
         />
       )}
 
