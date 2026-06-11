@@ -40,7 +40,9 @@ import {
 import { sendOutboundManual } from "@/lib/actions/communications";
 import {
   listOpenDealsForParty,
+  searchRecipientContacts,
   type OpenDealOption,
+  type RecipientContact,
 } from "@/lib/actions/compose-recipients";
 import { uploadAttachment, type UploadedAttachment } from "@/lib/actions/upload-attachment";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
@@ -134,6 +136,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   // ?? Common form state ???????????????????????????????????
   const [activeTab, setActiveTab] = useState<TabId>(props.initialTab ?? "direct");
   const [to, setTo] = useState(effectiveTo);
+  // To-field contact picker (type-ahead over app.contacts). Picking a contact
+  // sets both the address and a linked contactId (overrides props.contactId).
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(props.contactId ?? null);
+  const [toResults, setToResults] = useState<RecipientContact[]>([]);
+  const [toOpen, setToOpen] = useState(false);
+  const [toSearching, setToSearching] = useState(false);
+  const toDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [subject, setSubject] = useState(props.defaultSubject ?? "");
   const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
@@ -166,6 +175,41 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, props.partyId]);
+
+  // Keep the linked contact in sync with the incoming prop when (re)opening.
+  useEffect(() => {
+    if (props.open) setSelectedContactId(props.contactId ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open]);
+
+  // To-field type-ahead search (debounced). Typing clears any linked contact
+  // until a result is picked, so a hand-typed address won't carry a stale id.
+  function onToChange(value: string) {
+    setTo(value);
+    setSelectedContactId(null);
+    if (toDebounce.current) clearTimeout(toDebounce.current);
+    const q = value.trim();
+    if (q.length < 2) {
+      setToResults([]);
+      setToOpen(false);
+      return;
+    }
+    toDebounce.current = setTimeout(async () => {
+      setToSearching(true);
+      const res = await searchRecipientContacts(q);
+      setToSearching(false);
+      if (res.ok) {
+        setToResults(res.results);
+        setToOpen(res.results.length > 0);
+      }
+    }, 200);
+  }
+  function pickToContact(c: RecipientContact) {
+    setTo(c.email);
+    setSelectedContactId(c.contactId);
+    setToResults([]);
+    setToOpen(false);
+  }
 
   // ?? Template tab state ??????????????????????????????????
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
@@ -321,7 +365,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         const payload: ComposePayload = {
           mode: finalMode,
           partyId: props.partyId,
-          contactId: props.contactId ?? null,
+          contactId: selectedContactId ?? props.contactId ?? null,
           dealId: dealId !== NO_DEAL ? dealId : null,
           to: to.trim(),
           subject: subject.trim(),
@@ -351,7 +395,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           subject: subject.trim(),
           bodyPlain: body,
           partyId: null,
-          contactId: props.contactId ?? null,
+          contactId: selectedContactId ?? props.contactId ?? null,
           dealId: dealId !== NO_DEAL ? dealId : null,
           inReplyTo: props.replyToMessageId ?? null,
           threadId: props.threadId ?? null,
@@ -574,16 +618,50 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             </div>
           )}
 
-          {/* Common: To */}
+          {/* Common: To (with contact type-ahead) */}
           <div className="space-y-1">
             <Label htmlFor="to">To</Label>
-            <Input
-              id="to"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder="recipient@example.com"
-              type="email"
-            />
+            <div className="relative">
+              <Input
+                id="to"
+                value={to}
+                onChange={(e) => onToChange(e.target.value)}
+                onFocus={() => toResults.length > 0 && setToOpen(true)}
+                onBlur={() => setTimeout(() => setToOpen(false), 150)}
+                placeholder="Search contacts or type an email"
+                type="text"
+                autoComplete="off"
+              />
+              {toSearching && (
+                <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              {toOpen && toResults.length > 0 && (
+                <div className="absolute z-30 left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow-md">
+                  {toResults.map((c) => (
+                    <button
+                      key={c.contactId}
+                      type="button"
+                      className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-accent"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        pickToContact(c);
+                      }}
+                    >
+                      <span className="font-medium">
+                        {c.fullName}
+                        {c.title ? (
+                          <span className="font-normal text-muted-foreground"> &middot; {c.title}</span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {c.email}
+                        {c.partyName ? ` \u00b7 ${c.partyName}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Common: Subject */}
