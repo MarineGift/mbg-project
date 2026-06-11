@@ -8,8 +8,10 @@
  *   - 2026-05-11: aligned with the DB schema - removed the single industry/tags field,
  *                 split into industryTags/interestTags arrays.
  *                 (actual DB columns: industry_tags ARRAY, interest_tags ARRAY)
- *   - 2026-05-14: Phase 6 ??industryPaperCompanyId /
+ *   - 2026-05-14: Phase 6 - industryPaperCompanyId /
  *                 added the industryFillerSupplierId FK field.
+ *   - 2026-06-11: added ContactProfile (app.contact_profiles 1:1 enrichment) and
+ *                 attached it to PartyContact as an optional `profile` field.
  */
 
 import type { PartyTypeCode } from './ai';
@@ -43,7 +45,7 @@ export interface PartyDetail {
   createdAt: string;
   updatedAt: string;
 
-  /** ??Phase 6 - FK linking to the industry master DB */
+  /** Phase 6 - FK linking to the industry master DB */
   industryPaperCompanyId: number | null;
   industryFillerSupplierId: number | null;
 
@@ -86,6 +88,21 @@ export interface TimelineTaskItem {
   dueAt: string | null;
 }
 
+/**
+ * Enrichment fields from app.contact_profiles (1:1 extension of app.contacts).
+ * Present only when a profile row exists for the contact; most contacts have none.
+ */
+export interface ContactProfile {
+  coverageRegion: string | null;
+  locationText: string | null;
+  boardRoles: string | null;
+  mbgFitRating: 'HIGH' | 'moderate-high' | 'moderate' | 'LOW' | null;
+  mbgFitNote: string | null;
+  entryChannel: string | null;
+  verifiedAt: string | null;
+  verifySource: string | null;
+}
+
 export interface PartyContact {
   id: string;
   fullName: string | null;
@@ -94,6 +111,8 @@ export interface PartyContact {
   phone: string | null;
   notes: string | null;
   isPrimary: boolean;
+  /** undefined when no app.contact_profiles row exists for this contact */
+  profile?: ContactProfile;
 }
 
 export interface PartyEngagement {

@@ -11,11 +11,16 @@ import {
   Calendar,
   ArrowRight,
   Check,
+  MapPin,
+  Target,
+  ShieldCheck,
+  Compass,
+  Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ContactFormDialog } from '@/components/parties/contact-form-dialog';
-import type { PartyContact } from '@/types/party-detail';
+import type { ContactProfile, PartyContact } from '@/types/party-detail';
 import type { ContactActivity } from '@/lib/queries/contact-activities';
 
 interface Props {
@@ -41,6 +46,88 @@ function fmtDate(iso: string | null): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+/** Tailwind classes for each MBG-fit rating badge. */
+function fitBadgeClasses(rating: ContactProfile['mbgFitRating']): string {
+  switch (rating) {
+    case 'HIGH':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    case 'moderate-high':
+      return 'bg-teal-100 text-teal-800 border-teal-200';
+    case 'moderate':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'LOW':
+      return 'bg-rose-100 text-rose-800 border-rose-200';
+    default:
+      return 'bg-muted text-muted-foreground border-transparent';
+  }
+}
+
+function ContactProfileBlock({ profile }: { profile: ContactProfile }) {
+  const hasFit = !!profile.mbgFitRating || !!profile.mbgFitNote;
+  return (
+    <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Investor intel
+        </span>
+        {profile.mbgFitRating && (
+          <span
+            className={[
+              'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
+              fitBadgeClasses(profile.mbgFitRating),
+            ].join(' ')}
+          >
+            <Target className="h-3 w-3" />
+            {profile.mbgFitRating} fit
+          </span>
+        )}
+      </div>
+
+      {profile.coverageRegion && (
+        <p className="text-xs text-muted-foreground flex items-start gap-1">
+          <Compass className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>{profile.coverageRegion}</span>
+        </p>
+      )}
+      {profile.locationText && (
+        <p className="text-xs text-muted-foreground flex items-start gap-1">
+          <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>{profile.locationText}</span>
+        </p>
+      )}
+      {profile.boardRoles && (
+        <p className="text-xs text-muted-foreground flex items-start gap-1">
+          <Users className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>{profile.boardRoles}</span>
+        </p>
+      )}
+      {profile.entryChannel && (
+        <p className="text-xs text-muted-foreground flex items-start gap-1">
+          <ArrowRight className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>{profile.entryChannel}</span>
+        </p>
+      )}
+
+      {hasFit && profile.mbgFitNote && (
+        <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed pt-0.5">
+          {profile.mbgFitNote}
+        </p>
+      )}
+
+      {(profile.verifiedAt || profile.verifySource) && (
+        <p className="text-[10px] text-muted-foreground flex items-start gap-1 pt-0.5">
+          <ShieldCheck className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>
+            {profile.verifiedAt && <>Verified {fmtDate(profile.verifiedAt)}</>}
+            {profile.verifiedAt && profile.verifySource && <> &middot; </>}
+            {profile.verifySource}
+          </span>
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: Props) {
@@ -98,6 +185,17 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                           <span className="font-medium text-sm truncate">
                             {displayName(c)}
                           </span>
+                          {c.profile?.mbgFitRating && (
+                            <span
+                              className={[
+                                'ml-auto inline-flex items-center rounded-full border px-1 py-0 text-[9px] font-medium shrink-0',
+                                fitBadgeClasses(c.profile.mbgFitRating),
+                              ].join(' ')}
+                              aria-label={`MBG fit ${c.profile.mbgFitRating}`}
+                            >
+                              {c.profile.mbgFitRating}
+                            </span>
+                          )}
                         </span>
                         {c.jobTitle && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -157,6 +255,11 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                         </p>
                       )}
                     </div>
+
+                    {/* contact_profiles enrichment (investor intel) */}
+                    {selected.profile && (
+                      <ContactProfileBlock profile={selected.profile} />
+                    )}
 
                     {/* engagement activity timeline */}
                     <div>

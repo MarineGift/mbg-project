@@ -18,8 +18,11 @@
  *                 close_date -> expected_close_date + a pipeline_stages
  *                 JOIN to get the stage name. The openEngagements count
  *                 filter's status enum values were matched to the actual schema.
- *   - 2026-05-14: Phase 6 ??industry_paper_company_id /
+ *   - 2026-05-14: Phase 6 - industry_paper_company_id /
  *                 Added the industry_filler_supplier_id FK column to the SELECT + mapping.
+ *   - 2026-06-11: added app.contact_profiles enrichment via a separate parallel
+ *                 fetch + in-memory join (no PostgREST embed; the table is new and
+ *                 the relationship may not be in the schema cache yet).
  */
 
 import 'server-only';
@@ -31,6 +34,7 @@ import type {
   CommunicationStatus,
 } from '@/types/inbox';
 import type {
+  ContactProfile,
   PartyContact,
   PartyDetail,
   PartyDetailFull,
@@ -55,7 +59,7 @@ interface RawPartyRow {
   source: string | null;
   created_at: string;
   updated_at: string;
-  // ??Phase 6 (2026-05-14)
+  // Phase 6 (2026-05-14)
 }
 
 const TIMELINE_LIMIT = 30;
@@ -234,8 +238,42 @@ export async function fetchPartyDetail(
     );
   }
 
+  // contact_profiles enrichment - separate fetch keyed by the contact ids we got.
+  // In-memory join (no embed): the table is new; embedding risks a stale schema cache.
+  const contactRows = (contactsRes.data ?? []) as Array<{ id: string }>;
+  const contactIds = contactRows.map((c) => c.id);
+  const profilesByContact = new Map<string, ContactProfile>();
+  if (contactIds.length > 0) {
+    const profilesRes = await supabase
+      .schema('app')
+      .from('contact_profiles' as never)
+      .select(
+        'contact_id, coverage_region, location_text, board_roles, mbg_fit_rating, mbg_fit_note, entry_channel, verified_at, verify_source',
+      )
+      .in('contact_id', contactIds);
+
+    if (profilesRes.error) {
+      console.error('[party-detail] contact_profiles error:', profilesRes.error);
+    } else {
+      for (const raw of (profilesRes.data ?? []) as unknown[]) {
+        const r = raw as Record<string, unknown>;
+        const cid = r.contact_id as string;
+        profilesByContact.set(cid, {
+          coverageRegion: (r.coverage_region as string | null) ?? null,
+          locationText: (r.location_text as string | null) ?? null,
+          boardRoles: (r.board_roles as string | null) ?? null,
+          mbgFitRating: (r.mbg_fit_rating as ContactProfile['mbgFitRating']) ?? null,
+          mbgFitNote: (r.mbg_fit_note as string | null) ?? null,
+          entryChannel: (r.entry_channel as string | null) ?? null,
+          verifiedAt: (r.verified_at as string | null) ?? null,
+          verifySource: (r.verify_source as string | null) ?? null,
+        });
+      }
+    }
+  }
+
   const contacts: PartyContact[] = ((contactsRes.data ?? []) as unknown[]).map(
-    mapContact,
+    (raw) => mapContact(raw, profilesByContact),
   );
   const engagements: PartyEngagement[] = (
     (engagementsRes.data ?? []) as unknown[]
@@ -267,7 +305,7 @@ export async function fetchPartyDetail(
     source: p.source,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
-    // ??Phase 6 (2026-05-14)
+    // Phase 6 (2026-05-14)
     industryPaperCompanyId: null,
     industryFillerSupplierId: null,
     counts: {
@@ -320,16 +358,21 @@ export async function fetchPartyDetail(
  * mappers
  * ============================================================ */
 
-function mapContact(raw: unknown): PartyContact {
+function mapContact(
+  raw: unknown,
+  profilesByContact: Map<string, ContactProfile>,
+): PartyContact {
   const r = raw as Record<string, unknown>;
+  const id = r.id as string;
   return {
-    id: r.id as string,
+    id,
     fullName: (r.full_name as string | null) ?? null,
     email: (r.email as string | null) ?? null,
     jobTitle: (r.title_text as string | null) ?? null,
     phone: (r.phone_e164 as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
+    profile: profilesByContact.get(id),
   };
 }
 
