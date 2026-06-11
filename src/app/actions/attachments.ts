@@ -1,9 +1,7 @@
 // src/app/actions/attachments.ts
 'use server';
 
-// ADJUST IF NEEDED: use the same supabase server client import that
-// src/app/actions/delete-communication.ts uses at its top.
-import { createClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { parseDriveLink } from '@/lib/attachments/drive';
 import type {
@@ -19,9 +17,8 @@ export async function listAttachments(
   entityType: AttachmentEntityType,
   entityId: string
 ): Promise<{ data: Attachment[]; error: string | null }> {
-  const supabase = createClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema('app')
     .from('attachments')
     .select('*')
     .eq('entity_type', entityType)
@@ -45,9 +42,8 @@ export async function addAttachment(
     input.fileName.trim() ||
     (parsed.fileId ? `Drive file ${parsed.fileId}` : parsed.url);
 
-  const supabase = createClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema('app')
     .from('attachments')
     .insert({
       organization_id: ORG_ID,
@@ -72,9 +68,8 @@ export async function addAttachment(
 export async function removeAttachment(
   id: string
 ): Promise<{ error: string | null }> {
-  const supabase = createClient();
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
-    .schema('app')
     .from('attachments')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);

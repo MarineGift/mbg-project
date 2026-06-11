@@ -62,7 +62,7 @@ export function parseDriveLink(raw: string): DriveLinkInfo | null {
     const m = input.match(p.re);
     if (m) {
       return {
-        fileId: m[1],
+        fileId: m[1] ?? null,
         url: input,
         kind: p.kind,
         mimeGuess: p.mime,
