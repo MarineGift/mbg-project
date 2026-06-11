@@ -31,12 +31,15 @@ import {
   Users,
   X,
   Loader2,
+  ChevronDown,
+  ChevronRight,
   Activity as ActivityIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
-import { logEngagement, searchPartyContacts } from './actions';
+import { logEngagement, searchPartyContacts, getEngagementDetail } from './actions';
+import type { EngagementDetail } from './actions';
 
 interface EngagementType {
   id: number;
@@ -239,7 +242,9 @@ function ActivityComposer({
 
   const [checklistId, setChecklistId] = useState('');
   const [taskId, setTaskId] = useState('');
-  const [typeId, setTypeId] = useState<number>(engagementTypes[0]?.id ?? 0);
+  const [typeId, setTypeId] = useState<number>(
+    (engagementTypes.find((t) => t.code.toLowerCase() !== 'email') ?? engagementTypes[0])?.id ?? 0,
+  );
   const [title, setTitle] = useState('');
   const [when, setWhen] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [summary, setSummary] = useState('');
@@ -248,7 +253,7 @@ function ActivityComposer({
 
   // ----- participants (meeting/call/message/consultation only) -----
   type Participant = { contact_id?: string | null; name?: string | null; email?: string | null };
-  const PARTICIPANT_TYPE_CODES = new Set(['meeting', 'call', 'message', 'consultation']);
+  const PARTICIPANT_TYPE_CODES = new Set(['meeting', 'call', 'message', 'consultation', 'note']);
   const selectedTypeCode = (engagementTypes.find((t) => t.id === typeId)?.code ?? '').toLowerCase();
   const showParticipants = partyId != null && PARTICIPANT_TYPE_CODES.has(selectedTypeCode);
 
@@ -404,12 +409,15 @@ function ActivityComposer({
         </div>
       </div>
 
-      {/* Activity type chips */}
+      {/* Activity type chips. Email is intentionally hidden here — use the
+          dedicated "Send Email" button above (which composes + auto-logs). */}
       <div className="flex flex-wrap gap-1.5">
         {engagementTypes.length === 0 ? (
           <span className="text-xs text-muted-foreground">No activity types configured.</span>
         ) : (
-          engagementTypes.map((t) => {
+          engagementTypes
+            .filter((t) => t.code.toLowerCase() !== 'email')
+            .map((t) => {
             const Icon = iconFor(t.code);
             const active = t.id === typeId;
             return (
@@ -574,48 +582,214 @@ function ActivityRow({ engagement: e, isLast }: { engagement: Engagement; isLast
     e.engagement_type?.display_name_en || e.engagement_type?.name || e.engagement_type?.code || e.channel || '';
   const body = e.summary || e.content || '';
 
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<EngagementDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !detail && !loading) {
+      setLoading(true);
+      getEngagementDetail(e.id).then((r) => {
+        setLoading(false);
+        if (r.ok) setDetail(r.detail);
+      });
+    }
+  }
+
   return (
-    <li className={'flex gap-3 px-4 py-3 ' + (isLast ? '' : 'border-b')}>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="line-clamp-1 text-sm font-medium text-foreground">{e.title}</div>
-          <div className="shrink-0 text-xs text-muted-foreground">{fmtRelative(e.occurred_at)}</div>
+    <li className={isLast ? '' : 'border-b'}>
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full gap-3 px-4 py-3 text-left hover:bg-muted/40"
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+          <Icon className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {typeLabel && <span className="capitalize">{typeLabel}</span>}
-          {e.direction && (
-            <>
-              {typeLabel && <span className="opacity-40">{'\u00b7'}</span>}
-              <span className="capitalize">{e.direction}</span>
-            </>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="line-clamp-1 text-sm font-medium text-foreground">{e.title}</div>
+            <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              {fmtRelative(e.occurred_at)}
+              {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </div>
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {typeLabel && <span className="capitalize">{typeLabel}</span>}
+            {e.direction && (
+              <>
+                {typeLabel && <span className="opacity-40">{'\u00b7'}</span>}
+                <span className="capitalize">{e.direction}</span>
+              </>
+            )}
+            {e.duration_min != null && (
+              <>
+                <span className="opacity-40">{'\u00b7'}</span>
+                <span>{e.duration_min}m</span>
+              </>
+            )}
+            {e.status && e.status !== 'completed' && (
+              <>
+                <span className="opacity-40">{'\u00b7'}</span>
+                <span className="capitalize">{e.status}</span>
+              </>
+            )}
+          </div>
+          {!open && body && (
+            <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+              {String(body).slice(0, 240)}
+            </p>
           )}
-          {e.duration_min != null && (
-            <>
-              <span className="opacity-40">{'\u00b7'}</span>
-              <span>{e.duration_min}m</span>
-            </>
-          )}
-          {e.status && e.status !== 'completed' && (
-            <>
-              <span className="opacity-40">{'\u00b7'}</span>
-              <span className="capitalize">{e.status}</span>
-            </>
+          {!open && e.next_steps && (
+            <p className="mt-1.5 line-clamp-1 text-xs text-foreground/80">
+              <span className="font-medium">Next:</span> {e.next_steps}
+            </p>
           )}
         </div>
-        {body && (
-          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
-            {String(body).slice(0, 240)}
-          </p>
-        )}
-        {e.next_steps && (
-          <p className="mt-1.5 line-clamp-1 text-xs text-foreground/80">
-            <span className="font-medium">Next:</span> {e.next_steps}
-          </p>
-        )}
-      </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pl-14">
+          {loading && (
+            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading details...
+            </div>
+          )}
+          {!loading && detail && <ActivityDetail detail={detail} />}
+        </div>
+      )}
     </li>
   );
+}
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString();
+}
+
+function ActivityDetail({ detail }: { detail: EngagementDetail }) {
+  const em = detail.email;
+  return (
+    <div className="space-y-3 rounded-md border bg-muted/20 p-3 text-sm">
+      {/* email-specific block */}
+      {em && (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+            {em.subject && (
+              <>
+                <span className="text-muted-foreground">Subject</span>
+                <span className="font-medium">{em.subject}</span>
+              </>
+            )}
+            {em.from_address && (
+              <>
+                <span className="text-muted-foreground">From</span>
+                <span>{em.from_name ? `${em.from_name} <${em.from_address}>` : em.from_address}</span>
+              </>
+            )}
+            {em.to_addresses.length > 0 && (
+              <>
+                <span className="text-muted-foreground">To</span>
+                <span>{em.to_addresses.join(', ')}</span>
+              </>
+            )}
+            {em.cc_addresses.length > 0 && (
+              <>
+                <span className="text-muted-foreground">Cc</span>
+                <span>{em.cc_addresses.join(', ')}</span>
+              </>
+            )}
+          </div>
+          {/* delivery/tracking chips */}
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
+            {em.sent_at && <Chip label={`Sent ${fmtDateTime(em.sent_at)}`} />}
+            {em.delivered_at && <Chip label={`Delivered ${fmtDateTime(em.delivered_at)}`} />}
+            {em.opened_at && <Chip label={`Opened ${fmtDateTime(em.opened_at)}`} tone="green" />}
+            {em.clicked_at && <Chip label={`Clicked ${fmtDateTime(em.clicked_at)}`} tone="green" />}
+            {em.replied_at && <Chip label={`Replied ${fmtDateTime(em.replied_at)}`} tone="green" />}
+          </div>
+          {(em.body_plain || em.body_html) && (
+            <div className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap rounded border bg-background p-2 text-xs">
+              {em.body_plain
+                ? em.body_plain
+                : stripHtml(em.body_html ?? '')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* participants */}
+      {detail.participants.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Users className="h-3.5 w-3.5" /> Participants
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {detail.participants.map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs"
+              >
+                {p.name || p.email || 'Unknown'}
+                {!p.contact_id && <span className="text-muted-foreground">(unlinked)</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* non-email body / notes / outcome / next steps */}
+      {!em && (detail.summary || detail.content) && (
+        <p className="whitespace-pre-wrap text-xs text-foreground/90">
+          {detail.summary || detail.content}
+        </p>
+      )}
+      {detail.notes && (
+        <p className="text-xs">
+          <span className="font-medium text-muted-foreground">Notes: </span>
+          <span className="whitespace-pre-wrap">{detail.notes}</span>
+        </p>
+      )}
+      {detail.outcome && (
+        <p className="text-xs">
+          <span className="font-medium text-muted-foreground">Outcome: </span>
+          {detail.outcome}
+        </p>
+      )}
+      {detail.next_steps && (
+        <p className="text-xs">
+          <span className="font-medium text-muted-foreground">Next steps: </span>
+          {detail.next_steps}
+        </p>
+      )}
+
+      <div className="text-[11px] text-muted-foreground">{fmtDateTime(detail.occurred_at)}</div>
+    </div>
+  );
+}
+
+function Chip({ label, tone = 'gray' }: { label: string; tone?: 'gray' | 'green' }) {
+  const cls =
+    tone === 'green'
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+      : 'bg-muted text-muted-foreground ring-border';
+  return (
+    <span className={'inline-flex items-center rounded-full px-2 py-0.5 ring-1 ring-inset ' + cls}>
+      {label}
+    </span>
+  );
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

@@ -446,3 +446,141 @@ export async function deleteTaskInDeal(
   revalidatePath('/pipelines/' + input.pipelineCode + '/deals/' + input.dealId);
   return { ok: true };
 }
+
+// ============================================================
+// getEngagementDetail  -- on-demand full detail for one activity row
+// ============================================================
+
+export interface EngagementParticipantView {
+  id: string;
+  contact_id: string | null;
+  name: string | null;
+  email: string | null;
+  role: string | null;
+  is_internal: boolean;
+}
+
+export interface EngagementEmailView {
+  subject: string | null;
+  from_address: string | null;
+  from_name: string | null;
+  to_addresses: string[];
+  cc_addresses: string[];
+  body_plain: string | null;
+  body_html: string | null;
+  direction: string | null;
+  occurred_at: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  replied_at: string | null;
+}
+
+export interface EngagementDetail {
+  id: string;
+  title: string;
+  summary: string | null;
+  content: string | null;
+  notes: string | null;
+  outcome: string | null;
+  next_steps: string | null;
+  occurred_at: string | null;
+  direction: string | null;
+  duration_min: number | null;
+  status: string | null;
+  type_code: string | null;
+  participants: EngagementParticipantView[];
+  email: EngagementEmailView | null;
+}
+
+export async function getEngagementDetail(
+  engagementId: string,
+): Promise<{ ok: true; detail: EngagementDetail } | { ok: false; error: string }> {
+  if (!engagementId) return { ok: false, error: 'Missing engagement id' };
+  const supabase = await createSupabaseServerClient();
+
+  const { data: engRow, error: engErr } = await supabase
+    .schema('app')
+    .from('engagements' as never)
+    .select(
+      '*, engagement_type:engagement_types!engagement_type_id(code, display_name_en)'
+    )
+    .eq('id', engagementId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (engErr || !engRow) return { ok: false, error: 'Activity not found' };
+  const e = engRow as any;
+
+  // participants
+  const { data: pRows } = await supabase
+    .schema('app')
+    .from('engagement_participants' as never)
+    .select('id, contact_id, name, email, role, is_internal')
+    .eq('engagement_id', engagementId)
+    .order('created_at', { ascending: true });
+
+  const participants = ((pRows ?? []) as any[]).map((p) => ({
+    id: p.id as string,
+    contact_id: (p.contact_id ?? null) as string | null,
+    name: (p.name ?? null) as string | null,
+    email: (p.email ?? null) as string | null,
+    role: (p.role ?? null) as string | null,
+    is_internal: !!p.is_internal,
+  }));
+
+  // linked email (if any) via extra_data.communication_id
+  let email: EngagementEmailView | null = null;
+  const commId = e?.extra_data?.communication_id as string | undefined;
+  if (commId) {
+    const { data: cRow } = await supabase
+      .schema('app')
+      .from('communications' as never)
+      .select(
+        'subject, from_address, from_name, to_addresses, cc_addresses, ' +
+        'body_plain, body_html, direction, occurred_at, sent_at, ' +
+        'delivered_at, opened_at, clicked_at, replied_at'
+      )
+      .eq('id', commId)
+      .maybeSingle();
+    if (cRow) {
+      const c = cRow as any;
+      email = {
+        subject: c.subject ?? null,
+        from_address: c.from_address ?? null,
+        from_name: c.from_name ?? null,
+        to_addresses: (c.to_addresses ?? []) as string[],
+        cc_addresses: (c.cc_addresses ?? []) as string[],
+        body_plain: c.body_plain ?? null,
+        body_html: c.body_html ?? null,
+        direction: c.direction ?? null,
+        occurred_at: c.occurred_at ?? null,
+        sent_at: c.sent_at ?? null,
+        delivered_at: c.delivered_at ?? null,
+        opened_at: c.opened_at ?? null,
+        clicked_at: c.clicked_at ?? null,
+        replied_at: c.replied_at ?? null,
+      };
+    }
+  }
+
+  const detail: EngagementDetail = {
+    id: e.id,
+    title: e.title,
+    summary: e.summary ?? null,
+    content: e.content ?? null,
+    notes: e.notes ?? null,
+    outcome: e.outcome ?? null,
+    next_steps: e.next_steps ?? null,
+    occurred_at: e.occurred_at ?? null,
+    direction: e.direction ?? null,
+    duration_min: e.duration_min ?? null,
+    status: e.status ?? null,
+    type_code: e.engagement_type?.code ?? e.channel ?? null,
+    participants,
+    email,
+  };
+
+  return { ok: true, detail };
+}
