@@ -37,6 +37,18 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   }) as Promise<T>;
 }
 
+/**
+ * True only for messages the MailCarrier worker actually pulled off the IMAP
+ * server (they carry external_data.mailcarrier_received_at). Synthetic/seed
+ * rows like the "Microsoft Outlook test message" lack this, so there is nothing
+ * to delete server-side -- skipping IMAP avoids hammering a slow/unstable
+ * MailCarrier host for messages that were never on it.
+ */
+function isFromImapServer(extData: Record<string, unknown> | null): boolean {
+  if (!extData) return false;
+  return typeof extData.mailcarrier_received_at === 'string';
+}
+
 export type DeleteCommunicationResult =
   | { success: true }
   | { success: false; error: string };
@@ -161,12 +173,12 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
     return { success: false, error: 'Message not found or already deleted' };
   }
 
-  // 4. IMAP delete (only when inbound + message_id present)
-  if (comm.direction === 'inbound' && comm.message_id) {
-    const extData = (comm.external_data ?? {}) as Record<string, unknown>;
+  // 4. IMAP delete (only for messages actually pulled from the IMAP server)
+  const extData4 = (comm.external_data ?? {}) as Record<string, unknown>;
+  if (comm.direction === 'inbound' && comm.message_id && isFromImapServer(extData4)) {
     const accountKind =
-      typeof extData.mailcarrier_account_kind === 'string'
-        ? extData.mailcarrier_account_kind
+      typeof extData4.mailcarrier_account_kind === 'string'
+        ? extData4.mailcarrier_account_kind
         : 'shared';
     try {
       await withTimeout(
@@ -177,6 +189,8 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
     } catch (imapErr) {
       console.error('[deleteComm] IMAP delete failed (non-fatal):', imapErr);
     }
+  } else if (comm.direction === 'inbound' && comm.message_id) {
+    console.log('[deleteComm] skipping IMAP (not from server) id=', id);
   }
 
   // 5. DB soft-delete
@@ -331,9 +345,15 @@ export async function deleteCommunicationsBulk(
 
   // 4. group inbound message-ids by mail account kind
   const idsByKind = new Map<string, string[]>();
+  let skippedNotFromServer = 0;
   for (const comm of comms) {
     if (comm.direction !== 'inbound' || !comm.message_id) continue;
     const extData = (comm.external_data ?? {}) as Record<string, unknown>;
+    if (!isFromImapServer(extData)) {
+      // synthetic/seed row (e.g. test mail) -- never on the IMAP server
+      skippedNotFromServer += 1;
+      continue;
+    }
     const accountKind =
       typeof extData.mailcarrier_account_kind === 'string'
         ? extData.mailcarrier_account_kind
@@ -341,6 +361,13 @@ export async function deleteCommunicationsBulk(
     const list = idsByKind.get(accountKind) ?? [];
     list.push(comm.message_id);
     idsByKind.set(accountKind, list);
+  }
+  if (skippedNotFromServer > 0) {
+    console.log(
+      '[deleteCommBulk] skipped IMAP for',
+      skippedNotFromServer,
+      'non-server message(s)',
+    );
   }
 
   // 5. IMAP phase: ONE connection per account kind, sequential, time-budgeted.
