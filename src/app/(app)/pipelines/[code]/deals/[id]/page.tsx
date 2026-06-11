@@ -382,11 +382,12 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
             <Link
               key={tabId}
               href={'/pipelines/' + params.code + '/deals/' + params.id + '?tab=' + tabId}
+              aria-current={active ? 'page' : undefined}
               className={
-                'border-b-2 px-3 py-2 text-sm transition ' +
+                'relative -mb-px rounded-t-md border px-4 py-2.5 text-sm transition ' +
                 (active
-                  ? 'border-foreground text-foreground font-medium'
-                  : 'border-transparent text-muted-foreground hover:text-foreground')
+                  ? 'border-b-0 border-t-2 border-t-foreground bg-card font-semibold text-foreground'
+                  : 'border-transparent font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground')
               }
             >
               {TAB_LABELS[tabId]}

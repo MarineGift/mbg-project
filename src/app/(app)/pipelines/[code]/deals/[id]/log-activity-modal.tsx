@@ -147,26 +147,6 @@ export function ActivityTabClient({
   const [composeOpen, setComposeOpen] = useState(false);
   return (
     <div className="space-y-4">
-      {/* Send Email -> opens the real Compose dialog (Manual / Template / AI),
-          pre-linked to this deal so the sent mail auto-logs as an engagement. */}
-      <div className="flex items-center justify-between rounded-lg border bg-card p-3">
-        <div className="text-sm text-muted-foreground">
-          {contactEmail
-            ? <>Send an email to <span className="font-medium text-foreground">{contactName || contactEmail}</span> and log it on this deal.</>
-            : partyId
-              ? 'Compose an email for this deal. Add a recipient in the dialog.'
-              : 'No company linked to this deal yet.'}
-        </div>
-        <Button
-          size="sm"
-          onClick={() => setComposeOpen(true)}
-          disabled={!partyId}
-        >
-          <Send className="mr-1 h-4 w-4" />
-          Send Email
-        </Button>
-      </div>
-
       {partyId && (
         <ComposeEmailDialog
           open={composeOpen}
@@ -189,14 +169,22 @@ export function ActivityTabClient({
         tasks={tasks}
         checklists={checklists}
         partyId={partyId}
+        canSendEmail={!!partyId}
+        onSendEmail={() => setComposeOpen(true)}
       />
 
       {/* Timeline */}
       <div>
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {engagements.length === 0
-            ? 'Activity'
-            : 'Recent activity (' + engagements.length + (engagements.length === 50 ? ', latest 50' : '') + ')'}
+        <div className="mb-2.5 flex items-center gap-2">
+          <span className="h-4 w-1 rounded-full bg-foreground" />
+          <span className="text-sm font-semibold text-foreground">
+            {engagements.length === 0 ? 'Activity' : 'Recent activity'}
+          </span>
+          {engagements.length > 0 && (
+            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {engagements.length}{engagements.length === 50 ? '+' : ''}
+            </span>
+          )}
         </div>
         {engagements.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-12">
@@ -229,6 +217,8 @@ function ActivityComposer({
   tasks,
   checklists,
   partyId = null,
+  canSendEmail = false,
+  onSendEmail,
 }: {
   pipelineCode: string;
   dealId: string;
@@ -236,6 +226,8 @@ function ActivityComposer({
   tasks: TaskOption[];
   checklists: ChecklistOption[];
   partyId?: string | null;
+  canSendEmail?: boolean;
+  onSendEmail?: () => void;
 }) {
   const router = useRouter();
   const dealBase = '/pipelines/' + pipelineCode + '/deals/' + dealId;
@@ -438,6 +430,20 @@ function ActivityComposer({
               </button>
             );
           })
+        )}
+
+        {/* Send Email lives with the activity types: it logs an email activity
+            on this deal, just composed through the full email dialog. */}
+        {canSendEmail && (
+          <button
+            type="button"
+            onClick={onSendEmail}
+            disabled={isPending}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-foreground bg-foreground px-2 py-1 text-xs font-medium text-background transition hover:opacity-90"
+          >
+            <Send className="h-3 w-3" />
+            Send Email
+          </button>
         )}
       </div>
 
