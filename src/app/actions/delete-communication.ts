@@ -11,6 +11,32 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { env } from '@/lib/env';
 import { createClient } from '@supabase/supabase-js';
 
+/* ------------------------------------------------------------------
+ * IMAP timeout budget (2026-06-11)
+ * Previously the bulk path allowed a 60s IMAP budget and connect() had
+ * no timeout. Selecting test messages that do not exist on the server
+ * (e.g. "Microsoft Outlook test message") made every search return empty
+ * while the request stayed pending for ~1 min, so the delete looked stuck.
+ * IMAP cleanup is best-effort; the DB soft-delete must not wait on it.
+ * ------------------------------------------------------------------ */
+const IMAP_CONNECT_TIMEOUT_MS = 5_000;
+const IMAP_SOCKET_TIMEOUT_MS = 8_000;
+const IMAP_SINGLE_BUDGET_MS = 8_000;
+const IMAP_BULK_BUDGET_MS = 8_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  }) as Promise<T>;
+}
+
 export type DeleteCommunicationResult =
   | { success: true }
   | { success: false; error: string };
@@ -50,9 +76,9 @@ async function deleteFromImap(messageId: string, accountKind: string): Promise<v
     auth: { user: creds.username, pass: creds.password },
     tls: { rejectUnauthorized: env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true },
     logger: false,
-    socketTimeout: 30_000,
+    socketTimeout: IMAP_SOCKET_TIMEOUT_MS,
   });
-  await client.connect();
+  await withTimeout(client.connect(), IMAP_CONNECT_TIMEOUT_MS, 'IMAP connect');
   const lock = await client.getMailboxLock(env.MAILCARRIER_INBOX_FOLDER);
   try {
     const uids = await (client as any).search(
@@ -143,7 +169,11 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
         ? extData.mailcarrier_account_kind
         : 'shared';
     try {
-      await deleteFromImap(comm.message_id, accountKind);
+      await withTimeout(
+        deleteFromImap(comm.message_id, accountKind),
+        IMAP_SINGLE_BUDGET_MS,
+        'IMAP single delete',
+      );
     } catch (imapErr) {
       console.error('[deleteComm] IMAP delete failed (non-fatal):', imapErr);
     }
@@ -186,21 +216,6 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
  *   3. ONE bulk DB soft-delete via .in('id', ids)
  * ============================================================ */
 
-const IMAP_BULK_BUDGET_MS = 60_000;
-
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms`)),
-      ms,
-    );
-  });
-  return Promise.race([p, timeout]).finally(() => {
-    if (timer) clearTimeout(timer);
-  }) as Promise<T>;
-}
-
 /** Delete many messages from one mailbox over a SINGLE IMAP connection. */
 async function deleteManyFromImap(
   messageIds: string[],
@@ -227,10 +242,10 @@ async function deleteManyFromImap(
     auth: { user: creds.username, pass: creds.password },
     tls: { rejectUnauthorized: env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true },
     logger: false,
-    socketTimeout: 15_000,
+    socketTimeout: IMAP_SOCKET_TIMEOUT_MS,
   });
 
-  await client.connect();
+  await withTimeout(client.connect(), IMAP_CONNECT_TIMEOUT_MS, 'IMAP connect');
   const lock = await client.getMailboxLock(env.MAILCARRIER_INBOX_FOLDER);
   try {
     for (const messageId of messageIds) {
