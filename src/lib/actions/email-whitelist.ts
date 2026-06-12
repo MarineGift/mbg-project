@@ -140,7 +140,7 @@ export async function searchPartiesForWhitelist(q: string): Promise<PartyOption[
   }
   const { data, error } = await builder
     .order("party_name" as never)
-    .limit(30);
+    .limit(100);
 
   if (error) return [];
   return ((data ?? []) as Array<{
