@@ -19,7 +19,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { PartyType } from '@/types/party-type';
+import { PARTY_TYPES, type PartyType } from '@/types/party-type';
 
 export interface PartyActionResult {
   ok: boolean;
@@ -33,15 +33,8 @@ const partySchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   legalName: z.string().max(200).optional().nullable(),
   // business category
-  partyType: z.enum([
-    'investor',
-    'paper_mill',
-    'filler_supplier',
-    'buyer',
-    'customer',
-    'partner',
-    'government_grant',
-  ]),
+  // Tracks app.party_types via the canonical PARTY_TYPES list (see types/party-type.ts).
+  partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
   // legal entity form
   partyKind: z
     .enum(['company', 'organization', 'individual', 'fund', 'government'])

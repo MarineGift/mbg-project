@@ -85,18 +85,9 @@ const contactRowSchema = z.object({
 
 const schema = z.object({
   name: z.string().min(1, 'Company name is required').max(200),
-  partyType: z.enum([
-    'investor',
-    'paper_mill',
-    'filler_supplier',
-    'buyer',
-    'customer',
-    'partner',
-    'government_grant',
-    'consultant',
-    'crowdfunding_platform',
-    'self',
-  ]),
+  // Tracks the canonical PARTY_TYPES list (types/party-type.ts) so new
+  // party types never require editing this schema by hand.
+  partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
   partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   countryCode: z
     .string()

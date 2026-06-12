@@ -36,7 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { createParty, updateParty, deleteParty } from '@/lib/actions/parties';
-import type { PartyType, PartyKind } from '@/types/party-type';
+import { PARTY_TYPES, type PartyType, type PartyKind } from '@/types/party-type';
 import type { PartyDetail, PartyTier } from '@/types/party-detail';
 
 interface Props {
@@ -49,18 +49,9 @@ interface Props {
 const schema = z.object({
   name: z.string().min(1, 'Required').max(200),
   legalName: z.string().max(200).optional().or(z.literal('')),
-  partyType: z.enum([
-    'investor',
-    'paper_mill',
-    'filler_supplier',
-    'buyer',
-    'customer',
-    'partner',
-    'government_grant',
-    'consultant',
-    'crowdfunding_platform',
-    'self',
-  ]),
+  // Tracks the canonical PARTY_TYPES list (types/party-type.ts) so new
+  // party types never require editing this schema by hand.
+  partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
   partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),
   countryCode: z
@@ -87,16 +78,6 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
-
-const PARTY_TYPES: readonly PartyType[] = [
-  'investor',
-  'paper_mill',
-  'filler_supplier',
-  'buyer',
-  'customer',
-  'partner',
-  'government_grant',
-] as const;
 
 const PARTY_KINDS: readonly PartyKind[] = [
   'company',
