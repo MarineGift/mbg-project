@@ -19,6 +19,10 @@
  *   - fully removes the \Seen flag dependency (never calls messageFlagsAdd)
  *   - changes the fetch range from UNSEEN search -> UID range
  *
+ * Multi-Account Mail Hub Step 2 (2026-06-12):
+ *   - persistInbound records communications.mail_account_id (= inbound_mailboxes.id)
+ *     for the DB-account polling path; data basis for reply From auto-selection.
+ *
  * Responsibilities:
  *   - IMAP connection/auth (TLS)
  *   - detect new mail via IDLE or polling
@@ -810,6 +814,9 @@ export class MailCarrierClient {
         engagement_id: threadMatch.matchedEngagementId ?? null,
         channel,
         direction,
+        // Step 2 (2026-06-12): record which DB mail account received this message.
+        // Basis for reply From auto-selection (Step 3/4). NULL on the env(kind) fallback path.
+        mail_account_id: this.account?.id ?? null,
         message_id: headers.messageId,
         in_reply_to: headers.inReplyTo ?? null,
         thread_id: threadId,
@@ -832,6 +839,7 @@ export class MailCarrierClient {
           mailcarrier_received_at: this.nowProvider().toISOString(),
           mailcarrier_account_kind: this.kind,
           mailcarrier_account_username: this.username,
+          mailcarrier_account_id: this.account?.id ?? null,
           pii_masked: false,
           pii_categories_detected: categories,
           thread_match: {
