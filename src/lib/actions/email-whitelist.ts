@@ -129,14 +129,18 @@ export async function searchPartiesForWhitelist(q: string): Promise<PartyOption[
     ((ptRows ?? []) as Array<{ id: number; code: string }>).map(r => [r.id, r.code]),
   );
 
-  const { data, error } = await sb.schema("app")
+  // tokenized AND-match so "omya korea" finds "Omya (Korea)"
+  let builder = sb.schema("app")
     .from("parties" as never)
     .select("id, party_name, country_code, party_type_id")
     .eq("organization_id" as never, ORG_ID as never)
-    .ilike("party_name" as never, `%${query}%` as never)
-    .is("deleted_at" as never, null)
+    .is("deleted_at" as never, null);
+  for (const token of query.split(/\s+/).filter(Boolean)) {
+    builder = builder.ilike("party_name" as never, `%${token}%` as never);
+  }
+  const { data, error } = await builder
     .order("party_name" as never)
-    .limit(12);
+    .limit(30);
 
   if (error) return [];
   return ((data ?? []) as Array<{
