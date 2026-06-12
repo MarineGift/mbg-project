@@ -197,7 +197,7 @@ async function fetchCommunicationContext(
     .schema('app')
     .from('communications')
     .select(
-      'id, organization_id, party_id, contact_id, engagement_id, module, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
+      'id, organization_id, party_id, contact_id, engagement_id, from_address, body_plain, subject, language_detected, ai_draft_id, ai_processing_status',
     )
     .eq('id', communicationId)
     .eq('organization_id', organizationId)
@@ -251,7 +251,12 @@ async function fetchCommunicationContext(
     partyId: (data.party_id as string | null) ?? undefined,
     contactId: (data.contact_id as string | null) ?? undefined,
     engagementId: (data.engagement_id as string | null) ?? undefined,
-    module: (data.module as PartyTypeCode | null) ?? undefined,
+    // `module` column was removed during the party_type normalization; it is
+    // no longer persisted on communications. Left undefined so the auto-send
+    // gate skips the module-allow check (see auto-send-gate.ts line ~117).
+    // TODO: restore via app.party_types lookup on party_type_id if module-
+    // scoped auto-send rules are needed.
+    module: undefined,
     fromAddress: (data.from_address as string | null) ?? undefined,
     bodyPlain: (data.body_plain as string | null) ?? '',
     subject: (data.subject as string | null) ?? '',
