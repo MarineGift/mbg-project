@@ -24,6 +24,9 @@ const PARTY_TYPE_STYLES: Record<PartyTypeCode, string> = {
   filler_supplier: 'bg-amber-100 text-amber-700',
   buyer: 'bg-yellow-100 text-yellow-700',
   government_grant: 'bg-gray-100 text-gray-700',  // standard tailwind colors; a module-filler token can be added later
+  consultant: 'bg-sky-100 text-sky-700',
+  crowdfunding_platform: 'bg-rose-100 text-rose-700',
+  self: 'bg-teal-100 text-teal-700',
 };
 
 export function PartyTypeBadge({

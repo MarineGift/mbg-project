@@ -93,6 +93,9 @@ const schema = z.object({
     'customer',
     'partner',
     'government_grant',
+    'consultant',
+    'crowdfunding_platform',
+    'self',
   ]),
   partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   countryCode: z

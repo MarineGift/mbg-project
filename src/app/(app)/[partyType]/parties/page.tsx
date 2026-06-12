@@ -42,6 +42,9 @@ const MODULE_LABELS: Record<PartyTypeCode, string> = {
   filler_supplier:         'Filler Suppliers',
   buyer:                   'Buyers',
   government_grant:        'Government Grants',
+  consultant:              'Consultants',
+  crowdfunding_platform:   'Crowdfunding Platforms',
+  self:                    'MarineBio Group',
 };
 
 const TIER_LABELS: Record<PartyTier, string> = {
