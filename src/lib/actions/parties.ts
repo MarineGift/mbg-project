@@ -10,6 +10,10 @@
  *   - 2026-05-12: removed a reference to the nonexistent deleted_by column in deleteParty.
  *   - 2026-05-25 (Phase C): module → party_type, party_type → party_kind rename.
  *                 The TS schema is camelCase (partyType, partyKind); DB columns are snake_case.
+ *   - 2026-06-12: auto-register the party's website domain in app.email_whitelist on
+ *                 create/update (best-effort; duplicates tolerated; social/free domains skipped).
+ *                 Address-level party pinning stays in the Email Whitelist screen for
+ *                 multi-party domains (e.g. omya.com -> Omya HQ vs Omya Korea).
  */
 
 'use server';
@@ -19,6 +23,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { rpc } from '@/lib/rpc/typed-rpc';
 import { PARTY_TYPES, type PartyType } from '@/types/party-type';
 
 export interface PartyActionResult {
@@ -60,6 +65,67 @@ const partySchema = z.object({
   source: z.string().max(120).optional().nullable(),
   notes: z.string().max(10_000).optional().nullable(),
 });
+
+/* ============================================================
+ * Auto-whitelist helper (2026-06-12)
+ * ============================================================ */
+
+/** Domains that must never be whitelisted from a website field:
+ *  free mail providers + social/aggregator sites often pasted as "website". */
+const WHITELIST_SKIP_DOMAINS = new Set([
+  'gmail.com', 'naver.com', 'daum.net', 'kakao.com', 'yahoo.com',
+  'hotmail.com', 'outlook.com', 'icloud.com', 'qq.com', '163.com',
+  'linkedin.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com',
+  'youtube.com', 'crunchbase.com', 'pitchbook.com', 'wikipedia.org',
+  'medium.com', 'github.com', 'angel.co', 'notion.site',
+]);
+
+function extractDomainFromWebsite(website: string | null | undefined): string | null {
+  if (!website) return null;
+  try {
+    const host = new URL(website).hostname.toLowerCase();
+    const domain = host.startsWith('www.') ? host.slice(4) : host;
+    if (!domain.includes('.')) return null;
+    if (WHITELIST_SKIP_DOMAINS.has(domain)) return null;
+    return domain;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort: register the party's website domain in app.email_whitelist.
+ * - never throws / never fails the party save
+ * - duplicate entries are silently tolerated (RPC error matched by message)
+ * - inbound party routing for shared domains is handled at the address level
+ *   (contacts.email exact match), so a domain entry here is acceptance-only.
+ */
+async function autoWhitelistPartyDomain(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organizationId: string,
+  website: string | null | undefined,
+  partyName: string,
+): Promise<void> {
+  const domain = extractDomainFromWebsite(website);
+  if (!domain) return;
+  try {
+    const { error } = await rpc(supabase, 'add_email_whitelist', {
+      p_org_id: organizationId,
+      p_pattern: domain,
+      p_kind: 'domain',
+      p_notes: `auto: party website (${partyName})`,
+    });
+    if (error && !/duplicate|unique|already|exists/i.test(error.message)) {
+      console.warn('[parties.autoWhitelistPartyDomain] add failed:', error.message);
+    }
+  } catch (e) {
+    console.warn('[parties.autoWhitelistPartyDomain] unexpected:', e);
+  }
+}
+
+/* ============================================================
+ * Create
+ * ============================================================ */
 
 export async function createParty(input: z.input<typeof partySchema>): Promise<PartyActionResult> {
   let auth: AuthContext;
@@ -136,6 +202,11 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     };
   }
   const partyId = (data as { id: string }).id;
+
+  // 2026-06-12: auto-register the party's email domain in the whitelist.
+  await autoWhitelistPartyDomain(
+    supabase, auth.organizationId, parsed.data.website, parsed.data.name.trim(),
+  );
 
   revalidatePath(`/${parsed.data.partyType}/parties`);
   return { ok: true, partyId };
@@ -221,6 +292,11 @@ export async function updateParty(
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
   }
+
+  // 2026-06-12: keep the whitelist in sync when a website is added/changed later.
+  await autoWhitelistPartyDomain(
+    supabase, auth.organizationId, parsed.data.website, parsed.data.name.trim(),
+  );
 
   // D6-5e: use input party_type code for revalidation (was reading removed DB col).
   revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);
