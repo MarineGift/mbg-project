@@ -150,6 +150,14 @@ export class MailCarrierClient {
   public readonly kind: SendingAddressKind | 'default' | 'account';
   /** username currently used for IMAP auth (for logging). */
   public readonly username: string;
+  /** 2026-06-12: prevents overlapping fetch passes on the same client. */
+  private fetchInFlight = false;
+
+  /** 2026-06-12: log tag including the account address so multiple DB
+   *  mailboxes (all kind='account') are distinguishable in worker logs. */
+  private get logTag(): string {
+    return this.username ? `${this.kind}:${this.username}` : String(this.kind);
+  }
 
   constructor(
     private readonly supabase: SupabaseClient,
@@ -376,7 +384,7 @@ export class MailCarrierClient {
       } catch (err) {
         if (!this.isRunning) break;
         // eslint-disable-next-line no-console
-        console.error(`[mailcarrier:${this.kind}] idle loop error:`, err);
+        console.error(`[mailcarrier:${this.logTag}] idle loop error:`, err);
         await this.handleReconnect();
       }
       iterations += 1;
@@ -404,7 +412,7 @@ export class MailCarrierClient {
 
     // eslint-disable-next-line no-console
     console.log(
-      `[mailcarrier:${this.kind}] polling loop start ` +
+      `[mailcarrier:${this.logTag}] polling loop start ` +
         `(interval=${env.MAILCARRIER_POLL_INTERVAL_SECONDS}s, isRunning=${this.isRunning})`,
     );
 
@@ -413,7 +421,7 @@ export class MailCarrierClient {
       const tickStart = Date.now();
       // eslint-disable-next-line no-console
       console.log(
-        `[mailcarrier:${this.kind}] polling tick #${iterations} — searching new messages`,
+        `[mailcarrier:${this.logTag}] polling tick #${iterations} — searching new messages`,
       );
 
       try {
@@ -421,7 +429,7 @@ export class MailCarrierClient {
         const elapsed = Date.now() - tickStart;
         // eslint-disable-next-line no-console
         console.log(
-          `[mailcarrier:${this.kind}] polling tick #${iterations} done (${elapsed}ms)`,
+          `[mailcarrier:${this.logTag}] polling tick #${iterations} done (${elapsed}ms)`,
         );
         consecutiveErrors = 0;
       } catch (err) {
@@ -429,7 +437,7 @@ export class MailCarrierClient {
         const elapsed = Date.now() - tickStart;
         // eslint-disable-next-line no-console
         console.error(
-          `[mailcarrier:${this.kind}] polling iteration #${iterations} error ` +
+          `[mailcarrier:${this.logTag}] polling iteration #${iterations} error ` +
             `after ${elapsed}ms (consecutive=${consecutiveErrors}):`,
           err,
         );
@@ -444,17 +452,17 @@ export class MailCarrierClient {
         ) {
           // eslint-disable-next-line no-console
           console.warn(
-            `[mailcarrier:${this.kind}] connection-level error detected (${errCode}) — attempting reconnect`,
+            `[mailcarrier:${this.logTag}] connection-level error detected (${errCode}) — attempting reconnect`,
           );
           try {
             await this.handleReconnect();
             // eslint-disable-next-line no-console
-            console.log(`[mailcarrier:${this.kind}] reconnect succeeded`);
+            console.log(`[mailcarrier:${this.logTag}] reconnect succeeded`);
             consecutiveErrors = 0; // reset the counter on successful reconnect
           } catch (reconnectErr) {
             // eslint-disable-next-line no-console
             console.error(
-              `[mailcarrier:${this.kind}] reconnect failed:`,
+              `[mailcarrier:${this.logTag}] reconnect failed:`,
               reconnectErr,
             );
           }
@@ -463,7 +471,7 @@ export class MailCarrierClient {
         if (consecutiveErrors >= 10) {
           // eslint-disable-next-line no-console
           console.error(
-            `[mailcarrier:${this.kind}] aborting polling loop after ${consecutiveErrors} consecutive errors`,
+            `[mailcarrier:${this.logTag}] aborting polling loop after ${consecutiveErrors} consecutive errors`,
           );
           break;
         }
@@ -476,7 +484,7 @@ export class MailCarrierClient {
 
     // eslint-disable-next-line no-console
     console.log(
-      `[mailcarrier:${this.kind}] polling loop exited ` +
+      `[mailcarrier:${this.logTag}] polling loop exited ` +
         `(isRunning=${this.isRunning}, iterations=${iterations})`,
     );
   }
@@ -538,7 +546,7 @@ export class MailCarrierClient {
     if (error) {
       // eslint-disable-next-line no-console
       console.warn(
-        `[mailcarrier:${this.kind}] loadLastProcessedUid failed, defaulting to 0:`,
+        `[mailcarrier:${this.logTag}] loadLastProcessedUid failed, defaulting to 0:`,
         error.message,
       );
       return 0;
@@ -567,7 +575,7 @@ export class MailCarrierClient {
     if (error) {
       // eslint-disable-next-line no-console
       console.error(
-        `[mailcarrier:${this.kind}] saveLastProcessedUid failed for uid=${uid}:`,
+        `[mailcarrier:${this.logTag}] saveLastProcessedUid failed for uid=${uid}:`,
         error.message,
       );
       // doesn't throw - retries on the next tick. Worst case the same message is processed again, but
@@ -583,15 +591,24 @@ export class MailCarrierClient {
    * -------------------------------------------------------- */
 
   async fetchAndProcessNew(onMessage: InboundHandler): Promise<void> {
+    // 2026-06-12: skip if a previous pass on this client is still running
+    // (long initial scans overlapped with poll ticks and mixed their logs).
+    if (this.fetchInFlight) {
+      // eslint-disable-next-line no-console
+      console.log(`[mailcarrier:${this.logTag}] fetch: previous pass still in flight - skipping tick`);
+      return;
+    }
+    this.fetchInFlight = true;
+
     const t0 = Date.now();
     // eslint-disable-next-line no-console
-    console.log(`[mailcarrier:${this.kind}] fetch: acquiring lock`);
+    console.log(`[mailcarrier:${this.logTag}] fetch: acquiring lock`);
 
     const lock = await this.client.getMailboxLock(env.MAILCARRIER_INBOX_FOLDER);
 
     // eslint-disable-next-line no-console
     console.log(
-      `[mailcarrier:${this.kind}] fetch: lock acquired (+${Date.now() - t0}ms)`,
+      `[mailcarrier:${this.logTag}] fetch: lock acquired (+${Date.now() - t0}ms)`,
     );
 
     let msgCount = 0;
@@ -603,7 +620,7 @@ export class MailCarrierClient {
       const range = `${lastUid + 1}:*`;
       // eslint-disable-next-line no-console
       console.log(
-        `[mailcarrier:${this.kind}] fetch: range=${range} (last_uid=${lastUid})`,
+        `[mailcarrier:${this.logTag}] fetch: range=${range} (last_uid=${lastUid})`,
       );
 
       // 2. UID-based fetch (imapflow's third argument { uid: true })
@@ -618,7 +635,7 @@ export class MailCarrierClient {
         if (!Number.isFinite(uid) || uid <= lastUid) {
           // eslint-disable-next-line no-console
           console.log(
-            `[mailcarrier:${this.kind}] fetch: skipping uid=${uid} (<= last_uid=${lastUid})`,
+            `[mailcarrier:${this.logTag}] fetch: skipping uid=${uid} (<= last_uid=${lastUid})`,
           );
           continue;
         }
@@ -627,16 +644,17 @@ export class MailCarrierClient {
         const msgT0 = Date.now();
         // eslint-disable-next-line no-console
         console.log(
-          `[mailcarrier:${this.kind}] fetch: msg #${msgCount} received uid=${uid} (+${Date.now() - t0}ms)`,
+          `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} received uid=${uid} (+${Date.now() - t0}ms)`,
         );
 
         try {
           if (!message.source) {
             // eslint-disable-next-line no-console
             console.log(
-              `[mailcarrier:${this.kind}] fetch: msg #${msgCount} no source, marking as processed`,
+              `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} no source, marking as processed`,
             );
             lastUidProcessed = uid;
+            await this.saveLastProcessedUid(uid); // 2026-06-12: incremental save
             continue;
           }
 
@@ -644,7 +662,7 @@ export class MailCarrierClient {
           const event = await this.persistInbound(parsed);
           // eslint-disable-next-line no-console
           console.log(
-            `[mailcarrier:${this.kind}] fetch: msg #${msgCount} persistInbound done ` +
+            `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} persistInbound done ` +
               `(event=${event ? 'yes' : 'null'}) (+${Date.now() - msgT0}ms)`,
           );
 
@@ -653,12 +671,12 @@ export class MailCarrierClient {
               await onMessage(event);
               // eslint-disable-next-line no-console
               console.log(
-                `[mailcarrier:${this.kind}] fetch: msg #${msgCount} onMessage done (+${Date.now() - msgT0}ms)`,
+                `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} onMessage done (+${Date.now() - msgT0}ms)`,
               );
             } catch (handlerErr) {
               // eslint-disable-next-line no-console
               console.error(
-                `[mailcarrier:${this.kind}] fetch: msg #${msgCount} onMessage failed:`,
+                `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} onMessage failed:`,
                 handlerErr,
               );
               // even if onMessage fails, the mail itself is fully persisted - proceed with the UID update
@@ -666,11 +684,16 @@ export class MailCarrierClient {
           }
 
           // processing done (covers both persist success and whitelist skip) -> update the UID
+          // 2026-06-12: save IMMEDIATELY per message. Previously the UID was saved only
+          // once at the end of the whole pass, so a dropped IMAP connection during a long
+          // initial scan lost all progress and every restart re-scanned the entire mailbox
+          // (state stuck, e.g. contact@ frozen at uid=75 while uids up to 230 were streamed).
           lastUidProcessed = uid;
+          await this.saveLastProcessedUid(uid);
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error(
-            `[mailcarrier:${this.kind}] fetch: msg #${msgCount} uid=${uid} processing failed:`,
+            `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} uid=${uid} processing failed:`,
             err,
           );
           // on a single failure, don't update lastUidProcessed -> retry on the next tick.
@@ -684,26 +707,27 @@ export class MailCarrierClient {
         await this.saveLastProcessedUid(lastUidProcessed);
         // eslint-disable-next-line no-console
         console.log(
-          `[mailcarrier:${this.kind}] fetch: saved last_uid=${lastUidProcessed} ` +
+          `[mailcarrier:${this.logTag}] fetch: saved last_uid=${lastUidProcessed} ` +
             `(${msgCount} msgs in this tick, total +${Date.now() - t0}ms)`,
         );
       } else {
         // eslint-disable-next-line no-console
         console.log(
-          `[mailcarrier:${this.kind}] fetch: no new messages (+${Date.now() - t0}ms)`,
+          `[mailcarrier:${this.logTag}] fetch: no new messages (+${Date.now() - t0}ms)`,
         );
       }
     } finally {
+      this.fetchInFlight = false;
       // eslint-disable-next-line no-console
-      console.log(`[mailcarrier:${this.kind}] fetch: releasing lock`);
+      console.log(`[mailcarrier:${this.logTag}] fetch: releasing lock`);
       try {
         await lock.release();
         // eslint-disable-next-line no-console
-        console.log(`[mailcarrier:${this.kind}] fetch: lock released`);
+        console.log(`[mailcarrier:${this.logTag}] fetch: lock released`);
       } catch (releaseErr) {
         // eslint-disable-next-line no-console
         console.warn(
-          `[mailcarrier:${this.kind}] fetch: lock release failed:`,
+          `[mailcarrier:${this.logTag}] fetch: lock release failed:`,
           releaseErr,
         );
       }
@@ -730,7 +754,7 @@ export class MailCarrierClient {
     );
     if (!isAllowed) {
       // eslint-disable-next-line no-console
-      console.log(`[mailcarrier:${this.kind}] skip — not in whitelist: ${fromAddress}`);
+      console.log(`[mailcarrier:${this.logTag}] skip — not in whitelist: ${fromAddress}`);
       return null;
     }
 
@@ -838,7 +862,7 @@ export class MailCarrierClient {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(
-          `[mailcarrier:${this.kind}] attachment persist failed for comm=${communicationId}:`,
+          `[mailcarrier:${this.logTag}] attachment persist failed for comm=${communicationId}:`,
           err,
         );
       }
@@ -867,7 +891,7 @@ export class MailCarrierClient {
     if (att.content.length > ATTACHMENT_MAX_BYTES) {
       // eslint-disable-next-line no-console
       console.warn(
-        `[mailcarrier:${this.kind}] attachment too large, skipping: ${att.filename ?? '(unknown)'} size=${att.content.length}`,
+        `[mailcarrier:${this.logTag}] attachment too large, skipping: ${att.filename ?? '(unknown)'} size=${att.content.length}`,
       );
       return;
     }
@@ -916,7 +940,7 @@ export class MailCarrierClient {
     if (insertError) {
       // eslint-disable-next-line no-console
       console.error(
-        `[mailcarrier:${this.kind}] attachments INSERT failed, attempting Storage cleanup:`,
+        `[mailcarrier:${this.logTag}] attachments INSERT failed, attempting Storage cleanup:`,
         insertError,
       );
       try {
@@ -946,7 +970,7 @@ export class MailCarrierClient {
     const delayMs = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 60_000);
     // eslint-disable-next-line no-console
     console.warn(
-      `[mailcarrier:${this.kind}] reconnect attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} after ${delayMs}ms`,
+      `[mailcarrier:${this.logTag}] reconnect attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} after ${delayMs}ms`,
     );
     await new Promise((r) => setTimeout(r, delayMs));
     try {
