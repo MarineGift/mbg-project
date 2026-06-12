@@ -11,6 +11,44 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { env } from '@/lib/env';
 import { createClient } from '@supabase/supabase-js';
 
+/* ------------------------------------------------------------------
+ * IMAP timeout budget (2026-06-11)
+ * Previously the bulk path allowed a 60s IMAP budget and connect() had
+ * no timeout. Selecting test messages that do not exist on the server
+ * (e.g. "Microsoft Outlook test message") made every search return empty
+ * while the request stayed pending for ~1 min, so the delete looked stuck.
+ * IMAP cleanup is best-effort; the DB soft-delete must not wait on it.
+ * ------------------------------------------------------------------ */
+const IMAP_CONNECT_TIMEOUT_MS = 5_000;
+const IMAP_SOCKET_TIMEOUT_MS = 8_000;
+const IMAP_SINGLE_BUDGET_MS = 8_000;
+const IMAP_BULK_BUDGET_MS = 8_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  }) as Promise<T>;
+}
+
+/**
+ * True only for messages the MailCarrier worker actually pulled off the IMAP
+ * server (they carry external_data.mailcarrier_received_at). Synthetic/seed
+ * rows like the "Microsoft Outlook test message" lack this, so there is nothing
+ * to delete server-side -- skipping IMAP avoids hammering a slow/unstable
+ * MailCarrier host for messages that were never on it.
+ */
+function isFromImapServer(extData: Record<string, unknown> | null): boolean {
+  if (!extData) return false;
+  return typeof extData.mailcarrier_received_at === 'string';
+}
+
 export type DeleteCommunicationResult =
   | { success: true }
   | { success: false; error: string };
@@ -47,12 +85,13 @@ async function deleteFromImap(messageId: string, accountKind: string): Promise<v
     host,
     port: env.MAILCARRIER_PORT,
     secure: isImplicitTls,
+    doSTARTTLS: isImplicitTls ? undefined : false,
     auth: { user: creds.username, pass: creds.password },
     tls: { rejectUnauthorized: env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true },
     logger: false,
-    socketTimeout: 30_000,
+    socketTimeout: IMAP_SOCKET_TIMEOUT_MS,
   });
-  await client.connect();
+  await withTimeout(client.connect(), IMAP_CONNECT_TIMEOUT_MS, 'IMAP connect');
   const lock = await client.getMailboxLock(env.MAILCARRIER_INBOX_FOLDER);
   try {
     const uids = await (client as any).search(
@@ -135,18 +174,24 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
     return { success: false, error: 'Message not found or already deleted' };
   }
 
-  // 4. IMAP delete (only when inbound + message_id present)
-  if (comm.direction === 'inbound' && comm.message_id) {
-    const extData = (comm.external_data ?? {}) as Record<string, unknown>;
+  // 4. IMAP delete (only for messages actually pulled from the IMAP server)
+  const extData4 = (comm.external_data ?? {}) as Record<string, unknown>;
+  if (comm.direction === 'inbound' && comm.message_id && isFromImapServer(extData4)) {
     const accountKind =
-      typeof extData.mailcarrier_account_kind === 'string'
-        ? extData.mailcarrier_account_kind
+      typeof extData4.mailcarrier_account_kind === 'string'
+        ? extData4.mailcarrier_account_kind
         : 'shared';
     try {
-      await deleteFromImap(comm.message_id, accountKind);
+      await withTimeout(
+        deleteFromImap(comm.message_id, accountKind),
+        IMAP_SINGLE_BUDGET_MS,
+        'IMAP single delete',
+      );
     } catch (imapErr) {
       console.error('[deleteComm] IMAP delete failed (non-fatal):', imapErr);
     }
+  } else if (comm.direction === 'inbound' && comm.message_id) {
+    console.log('[deleteComm] skipping IMAP (not from server) id=', id);
   }
 
   // 5. DB soft-delete
@@ -186,21 +231,6 @@ export async function deleteCommunication(id: string): Promise<DeleteCommunicati
  *   3. ONE bulk DB soft-delete via .in('id', ids)
  * ============================================================ */
 
-const IMAP_BULK_BUDGET_MS = 60_000;
-
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms`)),
-      ms,
-    );
-  });
-  return Promise.race([p, timeout]).finally(() => {
-    if (timer) clearTimeout(timer);
-  }) as Promise<T>;
-}
-
 /** Delete many messages from one mailbox over a SINGLE IMAP connection. */
 async function deleteManyFromImap(
   messageIds: string[],
@@ -224,13 +254,14 @@ async function deleteManyFromImap(
     host,
     port: env.MAILCARRIER_PORT,
     secure: isImplicitTls,
+    doSTARTTLS: isImplicitTls ? undefined : false,
     auth: { user: creds.username, pass: creds.password },
     tls: { rejectUnauthorized: env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true },
     logger: false,
-    socketTimeout: 15_000,
+    socketTimeout: IMAP_SOCKET_TIMEOUT_MS,
   });
 
-  await client.connect();
+  await withTimeout(client.connect(), IMAP_CONNECT_TIMEOUT_MS, 'IMAP connect');
   const lock = await client.getMailboxLock(env.MAILCARRIER_INBOX_FOLDER);
   try {
     for (const messageId of messageIds) {
@@ -316,9 +347,15 @@ export async function deleteCommunicationsBulk(
 
   // 4. group inbound message-ids by mail account kind
   const idsByKind = new Map<string, string[]>();
+  let skippedNotFromServer = 0;
   for (const comm of comms) {
     if (comm.direction !== 'inbound' || !comm.message_id) continue;
     const extData = (comm.external_data ?? {}) as Record<string, unknown>;
+    if (!isFromImapServer(extData)) {
+      // synthetic/seed row (e.g. test mail) -- never on the IMAP server
+      skippedNotFromServer += 1;
+      continue;
+    }
     const accountKind =
       typeof extData.mailcarrier_account_kind === 'string'
         ? extData.mailcarrier_account_kind
@@ -326,6 +363,13 @@ export async function deleteCommunicationsBulk(
     const list = idsByKind.get(accountKind) ?? [];
     list.push(comm.message_id);
     idsByKind.set(accountKind, list);
+  }
+  if (skippedNotFromServer > 0) {
+    console.log(
+      '[deleteCommBulk] skipped IMAP for',
+      skippedNotFromServer,
+      'non-server message(s)',
+    );
   }
 
   // 5. IMAP phase: ONE connection per account kind, sequential, time-budgeted.

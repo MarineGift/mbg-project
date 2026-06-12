@@ -240,7 +240,9 @@ export class MailCarrierClient {
     // The account path uses per-account host/port; otherwise the existing single env values (backward compat).
     const host = creds.host ?? requireMailcarrierEnv().host;
     const port = creds.port ?? env.MAILCARRIER_PORT;
-    // 993: implicit TLS, 143: STARTTLS (ImapFlow negotiates automatically)
+    // 993: implicit TLS. 143: plaintext. This server is plaintext-only with NO
+    // STARTTLS, so doSTARTTLS:false stops ImapFlow from attempting an upgrade
+    // (the default opportunistic STARTTLS handshake hung against this server).
     const isImplicitTls = port === 993;
     // option to allow self-signed certificates (verification environments only)
     const rejectUnauthorized = env.MAILCARRIER_TLS_REJECT_UNAUTHORIZED ?? true;
@@ -249,14 +251,15 @@ export class MailCarrierClient {
       host,
       port,
       secure: isImplicitTls,
+      doSTARTTLS: isImplicitTls ? undefined : false,
       auth: {
         user: creds.username,
         pass: creds.password,
       },
       tls: { rejectUnauthorized },
       logger: false,
-      // shortened from the 5-minute default to 60s. If the mail server doesn't respond to a command, fail fast.
-      socketTimeout: 60_000,
+      // plaintext server should answer fast; fail quickly if it does not.
+      socketTimeout: 20_000,
     }) as unknown as IImapClient;
   }
 

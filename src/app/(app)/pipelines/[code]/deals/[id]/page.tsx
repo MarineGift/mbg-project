@@ -233,7 +233,7 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
         .select('id, title, checklist_id')
         .eq('deal_id', params.id)
         .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: true }),
     ]);
     engagements = (engData ?? []) as any[];
     engagementTypes = (typeData ?? []) as any[];
@@ -287,7 +287,9 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
         .schema('app')
         .from('deal_checklists' as never)
         .select('*')
-        .in('id', checklistIds);
+        .in('id', checklistIds)
+        .order('sort_order', { ascending: true, nullsFirst: true })
+        .order('created_at', { ascending: true });
       checklists = (cs ?? []) as any[];
     }
   }
