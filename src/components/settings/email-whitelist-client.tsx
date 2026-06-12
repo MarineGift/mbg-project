@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   Globe, Mail, Plus, Trash2, ToggleLeft, ToggleRight,
   Download, Loader2, CheckCircle2, AlertCircle, X, Check, Building2, ArrowRight,
+  Search, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
   addWhitelistEntry, bulkAddDomains,
@@ -39,6 +40,7 @@ export function EmailWhitelistClient({
   const [showAdd, setShowAdd] = useState(false);
   const [assignFor, setAssignFor] = useState<string | null>(null); // email to (re)assign
   const [showImport, setShowImport] = useState(false);
+  const [filter, setFilter] = useState("");
   const [isPending, start] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -77,8 +79,17 @@ export function EmailWhitelistClient({
     showToast(msg);
   };
 
-  const domains = entries.filter(e => e.kind === "domain");
-  const addresses = entries.filter(e => e.kind === "address");
+  const norm = filter.trim().toLowerCase();
+  const match = (e: WhitelistEntry) => {
+    if (!norm) return true;
+    if (e.pattern.toLowerCase().includes(norm)) return true;
+    if ((e.notes ?? "").toLowerCase().includes(norm)) return true;
+    const a = assignments[e.pattern];
+    if (a && (a.partyName.toLowerCase().includes(norm) || (a.fullName ?? "").toLowerCase().includes(norm))) return true;
+    return false;
+  };
+  const domains = entries.filter(e => e.kind === "domain" && match(e));
+  const addresses = entries.filter(e => e.kind === "address" && match(e));
 
   return (
     <div className="space-y-6">
@@ -124,6 +135,23 @@ export function EmailWhitelistClient({
         <StatCard label="Email Addresses" value={addresses.length} color="text-purple-600" />
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+        <input
+          type="text"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          placeholder="Search pattern, notes, or party..."
+          className="w-full pl-9 pr-9 py-2 border rounded-md text-sm"
+        />
+        {filter && (
+          <button onClick={() => setFilter("")} className="absolute right-3 top-2.5">
+            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+          </button>
+        )}
+      </div>
+
       {/* Add / Assign form */}
       {(showAdd || assignFor) && (
         <AddForm
@@ -145,6 +173,7 @@ export function EmailWhitelistClient({
         title="Domains"
         icon={<Globe className="w-4 h-4" />}
         entries={domains} onToggle={handleToggle} onDelete={handleDelete} isPending={isPending}
+        resetKey={norm}
       />
 
       {/* Address section (party-aware) */}
@@ -154,6 +183,7 @@ export function EmailWhitelistClient({
         entries={addresses} onToggle={handleToggle} onDelete={handleDelete} isPending={isPending}
         assignments={assignments}
         onAssign={email => { setShowAdd(false); setAssignFor(email); }}
+        resetKey={norm}
       />
 
       {/* Import modal */}
@@ -177,8 +207,10 @@ function StatCard({ label, value, color = "text-gray-900" }: { label: string; va
   );
 }
 
+const PAGE_SIZE = 25;
+
 function Section({
-  title, icon, entries, onToggle, onDelete, isPending, assignments, onAssign,
+  title, icon, entries, onToggle, onDelete, isPending, assignments, onAssign, resetKey,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -188,8 +220,14 @@ function Section({
   isPending: boolean;
   assignments?: Record<string, AddressAssignment>;
   onAssign?: (email: string) => void;
+  resetKey?: string;
 }) {
   const withParty = !!assignments;
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [resetKey]);
+  const pages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+  const cur = Math.min(page, pages - 1);
+  const pageEntries = entries.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-2 font-medium text-sm">
@@ -214,7 +252,7 @@ function Section({
             </tr>
           </thead>
           <tbody className="divide-y">
-            {entries.map(e => {
+            {pageEntries.map(e => {
               const a = assignments?.[e.pattern];
               return (
                 <tr key={e.id} className={e.is_active ? "hover:bg-gray-50" : "hover:bg-gray-50 opacity-50"}>
@@ -279,6 +317,30 @@ function Section({
             })}
           </tbody>
         </table>
+      )}
+      {pages > 1 && (
+        <div className="flex items-center justify-between px-4 py-2.5 border-t bg-gray-50 text-xs text-gray-600">
+          <span>
+            Showing {cur * PAGE_SIZE + 1}-{Math.min((cur + 1) * PAGE_SIZE, entries.length)} of {entries.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={cur === 0}
+              className="p-1.5 border rounded-md bg-white disabled:opacity-40 hover:bg-gray-100"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="px-2">{cur + 1} / {pages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(pages - 1, p + 1))}
+              disabled={cur >= pages - 1}
+              className="p-1.5 border rounded-md bg-white disabled:opacity-40 hover:bg-gray-100"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
