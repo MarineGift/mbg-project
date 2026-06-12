@@ -139,6 +139,9 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   // To-field contact picker (type-ahead over app.contacts). Picking a contact
   // sets both the address and a linked contactId (overrides props.contactId).
   const [selectedContactId, setSelectedContactId] = useState<string | null>(props.contactId ?? null);
+  // Full record of the picked contact (type-ahead). Used to re-render merge
+  // tokens client-side when a template is already applied.
+  const [selectedContact, setSelectedContact] = useState<RecipientContact | null>(null);
   const [toResults, setToResults] = useState<RecipientContact[]>([]);
   const [toOpen, setToOpen] = useState(false);
   const [toSearching, setToSearching] = useState(false);
@@ -178,7 +181,11 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
 
   // Keep the linked contact in sync with the incoming prop when (re)opening.
   useEffect(() => {
-    if (props.open) setSelectedContactId(props.contactId ?? null);
+    if (props.open) {
+      setSelectedContactId(props.contactId ?? null);
+      setSelectedContact(null);
+      setRawTemplate(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open]);
 
@@ -187,6 +194,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   function onToChange(value: string) {
     setTo(value);
     setSelectedContactId(null);
+    setSelectedContact(null);
     if (toDebounce.current) clearTimeout(toDebounce.current);
     const q = value.trim();
     if (q.length < 2) {
@@ -207,14 +215,81 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   function pickToContact(c: RecipientContact) {
     setTo(c.email);
     setSelectedContactId(c.contactId);
+    setSelectedContact(c);
     setToResults([]);
     setToOpen(false);
+    // A template is already applied: re-render subject/body from the raw
+    // template with the freshly picked contact (overwrites manual edits).
+    if (rawTemplate) {
+      const data = buildMergeData(c);
+      setSubject(renderMergeFields(rawTemplate.subject, data, { keepUnknown: true }));
+      setBody(renderMergeFields(rawTemplate.body, data, { keepUnknown: true }));
+      toast.success(`Merge fields updated for ${c.fullName}`);
+    }
   }
 
   // ?? Template tab state ??????????????????????????????????
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     props.templateId ?? "",
   );
+  // Raw (un-rendered) template kept so tokens can be re-rendered when the
+  // recipient contact changes after the template was applied.
+  const [rawTemplate, setRawTemplate] = useState<{ subject: string; body: string } | null>(null);
+
+  // Sender constants for client-side preview of {{sender_*}} tokens.
+  // Must match SENDER_* in src/lib/email/send-outbound.ts.
+  const SENDER_MERGE: Record<string, string> = {
+    sender_name: "YunYoung Heo",
+    "sender.name": "YunYoung Heo",
+    "my.name": "YunYoung Heo",
+    sender_title: "Founder & CEO",
+    "sender.title": "Founder & CEO",
+    sender_company: "MarineBio Group",
+    "sender.company": "MarineBio Group",
+  };
+
+  // Build the client-side merge map. Covers BOTH conventions:
+  //   dot notation : {{contact.firstName}}, {{contact.given_name}}, {{party.name}}
+  //   snake_case   : {{contact_first_name}}, {{company_name}}, {{fund_name}} (2026-06 set)
+  // Only keys with real values are included; missing keys stay as visible
+  // tokens (keepUnknown) so the server render pass can still fill them.
+  function buildMergeData(contact: RecipientContact | null): Record<string, string> {
+    const data: Record<string, string> = { ...SENDER_MERGE };
+
+    const fullName = (contact?.fullName ?? props.contactName ?? "").trim();
+    if (fullName) {
+      const parts = fullName.split(/\s+/);
+      const firstName = parts[0] ?? "";
+      const lastName = parts.slice(1).join(" ");
+      data["contact.name"] = fullName;
+      data["contact.full_name"] = fullName;
+      data["contact_name"] = fullName;
+      data["contact_full_name"] = fullName;
+      data["contact.firstName"] = firstName;
+      data["contact.given_name"] = firstName;
+      data["contact_first_name"] = firstName;
+      if (lastName) {
+        data["contact.family_name"] = lastName;
+        data["contact_last_name"] = lastName;
+        data["contact_family_name"] = lastName;
+      }
+    }
+    if (contact?.email) {
+      data["contact.email"] = contact.email;
+      data["contact_email"] = contact.email;
+    }
+    if (contact?.title) {
+      data["contact.title"] = contact.title;
+      data["contact_title"] = contact.title;
+    }
+    if (contact?.partyName) {
+      data["party.name"] = contact.partyName;
+      data["party_name"] = contact.partyName;
+      data["company_name"] = contact.partyName;
+      data["fund_name"] = contact.partyName;
+    }
+    return data;
+  }
 
   // ?? AI tab state ????????????????????????????????????????
   const [aiTone, setAiTone] = useState<"professional" | "friendly" | "concise">(
@@ -231,17 +306,15 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     const t = templates.find((x) => x.id === templateId);
     if (!t) return;
 
-    // Build merge-field context (best-effort with what we know on the client)
-    const firstName =
-      (props.contactName ?? "").trim().split(/\s+/)[0] ?? "";
-    const data: Record<string, string> = {
-      "contact.name": props.contactName ?? "",
-      "contact.firstName": firstName,
-      "contact.given_name": firstName,
-    };
+    const raw = { subject: t.subject ?? "", body: t.body_plain ?? "" };
+    setRawTemplate(raw);
 
-    setSubject(renderMergeFields(t.subject ?? "", data));
-    setBody(renderMergeFields(t.body_plain ?? "", data));
+    // Render with whatever is known client-side; unknown/missing tokens stay
+    // visible and are resolved either when a contact is picked (re-render in
+    // pickToContact) or server-side at send time (renderWithContext).
+    const data = buildMergeData(selectedContact);
+    setSubject(renderMergeFields(raw.subject, data, { keepUnknown: true }));
+    setBody(renderMergeFields(raw.body, data, { keepUnknown: true }));
     toast.success(`Template applied: ${t.name}`);
   }
 
@@ -558,7 +631,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                 </select>
               )}
               <p className="text-xs text-muted-foreground">
-                Tokens like <code>{"{{contact.firstName}}"}</code> are replaced automatically when you pick a template.
+                Tokens like <code>{"{{contact_first_name}}"}</code> and <code>{"{{company_name}}"}</code> are filled when you pick a template and a recipient; anything left is filled at send time.
               </p>
             </div>
           )}

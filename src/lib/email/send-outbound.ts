@@ -109,12 +109,24 @@ export interface SendOutboundResult {
  * email-compose.ts private copies are removed in the adapter step.
  * ============================================================ */
 
-/** Render {{party.*}} / {{contact.*}} merge variables; strip unmatched. */
+/** Sender defaults for {{sender_*}} merge tokens (solo-founder org).
+ *  NOTE: not derived from input.fromName because the shared inbox resolves
+ *  to the org name ("Marinebio Group"), which must not render into
+ *  "I am {{sender_name}}, {{sender_title}}". */
+const SENDER_NAME = 'YunYoung Heo';
+const SENDER_TITLE = 'Founder & CEO';
+const SENDER_COMPANY = 'MarineBio Group';
+
+/** Render merge variables; strip unmatched at the end.
+ *  Supports both dot-notation ({{contact.given_name}}, {{party.name}}) and
+ *  snake_case template tokens ({{contact_first_name}}, {{company_name}},
+ *  {{fund_name}}, {{sender_name}}, ...) used by the 2026-06 template set. */
 async function renderWithContext(
   supabase: SbClient,
   template: string,
   partyId: string,
   contactId?: string | null,
+  sender?: { name?: string | null; title?: string | null; company?: string | null },
 ): Promise<string> {
   let result = template;
 
@@ -129,10 +141,15 @@ async function renderWithContext(
     | null;
 
   if (party) {
+    const partyName = party.party_name ?? '';
     result = result
-      .replace(/{{party\.name}}/g, party.party_name ?? '')
+      .replace(/{{party\.name}}/g, partyName)
       .replace(/{{party\.country}}/g, party.country_code ?? '')
-      .replace(/{{party\.website}}/g, party.website ?? '');
+      .replace(/{{party\.website}}/g, party.website ?? '')
+      // snake_case aliases (2026-06 template set)
+      .replace(/{{\s*party_name\s*}}/g, partyName)
+      .replace(/{{\s*company_name\s*}}/g, partyName)
+      .replace(/{{\s*fund_name\s*}}/g, partyName);
   }
 
   let resolvedContactId = contactId ?? null;
@@ -169,14 +186,37 @@ async function renderWithContext(
       const fullName = [contact.given_name, contact.family_name].filter(Boolean).join(' ');
       result = result
         .replace(/{{contact\.given_name}}/g, contact.given_name ?? '')
+        .replace(/{{contact\.firstName}}/g, contact.given_name ?? '')
         .replace(/{{contact\.family_name}}/g, contact.family_name ?? '')
         .replace(/{{contact\.full_name}}/g, fullName)
+        .replace(/{{contact\.name}}/g, fullName)
         .replace(/{{contact\.email}}/g, contact.email ?? '')
         .replace(/{{contact\.title}}/g, contact.title_text ?? '')
         .replace(/{{contact\.department}}/g, contact.department ?? '')
-        .replace(/{{contact\.phone}}/g, contact.phone_e164 ?? '');
+        .replace(/{{contact\.phone}}/g, contact.phone_e164 ?? '')
+        // snake_case aliases (2026-06 template set)
+        .replace(/{{\s*contact_first_name\s*}}/g, contact.given_name ?? '')
+        .replace(/{{\s*contact_last_name\s*}}/g, contact.family_name ?? '')
+        .replace(/{{\s*contact_family_name\s*}}/g, contact.family_name ?? '')
+        .replace(/{{\s*contact_full_name\s*}}/g, fullName)
+        .replace(/{{\s*contact_name\s*}}/g, fullName)
+        .replace(/{{\s*contact_email\s*}}/g, contact.email ?? '')
+        .replace(/{{\s*contact_title\s*}}/g, contact.title_text ?? '');
     }
   }
+
+  // sender tokens (both conventions)
+  const senderName = sender?.name ?? SENDER_NAME;
+  const senderTitle = sender?.title ?? SENDER_TITLE;
+  const senderCompany = sender?.company ?? SENDER_COMPANY;
+  result = result
+    .replace(/{{\s*sender_name\s*}}/g, senderName)
+    .replace(/{{sender\.name}}/g, senderName)
+    .replace(/{{my\.name}}/g, senderName)
+    .replace(/{{\s*sender_title\s*}}/g, senderTitle)
+    .replace(/{{sender\.title}}/g, senderTitle)
+    .replace(/{{\s*sender_company\s*}}/g, senderCompany)
+    .replace(/{{sender\.company}}/g, senderCompany);
 
   // strip any unmatched variables
   result = result.replace(/{{[^}]+}}/g, '');
