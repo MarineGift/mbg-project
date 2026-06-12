@@ -53,7 +53,8 @@ export async function GET(
     if (error || !data) {
       return NextResponse.json({ error: 'Attachment not found' }, { status: 404 });
     }
-    const att = data as AttachmentRow;
+    // unknown-first cast: generated types predate drive_file_id (33_*.sql).
+    const att = data as unknown as AttachmentRow;
 
     const canStream =
       att.storage_provider === 'google_drive' &&

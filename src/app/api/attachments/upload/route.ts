@@ -87,23 +87,27 @@ export async function POST(req: NextRequest) {
     });
 
     // Insert through the user's client so RLS applies.
+    // NOTE: payload cast follows the codebase's `as never` idiom -- the
+    // generated Database types predate the drive_file_id column (33_*.sql).
+    // Regenerating supabase types removes the need for this cast.
+    const payload = {
+      organization_id: orgId,
+      entity_type: entityType,
+      entity_id: entityId,
+      file_name: uploaded.name,
+      file_size_bytes: uploaded.size,
+      mime_type: uploaded.mimeType,
+      storage_provider: 'google_drive',
+      storage_bucket: null,
+      storage_path: uploaded.webViewLink,
+      drive_file_id: uploaded.id,
+      description,
+      uploaded_by: user.id,
+    };
     const { data: row, error } = await supabase
       .schema('app')
       .from('attachments')
-      .insert({
-        organization_id: orgId,
-        entity_type: entityType,
-        entity_id: entityId,
-        file_name: uploaded.name,
-        file_size_bytes: uploaded.size,
-        mime_type: uploaded.mimeType,
-        storage_provider: 'google_drive',
-        storage_bucket: null,
-        storage_path: uploaded.webViewLink,
-        drive_file_id: uploaded.id,
-        description,
-        uploaded_by: user.id,
-      })
+      .insert(payload as never)
       .select('*')
       .single();
 
