@@ -10,6 +10,9 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
+  // Drive: per-file access for URM attachment upload/download.
+  // Re-consent required after adding (Settings -> Calendar -> reconnect Google).
+  'https://www.googleapis.com/auth/drive.file',
 ].join(' ')
 
 // ─────────────────────────────────────────────
