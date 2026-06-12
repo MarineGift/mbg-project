@@ -19,6 +19,7 @@ export async function listAttachments(
 ): Promise<{ data: Attachment[]; error: string | null }> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
+    .schema('app')
     .from('attachments')
     .select('*')
     .eq('entity_type', entityType)
@@ -44,6 +45,7 @@ export async function addAttachment(
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
+    .schema('app')
     .from('attachments')
     .insert({
       organization_id: ORG_ID,
@@ -70,6 +72,7 @@ export async function removeAttachment(
 ): Promise<{ error: string | null }> {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
+    .schema('app')
     .from('attachments')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
