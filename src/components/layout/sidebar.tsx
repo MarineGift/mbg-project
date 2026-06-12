@@ -52,6 +52,7 @@ const PIPELINE_DOT: Record<string, string> = {
   crowdfunding:     'bg-rose-500',
   government_grant: 'bg-violet-500',
   partner:          'bg-orange-500',
+  self:             'bg-teal-600',
 };
 const FALLBACK_DOT = 'bg-zinc-400';
 
@@ -73,6 +74,7 @@ const DIRECTORY_ITEMS: readonly DirectoryItem[] = [
   { code: 'paper_mill',      name: 'Paper Mills' },
   { code: 'filler_supplier', name: 'Filler Suppliers' },
   { code: 'partner',         name: 'Partners' },
+  { code: 'self',            name: 'MarineBio Group' },
 ] as const;
 
 interface NavItem {

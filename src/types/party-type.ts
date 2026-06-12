@@ -30,7 +30,10 @@ export type PartyType =
   | 'buyer'
   | 'customer'
   | 'partner'
-  | 'government_grant';
+  | 'government_grant'
+  | 'consultant'
+  | 'crowdfunding_platform'
+  | 'self';
 
 /** Legacy alias. New code uses PartyType directly. */
 export type PartyTypeCode = PartyType;
@@ -44,6 +47,9 @@ export const PARTY_TYPES: readonly PartyType[] = [
   'customer',
   'partner',
   'government_grant',
+  'consultant',
+  'crowdfunding_platform',
+  'self',
 ] as const;
 
 /** Legacy alias. */
@@ -60,6 +66,9 @@ export const PARTY_TYPE_ID_BY_CODE: Record<PartyType, number> = {
   customer: 5,
   partner: 6,
   government_grant: 7,
+  consultant: 8,
+  crowdfunding_platform: 9,
+  self: 10,
 };
 
 export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
@@ -70,6 +79,9 @@ export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
   5: 'customer',
   6: 'partner',
   7: 'government_grant',
+  8: 'consultant',
+  9: 'crowdfunding_platform',
+  10: 'self',
 };
 
 /** Localized display names. */
@@ -92,6 +104,13 @@ export const PARTY_TYPE_DISPLAY: Record<
     ko: '정부지원',
     ja: '政府補助',
   },
+  consultant: { en: 'Consultant', ko: '컨설턴트', ja: 'コンサルタント' },
+  crowdfunding_platform: {
+    en: 'Crowdfunding Platform',
+    ko: '크라우드 펀딩 운영사',
+    ja: 'クラウドファンディング運営会社',
+  },
+  self: { en: 'MarineBio Group', ko: '자사', ja: '自社' },
 };
 
 /** Type guard. */

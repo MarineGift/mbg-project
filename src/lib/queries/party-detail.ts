@@ -172,6 +172,7 @@ export async function fetchPartyDetail(
         count: 'exact',
       })
       .eq('party_id', partyId)
+      .is('deleted_at', null)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(SIDEBAR_LIMIT),
