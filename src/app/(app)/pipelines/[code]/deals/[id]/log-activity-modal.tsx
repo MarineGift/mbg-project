@@ -311,6 +311,17 @@ function ActivityComposer({
     return tasks.filter((t) => t.checklist_id === checklistId);
   }, [tasks, checklistId]);
 
+  // Task count per checklist, shown in the dropdown labels. If every count
+  // reads (0) while tasks exist on the Tasks tab, the tasks prop isn't
+  // reaching the composer -- check the server fetch.
+  const checklistTaskCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of tasks) {
+      if (t.checklist_id) m.set(t.checklist_id, (m.get(t.checklist_id) ?? 0) + 1);
+    }
+    return m;
+  }, [tasks]);
+
   function onChecklistChange(id: string) {
     setChecklistId(id);
     // If the currently selected task isn't in the new checklist, clear it.
@@ -362,8 +373,10 @@ function ActivityComposer({
             className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
           >
             <option value="">All checklists</option>
-            {checklists.map((c) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
+            {checklists.map((c, i) => (
+              <option key={c.id} value={c.id}>
+                {i + 1}. {c.title} ({checklistTaskCounts.get(c.id) ?? 0})
+              </option>
             ))}
           </select>
           <button
@@ -385,6 +398,11 @@ function ActivityComposer({
             className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
           >
             <option value="">Log directly to this deal (no task)</option>
+            {checklistId && visibleTasks.length === 0 && (
+              <option value="" disabled>
+                No tasks in this checklist
+              </option>
+            )}
             {visibleTasks.map((t) => (
               <option key={t.id} value={t.id}>{t.title}</option>
             ))}

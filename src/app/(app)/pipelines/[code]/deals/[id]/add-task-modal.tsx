@@ -448,9 +448,9 @@ function AddTaskModal({
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
               >
                 <option value="">No checklist item (standalone)</option>
-                {checklists.map((c) => (
+                {checklists.map((c, i) => (
                   <option key={c.id} value={c.id}>
-                    {c.title || c.name || 'Checklist item'}
+                    {i + 1}. {c.title || c.name || 'Checklist item'}
                   </option>
                 ))}
               </select>
