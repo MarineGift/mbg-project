@@ -50,13 +50,8 @@ export function diagnoseTask(
     });
   }
 
-  // Overdue
-  if (
-    task.dueAt &&
-    new Date(task.dueAt).getTime() < now &&
-    task.status !== 'done' &&
-    task.status !== 'cancelled'
-  ) {
+  // Overdue (status is already not done/cancelled — guarded at the top)
+  if (task.dueAt && new Date(task.dueAt).getTime() < now) {
     const overdueDays = daysBetween(task.dueAt, now);
     out.push({
       level: 'blocker',
