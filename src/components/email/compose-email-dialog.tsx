@@ -590,6 +590,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       inReplyTo: props.replyToMessageId ?? null,
       threadId: props.threadId ?? null,
       attachments: args.attachmentsMeta,
+      useSignature,
     });
     if (result.ok) return { ok: true };
     // sendOutboundManual does not echo the blocked address; fall back to To[0].

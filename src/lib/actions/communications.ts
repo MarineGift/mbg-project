@@ -95,6 +95,8 @@ const composeSchema = z.object({
   cc: z.string().max(2000).optional().or(z.literal('')),
   subject: z.string().min(1, 'Subject is required').max(500),
   bodyPlain: z.string().min(1, 'Body is required').max(50_000),
+  /** Attach the org default signature (dialog toggle; default true). */
+  useSignature: z.boolean().optional(),
   /** If a rich-text editor exists, HTML can be passed directly (otherwise bodyPlain -> auto-converted) */
   bodyHtml: z.string().max(200_000).optional().nullable(),
   /** Party link (if present, stored in communications.party_id) */
@@ -222,7 +224,7 @@ export async function sendOutboundManual(
       ? parsed.data.bodyHtml
       : plainToHtml(parsed.data.bodyPlain),
     bodyText: parsed.data.bodyPlain,
-    useSignature: false,
+    useSignature: parsed.data.useSignature ?? true,
     inReplyTo: parsed.data.inReplyTo ?? undefined,
     references: parsed.data.inReplyTo ? [parsed.data.inReplyTo] : undefined,
     partyId: parsed.data.partyId ?? null,
