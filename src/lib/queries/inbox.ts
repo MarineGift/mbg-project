@@ -66,6 +66,12 @@ export function parseInboxFilters(
   const direction = pickEnum(params.direction, ALL_DIRECTIONS, defaults.direction);
   const queryRaw = single(params.q);
   const query = queryRaw?.trim() ?? '';
+  const searchFieldRaw = single(params.field);
+  const searchField = (['all', 'from', 'to', 'subject'] as const).includes(
+    searchFieldRaw as never,
+  )
+    ? (searchFieldRaw as InboxFilters['searchField'])
+    : defaults.searchField;
   const hasDraft = single(params.hasDraft) === '1';
   const partyIdRaw = single(params.party);
   const partyId = partyIdRaw && /^[0-9a-f-]{36}$/i.test(partyIdRaw) ? partyIdRaw : null;
@@ -74,6 +80,7 @@ export function parseInboxFilters(
     channel: channel as CommunicationChannel | 'all',
     direction: direction as CommunicationDirection | 'all',
     query,
+    searchField,
     hasDraft,
     partyId,
   };
@@ -162,7 +169,29 @@ export async function fetchInbox(
   }
   if (filters.query.length > 0) {
     const pattern = `%${escapeLikePattern(filters.query)}%`;
-    query = query.or(`subject.ilike.${pattern},body_plain.ilike.${pattern}`);
+    // Field-scoped search. Note: to_addresses is text[], which PostgREST cannot
+    // ilike directly, so the To scope (and the To part of "all") uses cs
+    // (array-contains, exact element match). from/subject/body use ilike.
+    switch (filters.searchField) {
+      case 'from':
+        query = query.or(
+          `from_address.ilike.${pattern},from_name.ilike.${pattern}`,
+        );
+        break;
+      case 'subject':
+        query = query.ilike('subject', pattern);
+        break;
+      case 'to':
+        // exact recipient address match (array element)
+        query = query.contains('to_addresses', [filters.query]);
+        break;
+      case 'all':
+      default:
+        query = query.or(
+          `from_address.ilike.${pattern},from_name.ilike.${pattern},subject.ilike.${pattern},body_plain.ilike.${pattern}`,
+        );
+        break;
+    }
   }
 
   // sort

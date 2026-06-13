@@ -48,8 +48,8 @@ export default async function SentPage({ searchParams }: PageProps) {
           {/* TODO t7c: dedicated sent.queueDescription i18n key */}
           Messages you have sent.
         </p>
-        <div className="mt-4 w-full max-w-xl">
-          <InboxSearchBar initialQuery={filters.query} />
+        <div className="mt-4 w-full max-w-2xl">
+          <InboxSearchBar initialQuery={filters.query} initialField={filters.searchField} />
         </div>
       </header>
 

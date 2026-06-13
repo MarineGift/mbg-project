@@ -85,13 +85,24 @@ export interface InboxRow {
 }
 
 /**
+ * Inbox search field scope - which column(s) the query term targets.
+ *   all     -> from (address+name), to, subject, body
+ *   from    -> from_address + from_name
+ *   to      -> to_addresses (exact element match; see query note)
+ *   subject -> subject
+ */
+export type InboxSearchField = 'all' | 'from' | 'to' | 'subject';
+
+/**
  * Inbox filter - passed via URL searchParams.
  */
 export interface InboxFilters {
   channel: CommunicationChannel | 'all';
   direction: CommunicationDirection | 'all';
-  /** search term (ilike + pg_trgm). targets subject + body_plain */
+  /** search term (ilike + pg_trgm) */
   query: string;
+  /** which field(s) the search term targets (default: all) */
+  searchField: InboxSearchField;
   /** only inbound that has an AI draft */
   hasDraft: boolean;
   /** a specific party (UUID) - Phase 1 supports only direct URL input */
@@ -116,6 +127,7 @@ export const DEFAULT_INBOX_FILTERS: InboxFilters = {
   // "Unread inbound" indicator. Users can still toggle to outbound via UI dropdown.
   direction: 'inbound',
   query: '',
+  searchField: 'all',
   hasDraft: false,
   partyId: null,
 };

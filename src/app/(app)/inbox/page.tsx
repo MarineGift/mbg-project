@@ -52,8 +52,8 @@ export default async function InboxPage({ searchParams }: PageProps) {
           </div>
           <InboxComposeButton />
         </div>
-        <div className="mt-4 max-w-xl">
-          <InboxSearchBar initialQuery={filters.query} />
+        <div className="mt-4 max-w-2xl">
+          <InboxSearchBar initialQuery={filters.query} initialField={filters.searchField} />
         </div>
       </header>
 
