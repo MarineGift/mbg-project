@@ -166,6 +166,14 @@ export class MailCarrierClient {
   /** 2026-06-12: prevents overlapping fetch passes on the same client. */
   private fetchInFlight = false;
 
+  // AI processing is decoupled from the fetch loop: persistInbound runs
+  // synchronously (mail shows in the inbox immediately), while AI drafting
+  // runs in the background with bounded concurrency. Drained before exit.
+  private static readonly AI_MAX_CONCURRENCY = 3;
+  private aiInFlight = 0;
+  private aiWaiters: Array<() => void> = [];
+  private aiTasks = new Set<Promise<void>>();
+
   /** 2026-06-12: log tag including the account address so multiple DB
    *  mailboxes (all kind='account') are distinguishable in worker logs. */
   private get logTag(): string {
@@ -380,10 +388,14 @@ export class MailCarrierClient {
     }
     this.isRunning = true;
 
-    if (env.MAILCARRIER_USE_IDLE) {
-      await this.runIdleLoop(onMessage);
-    } else {
-      await this.runPollingLoop(onMessage);
+    try {
+      if (env.MAILCARRIER_USE_IDLE) {
+        await this.runIdleLoop(onMessage);
+      } else {
+        await this.runPollingLoop(onMessage);
+      }
+    } finally {
+      await this.drainAi();
     }
   }
 
@@ -597,6 +609,47 @@ export class MailCarrierClient {
   }
 
   /* --------------------------------------------------------
+   * dispatchAi - run onMessage (AI classify + draft) in the background
+   * with a small concurrency cap so a large backfill cannot flood the
+   * model API. The fetch loop never awaits this; mail is already persisted.
+   * -------------------------------------------------------- */
+  private dispatchAi(event: InboundMessageEvent, onMessage: InboundHandler): void {
+    const task = (async () => {
+      if (this.aiInFlight >= MailCarrierClient.AI_MAX_CONCURRENCY) {
+        await new Promise<void>((resolve) => this.aiWaiters.push(resolve));
+      }
+      this.aiInFlight += 1;
+      try {
+        await onMessage(event);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[mailcarrier:${this.logTag}] background AI failed for ${event.communicationId.slice(0, 8)}:`,
+          err,
+        );
+      } finally {
+        this.aiInFlight -= 1;
+        const next = this.aiWaiters.shift();
+        if (next) next();
+      }
+    })();
+    this.aiTasks.add(task);
+    void task.finally(() => this.aiTasks.delete(task));
+  }
+
+  /* --------------------------------------------------------
+   * drainAi - wait for all background AI tasks to finish (used on shutdown).
+   * -------------------------------------------------------- */
+  private async drainAi(): Promise<void> {
+    if (this.aiTasks.size === 0) return;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[mailcarrier:${this.logTag}] draining ${this.aiTasks.size} background AI task(s)`,
+    );
+    await Promise.allSettled(Array.from(this.aiTasks));
+  }
+
+  /* --------------------------------------------------------
    * fetchAndProcessNew - UID-based new-message processing (Phase 2-c)
    *
    * Removes the \Seen flag dependency. Based on the last_processed_uid stored in the DB,
@@ -680,20 +733,9 @@ export class MailCarrierClient {
           );
 
           if (event) {
-            try {
-              await onMessage(event);
-              // eslint-disable-next-line no-console
-              console.log(
-                `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} onMessage done (+${Date.now() - msgT0}ms)`,
-              );
-            } catch (handlerErr) {
-              // eslint-disable-next-line no-console
-              console.error(
-                `[mailcarrier:${this.logTag}] fetch: msg #${msgCount} onMessage failed:`,
-                handlerErr,
-              );
-              // even if onMessage fails, the mail itself is fully persisted - proceed with the UID update
-            }
+            // Non-blocking: AI runs in the background (bounded concurrency).
+            // The mail is already persisted, so the fetch loop must not wait.
+            this.dispatchAi(event, onMessage);
           }
 
           // processing done (covers both persist success and whitelist skip) -> update the UID
