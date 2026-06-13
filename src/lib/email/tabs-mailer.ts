@@ -30,6 +30,7 @@ import {
   type CampaignCreateResult,
   type TabsCampaignStats,
   type SendingAddressKind,
+  type SmtpAccountConfig,
 } from '../../types/email';
 import { evaluateQuietHours } from './quiet-hours';
 
@@ -113,8 +114,9 @@ export interface TabsMailerOptions {
 }
 
 export class TabsMailerClient implements ITabsMailerClient {
-  /** Per-kind transporter cache. 'default' is the backward-compat fallback. */
-  private transporters: Map<SendingAddressKind | 'default', Transporter> = new Map();
+  /** Transporter cache. Keys: kind ('personal'|'role'|'shared'), 'default'
+   *  (backward-compat fallback), or `account:<inbound_mailboxes.id>` (Step 3). */
+  private transporters: Map<string, Transporter> = new Map();
   private readonly nowProvider: () => Date;
 
   constructor(options: TabsMailerOptions = {}) {
@@ -217,6 +219,48 @@ export class TabsMailerClient implements ITabsMailerClient {
   }
 
   /**
+   * Multi-Account Step 3: create/cache a transporter for a DB mail account
+   * (app.inbound_mailboxes smtp_* columns, password already decrypted by the caller).
+   *
+   * TLS mapping mirrors baseSmtpOptions():
+   *   - useTls && port 465  -> implicit TLS (SMTPS)
+   *   - useTls && port !=465 -> STARTTLS required
+   *   - !useTls             -> plain (ignoreTLS) - current domain-mail infra
+   *
+   * NOTE: createTabsMailer() is a process-wide singleton, so this cache lives
+   * until restart. Credential changes (Step 5 UI) must call resetTabsMailerCache().
+   */
+  private getTransporterForAccount(acct: SmtpAccountConfig): Transporter {
+    const cacheKey = `account:${acct.accountId}`;
+    const cached = this.transporters.get(cacheKey);
+    if (cached) return cached;
+
+    const rejectUnauthorized = env.TABS_MAILER_TLS_REJECT_UNAUTHORIZED ?? true;
+    const config: SMTPTransport.Options = {
+      host: acct.host,
+      port: acct.port,
+      secure: acct.useTls && acct.port === 465,
+      requireTLS: acct.useTls && acct.port !== 465,
+      ignoreTLS: !acct.useTls,
+      tls: { rejectUnauthorized },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
+      // type:'login' = user/pass credentials (vs oauth2), same as the kind path.
+      auth: { type: 'login', user: acct.username, pass: acct.password },
+    };
+    // SASL mechanism preference (smtp_auth_method): 'login' (default) lets
+    // nodemailer negotiate as before; 'plain' forces AUTH PLAIN.
+    if (acct.authMethod === 'plain') {
+      config.authMethod = 'PLAIN';
+    }
+
+    const transporter = nodemailer.createTransport(config);
+    this.transporters.set(cacheKey, transporter);
+    return transporter;
+  }
+
+  /**
    * Verify SMTP connection/auth.
    * @param kind specify to verify only a particular kind. If omitted, verifies the default fallback.
    */
@@ -286,15 +330,23 @@ export class TabsMailerClient implements ITabsMailerClient {
       }
     }
 
-    // [2] kind-based transporter + From determination
+    // [2] account/kind-based transporter + From determination
+    //     Multi-Account Step 3: smtpAccount (DB) wins over kind (env).
+    const account = input.smtpAccount;
     const kind = input.sendingAddressKind;
-    const transporter = this.getTransporterFor(kind);
+    const transporter = account
+      ? this.getTransporterForAccount(account)
+      : this.getTransporterFor(kind);
 
-    // From: when kind is set, force the credentials' username (SPF/DKIM consistency)
-    //       when kind is unset, use input.fromAddress/fromName as-is (backward compat)
+    // From: account set  -> force the account address/display name (SPF/DKIM consistency)
+    //       kind set     -> force the credentials' username (existing behavior)
+    //       neither      -> use input.fromAddress/fromName as-is (backward compat)
     let effectiveFromAddress = input.fromAddress;
     let effectiveFromName = input.fromName;
-    if (kind) {
+    if (account) {
+      effectiveFromAddress = account.address;
+      if (account.displayName) effectiveFromName = account.displayName;
+    } else if (kind) {
       const creds = this.resolveCredentials(kind);
       if (creds) {
         effectiveFromAddress = creds.username;
@@ -347,7 +399,7 @@ export class TabsMailerClient implements ITabsMailerClient {
       });
     } catch (err) {
       throw new TabsMailerError(
-        `sendOne failed (kind=${kind ?? 'default'}): ${(err as Error).message}`,
+        `sendOne failed (${account ? `account=${account.address}` : `kind=${kind ?? 'default'}`}): ${(err as Error).message}`,
         err,
       );
     }

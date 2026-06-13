@@ -13,12 +13,24 @@
 //
 // NOTE: this is a plain server-side helper (NOT a 'use server' file). It is
 // imported only by server action modules and runs server-side.
+//
+// Multi-Account Mail Hub Step 3 (2026-06-12):
+//   From routing through app.inbound_mailboxes (explicit accountId > reply
+//   rule > is_default), per-account SMTP via SendOneInput.smtpAccount, and
+//   communications.mail_account_id recorded on outbound rows. When the org
+//   has no active smtp-ready accounts the legacy env/TABS_MAILER path applies
+//   unchanged (caller-provided fromAddress + sendingAddressKind).
 
 import type { SbClient } from '@/lib/supabase/server';
-import type { SendingAddressKind, AttachmentInput } from '@/types/email';
+import type { SendingAddressKind, AttachmentInput, SmtpAccountConfig } from '@/types/email';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
 import { createEmailTracking } from '@/lib/actions/email-tracking';
 import { hasUnrestoredTokens, findUnrestoredTokens } from '@/lib/ai/pii-masker';
+import {
+  resolveOutboundMailAccount,
+  decryptMailAccountSmtpPassword,
+  type MailAccount,
+} from '@/lib/email/mail-accounts';
 
 /* ============================================================
  * Input / Output
@@ -55,6 +67,12 @@ export interface SendOutboundInput {
   fromAddress: string;
   sendingAddressKind?: SendingAddressKind;
   replyTo?: string;
+  /** Multi-Account Step 3: explicit From account (app.inbound_mailboxes.id).
+   *  Wins over the reply/default routing rule. Set by the Step 4 From dropdown.
+   *  When the org has active smtp-ready accounts, the core routes From through
+   *  them (reply -> original account rule, new -> is_default) and the
+   *  fromName/fromAddress/sendingAddressKind above become a legacy fallback. */
+  mailAccountId?: string | null;
 
   // content
   subject: string;
@@ -340,6 +358,24 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     };
   }
 
+  // [3c] Multi-Account Step 3: resolve the From account from app.inbound_mailboxes.
+  //      explicit (input.mailAccountId) > reply rule > is_default.
+  //      Resolve failure or zero accounts -> legacy env/TABS_MAILER path (fromAccount=null).
+  let fromAccount: MailAccount | null = null;
+  try {
+    fromAccount = await resolveOutboundMailAccount(supabase, orgId, {
+      explicitAccountId: input.mailAccountId ?? null,
+      inReplyTo: input.inReplyTo ?? null,
+    });
+  } catch (acctErr) {
+    console.warn(
+      '[sendOutbound] mail account resolve failed - falling back to env SMTP:',
+      acctErr instanceof Error ? acctErr.message : acctErr,
+    );
+  }
+  const effectiveFromAddress = fromAccount?.address ?? input.fromAddress;
+  const effectiveFromName = fromAccount?.displayName ?? input.fromName;
+
   // [4] insert communications (status='sending')
   const insertRow: Record<string, unknown> = {
     organization_id: orgId,
@@ -348,8 +384,10 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     party_id: input.partyId ?? null,
     contact_id: input.contactId ?? null,
     deal_id: input.dealId ?? null,
-    from_address: input.fromAddress,
-    from_name: input.fromName,
+    from_address: effectiveFromAddress,
+    from_name: effectiveFromName,
+    // which account sent this (reply continuity for future inbound replies)
+    mail_account_id: fromAccount?.id ?? null,
     to_addresses: [input.to],
     cc_addresses: input.cc ?? [],
     subject: finalSubject,
@@ -418,12 +456,30 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
   const bodyText =
     input.bodyText ?? finalBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   try {
+    // Multi-Account Step 3: per-account SMTP. Decrypt inside the try block so
+    // a decrypt failure lands in the same failed-status update path below.
+    let smtpAccount: SmtpAccountConfig | undefined;
+    if (fromAccount) {
+      const smtpPassword = await decryptMailAccountSmtpPassword(supabase, fromAccount);
+      smtpAccount = {
+        accountId: fromAccount.id,
+        address: fromAccount.address,
+        displayName: fromAccount.displayName,
+        host: fromAccount.smtpHost,
+        port: fromAccount.smtpPort,
+        useTls: fromAccount.smtpUseTls,
+        username: fromAccount.smtpUsername,
+        password: smtpPassword,
+        authMethod: fromAccount.smtpAuthMethod,
+      };
+    }
+
     const mailer = await createTabsMailer();
     const sendResult = await mailer.sendOne({
       to: { address: input.to },
       cc: input.cc?.map((a) => ({ address: a })),
-      fromName: input.fromName,
-      fromAddress: input.fromAddress,
+      fromName: effectiveFromName,
+      fromAddress: effectiveFromAddress,
       replyTo: input.replyTo,
       subject: finalSubject,
       bodyText,
@@ -432,7 +488,9 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
       references: input.references ?? (input.inReplyTo ? [input.inReplyTo] : undefined),
       urmHeaders: { communicationId, autoSend: input.autoSend ?? false },
       attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
-      sendingAddressKind: input.sendingAddressKind,
+      smtpAccount,
+      // account path wins; kind only applies on the legacy fallback
+      sendingAddressKind: smtpAccount ? undefined : input.sendingAddressKind,
       traceLabel: input.traceLabel,
     });
 

@@ -210,6 +210,29 @@ export interface MailRecipient {
  */
 export type SendingAddressKind = 'personal' | 'role' | 'shared';
 
+/**
+ * Multi-Account Mail Hub Step 3 (2026-06-12).
+ * Per-account SMTP override resolved from app.inbound_mailboxes.
+ * When set on SendOneInput, takes precedence over sendingAddressKind/env
+ * (transporter, From address and From display name all come from the account).
+ */
+export interface SmtpAccountConfig {
+  /** app.inbound_mailboxes.id - transporter cache key + logs */
+  accountId: string;
+  /** account address; becomes the effective From (SPF/DKIM consistency) */
+  address: string;
+  displayName?: string | null;
+  host: string;
+  port: number;
+  /** false on 587 means no STARTTLS (plain) - matches current infra */
+  useTls: boolean;
+  username: string;
+  /** decrypted plaintext password - never persisted, never logged */
+  password: string;
+  /** 'login' (default) forces AUTH LOGIN; any other value lets nodemailer negotiate */
+  authMethod?: string | null;
+}
+
 export interface SendOneInput {
   to: MailRecipient;
   cc?: MailRecipient[];
@@ -236,6 +259,8 @@ export interface SendOneInput {
   traceLabel?: string;
   /** Which SMTP credentials kind to use. If unset, uses the existing single transporter (backward compat). */
   sendingAddressKind?: SendingAddressKind;
+  /** Multi-Account Step 3: per-account SMTP override. Wins over sendingAddressKind/env when set. */
+  smtpAccount?: SmtpAccountConfig;
 }
 
 export interface SendOneOutput {
