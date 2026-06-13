@@ -253,6 +253,52 @@ export async function deleteTask(input: { taskId: string }): Promise<TaskActionR
   return { ok: true };
 }
 
+/* ============================================================
+ * updateTaskNotes — free-form notes, used as the blocker reason
+ * ============================================================ */
+
+const notesSchema = z.object({
+  taskId: z.string().uuid(),
+  notes: z.string().max(5000).nullable(),
+});
+
+export async function updateTaskNotes(input: {
+  taskId: string;
+  notes: string | null;
+}): Promise<TaskActionResult> {
+  let auth: AuthContext;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+  const parsed = notesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, errorCode: 'validation' };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error, data } = await supabase
+    .schema('app')
+    .from('tasks' as never)
+    .update({ notes: parsed.data.notes?.trim() || null, updated_by: auth.userId } as never)
+    .eq('id', parsed.data.taskId)
+    .eq('organization_id', auth.organizationId)
+    .is('deleted_at', null)
+    .select('id, deal_id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[tasks.updateTaskNotes] update error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
+  if (!data) return { ok: false, errorCode: 'not_found' };
+
+  void (data as UpdatedTaskRow);
+  revalidateTaskSurfaces();
+  return { ok: true };
+}
+
 export async function updateTaskStatus(input: {
   taskId: string;
   status: TaskStatus;
@@ -274,6 +320,9 @@ export async function updateTaskStatus(input: {
     updates.completed_at = new Date().toISOString();
   } else if (parsed.data.status === 'todo') {
     updates.completed_at = null;
+  } else if (parsed.data.status === 'in_progress') {
+    // stamp started_at on first transition into in_progress (used by diagnostics)
+    updates.started_at = new Date().toISOString();
   }
 
   const { error, data } = await supabase

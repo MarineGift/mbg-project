@@ -123,12 +123,15 @@ interface RawTaskRow {
   id: string;
   title: string;
   description: string | null;
+  notes: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   due_at: string | null;
+  started_at: string | null;
   completed_at: string | null;
   created_at: string;
   assigned_to_user_id: string | null;
+  assigned_to_contact_id: string | null;
   deal_id: string | null;
   deal:
     | {
@@ -141,8 +144,8 @@ interface RawTaskRow {
 }
 
 const TASK_SELECT =
-  'id, title, description, status, priority, due_at, completed_at, created_at, ' +
-  'assigned_to_user_id, deal_id, ' +
+  'id, title, description, notes, status, priority, due_at, started_at, completed_at, created_at, ' +
+  'assigned_to_user_id, assigned_to_contact_id, deal_id, ' +
   'deal:deals!deal_id ( id, deal_name, pipeline:pipelines!pipeline_id ( code, name ) )';
 
 export async function fetchTasks(
@@ -221,10 +224,12 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     id: r.id,
     title: r.title,
     description: r.description,
+    notes: r.notes,
     status: r.status,
     priority: r.priority,
     dueAt: r.due_at,
     reminderAt: null,
+    startedAt: r.started_at,
     partyType: null,
     partyId: null,
     partyName: null,
@@ -232,7 +237,9 @@ function toTaskRow(r: RawTaskRow): TaskRow {
     engagementId: r.deal_id,
     engagementName: deal?.deal_name ?? null,
     engagementPipelineCode: deal?.pipeline?.code ?? null,
+    dealId: r.deal_id,
     assignedToUserId: r.assigned_to_user_id,
+    assignedToContactId: r.assigned_to_contact_id,
     createdAt: r.created_at,
     completedAt: r.completed_at,
     aiSuggested: false,

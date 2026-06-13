@@ -22,10 +22,14 @@ export interface TaskRow {
   id: string;
   title: string;
   description: string | null;
+  /** Free-form notes; reused as the blocker reason on the detail page. */
+  notes: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   dueAt: string | null;
   reminderAt: string | null;
+  /** When work started (status -> in_progress). Used by the stalled diagnostic. */
+  startedAt: string | null;
   partyType: PartyTypeCode | null;
   partyId: string | null;
   partyName: string | null;
@@ -33,7 +37,10 @@ export interface TaskRow {
   engagementId: string | null;
   engagementName: string | null;
   engagementPipelineCode: string | null;
+  /** Owning deal id (app.tasks.deal_id, NOT NULL). Same value as engagementId today. */
+  dealId: string | null;
   assignedToUserId: string | null;
+  assignedToContactId: string | null;
   createdAt: string;
   completedAt: string | null;
   /** Whether this is an AI-generated task (linked_strategy_action_id != null) */

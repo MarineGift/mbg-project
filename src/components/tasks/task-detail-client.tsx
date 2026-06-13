@@ -1,18 +1,22 @@
 // src/components/tasks/task-detail-client.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Pencil, Trash2, Sparkles, Clock,
   Briefcase, AlertTriangle, CheckCircle2, Loader2,
+  ShieldAlert, Info, Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { TaskFormDialog } from './task-form-dialog';
-import { updateTaskStatus, deleteTask } from '@/lib/actions/tasks';
+import { updateTaskStatus, deleteTask, updateTaskNotes } from '@/lib/actions/tasks';
+import { listAttachments } from '@/app/actions/attachments';
+import AttachmentsPanel from '@/components/attachments/attachments-panel';
+import { diagnoseTask, type TaskDiagnostic } from '@/lib/tasks/diagnostics';
 import type { TaskRow, TaskStatus, TaskPriority } from '@/types/task';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +63,39 @@ export function TaskDetailClient({ task: initial }: Props) {
   const [task, setTask] = useState<TaskRow>(initial);
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // Attachment count (for diagnostics). The panel below loads its own full list;
+  // this lightweight fetch just feeds the "no reference material" signal.
+  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    listAttachments('task', task.id).then((res) => {
+      if (!cancelled && !res.error) setAttachmentCount(res.data.length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id]);
+
+  // Blocker / notes editor
+  const [notesDraft, setNotesDraft] = useState(task.notes ?? '');
+  const [savingNotes, startSavingNotes] = useTransition();
+  const notesDirty = (notesDraft.trim() || null) !== (task.notes?.trim() || null);
+
+  function saveNotes() {
+    startSavingNotes(async () => {
+      const result = await updateTaskNotes({ taskId: task.id, notes: notesDraft });
+      if (result.ok) {
+        setTask((prev) => ({ ...prev, notes: notesDraft.trim() || null }));
+        toast.success('Notes saved');
+      } else {
+        toast.error(result.errorMessage ?? 'Failed to save notes');
+      }
+    });
+  }
+
+  const diagnostics: TaskDiagnostic[] = diagnoseTask(task, attachmentCount ?? 0);
+  const isDone = task.status === 'done';
 
   const isOverdue =
     task.dueAt != null &&
@@ -137,6 +174,17 @@ export function TaskDetailClient({ task: initial }: Props) {
               <Sparkles className="h-3.5 w-3.5" />
               AI
             </span>
+          )}
+          {!isDone && (
+            <Button
+              size="sm"
+              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => handleStatusChange('done')}
+              disabled={isPending}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              Mark complete
+            </Button>
           )}
           <Button
             variant="outline"
@@ -218,6 +266,40 @@ export function TaskDetailClient({ task: initial }: Props) {
             </div>
           </div>
 
+          {/* Why isn't this done yet? — completion diagnostics */}
+          {!isDone && task.status !== 'cancelled' && diagnostics.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Completion check
+              </p>
+              <ul className="rounded-lg border divide-y text-sm overflow-hidden">
+                {diagnostics.map((d, i) => {
+                  const tone =
+                    d.level === 'blocker'
+                      ? 'text-destructive'
+                      : d.level === 'warning'
+                        ? 'text-orange-600 dark:text-orange-400'
+                        : 'text-muted-foreground';
+                  const Icon =
+                    d.level === 'blocker'
+                      ? ShieldAlert
+                      : d.level === 'warning'
+                        ? AlertTriangle
+                        : Info;
+                  return (
+                    <li key={i} className="flex items-start gap-2.5 px-4 py-2.5">
+                      <Icon className={cn('h-4 w-4 mt-0.5 shrink-0', tone)} />
+                      <div className="min-w-0">
+                        <span className={cn('font-medium', tone)}>{d.label}</span>
+                        <span className="text-muted-foreground"> — {d.detail}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           {/* Description */}
           {task.description && (
             <div className="space-y-2">
@@ -282,6 +364,45 @@ export function TaskDetailClient({ task: initial }: Props) {
                 <dd className="text-muted-foreground">{fmt(task.createdAt)}</dd>
               </div>
             </dl>
+          </div>
+
+          {/* Blocker / notes */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Blocker / notes
+            </p>
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={3}
+              placeholder="What's blocking this task, or any notes on what's needed to finish it?"
+              className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm"
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={saveNotes}
+                disabled={!notesDirty || savingNotes}
+              >
+                {savingNotes ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5 mr-1" />
+                )}
+                Save notes
+              </Button>
+            </div>
+          </div>
+
+          {/* Attachments (Google Drive) — reference material for this task */}
+          <div className="space-y-2">
+            <AttachmentsPanel
+              entityType="task"
+              entityId={task.id}
+              folderLabel={task.engagementName ?? undefined}
+            />
           </div>
 
         </div>
