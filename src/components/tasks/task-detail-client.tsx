@@ -17,6 +17,8 @@ import { updateTaskStatus, deleteTask, updateTaskNotes } from '@/lib/actions/tas
 import { listAttachments } from '@/app/actions/attachments';
 import AttachmentsPanel from '@/components/attachments/attachments-panel';
 import { diagnoseTask, type TaskDiagnostic } from '@/lib/tasks/diagnostics';
+import { TaskActivityTimeline } from './task-activity-timeline';
+import type { TaskActivityEvent } from '@/lib/queries/task-activity';
 import type { TaskRow, TaskStatus, TaskPriority } from '@/types/task';
 import { cn } from '@/lib/utils';
 
@@ -56,9 +58,10 @@ const ALL_STATUSES: readonly TaskStatus[] = [
 
 interface Props {
   task: TaskRow;
+  activity?: TaskActivityEvent[];
 }
 
-export function TaskDetailClient({ task: initial }: Props) {
+export function TaskDetailClient({ task: initial, activity = [] }: Props) {
   const router = useRouter();
   const [task, setTask] = useState<TaskRow>(initial);
   const [editOpen, setEditOpen] = useState(false);
@@ -403,6 +406,14 @@ export function TaskDetailClient({ task: initial }: Props) {
               entityId={task.id}
               folderLabel={task.engagementName ?? undefined}
             />
+          </div>
+
+          {/* Activity timeline — what happened on this task, over time */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Activity
+            </p>
+            <TaskActivityTimeline events={activity} />
           </div>
 
         </div>
