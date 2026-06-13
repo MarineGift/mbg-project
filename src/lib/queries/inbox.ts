@@ -130,6 +130,7 @@ interface RawInboxRow {
   body_plain: string | null;
   occurred_at: string;
   sent_at: string | null;
+  received_at: string | null;
   ai_generated: boolean;
   read_at: string | null;
   party_id: string | null;
@@ -148,7 +149,7 @@ export async function fetchInbox(
     .from('communications' as never)
     .select(
       `id, channel, direction, status, from_address, from_name, to_addresses,
-       subject, body_plain, occurred_at, sent_at, ai_generated, read_at,
+       subject, body_plain, occurred_at, sent_at, received_at, ai_generated, read_at,
        thread_id,
        party_id,
        parties:party_id ( name:party_name, party_types(code) )`,
@@ -194,8 +195,12 @@ export async function fetchInbox(
     }
   }
 
-  // sort
+  // sort: by the time WE received/handled the message, not the original
+  // header date. Freshly pulled old mail has an old occurred_at but a recent
+  // received_at; sorting by received_at keeps newly-arrived mail at the top.
+  // received_at is null for outbound, so occurred_at is the fallback.
   query = query
+    .order('received_at', { ascending: false, nullsFirst: false })
     .order('occurred_at', { ascending: false, nullsFirst: false })
     .order('id', { ascending: true });
 
