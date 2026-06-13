@@ -82,6 +82,10 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   success: boolean;
   messageId?: string;
   error?: string;
+  /** Step 4: surfaced so the dialog can offer "add to whitelist and send". */
+  errorCode?: "not_whitelisted" | "database" | "send_failed";
+  /** The blocked recipient address (when errorCode === 'not_whitelisted'). */
+  blockedRecipient?: string;
 }> {
   const supabase = await createSupabaseServerClient();
 
@@ -162,7 +166,24 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   });
 
   if (!result.ok) {
-    return { success: false, error: result.errorMessage ?? "Send failed" };
+    const errorCode =
+      result.errorCode === "not_whitelisted"
+        ? "not_whitelisted"
+        : result.errorCode === "database"
+          ? "database"
+          : "send_failed";
+    // For not_whitelisted, the core puts the blocked address in errorMessage
+    // ("Recipient not in whitelist: <addr>"); extract it for the prompt.
+    const blockedRecipient =
+      errorCode === "not_whitelisted"
+        ? (result.errorMessage?.split(":").pop()?.trim() ?? undefined)
+        : undefined;
+    return {
+      success: false,
+      error: result.errorMessage ?? "Send failed",
+      errorCode,
+      blockedRecipient,
+    };
   }
   // Preserve legacy return shape: messageId carries the communications row id.
   return { success: true, messageId: result.communicationId };

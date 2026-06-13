@@ -18,6 +18,7 @@ import { InboxSearchBar } from '@/components/inbox/inbox-search-bar';
 import { InboxTable } from '@/components/inbox/inbox-table';
 import { InboxPagination } from '@/components/inbox/inbox-pagination';
 import { InboxEmpty } from '@/components/inbox/inbox-empty';
+import { InboxComposeButton } from '@/components/inbox/inbox-compose-button';
 import { DEFAULT_INBOX_FILTERS } from '@/types/inbox';
 
 interface PageProps {
@@ -42,10 +43,15 @@ export default async function InboxPage({ searchParams }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       <header className="px-6 py-5 border-b bg-background">
-        <h1 className="text-xl font-semibold">{t('queueTitle')}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {t('queueDescription')}
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold">{t('queueTitle')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('queueDescription')}
+            </p>
+          </div>
+          <InboxComposeButton />
+        </div>
         <div className="mt-4 max-w-xl">
           <InboxSearchBar initialQuery={filters.query} />
         </div>

@@ -50,6 +50,7 @@ import {
   getReplyFromAccountId,
   type MailAccountOption,
 } from "@/lib/actions/mail-account-options";
+import { addWhitelistEntry } from "@/lib/actions/email-whitelist";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
 import type { SendingAddressKind } from '@/types/email';
@@ -489,72 +490,115 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
 
     setSending(true);
     try {
-      let ok: boolean;
-      let errMsg: string | undefined;
+      // First attempt. doSend returns a normalized result incl. whitelist info.
+      let res = await doSend({ attachmentPaths, attachmentsMeta, finalMode });
 
-      if (props.partyId) {
-        // Party-linked: full path (merge fields + template + signature).
-        const payload: ComposePayload = {
-          mode: finalMode,
-          partyId: props.partyId,
-          contactId: selectedContactId ?? props.contactId ?? null,
-          dealId: dealId !== NO_DEAL ? dealId : null,
-          to: toParts.join(","),
-          subject: subject.trim(),
-          body,
-          cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
-          templateId:
-            activeTab === "template" && selectedTemplateId
-              ? selectedTemplateId
-              : props.templateId,
-          replyToMessageId: props.replyToMessageId,
-          threadId: props.threadId,
-          attachmentPaths,
-          attachments: attachmentsMeta,
-          useSignature,
-          fromKind,
-          mailAccountId: fromAccountId,
-        };
-        const result = await sendEmail(payload);
-        ok = result.success;
-        errMsg = result.error;
-      } else {
-        // No registered party (e.g. reply to an unknown sender). Use the proven
-        // manual outbound path, which supports a null party. The 3-mode UI still
-        // applies: Template/AI fill the body client-side; this just sends it.
-        const result = await sendOutboundManual({
-          fromKind,
-          mailAccountId: fromAccountId,
-          to: toParts.join(","),
-          cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
-          subject: subject.trim(),
-          bodyPlain: body,
-          partyId: null,
-          contactId: selectedContactId ?? props.contactId ?? null,
-          dealId: dealId !== NO_DEAL ? dealId : null,
-          inReplyTo: props.replyToMessageId ?? null,
-          threadId: props.threadId ?? null,
-          attachments: attachmentsMeta,
-        });
-        if (result.ok) {
-          ok = true;
-          errMsg = undefined;
-        } else {
-          ok = false;
-          errMsg = result.errorMessage ?? undefined;
+      // Whitelist gate: offer to add the blocked address, then retry once.
+      if (!res.ok && res.errorCode === "not_whitelisted") {
+        const blocked = res.blockedRecipient || toParts[0] || "this recipient";
+        const proceed = window.confirm(
+          `${blocked} is not in your whitelist.\n\n` +
+            `Add it to the whitelist and send? ` +
+            `(Future emails from this address will also be allowed in.)`,
+        );
+        if (!proceed) {
+          toast.error("Send cancelled.");
+          return;
         }
+        // Add the full address (kind='address') so only this sender is allowed,
+        // not the entire domain.
+        const add = await addWhitelistEntry(blocked, "address", "Added from compose");
+        if (!add.ok) {
+          toast.error(`Could not add to whitelist: ${add.error ?? "unknown error"}`);
+          return;
+        }
+        toast.success(`${blocked} added to whitelist. Sending...`);
+        res = await doSend({ attachmentPaths, attachmentsMeta, finalMode });
       }
 
-      if (ok) {
+      if (res.ok) {
         toast.success("Email sent.");
         props.onSent?.();
         handleOpenChange(false);
       } else {
-        toast.error(errMsg ?? "Send failed.");
+        toast.error(res.errMsg ?? "Send failed.");
       }
     } finally {
       setSending(false);
     }
+  }
+
+  // Performs the actual send via the appropriate path and normalizes the result
+  // so handleSend can react to the whitelist gate uniformly.
+  async function doSend(args: {
+    attachmentPaths: string[];
+    attachmentsMeta: UploadedAttachment[];
+    finalMode: ComposeMode;
+  }): Promise<{
+    ok: boolean;
+    errMsg?: string;
+    errorCode?: "not_whitelisted" | "database" | "send_failed" | string;
+    blockedRecipient?: string;
+  }> {
+    const toParts = to.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+    const ccParts = cc.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+
+    if (props.partyId) {
+      // Party-linked: full path (merge fields + template + signature).
+      const payload: ComposePayload = {
+        mode: args.finalMode,
+        partyId: props.partyId,
+        contactId: selectedContactId ?? props.contactId ?? null,
+        dealId: dealId !== NO_DEAL ? dealId : null,
+        to: toParts.join(","),
+        subject: subject.trim(),
+        body,
+        cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
+        templateId:
+          activeTab === "template" && selectedTemplateId
+            ? selectedTemplateId
+            : props.templateId,
+        replyToMessageId: props.replyToMessageId,
+        threadId: props.threadId,
+        attachmentPaths: args.attachmentPaths,
+        attachments: args.attachmentsMeta,
+        useSignature,
+        fromKind,
+        mailAccountId: fromAccountId,
+      };
+      const result = await sendEmail(payload);
+      return {
+        ok: result.success,
+        errMsg: result.error,
+        errorCode: result.errorCode,
+        blockedRecipient: result.blockedRecipient,
+      };
+    }
+
+    // No registered party (e.g. reply to an unknown sender). Use the proven
+    // manual outbound path, which supports a null party.
+    const result = await sendOutboundManual({
+      fromKind,
+      mailAccountId: fromAccountId,
+      to: toParts.join(","),
+      cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
+      subject: subject.trim(),
+      bodyPlain: body,
+      partyId: null,
+      contactId: selectedContactId ?? props.contactId ?? null,
+      dealId: dealId !== NO_DEAL ? dealId : null,
+      inReplyTo: props.replyToMessageId ?? null,
+      threadId: props.threadId ?? null,
+      attachments: args.attachmentsMeta,
+    });
+    if (result.ok) return { ok: true };
+    // sendOutboundManual does not echo the blocked address; fall back to To[0].
+    return {
+      ok: false,
+      errMsg: result.errorMessage ?? undefined,
+      errorCode: result.errorCode,
+      blockedRecipient: toParts[0],
+    };
   }
 
   // ?? Header label ????????????????????????????????????????
