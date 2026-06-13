@@ -255,7 +255,7 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
                       </p>
                       {row.partyTypeCode && <PartyTypeBadge partyType={row.partyTypeCode} size="sm" />}
                       <RelativeTime
-                        date={row.occurredAt}
+                        date={row.receivedAt ?? row.occurredAt}
                         className="text-xs text-muted-foreground whitespace-nowrap"
                       />
                     </div>

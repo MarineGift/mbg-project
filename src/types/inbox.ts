@@ -62,6 +62,8 @@ export interface InboxRow {
   subject: string | null;
   bodyPreview: string;       // first 120 chars
   occurredAt: string;
+  /** When our IMAP poller actually received the mail (null for outbound) */
+  receivedAt: string | null;
   sentAt: string | null;
   partyId: string | null;
   partyName: string | null;

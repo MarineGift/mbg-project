@@ -306,6 +306,7 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     subject: raw.subject,
     bodyPreview,
     occurredAt: raw.occurred_at,
+    receivedAt: raw.received_at,
     sentAt: raw.sent_at,
     partyId: raw.party_id,
     partyName: party?.name ?? null,
