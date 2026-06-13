@@ -52,23 +52,27 @@ export default async function DashboardPage() {
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'inbound')
-      .is('read_at' as never, null),
+      .is('read_at' as never, null)
+      .is('deleted_at' as never, null),
     supabase
       .schema('app')
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
-      .eq('direction', 'inbound'),
+      .eq('direction', 'inbound')
+      .is('deleted_at' as never, null),
     supabase
       .schema('app')
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
       .eq('direction', 'outbound')
-      .is('read_at' as never, null),
+      .is('read_at' as never, null)
+      .is('deleted_at' as never, null),
     supabase
       .schema('app')
       .from('communications' as never)
       .select('id', { count: 'exact', head: true })
-      .eq('direction', 'outbound'),
+      .eq('direction', 'outbound')
+      .is('deleted_at' as never, null),
   ]);
   const draftsPending  = (draftsPendingRes  as any).count ?? 0;
   const draftsTotal    = (draftsTotalRes    as any).count ?? 0;
