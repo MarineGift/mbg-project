@@ -60,6 +60,9 @@ export interface SendOutboundInput {
 
   // recipient (single primary; matches all three sites today)
   to: string;
+  /** Step 4: additional To recipients (multi-recipient send). Each is
+   *  whitelist-checked like the primary and recorded in to_addresses. */
+  toAdditional?: string[];
   cc?: string[];
 
   // identity - caller resolves (decision c). Core does not pick env vs DB policy.
@@ -279,16 +282,21 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
   const orgId = input.organizationId;
 
   // [1] whitelist guard (before any DB write). cc is intentionally not checked.
+  //     Step 4: every To recipient (primary + additional) is checked individually.
+  const toRecipients = [input.to, ...(input.toAdditional ?? [])]
+    .map((a) => a.trim())
+    .filter(Boolean);
   if (!input.skipWhitelist) {
-    const domain = input.to.split('@')[1]?.toLowerCase();
-    if (domain) {
+    for (const recipient of toRecipients) {
+      const domain = recipient.split('@')[1]?.toLowerCase();
+      if (!domain) continue;
       const { data: wlRows, error: wlErr } = await supabase
         .schema('app')
         .from('email_whitelist' as never)
         .select('id')
         .eq('organization_id', orgId)
         .eq('is_active', true)
-        .in('pattern', [domain, input.to.toLowerCase()])
+        .in('pattern', [domain, recipient.toLowerCase()])
         .limit(1);
       if (wlErr) {
         return {
@@ -303,7 +311,7 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
           ok: false,
           status: 'blocked',
           errorCode: 'not_whitelisted',
-          errorMessage: `Recipient not in whitelist: ${input.to}`,
+          errorMessage: `Recipient not in whitelist: ${recipient}`,
         };
       }
     }
@@ -388,7 +396,7 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     from_name: effectiveFromName,
     // which account sent this (reply continuity for future inbound replies)
     mail_account_id: fromAccount?.id ?? null,
-    to_addresses: [input.to],
+    to_addresses: toRecipients,
     cc_addresses: input.cc ?? [],
     subject: finalSubject,
     body_html: finalBody,
@@ -476,7 +484,8 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
 
     const mailer = await createTabsMailer();
     const sendResult = await mailer.sendOne({
-      to: { address: input.to },
+      to: { address: toRecipients[0] ?? input.to },
+      toAdditional: toRecipients.slice(1).map((a) => ({ address: a })),
       cc: input.cc?.map((a) => ({ address: a })),
       fromName: effectiveFromName,
       fromAddress: effectiveFromAddress,

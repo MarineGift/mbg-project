@@ -32,7 +32,10 @@ export interface ComposePayload {
   attachmentPaths?: string[];      // Supabase Storage paths (legacy / fallback)
   attachments?: Array<{ path: string; filename: string; size: number; mimeType: string }>; // preferred: rich metadata
   useSignature?: boolean;          // whether to attach the signature (default true)
-  fromKind?: SendingAddressKind;  // D6-7b: kind-aware SMTP sender selection
+  fromKind?: SendingAddressKind;  // D6-7b: kind-aware SMTP sender selection (legacy fallback)
+  /** Step 4: explicit From account (app.inbound_mailboxes.id) from the dialog
+   *  dropdown. When set, the send core routes From/SMTP through this account. */
+  mailAccountId?: string | null;
 }
 
 export interface AIReplyPayload {
@@ -104,15 +107,27 @@ export async function sendEmail(payload: ComposePayload): Promise<{
           mimeType: "application/octet-stream",
         }));
 
+  // Step 4: multi-recipient To. Split on comma/semicolon; first address is the
+  // primary, the rest go to toAdditional (each whitelist-checked in the core).
+  const toList = payload.to
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter((s) => /\S+@\S+\.\S+/.test(s));
+  if (toList.length === 0) {
+    return { success: false, error: "No valid recipient address" };
+  }
+
   // Delegate to the shared outbound core (Stage B). The dialog exposes template
   // merge + default signature, so pass `merge` and `useSignature` through.
   const result = await sendOutboundEmail({
     supabase,
     organizationId: orgId,
-    to: payload.to,
+    to: toList[0],
+    toAdditional: toList.slice(1),
     fromName: senderInfo.displayName,
     fromAddress: senderInfo.username,
     sendingAddressKind: kind,
+    mailAccountId: payload.mailAccountId ?? null,
     subject: payload.subject,
     bodyHtml: payload.body,
     merge: {

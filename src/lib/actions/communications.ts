@@ -78,7 +78,20 @@ export interface ComposeResult {
 }
 
 const composeSchema = z.object({
-  to: z.string().email('Invalid recipient email').max(255),
+  // Step 4: one or more recipients, comma/semicolon separated; each validated.
+  to: z
+    .string()
+    .max(2000)
+    .refine(
+      (v) => {
+        const parts = v.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+        return (
+          parts.length > 0 &&
+          parts.every((p) => z.string().email().max(255).safeParse(p).success)
+        );
+      },
+      { message: 'Invalid recipient email' },
+    ),
   cc: z.string().max(2000).optional().or(z.literal('')),
   subject: z.string().min(1, 'Subject is required').max(500),
   bodyPlain: z.string().min(1, 'Body is required').max(50_000),
@@ -95,6 +108,8 @@ const composeSchema = z.object({
   threadId: z.string().max(500).optional().nullable(),
   /** D6-7b-2: which sending account to send from (default: shared = contact@) */
   fromKind: z.enum(['personal', 'role', 'shared']).optional().default('shared'),
+  /** Step 4: explicit From account (app.inbound_mailboxes.id) from the dialog dropdown. */
+  mailAccountId: z.string().uuid().optional().nullable(),
   attachments: z
     .array(
       z.object({
@@ -182,6 +197,12 @@ export async function sendOutboundManual(
     .map((s) => s.trim())
     .filter((s) => /\S+@\S+\.\S+/.test(s));
 
+  // Step 4: multi-recipient To (schema guarantees each part is a valid email)
+  const toList = parsed.data.to
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   // Delegate to the shared outbound core (Stage B). Whitelist, tracking,
   // insert(sending), sendOne, sent/failed update and attachment records all
   // live in the core now. Manual compose exposes no template/signature.
@@ -189,11 +210,13 @@ export async function sendOutboundManual(
     supabase,
     organizationId: auth.organizationId,
     sentByUserId: auth.userId,
-    to: parsed.data.to,
+    to: toList[0] ?? parsed.data.to,
+    toAdditional: toList.slice(1),
     cc: ccAddresses,
     fromName,
     fromAddress,
     sendingAddressKind: kind,
+    mailAccountId: parsed.data.mailAccountId ?? null,
     subject: parsed.data.subject,
     bodyHtml: parsed.data.bodyHtml?.trim()
       ? parsed.data.bodyHtml

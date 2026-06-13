@@ -45,6 +45,11 @@ import {
   type RecipientContact,
 } from "@/lib/actions/compose-recipients";
 import { uploadAttachment, type UploadedAttachment } from "@/lib/actions/upload-attachment";
+import {
+  listMailAccountOptions,
+  getReplyFromAccountId,
+  type MailAccountOption,
+} from "@/lib/actions/mail-account-options";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { toast } from "sonner";
 import type { SendingAddressKind } from '@/types/email';
@@ -150,6 +155,10 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
   const [fromKind, setFromKind] = useState<SendingAddressKind>('shared');
+  // Step 4: DB mail accounts for the From dropdown (app.inbound_mailboxes).
+  // Empty list -> legacy env-kind selector stays as the fallback UI.
+  const [mailAccounts, setMailAccounts] = useState<MailAccountOption[]>([]);
+  const [fromAccountId, setFromAccountId] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
 
@@ -189,6 +198,30 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open]);
 
+  // Step 4: load From accounts on open and preselect.
+  // reply -> server-side routing rule (matches what the send core would pick);
+  // new   -> is_default account.
+  useEffect(() => {
+    let cancelled = false;
+    if (!props.open) return;
+    (async () => {
+      const res = await listMailAccountOptions();
+      if (cancelled || !res.ok || res.accounts.length === 0) return;
+      setMailAccounts(res.accounts);
+      let preselect: string | null = null;
+      if (props.replyToMessageId) {
+        preselect = await getReplyFromAccountId(props.replyToMessageId);
+      }
+      if (cancelled) return;
+      const defaultId = res.accounts.find((a) => a.isDefault)?.id ?? res.accounts[0]?.id ?? null;
+      setFromAccountId(preselect ?? defaultId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open, props.replyToMessageId]);
+
   // To-field type-ahead search (debounced). Typing clears any linked contact
   // until a result is picked, so a hand-typed address won't carry a stale id.
   function onToChange(value: string) {
@@ -196,7 +229,10 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     setSelectedContactId(null);
     setSelectedContact(null);
     if (toDebounce.current) clearTimeout(toDebounce.current);
-    const q = value.trim();
+    // Step 4: with multiple recipients, search only the segment being typed
+    // (after the last comma/semicolon).
+    const segments = value.split(/[,;]/);
+    const q = (segments[segments.length - 1] ?? "").trim();
     if (q.length < 2) {
       setToResults([]);
       setToOpen(false);
@@ -213,7 +249,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     }, 200);
   }
   function pickToContact(c: RecipientContact) {
-    setTo(c.email);
+    // Step 4: replace the in-progress segment with the picked address,
+    // keeping any recipients already entered before it.
+    setTo((prev) => {
+      const segments = prev.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+      segments.pop(); // drop the partial query segment (may be empty)
+      return [...segments, c.email].join(", ");
+    });
     setSelectedContactId(c.contactId);
     setSelectedContact(c);
     setToResults([]);
@@ -396,6 +438,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       toast.error("Please enter a recipient.");
       return;
     }
+    // Step 4: multi-recipient To - validate each comma/semicolon-separated address.
+    const toParts = to.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+    const badAddress = toParts.find((p) => !/^\S+@\S+\.\S+$/.test(p));
+    if (toParts.length === 0 || badAddress) {
+      toast.error(badAddress ? `Invalid address: ${badAddress}` : "Please enter a recipient.");
+      return;
+    }
     if (!subject.trim()) {
       toast.error("Please enter a subject.");
       return;
@@ -440,7 +489,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           partyId: props.partyId,
           contactId: selectedContactId ?? props.contactId ?? null,
           dealId: dealId !== NO_DEAL ? dealId : null,
-          to: to.trim(),
+          to: toParts.join(","),
           subject: subject.trim(),
           body,
           templateId:
@@ -453,6 +502,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           attachments: attachmentsMeta,
           useSignature,
           fromKind,
+          mailAccountId: fromAccountId,
         };
         const result = await sendEmail(payload);
         ok = result.success;
@@ -463,7 +513,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         // applies: Template/AI fill the body client-side; this just sends it.
         const result = await sendOutboundManual({
           fromKind,
-          to: to.trim(),
+          mailAccountId: fromAccountId,
+          to: toParts.join(","),
           cc: undefined,
           subject: subject.trim(),
           bodyPlain: body,
@@ -536,21 +587,40 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           </DialogTitle>
         </DialogHeader>
 
-        {/* D6-7c-2: From kind selector (shared across all tabs) */}
+        {/* Step 4: From account selector (DB accounts; legacy kind fallback when empty) */}
         <div className="space-y-1">
           <Label htmlFor="fromKind">From</Label>
-          <Select value={fromKind} onValueChange={(v) => setFromKind(v as SendingAddressKind)}>
-            <SelectTrigger id="fromKind">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SENDER_OPTIONS.map((opt) => (
-                <SelectItem key={opt.kind} value={opt.kind}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {mailAccounts.length > 0 ? (
+            <Select
+              value={fromAccountId ?? undefined}
+              onValueChange={(v) => setFromAccountId(v)}
+            >
+              <SelectTrigger id="fromKind">
+                <SelectValue placeholder="Select sender account" />
+              </SelectTrigger>
+              <SelectContent>
+                {mailAccounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.displayName ? `${a.displayName} <${a.address}>` : a.address}
+                    {a.isDefault ? " (default)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Select value={fromKind} onValueChange={(v) => setFromKind(v as SendingAddressKind)}>
+              <SelectTrigger id="fromKind">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SENDER_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.kind} value={opt.kind}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Deal linkage: logs this email on the deal's Activity timeline */}
@@ -701,7 +771,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                 onChange={(e) => onToChange(e.target.value)}
                 onFocus={() => toResults.length > 0 && setToOpen(true)}
                 onBlur={() => setTimeout(() => setToOpen(false), 150)}
-                placeholder="Search contacts or type an email"
+                placeholder="Search contacts or type emails (comma-separated)"
                 type="text"
                 autoComplete="off"
               />

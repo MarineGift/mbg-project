@@ -235,6 +235,8 @@ export interface SmtpAccountConfig {
 
 export interface SendOneInput {
   to: MailRecipient;
+  /** Step 4: additional To recipients (multi-recipient send). Appended after `to` in the To header. */
+  toAdditional?: MailRecipient[];
   cc?: MailRecipient[];
   bcc?: MailRecipient[];
   fromName: string;

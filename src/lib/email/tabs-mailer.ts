@@ -379,9 +379,10 @@ export class TabsMailerClient implements ITabsMailerClient {
     try {
       info = await transporter.sendMail({
         from: { name: effectiveFromName, address: effectiveFromAddress },
-        to: input.to.name
-          ? { name: input.to.name, address: input.to.address }
-          : input.to.address,
+        // Step 4: multi-recipient To (primary + additional)
+        to: [input.to, ...(input.toAdditional ?? [])].map((r) =>
+          r.name ? { name: r.name, address: r.address } : r.address,
+        ),
         cc: input.cc?.map((r) =>
           r.name ? { name: r.name, address: r.address } : r.address,
         ),
