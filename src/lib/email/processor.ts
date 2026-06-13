@@ -448,12 +448,28 @@ async function insertDraft(
     input.classification.requiresHuman ||
     input.reply.requiresHumanApproval;
 
+  // agent_id is NOT NULL on ai.drafts; resolve it from the drafter run.
+  // ai.runs.agent_id is NOT NULL and the drafter run row always exists here.
+  const { data: drafterRun, error: drafterRunError } = await supabase
+    .schema('ai')
+    .from('runs')
+    .select('agent_id')
+    .eq('id', input.drafterRunId)
+    .single();
+  if (drafterRunError || !drafterRun?.agent_id) {
+    throw new ProcessorError(
+      `ai.drafts INSERT aborted: cannot resolve agent_id from drafter run ${input.drafterRunId}: ${drafterRunError?.message}`,
+      drafterRunError,
+    );
+  }
+  const drafterAgentId = drafterRun.agent_id as string;
+
   const { data, error } = await supabase
     .schema('ai')
     .from('drafts')
     .insert({
       organization_id: input.ctx.organizationId,
-      communication_id: input.ctx.id,
+      inbound_communication_id: input.ctx.id, agent_id: drafterAgentId,
       party_id: input.ctx.partyId ?? null,
       engagement_id: input.ctx.engagementId ?? null,
       classification_category: input.classification.category,
