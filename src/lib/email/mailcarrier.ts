@@ -154,6 +154,15 @@ export class MailCarrierClient {
   public readonly kind: SendingAddressKind | 'default' | 'account';
   /** username currently used for IMAP auth (for logging). */
   public readonly username: string;
+
+  /** Actual IMAP host/port this carrier will dial (account path uses the DB
+   *  values; otherwise the env defaults). For accurate worker logging. */
+  public get connectHost(): string {
+    return this.account?.host ?? env.MAILCARRIER_HOST ?? '(unset)';
+  }
+  public get connectPort(): number {
+    return this.account?.port ?? env.MAILCARRIER_PORT;
+  }
   /** 2026-06-12: prevents overlapping fetch passes on the same client. */
   private fetchInFlight = false;
 

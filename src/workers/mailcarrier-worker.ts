@@ -232,7 +232,7 @@ export async function runMailCarrierWorker(): Promise<void> {
     const tag = `${label}:${carrier.kind}`;
     // eslint-disable-next-line no-console
     console.log(
-      `[${tag}] connecting to IMAP ${env.MAILCARRIER_HOST}:${env.MAILCARRIER_PORT} (user=${carrier.username})`,
+      `[${tag}] connecting to IMAP ${carrier.connectHost}:${carrier.connectPort} (user=${carrier.username})`,
     );
     try {
       await carrier.connect();
