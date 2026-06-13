@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Search, X, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -90,6 +91,25 @@ export function InboxSearchBar({ initialQuery, initialField = 'all', className }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  // Immediate search (Enter key / Search button) - bypasses the 350ms debounce.
+  function runSearch() {
+    const next = new URLSearchParams(searchParams.toString());
+    if (value.trim().length === 0) {
+      next.delete('q');
+    } else {
+      next.set('q', value.trim());
+    }
+    if (field === 'all') {
+      next.delete('field');
+    } else {
+      next.set('field', field);
+    }
+    next.delete('page');
+    startTransition(() => {
+      router.replace(`${pathname}?${next.toString()}`);
+    });
+  }
+
   return (
     <div className={cn('flex gap-2', className)}>
       <Select value={field} onValueChange={(v) => onFieldChange(v as InboxSearchField)}>
@@ -114,6 +134,12 @@ export function InboxSearchBar({ initialQuery, initialField = 'all', className }
           type="search"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              runSearch();
+            }
+          }}
           placeholder={
             field === 'to'
               ? 'Search by recipient address...'
@@ -137,6 +163,10 @@ export function InboxSearchBar({ initialQuery, initialField = 'all', className }
           </button>
         )}
       </div>
+      <Button type="button" onClick={runSearch} className="shrink-0 gap-2">
+        <Search className="h-4 w-4" />
+        Search
+      </Button>
     </div>
   );
 }
