@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { addTask, searchContacts } from './actions';
+import { addTask, searchContacts, toggleTaskInDeal } from './actions';
 import AttachmentsPanel from '@/components/attachments/attachments-panel';
 
 // ============================================================
@@ -128,14 +128,44 @@ function contactSecondaryLine(c: ContactResult): string {
 
 export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Props) {
   const [open, setOpen] = useState(false);
+  const [local, setLocal] = useState<Task[]>(tasks);
+  const [, startTransition] = useTransition();
 
-  const adHoc = tasks.filter((t) => !t.checklist_id);
+  // Resync when the server refreshes (after revalidatePath).
+  useEffect(() => {
+    setLocal(tasks);
+  }, [tasks]);
+
+  const isTaskDone = (t: Task) => t.status === 'completed' || t.status === 'done';
+  const doneCount = local.filter(isTaskDone).length;
+
+  const adHoc = local.filter((t) => !t.checklist_id);
   const byChecklist = new Map<string, Task[]>();
   for (const c of checklists) byChecklist.set(c.id, []);
-  for (const t of tasks) {
+  for (const t of local) {
     if (t.checklist_id && byChecklist.has(t.checklist_id)) {
       byChecklist.get(t.checklist_id)!.push(t);
     }
+  }
+
+  function toggle(task: Task) {
+    const next = !isTaskDone(task);
+    setLocal((prev) =>
+      prev.map((t) =>
+        t.id === task.id ? { ...t, status: next ? 'completed' : 'pending' } : t,
+      ),
+    );
+    startTransition(async () => {
+      const r = await toggleTaskInDeal({ pipelineCode, dealId, taskId: task.id, completed: next });
+      if (!r.ok) {
+        // revert on failure
+        setLocal((prev) =>
+          prev.map((t) =>
+            t.id === task.id ? { ...t, status: next ? 'pending' : 'completed' } : t,
+          ),
+        );
+      }
+    });
   }
 
   return (
@@ -143,7 +173,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
       {/* Header bar */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {tasks.length === 0 ? 'Tasks' : 'Tasks (' + tasks.length + ')'}
+          {local.length === 0 ? 'Tasks' : 'Tasks (' + doneCount + '/' + local.length + ')'}
         </div>
         <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
@@ -151,8 +181,13 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
         </Button>
       </div>
 
+      {/* Overall progress */}
+      {local.length > 0 && (
+        <ProgressBar done={doneCount} total={local.length} className="mb-4" />
+      )}
+
       {/* List or empty state */}
-      {tasks.length === 0 ? (
+      {local.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-16">
           <CheckSquare className="mb-3 h-8 w-8 text-muted-foreground/30" />
           <div className="text-sm font-medium text-foreground">No tasks yet</div>
@@ -166,13 +201,13 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
             checklists.length > 0 ? (
               // Mixed: standalone tasks get an "Other tasks" header so they
               // don't visually merge with named checklists.
-              <TaskGroup title="Other tasks" tasks={adHoc} />
+              <TaskGroup title="Other tasks" tasks={adHoc} onToggle={toggle} />
             ) : (
               // Only standalone tasks: skip the group header entirely.
               <div className="rounded-lg border bg-card">
                 <ul className="divide-y">
                   {adHoc.map((t) => (
-                    <TaskRow key={t.id} task={t} />
+                    <TaskRow key={t.id} task={t} onToggle={toggle} />
                   ))}
                 </ul>
               </div>
@@ -184,6 +219,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
               title={c.title || c.name || 'Checklist'}
               description={c.description ?? null}
               tasks={byChecklist.get(c.id) ?? []}
+              onToggle={toggle}
             />
           ))}
         </div>
@@ -204,35 +240,68 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
 // Task list rendering
 // ============================================================
 
+function ProgressBar({
+  done,
+  total,
+  className,
+}: {
+  done: number;
+  total: number;
+  className?: string;
+}) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div
+      className={'h-1.5 w-full overflow-hidden rounded-full bg-muted ' + (className ?? '')}
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-full bg-emerald-500 transition-all"
+        style={{ width: pct + '%' }}
+      />
+    </div>
+  );
+}
+
 function TaskGroup({
   title,
   description,
   tasks,
+  onToggle,
 }: {
   title: string;
   description?: string | null;
   tasks: Task[];
+  onToggle: (t: Task) => void;
 }) {
   const done = tasks.filter((t) => t.status === 'completed' || t.status === 'done').length;
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
-          )}
+      <div className="border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">{title}</div>
+            {description && (
+              <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+            )}
+          </div>
+          <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {done}/{tasks.length}
+          </div>
         </div>
-        <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {done}/{tasks.length}
-        </div>
+        {tasks.length > 0 && (
+          <ProgressBar done={done} total={tasks.length} className="mt-2" />
+        )}
       </div>
       {tasks.length === 0 ? (
         <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">No tasks</div>
       ) : (
         <ul className="divide-y">
           {tasks.map((t) => (
-            <TaskRow key={t.id} task={t} />
+            <TaskRow key={t.id} task={t} onToggle={onToggle} />
           ))}
         </ul>
       )}
@@ -240,7 +309,7 @@ function TaskGroup({
   );
 }
 
-function TaskRow({ task: t }: { task: Task }) {
+function TaskRow({ task: t, onToggle }: { task: Task; onToggle: (t: Task) => void }) {
   const [filesOpen, setFilesOpen] = useState(false);
   const status = String(t.status || 'pending').toLowerCase();
   const isDone = status === 'completed' || status === 'done';
@@ -277,9 +346,14 @@ function TaskRow({ task: t }: { task: Task }) {
   return (
     <li className="px-4 py-2.5">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5">
+        <button
+          type="button"
+          onClick={() => onToggle(t)}
+          aria-label={isDone ? 'mark incomplete' : 'mark complete'}
+          className="mt-0.5 shrink-0"
+        >
           <StatusIcon className={'h-4 w-4 ' + statusIconCls} />
-        </div>
+        </button>
         <div className="min-w-0 flex-1">
           <div
             className={

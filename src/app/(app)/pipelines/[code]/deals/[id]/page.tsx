@@ -194,6 +194,17 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
   const stageNameById = new Map<string, string>(
     ((pipeStages ?? []) as Array<{ id: string; name: string }>).map((st) => [st.id, st.name])
   );
+
+  // Stage position within the pipeline (for the header progress bar). Reuses
+  // the already-fetched pipeStages; no extra query.
+  const orderedStages = (pipeStages ?? []) as Array<{ id: string; name: string }>;
+  const stageCount = orderedStages.length;
+  const stageIndex = d.stage
+    ? orderedStages.findIndex(
+        (s) => s.id === (d.stage as { id?: string }).id || s.name === d.stage!.name,
+      )
+    : -1;
+  const stagePos = stageIndex >= 0 ? stageIndex + 1 : null;
   const { data: stageHistory } = await supabase
     .schema('app')
     .from('deal_stage_history' as never)
@@ -355,7 +366,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
             <>
               <span className="mx-1 opacity-40">{'\u00b7'}</span>
               <span>
-                Stage: <span className="font-medium text-foreground">{d.stage.name}</span>
+                Stage{stagePos !== null ? ' ' + stagePos + '/' + stageCount : ''}:{' '}
+                <span className="font-medium text-foreground">{d.stage.name}</span>
               </span>
             </>
           )}
@@ -374,6 +386,20 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
             </>
           )}
         </div>
+
+        {stagePos !== null && stageCount > 1 && (
+          <div className="mt-2 max-w-xs">
+            <div className="mb-1 text-[11px] text-muted-foreground tabular-nums">
+              Stage {stagePos} of {stageCount}
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-foreground/70 transition-all"
+                style={{ width: Math.round((stagePos / stageCount) * 100) + '%' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tab strip */}
