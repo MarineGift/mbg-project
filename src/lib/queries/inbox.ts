@@ -196,11 +196,10 @@ export async function fetchInbox(
   }
 
   // sort: by the time WE received/handled the message, not the original
-  // header date. Freshly pulled old mail has an old occurred_at but a recent
-  // received_at; sorting by received_at keeps newly-arrived mail at the top.
-  // received_at is null for outbound, so occurred_at is the fallback.
+  // Standard mailbox ordering: by the actual mail date (occurred_at) DESC,
+  // so the genuinely most recent message is at the top. received_at reflects
+  // one-time backfill order and is intentionally NOT used for sorting.
   query = query
-    .order('received_at', { ascending: false, nullsFirst: false })
     .order('occurred_at', { ascending: false, nullsFirst: false })
     .order('id', { ascending: true });
 
