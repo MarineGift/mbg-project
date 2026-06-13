@@ -152,6 +152,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [toSearching, setToSearching] = useState(false);
   const toDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [subject, setSubject] = useState(props.defaultSubject ?? "");
+  // Step 4: CC recipients (comma/semicolon separated). Optional.
+  const [cc, setCc] = useState("");
   const [body, setBody] = useState(props.defaultBody ?? "");
   const [useSignature, setUseSignature] = useState(true);
   const [fromKind, setFromKind] = useState<SendingAddressKind>('shared');
@@ -194,6 +196,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       setSelectedContactId(props.contactId ?? null);
       setSelectedContact(null);
       setRawTemplate(null);
+      setCc("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open]);
@@ -445,6 +448,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       toast.error(badAddress ? `Invalid address: ${badAddress}` : "Please enter a recipient.");
       return;
     }
+    // Step 4: CC is optional, but any entered address must be valid.
+    const ccParts = cc.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+    const badCc = ccParts.find((p) => !/^\S+@\S+\.\S+$/.test(p));
+    if (badCc) {
+      toast.error(`Invalid CC address: ${badCc}`);
+      return;
+    }
     if (!subject.trim()) {
       toast.error("Please enter a subject.");
       return;
@@ -492,6 +502,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           to: toParts.join(","),
           subject: subject.trim(),
           body,
+          cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
           templateId:
             activeTab === "template" && selectedTemplateId
               ? selectedTemplateId
@@ -515,7 +526,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           fromKind,
           mailAccountId: fromAccountId,
           to: toParts.join(","),
-          cc: undefined,
+          cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
           subject: subject.trim(),
           bodyPlain: body,
           partyId: null,
@@ -805,6 +816,19 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Common: CC (optional, comma-separated; not whitelist-checked) */}
+          <div className="space-y-1">
+            <Label htmlFor="cc">Cc</Label>
+            <Input
+              id="cc"
+              value={cc}
+              onChange={(e) => setCc(e.target.value)}
+              placeholder="Cc (optional, comma-separated)"
+              type="text"
+              autoComplete="off"
+            />
           </div>
 
           {/* Common: Subject */}

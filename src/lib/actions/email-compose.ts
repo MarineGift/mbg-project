@@ -36,6 +36,9 @@ export interface ComposePayload {
   /** Step 4: explicit From account (app.inbound_mailboxes.id) from the dialog
    *  dropdown. When set, the send core routes From/SMTP through this account. */
   mailAccountId?: string | null;
+  /** Step 4: CC recipients (comma/semicolon separated). Not whitelist-checked
+   *  (matches the core's cc policy) but recorded on the communication. */
+  cc?: string;
 }
 
 export interface AIReplyPayload {
@@ -117,6 +120,12 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     return { success: false, error: "No valid recipient address" };
   }
 
+  // Step 4: CC recipients (comma/semicolon separated, validated like To)
+  const ccList = (payload.cc ?? "")
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter((s) => /\S+@\S+\.\S+/.test(s));
+
   // Delegate to the shared outbound core (Stage B). The dialog exposes template
   // merge + default signature, so pass `merge` and `useSignature` through.
   const result = await sendOutboundEmail({
@@ -124,6 +133,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     organizationId: orgId,
     to: toList[0],
     toAdditional: toList.slice(1),
+    cc: ccList.length > 0 ? ccList : undefined,
     fromName: senderInfo.displayName,
     fromAddress: senderInfo.username,
     sendingAddressKind: kind,
