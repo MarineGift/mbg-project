@@ -53,6 +53,10 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: 'Blocked',
   done: 'Done',
   cancelled: 'Cancelled',
+  // legacy values still present in older rows / audit history
+  pending: 'To Do',
+  open: 'To Do',
+  completed: 'Done',
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -103,8 +107,9 @@ function rowToEvents(r: RawAuditRow): TaskActivityEvent[] {
     if (col === 'status') {
       const from = String(old.status ?? '');
       const to = String(neu.status ?? '');
+      const isDone = (s: string) => s === 'done' || s === 'completed';
       const kind: TaskActivityKind =
-        to === 'done' ? 'completed' : from === 'done' ? 'reopened' : 'status_change';
+        isDone(to) ? 'completed' : isDone(from) ? 'reopened' : 'status_change';
       events.push({
         id: `${r.id}-status`,
         kind,
