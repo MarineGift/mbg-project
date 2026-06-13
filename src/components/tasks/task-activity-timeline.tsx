@@ -69,6 +69,9 @@ export function TaskActivityTimeline({ events }: { events: TaskActivityEvent[] }
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span className={cn('text-sm', tone)}>{e.summary}</span>
+                {e.actorName && (
+                  <span className="text-xs text-muted-foreground">by {e.actorName}</span>
+                )}
                 <span className="text-xs text-muted-foreground">{relTime(e.occurredAt)}</span>
               </div>
               {e.detail && (

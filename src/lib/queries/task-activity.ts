@@ -32,6 +32,7 @@ export interface TaskActivityEvent {
   /** optional secondary detail / comment body */
   detail: string | null;
   actorUserId: string | null;
+  actorName: string | null;
   occurredAt: string;
 }
 
@@ -41,6 +42,7 @@ interface RawAuditRow {
   operation: string; // INSERT | UPDATE | DELETE
   changed_columns: string[] | null;
   changed_by: string | null;
+  actor_name: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
 }
@@ -77,7 +79,7 @@ function fmtDate(v: unknown): string {
  * columns yields one event per meaningful column; noise columns are skipped.
  */
 function rowToEvents(r: RawAuditRow): TaskActivityEvent[] {
-  const base = { actorUserId: r.changed_by, occurredAt: r.occurred_at };
+  const base = { actorUserId: r.changed_by, actorName: r.actor_name, occurredAt: r.occurred_at };
 
   if (r.operation === 'INSERT') {
     return [{ id: `${r.id}-c`, kind: 'created', summary: 'Task created', detail: null, ...base }];
@@ -165,66 +167,38 @@ function rowToEvents(r: RawAuditRow): TaskActivityEvent[] {
 
 /**
  * Fetch the activity timeline for one task, newest first.
- * Reads audit.change_log via a schema-scoped client. If audit isn't readable
- * (permissions), returns [] rather than throwing — the detail page degrades to
- * "no history" instead of erroring.
+ * Calls the app.task_activity RPC (SECURITY DEFINER), which reads
+ * audit.change_log scoped to the caller's org and joins the actor name.
+ * audit.change_log has RLS + no authenticated grant, so a direct read returns
+ * nothing — the RPC is the supported path. On any error returns [] so the
+ * detail page degrades to "no history" instead of throwing.
  */
 export async function fetchTaskActivity(taskId: string): Promise<TaskActivityEvent[]> {
   const supabase = await createSupabaseServerClient();
 
-  // The default client is bound to the 'app' schema; switch to 'audit'.
-  const auditClient = (
-    supabase as unknown as {
-      schema: (s: string) => {
-        from: (t: string) => {
-          select: (c: string) => {
-            eq: (
-              col: string,
-              val: string,
-            ) => {
-              eq: (
-                col: string,
-                val: string,
-              ) => {
-                order: (
-                  col: string,
-                  opts: { ascending: boolean },
-                ) => {
-                  limit: (
-                    n: number,
-                  ) => Promise<{ data: RawAuditRow[] | null; error: { message: string } | null }>;
-                };
-              };
-            };
-          };
-        };
-      };
-    }
-  ).schema('audit');
+  const rpc = supabase as unknown as {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: RawAuditRow[] | null; error: { message: string } | null }>;
+  };
 
   let rows: RawAuditRow[] = [];
   try {
-    const { data, error } = await auditClient
-      .from('change_log')
-      .select('id, occurred_at, operation, changed_columns, changed_by, old_data, new_data')
-      .eq('table_name', 'tasks')
-      .eq('record_id', taskId)
-      .order('occurred_at', { ascending: false })
-      .limit(100);
+    const { data, error } = await rpc.rpc('task_activity', { p_task_id: taskId });
     if (error) {
       // eslint-disable-next-line no-console
-      console.warn('[task-activity] audit read failed:', error.message);
+      console.warn('[task-activity] rpc failed:', error.message);
       return [];
     }
     rows = data ?? [];
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[task-activity] audit read threw:', err instanceof Error ? err.message : err);
+    console.warn('[task-activity] rpc threw:', err instanceof Error ? err.message : err);
     return [];
   }
 
   const events = rows.flatMap(rowToEvents);
-  // newest first (rows already desc, but per-row event order is stable)
   events.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
   return events;
 }
