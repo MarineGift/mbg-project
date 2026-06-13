@@ -20,6 +20,7 @@ import {
   Search,
   User,
   Activity,
+  Paperclip,
 } from 'lucide-react';
 import {
   Dialog,
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { addTask, searchContacts } from './actions';
+import AttachmentsPanel from '@/components/attachments/attachments-panel';
 
 // ============================================================
 // Types (duck-typed against server data)
@@ -239,6 +241,7 @@ function TaskGroup({
 }
 
 function TaskRow({ task: t }: { task: Task }) {
+  const [filesOpen, setFilesOpen] = useState(false);
   const status = String(t.status || 'pending').toLowerCase();
   const isDone = status === 'completed' || status === 'done';
   const isInProgress = status === 'in_progress' || status === 'in-progress';
@@ -272,59 +275,77 @@ function TaskRow({ task: t }: { task: Task }) {
   );
 
   return (
-    <li className="flex items-start gap-3 px-4 py-2.5">
-      <div className="mt-0.5">
-        <StatusIcon className={'h-4 w-4 ' + statusIconCls} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div
-          className={
-            'text-sm ' + (isDone ? 'text-muted-foreground line-through' : 'text-foreground')
-          }
-        >
-          {t.title}
+    <li className="px-4 py-2.5">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">
+          <StatusIcon className={'h-4 w-4 ' + statusIconCls} />
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {priority && priority !== 'medium' && (
-            <span className={'font-medium capitalize ' + priorityCls}>{priority}</span>
-          )}
-          {due && (
-            <>
-              {priority && priority !== 'medium' && (
+        <div className="min-w-0 flex-1">
+          <div
+            className={
+              'text-sm ' + (isDone ? 'text-muted-foreground line-through' : 'text-foreground')
+            }
+          >
+            {t.title}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {priority && priority !== 'medium' && (
+              <span className={'font-medium capitalize ' + priorityCls}>{priority}</span>
+            )}
+            {due && (
+              <>
+                {priority && priority !== 'medium' && (
+                  <span className="opacity-40">{'\u00b7'}</span>
+                )}
+                <span className={isOverdue ? 'font-medium text-rose-700' : ''}>
+                  Due {fmtDate(due)}
+                  {dueRelative ? ' (' + dueRelative + ')' : ''}
+                </span>
+              </>
+            )}
+            {(t.assigned_to_contact_id || t.assigned_to_user_id) && (
+              <>
                 <span className="opacity-40">{'\u00b7'}</span>
-              )}
-              <span className={isOverdue ? 'font-medium text-rose-700' : ''}>
-                Due {fmtDate(due)}
-                {dueRelative ? ' (' + dueRelative + ')' : ''}
-              </span>
-            </>
-          )}
-          {(t.assigned_to_contact_id || t.assigned_to_user_id) && (
-            <>
+                <span>Assigned</span>
+              </>
+            )}
+            {t.estimated_minutes != null && (
+              <>
+                <span className="opacity-40">{'\u00b7'}</span>
+                <span>{t.estimated_minutes}m est</span>
+              </>
+            )}
+            {activityCount > 0 && (
+              <>
+                {hasMeta && <span className="opacity-40">{'\u00b7'}</span>}
+                <span className="inline-flex items-center gap-1 text-foreground/70">
+                  <Activity className="h-3 w-3" />
+                  {activityCount} {activityCount === 1 ? 'activity' : 'activities'}
+                </span>
+              </>
+            )}
+            {(hasMeta || activityCount > 0) && (
               <span className="opacity-40">{'\u00b7'}</span>
-              <span>Assigned</span>
-            </>
-          )}
-          {t.estimated_minutes != null && (
-            <>
-              <span className="opacity-40">{'\u00b7'}</span>
-              <span>{t.estimated_minutes}m est</span>
-            </>
-          )}
-          {activityCount > 0 && (
-            <>
-              {hasMeta && <span className="opacity-40">{'\u00b7'}</span>}
-              <span className="inline-flex items-center gap-1 text-foreground/70">
-                <Activity className="h-3 w-3" />
-                {activityCount} {activityCount === 1 ? 'activity' : 'activities'}
-              </span>
-            </>
+            )}
+            <button
+              type="button"
+              onClick={() => setFilesOpen((v) => !v)}
+              className="inline-flex items-center gap-1 hover:text-foreground"
+            >
+              <Paperclip className="h-3 w-3" />
+              {filesOpen ? 'Hide files' : 'Files'}
+            </button>
+          </div>
+          {t.description && (
+            <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
           )}
         </div>
-        {t.description && (
-          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
-        )}
       </div>
+      {filesOpen && (
+        <div className="mt-2 pl-7">
+          <AttachmentsPanel entityType="task" entityId={t.id} title="Attachments" />
+        </div>
+      )}
     </li>
   );
 }

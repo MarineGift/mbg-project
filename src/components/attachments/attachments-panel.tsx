@@ -48,6 +48,7 @@ export default function AttachmentsPanel({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null);
 
   useEffect(() => {
     if (loaded) return;
@@ -243,14 +244,30 @@ export default function AttachmentsPanel({
                 {label}
               </span>
               <div className="min-w-0 flex-1">
-                <a
-                  href={a.storage_path}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block truncate text-sm font-medium text-blue-700 hover:underline"
-                >
-                  {a.file_name}
-                </a>
+                {a.drive_file_id ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreview({
+                        src: `https://drive.google.com/file/d/${a.drive_file_id}/preview`,
+                        name: a.file_name,
+                      })
+                    }
+                    title="Click to preview in URM"
+                    className="block w-full truncate text-left text-sm font-medium text-blue-700 hover:underline"
+                  >
+                    {a.file_name}
+                  </button>
+                ) : (
+                  <a
+                    href={a.storage_path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block truncate text-sm font-medium text-blue-700 hover:underline"
+                  >
+                    {a.file_name}
+                  </a>
+                )}
                 {a.description && (
                   <p className="truncate text-xs text-gray-500">
                     {a.description}
@@ -260,6 +277,16 @@ export default function AttachmentsPanel({
               <span className="shrink-0 text-[11px] text-gray-400">
                 {new Date(a.uploaded_at).toLocaleDateString()}
               </span>
+              {a.drive_file_id && a.storage_path && (
+                <a
+                  href={a.storage_path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                >
+                  Open
+                </a>
+              )}
               {a.drive_file_id && (
                 <a
                   href={`/api/attachments/${a.id}/download`}
@@ -281,6 +308,37 @@ export default function AttachmentsPanel({
           );
         })}
       </ul>
+
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+              <span className="truncate text-sm font-semibold text-gray-800">
+                {preview.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                className="rounded px-2 py-0.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                aria-label="Close preview"
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              src={preview.src}
+              title={preview.name}
+              className="h-full w-full flex-1 border-0"
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
