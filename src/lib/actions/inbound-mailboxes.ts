@@ -62,6 +62,21 @@ export async function addMailbox(
   return { ok: true };
 }
 
+// update an existing mailbox. Uses the same upsert RPC keyed on address, so
+// host/port/tls/label/password are all replaced. Password is required (the
+// RPC always re-encrypts); to change only host/port, re-enter the password.
+export async function updateMailbox(
+  address: string,
+  host: string,
+  port: number,
+  label: string,
+  useTls: boolean,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  // identical backend path to addMailbox (upsert keyed on address)
+  return addMailbox(address, host, port, label, useTls, password);
+}
+
 export async function toggleMailbox(id: string, active: boolean): Promise<{ ok: boolean }> {
   const sb = createSupabaseAdminClient();
   await sb
