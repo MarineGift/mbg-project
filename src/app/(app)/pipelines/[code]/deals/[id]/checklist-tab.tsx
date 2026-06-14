@@ -46,6 +46,7 @@ interface Props {
 }
 
 const NO_STAGE = '__deal_wide__';
+const OTHER_KEY = '__other__';
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -70,12 +71,12 @@ export function ChecklistTabClient({
   const [draft, setDraft] = useState('');
   const [, startTransition] = useTransition();
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    // Collapse every group except the current stage by default.
+    // Show one group per pipeline stage; collapse all but the current stage.
     const s = new Set<string>();
-    for (const it of items) {
-      const key = it.stage_id ?? NO_STAGE;
-      if (key !== currentStageId) s.add(key);
+    for (const st of stages ?? []) {
+      if (st.id !== currentStageId) s.add(st.id);
     }
+    s.add(OTHER_KEY);
     return s;
   });
 
@@ -87,15 +88,10 @@ export function ChecklistTabClient({
   const total = local.length;
   const done = local.filter((i) => i.is_complete).length;
 
-  const stageName = new Map<string, string>();
-  const stageOrder = new Map<string, number>();
-  (stages ?? []).forEach((s, idx) => {
-    stageName.set(s.id, s.name);
-    stageOrder.set(s.id, s.sort_order ?? idx);
-  });
-
-  // Group by stage_id; order: current stage first, then by stage sort_order,
-  // then the deal-wide (no stage) group last.
+  // One group per pipeline stage (in stage order), each holding that stage's
+  // checklist items -- even if empty. Items whose stage_id is null (manual) or
+  // points to a stage no longer in the pipeline (e.g. a removed stage) fall
+  // into a trailing "Other" group so they stay visible and deletable.
   const groups = useMemo(() => {
     const byKey = new Map<string, ChecklistItem[]>();
     for (const it of local) {
@@ -103,20 +99,38 @@ export function ChecklistTabClient({
       if (!byKey.has(key)) byKey.set(key, []);
       byKey.get(key)!.push(it);
     }
-    const rank = (key: string) => {
-      if (key === NO_STAGE) return 2_000_000;
-      if (key === currentStageId) return 0;
-      return 1_000_000 + (stageOrder.get(key) ?? 9999);
-    };
-    return Array.from(byKey.entries())
-      .sort((a, b) => rank(a[0]) - rank(b[0]))
-      .map(([key, list]) => ({
-        key,
-        label: key === NO_STAGE ? 'Deal-wide' : stageName.get(key) ?? 'Stage',
-        isCurrent: key === currentStageId,
+    const out: Array<{
+      key: string;
+      label: string;
+      isCurrent: boolean;
+      items: ChecklistItem[];
+      done: number;
+    }> = [];
+    // every pipeline stage, in order
+    for (const st of stages ?? []) {
+      const list = byKey.get(st.id) ?? [];
+      byKey.delete(st.id);
+      out.push({
+        key: st.id,
+        label: st.name,
+        isCurrent: st.id === currentStageId,
         items: list,
         done: list.filter((i) => i.is_complete).length,
-      }));
+      });
+    }
+    // leftovers: manual (no stage) + orphan (removed-stage) items
+    const leftover: ChecklistItem[] = [];
+    for (const [, list] of byKey) leftover.push(...list);
+    if (leftover.length > 0) {
+      out.push({
+        key: OTHER_KEY,
+        label: 'Other',
+        isCurrent: false,
+        items: leftover,
+        done: leftover.filter((i) => i.is_complete).length,
+      });
+    }
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local, currentStageId, stages]);
 
@@ -181,7 +195,7 @@ export function ChecklistTabClient({
     // Reveal the deal-wide group so the new item is visible.
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.delete(NO_STAGE);
+      next.delete(OTHER_KEY);
       return next;
     });
     startTransition(async () => {
@@ -304,7 +318,14 @@ export function ChecklistTabClient({
                   </div>
                   <ProgressBar done={g.done} total={g.items.length} />
                 </div>
-                {isOpen && <ul className="divide-y">{g.items.map(renderItem)}</ul>}
+                {isOpen &&
+                  (g.items.length === 0 ? (
+                    <div className="px-4 py-4 text-center text-xs text-muted-foreground/70">
+                      No items yet{g.key === OTHER_KEY ? '' : ' — added when the deal reaches this stage'}
+                    </div>
+                  ) : (
+                    <ul className="divide-y">{g.items.map(renderItem)}</ul>
+                  ))}
               </div>
             );
           })}
