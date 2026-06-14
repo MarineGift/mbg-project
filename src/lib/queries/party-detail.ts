@@ -53,6 +53,8 @@ interface RawPartyRow {
   party_type_id: string;
   status: PartyStatus;
   country_code: string | null;
+  city: string | null;
+  region: string | null;
   website: string | null;
   interest_tags: string[];   // NOT NULL in DB
   notes: string | null;
@@ -141,7 +143,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, party_name, party_type_id, status, country_code, website, interest_tags, notes, source, created_at, updated_at',
+      'id, organization_id, party_name, party_type_id, status, country_code, city, region, website, interest_tags, notes, source, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -206,6 +208,7 @@ export async function fetchPartyDetail(
         { count: 'exact' },
       )
       .eq('party_id', partyId)
+      .is('deleted_at', null)
       .order('occurred_at', { ascending: false })
       .limit(TIMELINE_LIMIT),
 
@@ -299,6 +302,8 @@ export async function fetchPartyDetail(
     tier: null,
     status: p.status,
     countryCode: p.country_code,
+    city: p.city,
+    region: p.region,
     website: p.website,
     industryTags: [],
     interestTags: p.interest_tags,

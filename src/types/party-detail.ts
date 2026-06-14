@@ -35,6 +35,8 @@ export interface PartyDetail {
   tier: PartyTier | null;
   status: PartyStatus;
   countryCode: string | null;
+  city: string | null;
+  region: string | null;
   website: string | null;
   /** Industry classification tags (e.g. "Venture Capital", "Software", "Healthcare") */
   industryTags: string[];

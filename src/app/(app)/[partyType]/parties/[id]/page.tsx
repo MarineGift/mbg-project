@@ -126,7 +126,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             overview={
               <>
                 <PartyStatsGrid party={full.party} />
-                <PartyInfoCard party={full.party} />
+                <PartyInfoCard party={full.party} contacts={full.contacts} />
                 {(full.party.partyType === 'paper_mill' ||
                   full.party.partyType === 'filler_supplier') && (
                   <PartySupplyLinksPanel

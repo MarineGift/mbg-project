@@ -3,10 +3,34 @@ import { Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
-import type { PartyDetail } from '@/types/party-detail';
+import type { PartyContact, PartyDetail } from '@/types/party-detail';
 
 interface Props {
   party: PartyDetail;
+  contacts?: readonly PartyContact[];
+}
+
+// US states (+ a few CA provinces) - mirrors the parties list page.
+const US_STATES: Record<string, string> = { AL:'Alabama', AK:'Alaska', AZ:'Arizona', AR:'Arkansas', CA:'California', CO:'Colorado', CT:'Connecticut', DE:'Delaware', FL:'Florida', GA:'Georgia', HI:'Hawaii', ID:'Idaho', IL:'Illinois', IN:'Indiana', IA:'Iowa', KS:'Kansas', KY:'Kentucky', LA:'Louisiana', ME:'Maine', MD:'Maryland', MA:'Massachusetts', MI:'Michigan', MN:'Minnesota', MS:'Mississippi', MO:'Missouri', MT:'Montana', NE:'Nebraska', NV:'Nevada', NH:'New Hampshire', NJ:'New Jersey', NM:'New Mexico', NY:'New York', NC:'North Carolina', ND:'North Dakota', OH:'Ohio', OK:'Oklahoma', OR:'Oregon', PA:'Pennsylvania', RI:'Rhode Island', SC:'South Carolina', SD:'South Dakota', TN:'Tennessee', TX:'Texas', UT:'Utah', VT:'Vermont', VA:'Virginia', WA:'Washington', WV:'West Virginia', WI:'Wisconsin', WY:'Wyoming', DC:'District of Columbia', BC:'British Columbia', ON:'Ontario', QC:'Quebec' };
+
+// Common country codes -> full name (fallback: the code itself).
+const COUNTRY_NAMES: Record<string, string> = {
+  US:'United States', CA:'Canada', GB:'United Kingdom', UK:'United Kingdom',
+  DE:'Germany', FR:'France', NL:'Netherlands', CH:'Switzerland', SE:'Sweden',
+  ES:'Spain', IT:'Italy', IE:'Ireland', BE:'Belgium', AT:'Austria', FI:'Finland',
+  NO:'Norway', DK:'Denmark', PT:'Portugal', PL:'Poland',
+  JP:'Japan', CN:'China', KR:'South Korea', IN:'India', ID:'Indonesia',
+  VN:'Vietnam', MY:'Malaysia', TW:'Taiwan', TH:'Thailand', SG:'Singapore',
+  PH:'Philippines', HK:'Hong Kong',
+  IL:'Israel', AE:'United Arab Emirates', SA:'Saudi Arabia', TR:'Turkey',
+  BR:'Brazil', MX:'Mexico', AR:'Argentina', CL:'Chile',
+  AU:'Australia', NZ:'New Zealand',
+  ZA:'South Africa', MA:'Morocco', DZ:'Algeria', NG:'Nigeria', TN:'Tunisia', EG:'Egypt',
+};
+
+function countryName(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return COUNTRY_NAMES[code.toUpperCase()] ?? code;
 }
 
 function fmtDate(iso: string | null | undefined): string {
@@ -33,7 +57,26 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 const DASH = <span className="text-muted-foreground">-</span>;
 
-export function PartyInfoCard({ party }: Props) {
+/** Pick the "representative" contact: primary first, then first with an email, then first. */
+function pickRepContact(
+  contacts: readonly PartyContact[] | undefined,
+): PartyContact | null {
+  if (!contacts || contacts.length === 0) return null;
+  return (
+    contacts.find((c) => c.isPrimary) ??
+    contacts.find((c) => !!c.email) ??
+    contacts[0] ??
+    null
+  );
+}
+
+export function PartyInfoCard({ party, contacts }: Props) {
+  const rep = pickRepContact(contacts);
+  const country = countryName(party.countryCode);
+  const stateLabel = party.region
+    ? (US_STATES[party.region] ?? party.region)
+    : null;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -53,7 +96,30 @@ export function PartyInfoCard({ party }: Props) {
               {party.status}
             </span>
           </Row>
-          <Row label="Country">{party.countryCode || DASH}</Row>
+          <Row label="Country">{country || DASH}</Row>
+          <Row label="Location">{party.city || DASH}</Row>
+          <Row label="State">{stateLabel || DASH}</Row>
+          <Row label="Email">
+            {rep?.email ? (
+              <a
+                href={`mailto:${rep.email}`}
+                className="text-blue-600 hover:underline break-all"
+              >
+                {rep.email}
+              </a>
+            ) : (
+              DASH
+            )}
+          </Row>
+          <Row label="Phone">
+            {rep?.phone ? (
+              <a href={`tel:${rep.phone}`} className="hover:underline">
+                {rep.phone}
+              </a>
+            ) : (
+              DASH
+            )}
+          </Row>
           <Row label="Website">
             {party.website ? (
               isHttpUrl(party.website) ? (
@@ -73,22 +139,6 @@ export function PartyInfoCard({ party }: Props) {
             )}
           </Row>
           <Row label="Source">{party.source || DASH}</Row>
-          <Row label="Interest Tags">
-            {party.interestTags.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {party.interestTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-xs"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              DASH
-            )}
-          </Row>
           <Row label="Notes">
             {party.notes && party.notes.trim().length > 0 ? (
               <p className="whitespace-pre-wrap leading-relaxed">{party.notes}</p>
@@ -98,11 +148,6 @@ export function PartyInfoCard({ party }: Props) {
           </Row>
           <Row label="Created">{fmtDate(party.createdAt)}</Row>
           <Row label="Updated">{fmtDate(party.updatedAt)}</Row>
-          <Row label="Party ID">
-            <span className="font-mono text-xs text-muted-foreground break-all">
-              {party.id}
-            </span>
-          </Row>
         </dl>
       </CardContent>
     </Card>
