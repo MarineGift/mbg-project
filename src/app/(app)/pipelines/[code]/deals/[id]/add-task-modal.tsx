@@ -679,6 +679,10 @@ function AddTaskModal({
       setError('Title is required');
       return;
     }
+    if (!checklistId) {
+      setError('Pick the checklist item this task belongs to');
+      return;
+    }
 
     // Store as UTC noon of the picked date -- timezone-safe across the
     // entire UTC-10 to UTC+12 range (everywhere people live).
@@ -740,16 +744,20 @@ function AddTaskModal({
             />
           </div>
 
-          {/* Checklist item (only when the deal has checklist items) */}
-          {checklists.length > 0 && (
-            <div>
-              <label
-                htmlFor="task-checklist"
-                className="mb-1 block text-sm font-medium text-foreground"
-              >
-                Checklist item
-                <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
-              </label>
+          {/* Checklist item (REQUIRED -- tasks always live under a checklist item) */}
+          <div>
+            <label
+              htmlFor="task-checklist"
+              className="mb-1 block text-sm font-medium text-foreground"
+            >
+              Checklist item <span className="text-rose-600">*</span>
+            </label>
+            {checklists.length === 0 ? (
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                This deal has no checklist items yet. Add one in the Checklist tab first,
+                then come back to attach a task to it.
+              </div>
+            ) : (
               <select
                 id="task-checklist"
                 value={checklistId}
@@ -757,7 +765,7 @@ function AddTaskModal({
                 disabled={isPending}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
               >
-                <option value="">No checklist item (standalone)</option>
+                <option value="">Select a checklist item…</option>
                 {orderedModalChecklists.map((c) => {
                   const sn = c.stage_id ? modalStageName.get(c.stage_id) : null;
                   return (
@@ -768,8 +776,8 @@ function AddTaskModal({
                   );
                 })}
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Start + Due dates (range -> enables duration analysis) */}
           <div className="grid grid-cols-2 gap-3">
