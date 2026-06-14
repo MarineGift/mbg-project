@@ -169,7 +169,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
     tasksByStage.get(key)!.push(t);
   }
 
-  function buildSubgroups(stageTasks: Task[]) {
+  function buildSubgroups(stageId: string | null, stageTasks: Task[]) {
     const byCl = new Map<string, Task[]>();
     for (const t of stageTasks) {
       const k =
@@ -177,20 +177,29 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
       if (!byCl.has(k)) byCl.set(k, []);
       byCl.get(k)!.push(t);
     }
+    // Seed a sub-group for EVERY checklist item of this stage -- even with 0
+    // tasks -- so the full Stage > Checklist structure is always visible.
+    if (stageId) {
+      for (const c of checklists) {
+        if (c.stage_id === stageId && !byCl.has(c.id)) byCl.set(c.id, []);
+      }
+    }
     const keys = Array.from(byCl.keys()).sort((a, b) => {
       if (a === GENERAL) return 1;
       if (b === GENERAL) return -1;
       return (checklistTitle.get(a) ?? '').localeCompare(checklistTitle.get(b) ?? '');
     });
-    return keys.map((k) => {
-      const list = byCl.get(k) ?? [];
-      return {
-        key: k,
-        label: k === GENERAL ? null : checklistTitle.get(k) ?? 'Checklist',
-        tasks: list,
-        done: list.filter(isTaskDone).length,
-      };
-    });
+    return keys
+      .filter((k) => k !== GENERAL || (byCl.get(k)?.length ?? 0) > 0) // hide empty General
+      .map((k) => {
+        const list = byCl.get(k) ?? [];
+        return {
+          key: k,
+          label: k === GENERAL ? null : checklistTitle.get(k) ?? 'Checklist',
+          tasks: list,
+          done: list.filter(isTaskDone).length,
+        };
+      });
   }
 
   const stageGroups: Array<{
@@ -210,7 +219,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
       isCurrent: st.id === currentStageId,
       tasks: list,
       done: list.filter(isTaskDone).length,
-      subgroups: buildSubgroups(list),
+      subgroups: buildSubgroups(st.id, list),
     });
   }
   const otherTasks: Task[] = [];
@@ -222,7 +231,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
       isCurrent: false,
       tasks: otherTasks,
       done: otherTasks.filter(isTaskDone).length,
-      subgroups: buildSubgroups(otherTasks),
+      subgroups: buildSubgroups(null, otherTasks),
     });
   }
 
@@ -403,7 +412,7 @@ function StageGroup({
       </div>
 
       {isOpen &&
-        (total === 0 ? (
+        (subgroups.length === 0 ? (
           <div className="px-4 py-4 text-center text-xs text-muted-foreground/70">
             No tasks yet{isCurrent ? '' : ' — added when the deal reaches this stage'}
           </div>
@@ -411,6 +420,12 @@ function StageGroup({
           <div>
             {subgroups.map((sg) => {
               const isChecklist = sg.label != null;
+              const rail =
+                showSubHeaders
+                  ? isChecklist
+                    ? ' ml-[1.6rem] border-l-2 border-emerald-200'
+                    : ' ml-[1.6rem] border-l-2 border-muted'
+                  : '';
               return (
                 <div key={sg.key}>
                   {showSubHeaders && (
@@ -435,20 +450,17 @@ function StageGroup({
                       </span>
                     </div>
                   )}
-                  <ul
-                    className={
-                      'divide-y' +
-                      (showSubHeaders
-                        ? isChecklist
-                          ? ' ml-[1.6rem] border-l-2 border-emerald-200'
-                          : ' ml-[1.6rem] border-l-2 border-muted'
-                        : '')
-                    }
-                  >
-                    {sg.tasks.map((t) => (
-                      <TaskRow key={t.id} task={t} onToggle={onToggleTask} />
-                    ))}
-                  </ul>
+                  {sg.tasks.length === 0 ? (
+                    <div className={'px-4 py-2 text-[11px] text-muted-foreground/60' + rail}>
+                      No tasks yet — add one and link it to this item
+                    </div>
+                  ) : (
+                    <ul className={'divide-y' + rail}>
+                      {sg.tasks.map((t) => (
+                        <TaskRow key={t.id} task={t} onToggle={onToggleTask} />
+                      ))}
+                    </ul>
+                  )}
                 </div>
               );
             })}
