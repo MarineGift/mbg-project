@@ -337,6 +337,18 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
     finalSubject = await renderWithContext(supabase, input.subject, partyId, contactId ?? undefined);
   }
 
+  // [2a] If the body is plain text (no HTML tags), convert newlines so the
+  //      line breaks survive in the sent HTML. Template bodies are real HTML and
+  //      are detected as such (left untouched). AI-draft / plain compose bodies
+  //      arrive as plain text with \n and would otherwise collapse to one line.
+  const looksLikeHtml =
+    /<(?:p|br|div|table|tr|t[dh]|span|a|ul|ol|li|h[1-6]|strong|em|b|i|img|blockquote|pre|hr)\b[^>]*>/i.test(
+      finalBody,
+    );
+  if (finalBody.trim() && !looksLikeHtml) {
+    finalBody = plainToHtml(finalBody);
+  }
+
   // [2b] ensure an HTML body exists (tracking pixel + signature require HTML).
   if (!finalBody.trim() && input.bodyText) {
     finalBody = plainToHtml(input.bodyText);
