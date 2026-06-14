@@ -23,6 +23,7 @@ import {
   Paperclip,
   ChevronDown,
   ChevronRight,
+  ListChecks,
 } from 'lucide-react';
 import {
   Dialog,
@@ -408,25 +409,49 @@ function StageGroup({
           </div>
         ) : (
           <div>
-            {subgroups.map((sg) => (
-              <div key={sg.key}>
-                {showSubHeaders && (
-                  <div className="flex items-center justify-between bg-muted/30 px-4 py-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {sg.label ?? 'General'}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {sg.done}/{sg.tasks.length}
-                    </span>
-                  </div>
-                )}
-                <ul className="divide-y">
-                  {sg.tasks.map((t) => (
-                    <TaskRow key={t.id} task={t} onToggle={onToggleTask} />
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {subgroups.map((sg) => {
+              const isChecklist = sg.label != null;
+              return (
+                <div key={sg.key}>
+                  {showSubHeaders && (
+                    <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2">
+                      {isChecklist ? (
+                        <ListChecks className="h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <span
+                        className={
+                          'flex-1 truncate text-xs ' +
+                          (isChecklist
+                            ? 'font-semibold text-foreground'
+                            : 'font-medium text-muted-foreground')
+                        }
+                      >
+                        {sg.label ?? 'General (not under a checklist item)'}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                        {sg.done}/{sg.tasks.length}
+                      </span>
+                    </div>
+                  )}
+                  <ul
+                    className={
+                      'divide-y' +
+                      (showSubHeaders
+                        ? isChecklist
+                          ? ' ml-[1.6rem] border-l-2 border-emerald-200'
+                          : ' ml-[1.6rem] border-l-2 border-muted'
+                        : '')
+                    }
+                  >
+                    {sg.tasks.map((t) => (
+                      <TaskRow key={t.id} task={t} onToggle={onToggleTask} />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         ))}
     </div>
