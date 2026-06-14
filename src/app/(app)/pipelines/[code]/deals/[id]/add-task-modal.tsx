@@ -21,6 +21,8 @@ import {
   User,
   Activity,
   Paperclip,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Dialog,
@@ -134,6 +136,12 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
   const [open, setOpen] = useState(false);
   const [local, setLocal] = useState<Task[]>(tasks);
   const [, startTransition] = useTransition();
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const st of stages ?? []) if (st.id !== currentStageId) s.add(st.id);
+    s.add('__other__');
+    return s;
+  });
 
   // Resync when the server refreshes (after revalidatePath).
   useEffect(() => {
@@ -143,30 +151,87 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
   const isTaskDone = (t: Task) => t.status === 'completed' || t.status === 'done';
   const doneCount = local.filter(isTaskDone).length;
 
-  const adHoc = local.filter((t) => !t.checklist_id);
-  const byChecklist = new Map<string, Task[]>();
-  for (const c of checklists) byChecklist.set(c.id, []);
+  // Checklist item titles (for the 2nd-level sub-group labels).
+  const checklistTitle = new Map<string, string>();
+  for (const c of checklists) checklistTitle.set(c.id, c.title || c.name || 'Checklist');
+
+  // Two-level grouping: Stage (level 1, every pipeline stage in order) ->
+  // Checklist item (level 2) -> tasks. Tasks not linked to a checklist item
+  // land in a "General" sub-group. Tasks with no/unknown stage land in a
+  // trailing "Other" stage group.
+  const GENERAL = '__general__';
+  const tasksByStage = new Map<string, Task[]>();
   for (const t of local) {
-    if (t.checklist_id && byChecklist.has(t.checklist_id)) {
-      byChecklist.get(t.checklist_id)!.push(t);
-    }
+    const key = t.stage_id ?? '__other__';
+    if (!tasksByStage.has(key)) tasksByStage.set(key, []);
+    tasksByStage.get(key)!.push(t);
   }
 
-  // Stage-aware ordering of checklist groups: current stage first, then by
-  // stage sort_order. Degrades gracefully if stage data is absent.
-  const stageName = new Map<string, string>();
-  const stageOrder = new Map<string, number>();
-  (stages ?? []).forEach((s, idx) => {
-    stageName.set(s.id, s.name);
-    stageOrder.set(s.id, s.sort_order ?? idx);
-  });
-  const groupRank = (c: Checklist) => {
-    const sid = c.stage_id ?? null;
-    const current = sid && sid === currentStageId ? 0 : 1;
-    const so = sid && stageOrder.has(sid) ? stageOrder.get(sid)! : 9999;
-    return current * 1_000_000 + so;
-  };
-  const orderedChecklists = [...checklists].sort((a, b) => groupRank(a) - groupRank(b));
+  function buildSubgroups(stageTasks: Task[]) {
+    const byCl = new Map<string, Task[]>();
+    for (const t of stageTasks) {
+      const k =
+        t.checklist_id && checklistTitle.has(t.checklist_id) ? t.checklist_id : GENERAL;
+      if (!byCl.has(k)) byCl.set(k, []);
+      byCl.get(k)!.push(t);
+    }
+    const keys = Array.from(byCl.keys()).sort((a, b) => {
+      if (a === GENERAL) return 1;
+      if (b === GENERAL) return -1;
+      return (checklistTitle.get(a) ?? '').localeCompare(checklistTitle.get(b) ?? '');
+    });
+    return keys.map((k) => {
+      const list = byCl.get(k) ?? [];
+      return {
+        key: k,
+        label: k === GENERAL ? null : checklistTitle.get(k) ?? 'Checklist',
+        tasks: list,
+        done: list.filter(isTaskDone).length,
+      };
+    });
+  }
+
+  const stageGroups: Array<{
+    key: string;
+    label: string;
+    isCurrent: boolean;
+    tasks: Task[];
+    done: number;
+    subgroups: ReturnType<typeof buildSubgroups>;
+  }> = [];
+  for (const st of stages ?? []) {
+    const list = tasksByStage.get(st.id) ?? [];
+    tasksByStage.delete(st.id);
+    stageGroups.push({
+      key: st.id,
+      label: st.name,
+      isCurrent: st.id === currentStageId,
+      tasks: list,
+      done: list.filter(isTaskDone).length,
+      subgroups: buildSubgroups(list),
+    });
+  }
+  const otherTasks: Task[] = [];
+  for (const [, list] of tasksByStage) otherTasks.push(...list);
+  if (otherTasks.length > 0) {
+    stageGroups.push({
+      key: '__other__',
+      label: 'Other',
+      isCurrent: false,
+      tasks: otherTasks,
+      done: otherTasks.filter(isTaskDone).length,
+      subgroups: buildSubgroups(otherTasks),
+    });
+  }
+
+  function toggleStage(key: string) {
+    setCollapsedStages((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  }
 
   function toggle(task: Task) {
     const next = !isTaskDone(task);
@@ -216,32 +281,18 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {adHoc.length > 0 && (
-            checklists.length > 0 ? (
-              // Mixed: standalone tasks get an "Other tasks" header so they
-              // don't visually merge with named checklists.
-              <TaskGroup title="Other tasks" tasks={adHoc} onToggle={toggle} />
-            ) : (
-              // Only standalone tasks: skip the group header entirely.
-              <div className="rounded-lg border bg-card">
-                <ul className="divide-y">
-                  {adHoc.map((t) => (
-                    <TaskRow key={t.id} task={t} onToggle={toggle} />
-                  ))}
-                </ul>
-              </div>
-            )
-          )}
-          {orderedChecklists.map((c) => (
-            <TaskGroup
-              key={c.id}
-              title={c.title || c.name || 'Checklist'}
-              description={c.description ?? null}
-              tasks={byChecklist.get(c.id) ?? []}
-              onToggle={toggle}
-              stageLabel={c.stage_id ? stageName.get(c.stage_id) ?? null : null}
-              isCurrentStage={!!c.stage_id && c.stage_id === currentStageId}
+        <div className="space-y-3">
+          {stageGroups.map((g) => (
+            <StageGroup
+              key={g.key}
+              label={g.label}
+              isCurrent={g.isCurrent}
+              done={g.done}
+              total={g.tasks.length}
+              subgroups={g.subgroups}
+              collapsed={collapsedStages.has(g.key)}
+              onToggleCollapse={() => toggleStage(g.key)}
+              onToggleTask={toggle}
             />
           ))}
         </div>
@@ -288,63 +339,93 @@ function ProgressBar({
   );
 }
 
-function TaskGroup({
-  title,
-  description,
-  tasks,
-  onToggle,
-  stageLabel,
-  isCurrentStage,
+function StageGroup({
+  label,
+  isCurrent,
+  done,
+  total,
+  subgroups,
+  collapsed,
+  onToggleCollapse,
+  onToggleTask,
 }: {
-  title: string;
-  description?: string | null;
-  tasks: Task[];
-  onToggle: (t: Task) => void;
-  stageLabel?: string | null;
-  isCurrentStage?: boolean;
+  label: string;
+  isCurrent: boolean;
+  done: number;
+  total: number;
+  subgroups: Array<{ key: string; label: string | null; tasks: Task[]; done: number }>;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onToggleTask: (t: Task) => void;
 }) {
-  const done = tasks.filter((t) => t.status === 'completed' || t.status === 'done').length;
+  const isOpen = !collapsed;
+  // Show 2nd-level sub-headers only when meaningful (more than one sub-group,
+  // or a single checklist-linked sub-group). All-"General" stays flat.
+  const showSubHeaders =
+    subgroups.length > 1 || (subgroups.length === 1 && subgroups[0]?.label != null);
   return (
     <div className="rounded-lg border bg-card">
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-foreground">{title}</div>
-              {stageLabel && (
-                <span
-                  className={
-                    'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ' +
-                    (isCurrentStage
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-muted text-muted-foreground')
-                  }
-                >
-                  {stageLabel}
-                </span>
-              )}
-            </div>
-            {description && (
-              <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggleCollapse}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse();
+          }
+        }}
+        className="cursor-pointer border-b px-4 py-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {isOpen ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+            <span className="truncate text-sm font-medium text-foreground">{label}</span>
+            {isCurrent && (
+              <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                Current
+              </span>
             )}
           </div>
-          <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {done}/{tasks.length}
-          </div>
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {done}/{total}
+          </span>
         </div>
-        {tasks.length > 0 && (
-          <ProgressBar done={done} total={tasks.length} className="mt-2" />
-        )}
+        {total > 0 && <ProgressBar done={done} total={total} className="mt-2" />}
       </div>
-      {tasks.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">No tasks</div>
-      ) : (
-        <ul className="divide-y">
-          {tasks.map((t) => (
-            <TaskRow key={t.id} task={t} onToggle={onToggle} />
-          ))}
-        </ul>
-      )}
+
+      {isOpen &&
+        (total === 0 ? (
+          <div className="px-4 py-4 text-center text-xs text-muted-foreground/70">
+            No tasks yet{isCurrent ? '' : ' — added when the deal reaches this stage'}
+          </div>
+        ) : (
+          <div>
+            {subgroups.map((sg) => (
+              <div key={sg.key}>
+                {showSubHeaders && (
+                  <div className="flex items-center justify-between bg-muted/30 px-4 py-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {sg.label ?? 'General'}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {sg.done}/{sg.tasks.length}
+                    </span>
+                  </div>
+                )}
+                <ul className="divide-y">
+                  {sg.tasks.map((t) => (
+                    <TaskRow key={t.id} task={t} onToggle={onToggleTask} />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
