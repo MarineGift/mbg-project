@@ -45,6 +45,7 @@ interface Task {
   description: string | null;
   status: string | null;
   priority: string | null;
+  start_at?: string | null;
   due_at: string | null;
   checklist_id: string | null;
   stage_id?: string | null;
@@ -453,13 +454,24 @@ function TaskRow({ task: t, onToggle }: { task: Task; onToggle: (t: Task) => voi
       : 'text-amber-700';
 
   const due = t.due_at;
+  const start = t.start_at;
   const isOverdue = !!(due && !isDone && new Date(due).getTime() < Date.now());
   const dueRelative = due && !isDone ? fmtRelative(due) : '';
+  const durationDays =
+    start && due
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(due).getTime() - new Date(start).getTime()) / 86400000,
+          ),
+        )
+      : null;
 
   const activityCount = t._activityCount ?? 0;
   const showPriority = !!(priority && priority !== 'medium');
   const hasMeta = !!(
     showPriority ||
+    start ||
     due ||
     t.assigned_to_contact_id ||
     t.assigned_to_user_id ||
@@ -489,14 +501,28 @@ function TaskRow({ task: t, onToggle }: { task: Task; onToggle: (t: Task) => voi
             {priority && priority !== 'medium' && (
               <span className={'font-medium capitalize ' + priorityCls}>{priority}</span>
             )}
+            {start && (
+              <>
+                {showPriority && <span className="opacity-40">{'\u00b7'}</span>}
+                <span>Start {fmtDate(start)}</span>
+              </>
+            )}
             {due && (
               <>
-                {priority && priority !== 'medium' && (
+                {(showPriority || start) && (
                   <span className="opacity-40">{'\u00b7'}</span>
                 )}
                 <span className={isOverdue ? 'font-medium text-rose-700' : ''}>
                   Due {fmtDate(due)}
                   {dueRelative ? ' (' + dueRelative + ')' : ''}
+                </span>
+              </>
+            )}
+            {durationDays != null && (
+              <>
+                <span className="opacity-40">{'\u00b7'}</span>
+                <span className="tabular-nums" title="planned duration">
+                  {durationDays}d
                 </span>
               </>
             )}
@@ -570,6 +596,7 @@ function AddTaskModal({
 }) {
   const [title, setTitle] = useState('');
   const [checklistId, setChecklistId] = useState('');
+  const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [contactId, setContactId] = useState('');
@@ -582,6 +609,7 @@ function AddTaskModal({
     if (open) {
       setTitle('');
       setChecklistId('');
+      setStartDate('');
       setDueDate('');
       setPriority('medium');
       setContactId('');
@@ -617,7 +645,13 @@ function AddTaskModal({
 
     // Store as UTC noon of the picked date -- timezone-safe across the
     // entire UTC-10 to UTC+12 range (everywhere people live).
+    const startIso = startDate ? startDate + 'T12:00:00.000Z' : null;
     const dueIso = dueDate ? dueDate + 'T12:00:00.000Z' : null;
+
+    if (startIso && dueIso && startIso > dueIso) {
+      setError('Start date must be on or before the due date');
+      return;
+    }
 
     startTransition(async () => {
       const result = await addTask({
@@ -625,6 +659,7 @@ function AddTaskModal({
         dealId,
         title: trimmedTitle,
         checklist_id: checklistId || null,
+        start_at: startIso,
         due_at: dueIso,
         priority,
         assigned_to_contact_id: contactId || null,
@@ -699,23 +734,42 @@ function AddTaskModal({
             </div>
           )}
 
-          {/* Due date */}
-          <div>
-            <label
-              htmlFor="task-due"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Due date
-              <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
-            </label>
-            <input
-              id="task-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
-              disabled={isPending}
-            />
+          {/* Start + Due dates (range -> enables duration analysis) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="task-start"
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                Start date
+                <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
+              </label>
+              <input
+                id="task-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                disabled={isPending}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="task-due"
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                Due date
+                <span className="ml-1 text-xs font-normal text-muted-foreground">optional</span>
+              </label>
+              <input
+                id="task-due"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
+                disabled={isPending}
+              />
+            </div>
           </div>
 
           {/* Priority */}

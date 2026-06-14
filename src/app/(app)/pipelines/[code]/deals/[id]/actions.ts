@@ -158,6 +158,7 @@ interface AddTaskInput {
   pipelineCode: string;
   dealId: string;
   title: string;
+  start_at?: string | null;        // ISO timestamp or null (planned start)
   due_at?: string | null;          // ISO timestamp or null
   priority?: 'low' | 'medium' | 'high';
   assigned_to_contact_id?: string | null;
@@ -224,6 +225,7 @@ export async function addTask(
       title,
       status: 'pending',
       priority: input.priority ?? 'medium',
+      start_at: input.start_at ?? null,
       due_at: input.due_at ?? null,
       assigned_to_contact_id: input.assigned_to_contact_id ?? null,
       description: (input.description ?? '').trim() || null,
