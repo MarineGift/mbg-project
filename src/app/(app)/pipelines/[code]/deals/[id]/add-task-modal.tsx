@@ -24,6 +24,8 @@ import {
   ChevronDown,
   ChevronRight,
   ListChecks,
+  List,
+  CalendarRange,
 } from 'lucide-react';
 import {
   Dialog,
@@ -137,6 +139,7 @@ function contactSecondaryLine(c: ContactResult): string {
 export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages, currentStageId }: Props) {
   const [open, setOpen] = useState(false);
   const [local, setLocal] = useState<Task[]>(tasks);
+  const [view, setView] = useState<'list' | 'timeline'>('list');
   const [, startTransition] = useTransition();
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(() => {
     const s = new Set<string>();
@@ -271,10 +274,42 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
         <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {local.length === 0 ? 'Tasks' : 'Tasks (' + doneCount + '/' + local.length + ')'}
         </div>
-        <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" />
-          Add task
-        </Button>
+        <div className="flex items-center gap-2">
+          {local.length > 0 && (
+            <div className="flex items-center rounded-md border p-0.5">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={
+                  'flex items-center gap-1 rounded px-2 py-1 text-xs ' +
+                  (view === 'list'
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
+                <List className="h-3.5 w-3.5" />
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('timeline')}
+                className={
+                  'flex items-center gap-1 rounded px-2 py-1 text-xs ' +
+                  (view === 'timeline'
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                Timeline
+              </button>
+            </div>
+          )}
+          <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            Add task
+          </Button>
+        </div>
       </div>
 
       {/* Overall progress */}
@@ -291,6 +326,8 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
             Click <span className="font-medium">Add task</span> to track what needs to happen next for this deal.
           </div>
         </div>
+      ) : view === 'timeline' ? (
+        <TaskGantt stageGroups={stageGroups} onToggleTask={toggle} />
       ) : (
         <div className="space-y-3">
           {stageGroups.map((g) => (
@@ -318,6 +355,219 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
         stages={stages}
         currentStageId={currentStageId}
       />
+    </div>
+  );
+}
+
+// ============================================================
+// TaskGantt -- Timeline view of the deal's tasks.
+// Reuses the same Stage -> Checklist-item -> Task grouping as the list, but
+// only shows populated stages / checklist items. Bars span start_at..due_at;
+// a due-only task gets a short bar ending on its due date; a task with no
+// dates shows a muted note. A single "now" line spans the rows.
+// ============================================================
+
+const DAY_MS = 86_400_000;
+
+function ganttBounds(t: Task): { s: number | null; e: number | null } {
+  const start = t.start_at ? new Date(t.start_at).getTime() : NaN;
+  const due = t.due_at ? new Date(t.due_at).getTime() : NaN;
+  return {
+    s: isNaN(start) ? null : start,
+    e: isNaN(due) ? null : due,
+  };
+}
+
+type GanttStageGroup = {
+  key: string;
+  label: string;
+  isCurrent: boolean;
+  subgroups: Array<{ key: string; label: string | null; tasks: Task[] }>;
+};
+
+function TaskGantt({
+  stageGroups,
+  onToggleTask,
+}: {
+  stageGroups: GanttStageGroup[];
+  onToggleTask: (t: Task) => void;
+}) {
+  type Row =
+    | { kind: 'stage'; label: string; current: boolean }
+    | { kind: 'checklist'; label: string }
+    | { kind: 'task'; task: Task };
+
+  const rows: Row[] = [];
+  const dated: Task[] = [];
+  for (const g of stageGroups) {
+    const populated = g.subgroups.filter((sg) => sg.tasks.length > 0);
+    if (populated.length === 0) continue;
+    rows.push({ kind: 'stage', label: g.label, current: g.isCurrent });
+    for (const sg of populated) {
+      if (sg.label != null) rows.push({ kind: 'checklist', label: sg.label });
+      for (const t of sg.tasks) {
+        rows.push({ kind: 'task', task: t });
+        dated.push(t);
+      }
+    }
+  }
+
+  const now = Date.now();
+  const stamps: number[] = [now];
+  let hasDated = false;
+  for (const t of dated) {
+    const { s, e } = ganttBounds(t);
+    if (s != null) {
+      stamps.push(s);
+      hasDated = true;
+    }
+    if (e != null) {
+      stamps.push(e);
+      hasDated = true;
+    }
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-12">
+        <CalendarRange className="mb-3 h-8 w-8 text-muted-foreground/30" />
+        <div className="text-sm font-medium text-foreground">Nothing to schedule</div>
+        <div className="mt-1 text-xs text-muted-foreground">Add a task to see it on the timeline.</div>
+      </div>
+    );
+  }
+  if (!hasDated) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-12">
+        <CalendarRange className="mb-3 h-8 w-8 text-muted-foreground/30" />
+        <div className="text-sm font-medium text-foreground">No dates yet</div>
+        <div className="mt-1 max-w-sm text-center text-xs text-muted-foreground">
+          Give tasks a start and/or due date (in <span className="font-medium">Add task</span>) to place them on the
+          timeline.
+        </div>
+      </div>
+    );
+  }
+
+  let t0 = Math.min(...stamps);
+  let t1 = Math.max(...stamps);
+  if (t1 - t0 < DAY_MS) {
+    t0 -= DAY_MS * 2;
+    t1 += DAY_MS * 2;
+  } else {
+    t0 -= DAY_MS;
+    t1 += DAY_MS;
+  }
+  const span = t1 - t0 || 1;
+  const pct = (ms: number) => ((ms - t0) / span) * 100;
+  const todayPct = pct(now);
+
+  return (
+    <div className="overflow-x-auto rounded-lg border bg-card">
+      <div className="min-w-[640px]">
+        <div className="flex">
+          {/* Left: grouped labels */}
+          <div className="w-52 shrink-0 border-r">
+            <div className="h-7 border-b bg-muted/30" />
+            {rows.map((r, i) => {
+              if (r.kind === 'stage')
+                return (
+                  <div
+                    key={'l' + i}
+                    className={
+                      'flex h-7 items-center gap-1.5 px-3 text-xs font-semibold ' +
+                      (r.current ? 'text-emerald-700' : 'text-foreground')
+                    }
+                  >
+                    <span className="truncate">{r.label}</span>
+                    {r.current && (
+                      <span className="shrink-0 rounded bg-emerald-100 px-1 text-[10px] font-medium text-emerald-700">
+                        current
+                      </span>
+                    )}
+                  </div>
+                );
+              if (r.kind === 'checklist')
+                return (
+                  <div
+                    key={'l' + i}
+                    className="flex h-7 items-center gap-1.5 pl-5 pr-3 text-xs text-muted-foreground"
+                  >
+                    <ListChecks className="h-3 w-3 shrink-0 text-emerald-500" />
+                    <span className="truncate">{r.label}</span>
+                  </div>
+                );
+              const isDone = r.task.status === 'completed' || r.task.status === 'done';
+              return (
+                <button
+                  key={'l' + i}
+                  type="button"
+                  onClick={() => onToggleTask(r.task)}
+                  className="flex h-7 w-full items-center pl-8 pr-3 text-left text-xs hover:bg-muted/40"
+                  title="Toggle complete"
+                >
+                  <span className={'truncate ' + (isDone ? 'text-muted-foreground line-through' : 'text-foreground')}>
+                    {r.task.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right: timeline */}
+          <div className="relative flex-1">
+            <div className="relative h-7 border-b bg-muted/30 text-[10px] text-muted-foreground">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2">
+                {fmtDate(new Date(t0).toISOString())}
+              </span>
+              <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                {fmtDate(new Date(t1).toISOString())}
+              </span>
+            </div>
+            {todayPct >= 0 && todayPct <= 100 && (
+              <div
+                className="pointer-events-none absolute z-10 w-px bg-rose-400/70"
+                style={{ left: todayPct + '%', top: '1.75rem', bottom: 0 }}
+              >
+                <span className="absolute -top-0 left-1 text-[9px] font-medium text-rose-500">now</span>
+              </div>
+            )}
+            {rows.map((r, i) => {
+              if (r.kind !== 'task') return <div key={'t' + i} className="h-7" />;
+              const { s, e } = ganttBounds(r.task);
+              const isDone = r.task.status === 'completed' || r.task.status === 'done';
+              if (s == null && e == null)
+                return (
+                  <div key={'t' + i} className="flex h-7 items-center px-2">
+                    <span className="text-[10px] italic text-muted-foreground/60">no dates</span>
+                  </div>
+                );
+              const end = e ?? (s as number);
+              const startMs = s ?? end - DAY_MS;
+              const overdue = e != null && e < now && !isDone;
+              const left = pct(startMs);
+              const width = Math.max(1.5, pct(end) - left);
+              const barCls = isDone
+                ? 'bg-muted-foreground/30'
+                : overdue
+                  ? 'bg-rose-400'
+                  : 'bg-sky-500';
+              const range =
+                (s != null ? fmtDate(r.task.start_at) + ' \u2192 ' : 'due ') +
+                fmtDate(r.task.due_at ?? r.task.start_at);
+              return (
+                <div key={'t' + i} className="relative h-7">
+                  <div
+                    className={'absolute top-1.5 h-4 rounded ' + barCls}
+                    style={{ left: left + '%', width: width + '%' }}
+                    title={r.task.title + '  (' + range + ')'}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
