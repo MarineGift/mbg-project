@@ -223,6 +223,7 @@ export async function approveDraft(input: {
   // [B] not sending immediately -> done
   if (!parsed.data.sendImmediately) {
     revalidatePath(`/drafts/${row.id}`);
+    revalidatePath('/', 'layout');
     revalidatePath('/drafts');
     return { ok: true, data: { sent: false } };
   }
@@ -250,6 +251,7 @@ export async function approveDraft(input: {
   }
 
   revalidatePath(`/drafts/${row.id}`);
+  revalidatePath('/', 'layout');
   revalidatePath('/drafts');
   return {
     ok: true,
@@ -329,6 +331,7 @@ export async function rejectDraft(input: {
     };
   }
 
+  revalidatePath('/', 'layout');
   revalidatePath(`/drafts/${parsed.data.draftId}`);
   revalidatePath('/drafts');
   return { ok: true };
@@ -414,6 +417,7 @@ export async function bulkApproveDrafts(
       errorMessage: 'Already processed or not in pending_review',
     }));
 
+  revalidatePath('/', 'layout');
   revalidatePath('/drafts');
   return {
     ok: failed.length === 0,
@@ -507,6 +511,7 @@ export async function bulkRejectDrafts(input: {
       errorMessage: 'Already processed or not in pending_review',
     }));
 
+  revalidatePath('/', 'layout');
   revalidatePath('/drafts');
   return {
     ok: failed.length === 0,
