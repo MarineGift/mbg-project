@@ -314,19 +314,17 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
       tasks = tasks.map((t: any) => ({ ...t, _activityCount: counts[t.id] ?? 0 }));
     }
 
-    const checklistIds = Array.from(
-      new Set(tasks.map((t: any) => t.checklist_id).filter(Boolean))
-    ) as string[];
-    if (checklistIds.length > 0) {
-      const { data: cs } = await supabase
-        .schema('app')
-        .from('deal_checklists' as never)
-        .select('*')
-        .in('id', checklistIds)
-        .order('sort_order', { ascending: true, nullsFirst: true })
-        .order('created_at', { ascending: true });
-      checklists = (cs ?? []) as any[];
-    }
+    // All checklist items for this deal -- used both for the 2-level task
+    // grouping labels AND the "Checklist item" picker in the Add task modal.
+    const { data: cs } = await supabase
+      .schema('app')
+      .from('deal_checklists' as never)
+      .select('*')
+      .eq('deal_id', params.id)
+      .is('deleted_at', null)
+      .order('sort_order', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true });
+    checklists = (cs ?? []) as any[];
   }
 
   if (activeTab === 'checklist') {

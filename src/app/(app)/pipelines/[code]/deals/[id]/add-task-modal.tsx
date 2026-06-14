@@ -304,6 +304,8 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages
         pipelineCode={pipelineCode}
         dealId={dealId}
         checklists={checklists}
+        stages={stages}
+        currentStageId={currentStageId}
       />
     </div>
   );
@@ -555,12 +557,16 @@ function AddTaskModal({
   pipelineCode,
   dealId,
   checklists,
+  stages,
+  currentStageId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pipelineCode: string;
   dealId: string;
   checklists: Checklist[];
+  stages?: Array<{ id: string; name: string; sort_order: number | null }>;
+  currentStageId?: string | null;
 }) {
   const [title, setTitle] = useState('');
   const [checklistId, setChecklistId] = useState('');
@@ -584,6 +590,22 @@ function AddTaskModal({
       setError(null);
     }
   }, [open]);
+
+  const modalStageName = new Map<string, string>();
+  const modalStageOrder = new Map<string, number>();
+  (stages ?? []).forEach((s, i) => {
+    modalStageName.set(s.id, s.name);
+    modalStageOrder.set(s.id, s.sort_order ?? i);
+  });
+  const orderedModalChecklists = [...checklists].sort((a, b) => {
+    const ra =
+      (a.stage_id === currentStageId ? 0 : 1_000_000) +
+      (a.stage_id ? modalStageOrder.get(a.stage_id) ?? 9999 : 9999);
+    const rb =
+      (b.stage_id === currentStageId ? 0 : 1_000_000) +
+      (b.stage_id ? modalStageOrder.get(b.stage_id) ?? 9999 : 9999);
+    return ra - rb;
+  });
 
   const handleSubmit = () => {
     setError(null);
@@ -664,11 +686,15 @@ function AddTaskModal({
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/5"
               >
                 <option value="">No checklist item (standalone)</option>
-                {checklists.map((c, i) => (
-                  <option key={c.id} value={c.id}>
-                    {i + 1}. {c.title || c.name || 'Checklist item'}
-                  </option>
-                ))}
+                {orderedModalChecklists.map((c) => {
+                  const sn = c.stage_id ? modalStageName.get(c.stage_id) : null;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {sn ? sn + ' \u00b7 ' : ''}
+                      {c.title || c.name || 'Checklist item'}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}

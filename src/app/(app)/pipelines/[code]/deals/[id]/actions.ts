@@ -182,29 +182,37 @@ export async function addTask(
   const { data: dealRow, error: dErr } = await supabase
     .schema('app')
     .from('deals' as never)
-    .select('id, organization_id')
+    .select('id, organization_id, current_stage_id')
     .eq('id', input.dealId)
     .is('deleted_at', null)
     .maybeSingle();
 
   if (dErr || !dealRow) return { ok: false, error: 'Deal not found or inaccessible' };
-  const deal = dealRow as unknown as { id: string; organization_id: string };
+  const deal = dealRow as unknown as {
+    id: string;
+    organization_id: string;
+    current_stage_id: string | null;
+  };
 
   // If a checklist item was chosen, verify it belongs to THIS deal (and is
   // not soft-deleted) before linking, so a task can't point at another deal's
   // checklist item.
   let checklistId: string | null = null;
+  let stageId: string | null = deal.current_stage_id ?? null;
   if (input.checklist_id) {
     const { data: clRow } = await supabase
       .schema('app')
       .from('deal_checklists' as never)
-      .select('id')
+      .select('id, stage_id')
       .eq('id', input.checklist_id)
       .eq('deal_id', deal.id)
       .is('deleted_at', null)
       .maybeSingle();
     if (!clRow) return { ok: false, error: 'Checklist item not found on this deal' };
-    checklistId = (clRow as { id: string }).id;
+    const cl = clRow as { id: string; stage_id: string | null };
+    checklistId = cl.id;
+    // A task under a checklist item lives in that item's stage.
+    if (cl.stage_id) stageId = cl.stage_id;
   }
 
   const { data, error } = await supabase
@@ -220,6 +228,7 @@ export async function addTask(
       assigned_to_contact_id: input.assigned_to_contact_id ?? null,
       description: (input.description ?? '').trim() || null,
       checklist_id: checklistId,
+      stage_id: stageId,
     } as never)
     .select('id')
     .single();
