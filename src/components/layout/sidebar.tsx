@@ -230,7 +230,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [pathname]);
 
   // Fetch badge counts (inbox / inbound / outbound / drafts / open todos /
   // parties per type). All defensive: any failure leaves that count at 0.
@@ -309,7 +309,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [pathname]);
 
   const widthCls = collapsed ? 'w-16' : 'w-60';
 
