@@ -52,6 +52,7 @@ import {
 } from "@/lib/actions/mail-account-options";
 import { addWhitelistEntry } from "@/lib/actions/email-whitelist";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
+import { getReplyRecipients, type ReplyRecipients } from "@/lib/actions/reply-recipients";
 import { toast } from "sonner";
 import type { SendingAddressKind } from '@/types/email';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -342,6 +343,70 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     "professional",
   );
   const [generatingAI, setGeneratingAI] = useState(false);
+
+  // Reply scope: reply to the sender only, or reply all. Reply mode only.
+  // Default is "all" (per product decision). Original recipients are fetched
+  // from the source communication so the dialog stays self-contained.
+  const [replyScope, setReplyScope] = useState<"sender" | "all">("all");
+  const [replyRecipients, setReplyRecipients] = useState<ReplyRecipients | null>(null);
+
+  // Reply-all mapping: original sender -> To; remaining To + Cc -> Cc, with the
+  // sender removed from Cc and addresses de-duplicated case-insensitively. The
+  // sending account is intentionally NOT removed (per product decision).
+  function computeReplyAll(recips: ReplyRecipients): { to: string; cc: string } {
+    const norm = (s: string) => s.trim().toLowerCase();
+    const from = (recips.from ?? "").trim();
+    const seen = new Set<string>();
+    if (from) seen.add(norm(from));
+    const ccList: string[] = [];
+    for (const addr of [...recips.to, ...recips.cc]) {
+      const a = (addr ?? "").trim();
+      if (!a) continue;
+      const key = norm(a);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ccList.push(a);
+    }
+    return { to: from, cc: ccList.join(", ") };
+  }
+
+  function applyReplyScope(scope: "sender" | "all", recips: ReplyRecipients | null) {
+    if (!recips) return;
+    const from = (recips.from ?? "").trim();
+    if (scope === "sender") {
+      if (from) setTo(from);
+      setCc("");
+    } else {
+      const { to: toVal, cc: ccVal } = computeReplyAll(recips);
+      if (toVal) setTo(toVal);
+      setCc(ccVal);
+    }
+  }
+
+  function onChangeReplyScope(scope: "sender" | "all") {
+    setReplyScope(scope);
+    applyReplyScope(scope, replyRecipients);
+  }
+
+  // On open (reply mode), load original recipients and apply the default scope
+  // so To/Cc are pre-filled for Reply all out of the box.
+  useEffect(() => {
+    let cancelled = false;
+    if (!props.open || !isReplyMode || !effectiveOriginalCommunicationId) {
+      setReplyRecipients(null);
+      return;
+    }
+    setReplyScope("all");
+    getReplyRecipients(effectiveOriginalCommunicationId).then((res) => {
+      if (cancelled || !res.ok || !res.data) return;
+      setReplyRecipients(res.data);
+      applyReplyScope("all", res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open, effectiveOriginalCommunicationId, isReplyMode]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -814,6 +879,44 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                   </span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Reply scope: reply to sender only vs reply all */}
+          {isReplyMode && (
+            <div className="space-y-1">
+              <Label>Reply to</Label>
+              <div className="inline-flex rounded-md border p-0.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() => onChangeReplyScope("sender")}
+                  className={`rounded px-3 py-1 transition-colors ${
+                    replyScope === "sender"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sender only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeReplyScope("all")}
+                  className={`rounded px-3 py-1 transition-colors ${
+                    replyScope === "all"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Reply all
+                </button>
+              </div>
+              {replyScope === "all" &&
+                replyRecipients &&
+                replyRecipients.to.length + replyRecipients.cc.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No other recipients on the original message.
+                  </p>
+                )}
             </div>
           )}
 
