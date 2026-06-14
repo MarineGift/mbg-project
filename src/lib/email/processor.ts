@@ -486,7 +486,7 @@ async function insertDraft(
       auto_send_evaluation_log: input.gate.evaluationLog,
       expires_at: expiresAt.toISOString(),
       ai_generated: true,
-      status: 'draft',
+      status: 'pending_review',
       classifier_run_id: input.classifierRunId,
       drafter_run_id: input.drafterRunId,
       language: input.language,
