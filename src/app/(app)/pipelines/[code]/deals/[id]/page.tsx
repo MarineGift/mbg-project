@@ -194,6 +194,41 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
   const stageNameById = new Map<string, string>(
     ((pipeStages ?? []) as Array<{ id: string; name: string }>).map((st) => [st.id, st.name])
   );
+
+  // Stage position within the pipeline (for the header progress bar). Reuses
+  // the already-fetched pipeStages; no extra query.
+  const orderedStages = (pipeStages ?? []) as Array<{
+    id: string;
+    name: string;
+    sort_order: number | null;
+  }>;
+  const stageCount = orderedStages.length;
+  const stageIndex = d.stage
+    ? orderedStages.findIndex(
+        (s) => s.id === (d.stage as { id?: string }).id || s.name === d.stage!.name,
+      )
+    : -1;
+  const stagePos = stageIndex >= 0 ? stageIndex + 1 : null;
+  const currentStageId =
+    (d.stage as { id?: string } | null)?.id ??
+    (stageIndex >= 0 ? orderedStages[stageIndex]?.id ?? null : null);
+
+  // Current-stage exit-criteria readiness (cheap; shown in the header on every
+  // tab). null when the current stage has no checklist items.
+  let stageReady: { done: number; total: number } | null = null;
+  if (currentStageId) {
+    const { data: scl } = await supabase
+      .schema('app')
+      .from('deal_checklists' as never)
+      .select('is_complete')
+      .eq('deal_id', params.id)
+      .eq('stage_id', currentStageId)
+      .is('deleted_at', null);
+    const rows = (scl ?? []) as Array<{ is_complete: boolean | null }>;
+    if (rows.length > 0) {
+      stageReady = { done: rows.filter((r) => r.is_complete).length, total: rows.length };
+    }
+  }
   const { data: stageHistory } = await supabase
     .schema('app')
     .from('deal_stage_history' as never)
@@ -355,7 +390,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
             <>
               <span className="mx-1 opacity-40">{'\u00b7'}</span>
               <span>
-                Stage: <span className="font-medium text-foreground">{d.stage.name}</span>
+                Stage{stagePos !== null ? ' ' + stagePos + '/' + stageCount : ''}:{' '}
+                <span className="font-medium text-foreground">{d.stage.name}</span>
               </span>
             </>
           )}
@@ -374,6 +410,25 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
             </>
           )}
         </div>
+
+        {stagePos !== null && stageCount > 1 && (
+          <div className="mt-2 max-w-xs">
+            <div className="mb-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground tabular-nums">
+              <span>Stage {stagePos} of {stageCount}</span>
+              {stageReady && (
+                <span className="opacity-70">
+                  {'\u00b7'} exit criteria {stageReady.done}/{stageReady.total}
+                </span>
+              )}
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-foreground/70 transition-all"
+                style={{ width: Math.round((stagePos / stageCount) * 100) + '%' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tab strip */}
@@ -430,6 +485,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               dealId={params.id}
               tasks={tasks}
               checklists={checklists}
+              stages={orderedStages}
+              currentStageId={currentStageId}
             />
           )}
           {activeTab === 'checklist' && (
@@ -437,6 +494,8 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
               pipelineCode={params.code}
               dealId={params.id}
               items={checklists}
+              stages={orderedStages}
+              currentStageId={currentStageId}
             />
           )}
           {activeTab === 'history' && (

@@ -20,6 +20,7 @@ import {
   Search,
   User,
   Activity,
+  Paperclip,
 } from 'lucide-react';
 import {
   Dialog,
@@ -29,7 +30,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { addTask, searchContacts } from './actions';
+import { addTask, searchContacts, toggleTaskInDeal } from './actions';
+import AttachmentsPanel from '@/components/attachments/attachments-panel';
 
 // ============================================================
 // Types (duck-typed against server data)
@@ -43,6 +45,7 @@ interface Task {
   priority: string | null;
   due_at: string | null;
   checklist_id: string | null;
+  stage_id?: string | null;
   assigned_to_contact_id: string | null;
   assigned_to_user_id: string | null;
   estimated_minutes: number | null;
@@ -56,6 +59,7 @@ interface Checklist {
   title?: string | null;
   name?: string | null;
   description?: string | null;
+  stage_id?: string | null;
 }
 
 interface ContactResult {
@@ -73,6 +77,8 @@ interface Props {
   dealId: string;
   tasks: Task[];
   checklists: Checklist[];
+  stages?: Array<{ id: string; name: string; sort_order: number | null }>;
+  currentStageId?: string | null;
 }
 
 // ============================================================
@@ -124,16 +130,62 @@ function contactSecondaryLine(c: ContactResult): string {
 // Public component
 // ============================================================
 
-export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Props) {
+export function TasksTabClient({ pipelineCode, dealId, tasks, checklists, stages, currentStageId }: Props) {
   const [open, setOpen] = useState(false);
+  const [local, setLocal] = useState<Task[]>(tasks);
+  const [, startTransition] = useTransition();
 
-  const adHoc = tasks.filter((t) => !t.checklist_id);
+  // Resync when the server refreshes (after revalidatePath).
+  useEffect(() => {
+    setLocal(tasks);
+  }, [tasks]);
+
+  const isTaskDone = (t: Task) => t.status === 'completed' || t.status === 'done';
+  const doneCount = local.filter(isTaskDone).length;
+
+  const adHoc = local.filter((t) => !t.checklist_id);
   const byChecklist = new Map<string, Task[]>();
   for (const c of checklists) byChecklist.set(c.id, []);
-  for (const t of tasks) {
+  for (const t of local) {
     if (t.checklist_id && byChecklist.has(t.checklist_id)) {
       byChecklist.get(t.checklist_id)!.push(t);
     }
+  }
+
+  // Stage-aware ordering of checklist groups: current stage first, then by
+  // stage sort_order. Degrades gracefully if stage data is absent.
+  const stageName = new Map<string, string>();
+  const stageOrder = new Map<string, number>();
+  (stages ?? []).forEach((s, idx) => {
+    stageName.set(s.id, s.name);
+    stageOrder.set(s.id, s.sort_order ?? idx);
+  });
+  const groupRank = (c: Checklist) => {
+    const sid = c.stage_id ?? null;
+    const current = sid && sid === currentStageId ? 0 : 1;
+    const so = sid && stageOrder.has(sid) ? stageOrder.get(sid)! : 9999;
+    return current * 1_000_000 + so;
+  };
+  const orderedChecklists = [...checklists].sort((a, b) => groupRank(a) - groupRank(b));
+
+  function toggle(task: Task) {
+    const next = !isTaskDone(task);
+    setLocal((prev) =>
+      prev.map((t) =>
+        t.id === task.id ? { ...t, status: next ? 'completed' : 'pending' } : t,
+      ),
+    );
+    startTransition(async () => {
+      const r = await toggleTaskInDeal({ pipelineCode, dealId, taskId: task.id, completed: next });
+      if (!r.ok) {
+        // revert on failure
+        setLocal((prev) =>
+          prev.map((t) =>
+            t.id === task.id ? { ...t, status: next ? 'pending' : 'completed' } : t,
+          ),
+        );
+      }
+    });
   }
 
   return (
@@ -141,7 +193,7 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
       {/* Header bar */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {tasks.length === 0 ? 'Tasks' : 'Tasks (' + tasks.length + ')'}
+          {local.length === 0 ? 'Tasks' : 'Tasks (' + doneCount + '/' + local.length + ')'}
         </div>
         <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
@@ -149,8 +201,13 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
         </Button>
       </div>
 
+      {/* Overall progress */}
+      {local.length > 0 && (
+        <ProgressBar done={doneCount} total={local.length} className="mb-4" />
+      )}
+
       {/* List or empty state */}
-      {tasks.length === 0 ? (
+      {local.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-16">
           <CheckSquare className="mb-3 h-8 w-8 text-muted-foreground/30" />
           <div className="text-sm font-medium text-foreground">No tasks yet</div>
@@ -164,24 +221,27 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
             checklists.length > 0 ? (
               // Mixed: standalone tasks get an "Other tasks" header so they
               // don't visually merge with named checklists.
-              <TaskGroup title="Other tasks" tasks={adHoc} />
+              <TaskGroup title="Other tasks" tasks={adHoc} onToggle={toggle} />
             ) : (
               // Only standalone tasks: skip the group header entirely.
               <div className="rounded-lg border bg-card">
                 <ul className="divide-y">
                   {adHoc.map((t) => (
-                    <TaskRow key={t.id} task={t} />
+                    <TaskRow key={t.id} task={t} onToggle={toggle} />
                   ))}
                 </ul>
               </div>
             )
           )}
-          {checklists.map((c) => (
+          {orderedChecklists.map((c) => (
             <TaskGroup
               key={c.id}
               title={c.title || c.name || 'Checklist'}
               description={c.description ?? null}
               tasks={byChecklist.get(c.id) ?? []}
+              onToggle={toggle}
+              stageLabel={c.stage_id ? stageName.get(c.stage_id) ?? null : null}
+              isCurrentStage={!!c.stage_id && c.stage_id === currentStageId}
             />
           ))}
         </div>
@@ -202,35 +262,86 @@ export function TasksTabClient({ pipelineCode, dealId, tasks, checklists }: Prop
 // Task list rendering
 // ============================================================
 
+function ProgressBar({
+  done,
+  total,
+  className,
+}: {
+  done: number;
+  total: number;
+  className?: string;
+}) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div
+      className={'h-1.5 w-full overflow-hidden rounded-full bg-muted ' + (className ?? '')}
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-full bg-emerald-500 transition-all"
+        style={{ width: pct + '%' }}
+      />
+    </div>
+  );
+}
+
 function TaskGroup({
   title,
   description,
   tasks,
+  onToggle,
+  stageLabel,
+  isCurrentStage,
 }: {
   title: string;
   description?: string | null;
   tasks: Task[];
+  onToggle: (t: Task) => void;
+  stageLabel?: string | null;
+  isCurrentStage?: boolean;
 }) {
   const done = tasks.filter((t) => t.status === 'completed' || t.status === 'done').length;
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
-          )}
+      <div className="border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-medium text-foreground">{title}</div>
+              {stageLabel && (
+                <span
+                  className={
+                    'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ' +
+                    (isCurrentStage
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-muted text-muted-foreground')
+                  }
+                >
+                  {stageLabel}
+                </span>
+              )}
+            </div>
+            {description && (
+              <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+            )}
+          </div>
+          <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {done}/{tasks.length}
+          </div>
         </div>
-        <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {done}/{tasks.length}
-        </div>
+        {tasks.length > 0 && (
+          <ProgressBar done={done} total={tasks.length} className="mt-2" />
+        )}
       </div>
       {tasks.length === 0 ? (
         <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">No tasks</div>
       ) : (
         <ul className="divide-y">
           {tasks.map((t) => (
-            <TaskRow key={t.id} task={t} />
+            <TaskRow key={t.id} task={t} onToggle={onToggle} />
           ))}
         </ul>
       )}
@@ -238,7 +349,8 @@ function TaskGroup({
   );
 }
 
-function TaskRow({ task: t }: { task: Task }) {
+function TaskRow({ task: t, onToggle }: { task: Task; onToggle: (t: Task) => void }) {
+  const [filesOpen, setFilesOpen] = useState(false);
   const status = String(t.status || 'pending').toLowerCase();
   const isDone = status === 'completed' || status === 'done';
   const isInProgress = status === 'in_progress' || status === 'in-progress';
@@ -272,59 +384,82 @@ function TaskRow({ task: t }: { task: Task }) {
   );
 
   return (
-    <li className="flex items-start gap-3 px-4 py-2.5">
-      <div className="mt-0.5">
-        <StatusIcon className={'h-4 w-4 ' + statusIconCls} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div
-          className={
-            'text-sm ' + (isDone ? 'text-muted-foreground line-through' : 'text-foreground')
-          }
+    <li className="px-4 py-2.5">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => onToggle(t)}
+          aria-label={isDone ? 'mark incomplete' : 'mark complete'}
+          className="mt-0.5 shrink-0"
         >
-          {t.title}
-        </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {priority && priority !== 'medium' && (
-            <span className={'font-medium capitalize ' + priorityCls}>{priority}</span>
-          )}
-          {due && (
-            <>
-              {priority && priority !== 'medium' && (
+          <StatusIcon className={'h-4 w-4 ' + statusIconCls} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div
+            className={
+              'text-sm ' + (isDone ? 'text-muted-foreground line-through' : 'text-foreground')
+            }
+          >
+            {t.title}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {priority && priority !== 'medium' && (
+              <span className={'font-medium capitalize ' + priorityCls}>{priority}</span>
+            )}
+            {due && (
+              <>
+                {priority && priority !== 'medium' && (
+                  <span className="opacity-40">{'\u00b7'}</span>
+                )}
+                <span className={isOverdue ? 'font-medium text-rose-700' : ''}>
+                  Due {fmtDate(due)}
+                  {dueRelative ? ' (' + dueRelative + ')' : ''}
+                </span>
+              </>
+            )}
+            {(t.assigned_to_contact_id || t.assigned_to_user_id) && (
+              <>
                 <span className="opacity-40">{'\u00b7'}</span>
-              )}
-              <span className={isOverdue ? 'font-medium text-rose-700' : ''}>
-                Due {fmtDate(due)}
-                {dueRelative ? ' (' + dueRelative + ')' : ''}
-              </span>
-            </>
-          )}
-          {(t.assigned_to_contact_id || t.assigned_to_user_id) && (
-            <>
+                <span>Assigned</span>
+              </>
+            )}
+            {t.estimated_minutes != null && (
+              <>
+                <span className="opacity-40">{'\u00b7'}</span>
+                <span>{t.estimated_minutes}m est</span>
+              </>
+            )}
+            {activityCount > 0 && (
+              <>
+                {hasMeta && <span className="opacity-40">{'\u00b7'}</span>}
+                <span className="inline-flex items-center gap-1 text-foreground/70">
+                  <Activity className="h-3 w-3" />
+                  {activityCount} {activityCount === 1 ? 'activity' : 'activities'}
+                </span>
+              </>
+            )}
+            {(hasMeta || activityCount > 0) && (
               <span className="opacity-40">{'\u00b7'}</span>
-              <span>Assigned</span>
-            </>
-          )}
-          {t.estimated_minutes != null && (
-            <>
-              <span className="opacity-40">{'\u00b7'}</span>
-              <span>{t.estimated_minutes}m est</span>
-            </>
-          )}
-          {activityCount > 0 && (
-            <>
-              {hasMeta && <span className="opacity-40">{'\u00b7'}</span>}
-              <span className="inline-flex items-center gap-1 text-foreground/70">
-                <Activity className="h-3 w-3" />
-                {activityCount} {activityCount === 1 ? 'activity' : 'activities'}
-              </span>
-            </>
+            )}
+            <button
+              type="button"
+              onClick={() => setFilesOpen((v) => !v)}
+              className="inline-flex items-center gap-1 hover:text-foreground"
+            >
+              <Paperclip className="h-3 w-3" />
+              {filesOpen ? 'Hide files' : 'Files'}
+            </button>
+          </div>
+          {t.description && (
+            <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
           )}
         </div>
-        {t.description && (
-          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
-        )}
       </div>
+      {filesOpen && (
+        <div className="mt-2 pl-7">
+          <AttachmentsPanel entityType="task" entityId={t.id} title="Attachments" />
+        </div>
+      )}
     </li>
   );
 }
