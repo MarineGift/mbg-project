@@ -2,7 +2,7 @@
 import { getCalendarConnections, disconnectCalendar, triggerCalendarSync } from '@/app/actions/calendar-sync'
 import { Button } from '@/components/ui/button'
 import { Badge }  from '@/components/ui/badge'
-import { CheckCircle2, XCircle, RefreshCw, Link2Off } from 'lucide-react'
+import { CheckCircle2, XCircle, RefreshCw, RotateCw, Link2Off } from 'lucide-react'
 import { revalidatePath } from 'next/cache'
 
 // ─────────────────────────────────────────────
@@ -78,6 +78,15 @@ function ProviderCard({
                 <RefreshCw className="w-3.5 h-3.5" /> Sync now
               </Button>
             </form>
+            {/* Reconnect: re-runs OAuth with prompt=consent so newly added
+                scopes (e.g. drive.file for attachments) are granted. The
+                callback upserts the same connection row — no duplicate, no
+                disconnect needed. */}
+            <a href={`/api/calendar/${provider}/connect`}>
+              <Button variant="outline" size="sm" className="gap-1 w-full">
+                <RotateCw className="w-3.5 h-3.5" /> Reconnect
+              </Button>
+            </a>
             <form action={async () => {
               'use server'
               await disconnectCalendar(connection.id)
@@ -154,6 +163,14 @@ export default async function CalendarSettingsPage({
           connection={microsoftConn}
         />
       </div>
+
+      {/* Why reconnect */}
+      <p className="text-xs text-muted-foreground">
+        Added a new integration permission (e.g. Drive file access for
+        attachments)? Use <span className="font-medium">Reconnect</span> to
+        re-approve on the Google consent screen — your calendar sync keeps
+        working.
+      </p>
 
       {/* Env vars checklist */}
       <div className="rounded-lg border border-border p-4 space-y-2">
