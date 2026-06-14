@@ -165,7 +165,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const from = (page - 1) * pageSize;
   const to   = from + pageSize - 1;
 
-  if (!(PHASE_1_MODULES as readonly string[]).includes(moduleParam)) notFound();
+  // Allow every party-type code that has a directory label (incl. self,
+  // consultant, crowdfunding_platform) -- not just the Phase-1 modules.
+  if (!Object.keys(MODULE_LABELS).includes(moduleParam)) notFound();
   const module = moduleParam as PartyTypeCode;
 
   await requireAuthOrRedirect();

@@ -199,11 +199,12 @@ export default async function DashboardPage() {
   const engTotal   = dealRows.reduce((s, d) => s + d.engCount, 0);
 
   // Per-pipeline aggregation (deal / task / engagement counts).
-  type PipelineStat = { id: string; name: string; deals: number; tasks: number; engagements: number };
+  type PipelineStat = { id: string; code: string; name: string; deals: number; tasks: number; engagements: number };
   const pipelineStats: PipelineStat[] = pipelineRows.map((p) => {
     const rows = dealRows.filter((d) => d.pipelineId === p.id);
     return {
       id: p.id,
+      code: p.code,
       name: p.name,
       deals: rows.length,
       tasks: rows.reduce((s, d) => s + d.taskCount, 0),
@@ -349,7 +350,12 @@ export default async function DashboardPage() {
                 </div>
                 {pipelineStats.map((p) => (
                   <div key={p.id} className="flex items-center justify-between text-sm gap-2">
-                    <span className="font-medium truncate">{p.name}</span>
+                    <Link
+                      href={`/pipelines/${p.code}`}
+                      className="font-medium truncate hover:underline underline-offset-2"
+                    >
+                      {p.name}
+                    </Link>
                     <span className="tabular-nums text-muted-foreground font-mono text-xs shrink-0">
                       {p.deals} / {p.tasks} / {p.engagements}
                     </span>
