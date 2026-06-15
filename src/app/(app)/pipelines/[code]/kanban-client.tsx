@@ -522,7 +522,9 @@ function DraggableCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.2 : 1,
     cursor: 'grab',
-    touchAction: 'none',
+    // Allow the browser to pan (scroll the column / page the board) when swiping
+    // a card on touch; drag-and-drop still works with a mouse on desktop.
+    touchAction: 'manipulation',
   };
 
   return (
