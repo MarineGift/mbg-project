@@ -244,23 +244,25 @@ export async function fetchInbox(
 
   // t9a: group by threadId, pick latest representative + count + OR-aggregate hasDraft.
   // allRows is sorted by occurred_at desc, so first seen per thread IS the latest message.
-  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean; allRead: boolean }>();
+  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean; anyAiGenerated: boolean; allRead: boolean }>();
   for (const row of allRows) {
     const existing = threadMap.get(row.threadId);
     if (existing) {
       existing.count += 1;
       if (row.hasDraft) existing.anyHasDraft = true;
+      if (row.aiGenerated) existing.anyAiGenerated = true;
       // a thread is unread if ANY of its inbound messages is unread
       existing.allRead = existing.allRead && row.isRead;
     } else {
-      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft, allRead: row.isRead });
+      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft, anyAiGenerated: row.aiGenerated, allRead: row.isRead });
     }
   }
 
-  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft, allRead }) => ({
+  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft, anyAiGenerated, allRead }) => ({
     ...latest,
     threadCount: count,
     hasDraft: anyHasDraft,
+    aiGenerated: anyAiGenerated,
     isRead: allRead,
   }));
 
