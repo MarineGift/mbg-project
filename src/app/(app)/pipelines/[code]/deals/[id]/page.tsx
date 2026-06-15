@@ -276,12 +276,15 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
     activityTasks = (taskOpts ?? []) as Array<{ id: string; title: string; checklist_id?: string | null }>;
 
     // checklists for the Activity composer's chained Checklist dropdown
-    const { data: clOpts } = await supabase
+    let clQuery: any = supabase
       .schema('app')
       .from('deal_checklists' as never)
       .select('id, title')
       .eq('deal_id', params.id)
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+    // Only show checklists for the deal's CURRENT stage in the composer dropdown.
+    if (currentStageId) clQuery = clQuery.eq('stage_id', currentStageId);
+    const { data: clOpts } = await clQuery
       .order('sort_order', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: true });
     checklists = (clOpts ?? []) as any[];

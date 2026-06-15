@@ -481,7 +481,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-auto lg:h-[26rem] w-full shrink-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
+        'flex h-[24rem] lg:h-[26rem] w-full shrink-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
         isOver && 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10'
       )}
     >
@@ -502,7 +502,7 @@ function DroppableColumn({
         ) : null}
       </div>
 
-      <div className="scrollbar-thin flex-1 space-y-2 overflow-y-auto p-2">
+      <div className="scrollbar-visible flex-1 space-y-2 overflow-y-auto p-2">
         {children}
       </div>
     </div>
@@ -532,7 +532,7 @@ function DraggableCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
       {...listeners}
       {...attributes}
       onClick={onOpen}
-      className="block rounded-md border bg-background p-2.5 text-sm shadow-sm transition hover:border-foreground/20 hover:shadow"
+      className="block rounded-md border bg-background p-3 text-sm shadow-sm transition hover:border-foreground/20 hover:shadow"
     >
       <CardContent deal={deal} />
     </div>
