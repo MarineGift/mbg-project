@@ -117,15 +117,15 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
   }
   .scrollbar-visible::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 14px;
+    height: 14px;
   }
   .scrollbar-visible::-webkit-scrollbar-track {
     background: hsl(var(--muted) / 0.4);
     border-radius: 9999px;
   }
   .scrollbar-visible::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.5);
+    background: hsl(var(--muted-foreground) / 0.6);
     border-radius: 9999px;
   }
 }

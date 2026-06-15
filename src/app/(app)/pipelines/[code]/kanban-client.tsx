@@ -345,13 +345,13 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
           ) : null}
 
           {/* Board */}
-          <div className="flex-1 overflow-y-auto bg-muted/30">
+          <div className="flex-1 overflow-hidden bg-muted/30 lg:overflow-y-auto">
             {stages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 No stages configured for this pipeline.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+              <div className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto p-4 sm:grid sm:h-auto sm:snap-none sm:grid-cols-2 sm:overflow-x-visible lg:grid-cols-4 xl:grid-cols-5">
                 {stageBuckets.map(({ stage, deals: stageDeals, count, sums }, i) => (
                   <DroppableColumn
                     key={stage.id}
@@ -481,7 +481,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-[24rem] lg:h-[26rem] w-full shrink-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
+        'flex h-full w-[84vw] shrink-0 snap-start flex-col overflow-hidden rounded-lg border bg-card transition-colors sm:h-[26rem] sm:w-full',
         isOver && 'border-foreground/40 bg-card/80 ring-2 ring-foreground/10'
       )}
     >
