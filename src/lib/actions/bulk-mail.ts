@@ -37,8 +37,9 @@ import {
 
 /** V1 safety ceiling per invocation (a server action, not a worker). */
 const HARD_CAP = 100;
-/** ms between sends - gentle pacing for the shared SMTP host. */
-const SEND_PACING_MS = 150;
+/** Default / max simultaneous sends (overlaps SMTP + DB latency). */
+const DEFAULT_CONCURRENCY = 4;
+const MAX_CONCURRENCY = 8;
 
 const sourceSchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('pipeline_stage'), stageId: z.string().uuid() }),
@@ -133,6 +134,8 @@ export async function sendBulkMail(input: {
   onlyKeys?: string[];
   /** per-call cap; hard-limited to HARD_CAP regardless of value. */
   limit?: number;
+  /** simultaneous sends (1..MAX_CONCURRENCY); default DEFAULT_CONCURRENCY. */
+  concurrency?: number;
 }): Promise<BulkMailActionResult & { summary?: BulkMailSendSummary }> {
   let auth;
   try {
@@ -151,6 +154,7 @@ export async function sendBulkMail(input: {
       bypassWhitelist: z.boolean().optional().default(false),
       onlyKeys: z.array(z.string()).optional(),
       limit: z.number().int().positive().optional(),
+      concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).optional(),
     })
     .safeParse(input);
   if (!parsed.success) {
@@ -158,6 +162,10 @@ export async function sendBulkMail(input: {
   }
   const { templateId, source, mailAccountId, recipientMode, recentDays, bypassWhitelist, onlyKeys } = parsed.data;
   const cap = Math.min(parsed.data.limit ?? HARD_CAP, HARD_CAP);
+  const concurrency = Math.min(
+    Math.max(parsed.data.concurrency ?? DEFAULT_CONCURRENCY, 1),
+    MAX_CONCURRENCY,
+  );
 
   const supabase = await createSupabaseServerClient();
 
@@ -210,7 +218,12 @@ export async function sendBulkMail(input: {
     results: [],
   };
 
-  for (const r of recipients) {
+  // Bounded-concurrency pool: send up to `concurrency` recipients at once
+  // instead of strictly one-at-a-time. sendOutboundEmail is independent per
+  // recipient (separate communications rows), and the SMTP transporter is
+  // cached per account, so overlapping sends is safe. JS is single-threaded,
+  // so the summary mutations below are not a data race.
+  const sendOne = async (r: (typeof recipients)[number]): Promise<void> => {
     const email = r.email as string;
     summary.attempted += 1;
 
@@ -241,11 +254,17 @@ export async function sendBulkMail(input: {
     else summary.failed += 1;
 
     summary.results.push({ key: r.key, partyId: r.partyId, email, status, error: res.errorMessage });
+  };
 
-    if (SEND_PACING_MS > 0) {
-      await new Promise<void>((resolve) => setTimeout(resolve, SEND_PACING_MS));
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (let idx = cursor++; idx < recipients.length; idx = cursor++) {
+      const r = recipients[idx];
+      if (r) await sendOne(r);
     }
-  }
+  };
+  const lanes = Math.min(concurrency, recipients.length);
+  await Promise.all(Array.from({ length: Math.max(lanes, 0) }, () => worker()));
 
   return { ok: true, summary };
 }
