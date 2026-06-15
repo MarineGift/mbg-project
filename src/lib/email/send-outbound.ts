@@ -330,12 +330,17 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
       const { data: tmplRaw } = await supabase
         .schema('app')
         .from('email_templates' as never)
-        .select('body_html')
+        .select('body_html, body_plain')
         .eq('id', templateId)
         .single();
-      const tmpl = tmplRaw as { body_html: string | null } | null;
+      const tmpl = tmplRaw as { body_html: string | null; body_plain: string | null } | null;
       if (tmpl) {
-        finalBody = await renderWithContext(supabase, tmpl.body_html ?? '', partyId, contactId ?? undefined);
+        // bulk/template sends render body_html; fall back to body_plain so
+        // templates authored as plain text still produce a body (not just the
+        // signature). plainToHtml below converts the plain newlines to HTML.
+        const rawBody =
+          tmpl.body_html && tmpl.body_html.trim() ? tmpl.body_html : (tmpl.body_plain ?? '');
+        finalBody = await renderWithContext(supabase, rawBody, partyId, contactId ?? undefined);
       }
     }
     finalSubject = await renderWithContext(supabase, input.subject, partyId, contactId ?? undefined);

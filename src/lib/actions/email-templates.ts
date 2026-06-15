@@ -57,7 +57,7 @@ export async function createEmailTemplate(
     subject: parsed.data.subject.trim(),
     body_plain: parsed.data.bodyPlain,
     body_html: parsed.data.bodyHtml?.trim() || null,
-    module: parsed.data.module || null,
+    party_type: parsed.data.module || null,
     is_active: parsed.data.isActive ?? true,
     created_by: auth.userId,
   };
@@ -102,7 +102,7 @@ export async function updateEmailTemplate(
     subject: parsed.data.subject.trim(),
     body_plain: parsed.data.bodyPlain,
     body_html: parsed.data.bodyHtml?.trim() || null,
-    module: parsed.data.module || null,
+    party_type: parsed.data.module || null,
     is_active: parsed.data.isActive ?? true,
     updated_at: new Date().toISOString(),
   };
