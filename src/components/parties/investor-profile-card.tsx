@@ -2,10 +2,12 @@ import type { ReactNode } from 'react';
 import { Banknote } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { InvestorProfile } from '@/types/party-detail';
+import { InvestorPriorityEditor } from '@/components/parties/investor-priority-editor';
 
 interface Props {
   profile: InvestorProfile;
   partyName?: string;
+  partyId: string;
 }
 
 const DASH = <span className="text-muted-foreground">-</span>;
@@ -74,7 +76,7 @@ function Flags({ profile }: { profile: InvestorProfile }): ReactNode {
   );
 }
 
-export function InvestorProfileCard({ profile, partyName }: Props) {
+export function InvestorProfileCard({ profile, partyName, partyId }: Props) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -85,6 +87,9 @@ export function InvestorProfileCard({ profile, partyName }: Props) {
       </CardHeader>
       <CardContent>
         <dl>
+          <Row label="Priority">
+            <InvestorPriorityEditor partyId={partyId} partyType="investor" value={profile.priority} />
+          </Row>
           {!!profile.fundName && profile.fundName.trim() !== (partyName ?? "").trim() && (
             <Row label="Fund Name">{profile.fundName}</Row>
           )}

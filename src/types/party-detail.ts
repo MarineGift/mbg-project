@@ -140,7 +140,12 @@ export interface PartyTask {
   createdAt: string;
 }
 
+/** Investor priority / tier. high = Tier A, medium = Tier B, low = Tier C. */
+export type InvestorPriority = 'high' | 'medium' | 'low';
+
 export interface InvestorProfile {
+  /** editable on the Investor Profile card; null = unset */
+  priority: InvestorPriority | null;
   fundName: string | null;
   typeCode: string | null;
   typeName: string | null;

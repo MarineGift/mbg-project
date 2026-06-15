@@ -44,7 +44,7 @@ import type {
   PartyTier,
   TimelineCommunicationItem,
   TimelineItem,
-  TimelineTaskItem, InvestorProfile } from '@/types/party-detail';
+  TimelineTaskItem, InvestorProfile, InvestorPriority } from '@/types/party-detail';
 
 interface RawPartyRow {
   id: string;
@@ -345,14 +345,14 @@ export async function fetchPartyDetail(
       .schema('app')
       .from('investor_profile' as never)
       .select(
-        'fund_name, investor_type_id, fund_size_usd, aum_usd, fund_vintage_year, ' +
+        'priority, fund_name, investor_type_id, fund_size_usd, aum_usd, fund_vintage_year, ' +
         'ticket_min_usd, ticket_max_usd, sector_focus, geographic_focus, ' +
         'is_lead_investor, is_strategic, ' +
         'type:investor_type_id(code, display_name, category)',
       )
       .eq('party_id', partyId)
       .maybeSingle();
-    if (ipRow) investorProfile = mapInvestorProfile(ipRow);
+    investorProfile = ipRow ? mapInvestorProfile(ipRow) : emptyInvestorProfile();
   }
 
   return {    party: detail,
@@ -631,6 +631,25 @@ function mapMeeting(raw: unknown): PartyMeeting {
   };
 }
 
+function emptyInvestorProfile(): InvestorProfile {
+  return {
+    priority: null,
+    fundName: null,
+    typeCode: null,
+    typeName: null,
+    investorCategory: null,
+    fundSizeUsd: null,
+    aumUsd: null,
+    fundVintageYear: null,
+    ticketMinUsd: null,
+    ticketMaxUsd: null,
+    sectorFocus: [],
+    geographicFocus: [],
+    isLeadInvestor: false,
+    isStrategic: false,
+  };
+}
+
 function mapInvestorProfile(raw: unknown): InvestorProfile {
   const r = raw as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === 'number' ? v : v == null ? null : Number(v));
@@ -638,6 +657,7 @@ function mapInvestorProfile(raw: unknown): InvestorProfile {
   const t = Array.isArray(r.type) ? ((r.type as unknown[])[0] ?? null) : (r.type ?? null);
   const tt = t as { code?: string; display_name?: string; category?: string } | null;
   return {
+    priority: (r.priority as InvestorPriority | null) ?? null,
     fundName: (r.fund_name as string | null) ?? null,
     typeCode: tt?.code ?? null,
     typeName: tt?.display_name ?? null,

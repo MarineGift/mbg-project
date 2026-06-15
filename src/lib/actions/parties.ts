@@ -304,6 +304,59 @@ export async function updateParty(
   return { ok: true, partyId: parsed.data.partyId };
 }
 
+const investorPrioritySchema = z.object({
+  partyId: z.string().uuid(),
+  partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
+  priority: z.enum(['high', 'medium', 'low']).nullable(),
+});
+
+/**
+ * Set the investor priority (Tier) on app.investor_profile.
+ * Upserts the 1:1 row by party_id, so it works even if no profile row exists yet.
+ * priority: 'high' (Tier A) | 'medium' (Tier B) | 'low' (Tier C) | null (unset).
+ */
+export async function updateInvestorPriority(
+  input: z.input<typeof investorPrioritySchema>,
+): Promise<PartyActionResult> {
+  let auth: AuthContext;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+  const parsed = investorPrioritySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errorCode: 'validation',
+      errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input',
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .schema('app')
+    .from('investor_profile' as never)
+    .upsert(
+      {
+        party_id: parsed.data.partyId,
+        organization_id: auth.organizationId,
+        priority: parsed.data.priority,
+        updated_by: auth.userId,
+      } as never,
+      { onConflict: 'party_id' },
+    );
+
+  if (error) {
+    console.error('[parties.updateInvestorPriority] upsert error:', error);
+    return { ok: false, errorCode: 'database', errorMessage: error.message };
+  }
+
+  revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);
+  return { ok: true, partyId: parsed.data.partyId };
+}
+
 const deleteSchema = z.object({
   partyId: z.string().uuid(),
 });
