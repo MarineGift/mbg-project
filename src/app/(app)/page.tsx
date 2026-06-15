@@ -81,6 +81,16 @@ export default async function DashboardPage() {
   const outboundUnread = (outboundUnreadRes as any).count ?? 0;
   const outboundCount  = (outboundRes       as any).count ?? 0; // total outbound
 
+  // AI Sent: outbound emails composed via the AI Draft tab (communications.ai_generated).
+  const aiSentRes = await supabase
+    .schema('app')
+    .from('communications' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('direction', 'outbound')
+    .eq('ai_generated' as never, true)
+    .is('deleted_at' as never, null);
+  const aiSent = (aiSentRes as any).count ?? 0;
+
   // To-Do per-status breakdown (Backlog / To Do / In Progress / Review / Done).
   // Mirrors the /todo board: pick the kind='todo' board (else the first), read
   // its status options (label/color/order) and count its items per status.
@@ -250,11 +260,11 @@ export default async function DashboardPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <Link href="/inbox?hasDraft=1" className="font-medium hover:underline underline-offset-2">
-                  AI Drafts
+                <Link href="/inbox?direction=outbound&ai=1" className="font-medium hover:underline underline-offset-2">
+                  AI Sent
                 </Link>
                 <span className="tabular-nums text-muted-foreground font-mono text-xs">
-                  {draftsPending.toLocaleString()}/{draftsTotal.toLocaleString()}
+                  {aiSent.toLocaleString()}
                 </span>
               </div>
             </div>

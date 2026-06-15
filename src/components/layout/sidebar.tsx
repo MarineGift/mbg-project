@@ -109,7 +109,7 @@ const BOTTOM_ITEMS: readonly NavItem[] = [
 
 // Inbox sub-items, shown indented under the Inbox link. They map onto the inbox
 // page filters (direction + hasDraft) so the same list/query is reused.
-type InboxSubItem = { label: string; href: string; countKey: 'inbound' | 'outbound' | 'drafts'; match: (sp: URLSearchParams) => boolean };
+type InboxSubItem = { label: string; href: string; countKey: 'inbound' | 'outbound' | 'aiSent'; match: (sp: URLSearchParams) => boolean };
 const INBOX_SUBITEMS: readonly InboxSubItem[] = [
   {
     label: 'In Bound',
@@ -121,13 +121,13 @@ const INBOX_SUBITEMS: readonly InboxSubItem[] = [
     label: 'Out Bound',
     href: '/inbox?direction=outbound',
     countKey: 'outbound',
-    match: (sp) => !sp.get('hasDraft') && sp.get('direction') === 'outbound',
+    match: (sp) => !sp.get('hasDraft') && !sp.get('ai') && sp.get('direction') === 'outbound',
   },
   {
-    label: 'AI Drafts',
-    href: '/inbox?hasDraft=1',
-    countKey: 'drafts',
-    match: (sp) => !!sp.get('hasDraft'),
+    label: 'AI Sent',
+    href: '/inbox?direction=outbound&ai=1',
+    countKey: 'aiSent',
+    match: (sp) => sp.get('ai') === '1',
   },
 ] as const;
 
@@ -154,6 +154,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
     outbound: number;        // total outbound
     draftsPending: number;   // drafts pending review
     draftsTotal: number;     // total drafts
+    aiSent: number;          // outbound emails composed via AI (ai_generated=true)
     todoOpen: number;
     sent: number;             // outbound messages (non-deleted)
     calendarUpcoming: number; // events starting now or later
@@ -162,7 +163,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   };
   const [counts, setCounts] = useState<SidebarCounts>({
     inboxUnread: 0, inbound: 0, outboundUnread: 0, outbound: 0,
-    draftsPending: 0, draftsTotal: 0, todoOpen: 0,
+    draftsPending: 0, draftsTotal: 0, aiSent: 0, todoOpen: 0,
     sent: 0, calendarUpcoming: 0, campaignsActive: 0, parties: {},
   });
 
@@ -176,10 +177,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   };
 
   // A/B pairs for the inbox sub-items (shown as "A/B", e.g. unread/total).
-  const subPairs: Record<'inbound' | 'outbound' | 'drafts', [number, number]> = {
+  const subPairs: Record<'inbound' | 'outbound' | 'aiSent', [number, number]> = {
     inbound:  [counts.inboxUnread, counts.inbound],
     outbound: [counts.outboundUnread, counts.outbound],
-    drafts:   [counts.draftsPending, counts.draftsTotal],
+    aiSent:   [counts.aiSent, counts.aiSent],
   };
 
   const [pipelines, setPipelines] = useState<Pipeline[]>(STATIC_PIPELINES);
@@ -291,6 +292,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         // count query above).
         const todoOpen = (todoOpenRes as any).count ?? 0;
 
+        const aiSentRes = await comm()
+          .select('id', { count: 'exact', head: true })
+          .eq('direction', 'outbound')
+          .eq('ai_generated' as never, true)
+          .is('deleted_at' as never, null);
+        if (!alive) return;
+
         setCounts({
           inboxUnread: (unreadRes as any).count ?? 0,
           inbound: (inboundRes as any).count ?? 0,
@@ -300,6 +308,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           draftsTotal: (draftsTotalRes as any).count ?? 0,
           todoOpen,
           sent: (sentRes as any).count ?? 0,
+          aiSent: (aiSentRes as any).count ?? 0,
           calendarUpcoming: (calendarRes as any).count ?? 0,
           campaignsActive: (campaignsRes as any).count ?? 0,
           parties,
@@ -382,11 +391,17 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                               aria-current={subActive ? 'page' : undefined}
                             >
                               <span className="flex-1 truncate">{sub.label}</span>
-                              {subPairs[sub.countKey][1] > 0 && (
-                                <span className="tabular-nums text-xs text-muted-foreground">
-                                  {subPairs[sub.countKey][0]}/{subPairs[sub.countKey][1]}
-                                </span>
-                              )}
+                              {sub.countKey === 'aiSent'
+                                ? counts.aiSent > 0 && (
+                                    <span className="tabular-nums text-xs text-muted-foreground">
+                                      {counts.aiSent}
+                                    </span>
+                                  )
+                                : subPairs[sub.countKey][1] > 0 && (
+                                    <span className="tabular-nums text-xs text-muted-foreground">
+                                      {subPairs[sub.countKey][0]}/{subPairs[sub.countKey][1]}
+                                    </span>
+                                  )}
                             </Link>
                           </li>
                         );
