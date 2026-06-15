@@ -210,8 +210,8 @@ export async function drainTick(sb: SupabaseClient): Promise<number> {
 /* ============================================================
  * main - persistent poll loop (or --once drain)
  * ============================================================ */
-async function main(): Promise<void> {
-  const once = process.argv.includes('--once');
+export async function runMailRunWorker(opts: { once?: boolean } = {}): Promise<void> {
+  const once = opts.once ?? process.argv.includes('--once');
   const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   const ctl = createShutdownController('mailrun-worker');
 
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
 }
 
 if (isMainEntry(import.meta.url)) {
-  main().catch((err) => {
+  runMailRunWorker().catch((err) => {
     // eslint-disable-next-line no-console
     console.error('[mailrun-worker] fatal:', err);
     process.exit(1);
