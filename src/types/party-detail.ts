@@ -44,6 +44,9 @@ export interface PartyDetail {
   interestTags: string[];
   notes: string | null;
   source: string | null;
+  /** Long free-text introduction (Korean / English) - app.parties.intro_ko / intro_en */
+  introKo: string | null;
+  introEn: string | null;
   createdAt: string;
   updatedAt: string;
 

@@ -33,6 +33,7 @@ import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
 import { PartyDetailTabs } from '@/components/parties/party-detail-tabs';
 import { PartyInfoCard } from '@/components/parties/party-info-card';
+import { PartyIntroCard } from '@/components/parties/party-intro-card';
 import { InvestorProfileCard } from '@/components/parties/investor-profile-card';
 
 const PHASE_1_MODULES: readonly PartyTypeCode[] = [
@@ -126,6 +127,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
             overview={
               <>
                 <PartyStatsGrid party={full.party} />
+                <PartyIntroCard introKo={full.party.introKo} introEn={full.party.introEn} />
                 <PartyInfoCard party={full.party} contacts={full.contacts} />
                 {(full.party.partyType === 'paper_mill' ||
                   full.party.partyType === 'filler_supplier') && (
