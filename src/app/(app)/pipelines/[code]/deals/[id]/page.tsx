@@ -19,6 +19,7 @@ import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { ActivityTabClient } from './log-activity-modal';
 import { TasksTabClient } from './add-task-modal';
 import { ChecklistTabClient } from './checklist-tab';
+import { DealInfoAside } from './deal-info-aside';
 
 interface Props {
   params: { code: string; id: string };
@@ -538,11 +539,11 @@ export default async function DealDetailPage({ params, searchParams }: Props) {
           )}
         </div>
 
-        <aside className="w-80 shrink-0 space-y-3 overflow-y-auto border-l bg-muted/20 p-4">
+        <DealInfoAside>
           <PropertyCard deal={d} />
           {dpSorted.length > 0 && <CompaniesCard parties={dpSorted} />}
           {d.notes && <NotesCard notes={d.notes} />}
-        </aside>
+        </DealInfoAside>
       </div>
     </div>
   );
