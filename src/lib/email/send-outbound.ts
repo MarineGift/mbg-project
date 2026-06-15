@@ -463,6 +463,7 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
       subject: finalSubject,
       sentTo: input.to,
       htmlBody: finalBody,
+      client: supabase,
     });
     injectedHtml = tracking.injectedHtml;
   } catch (trackingErr) {

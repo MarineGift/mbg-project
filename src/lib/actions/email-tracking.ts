@@ -9,7 +9,7 @@
  *   - (future) drafts.ts -> sendApprovedDraft (AI auto-send)
  */
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, type SbClient } from '@/lib/supabase/server';
 import { rpc } from '@/lib/rpc/typed-rpc';
 import { extractLinks, injectTracking } from '@/lib/utils/email-tracking';
 import type { TrackingPayload } from '@/types/phase21';
@@ -34,6 +34,10 @@ export interface CreateTrackingInput {
   /** The HTML body to inject the pixel + links into.
    *  Convert plain text via plainToHtml() before calling. */
   htmlBody: string;
+
+  /** Supabase client to use. Pass one when calling outside a request scope
+   *  (e.g. background workers); falls back to the request-scoped server client. */
+  client?: SbClient;
 }
 
 export interface CreateTrackingResult {
@@ -55,7 +59,7 @@ export interface CreateTrackingResult {
 export async function createEmailTracking(
   input: CreateTrackingInput,
 ): Promise<CreateTrackingResult> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = input.client ?? (await createSupabaseServerClient());
 
   const links = extractLinks(input.htmlBody).map((url) => ({ url }));
 
