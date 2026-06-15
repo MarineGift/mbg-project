@@ -8,7 +8,7 @@
  */
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Inbox, CheckSquare, Building2, Handshake } from 'lucide-react';
+import { Inbox, CheckSquare, Building2, Handshake, Mail } from 'lucide-react';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -299,6 +299,19 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/mailing" className="block rounded-xl transition-colors hover:bg-muted/40">
+          <Card className="h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Mailing</CardTitle>
+              <Mail className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Send bulk email to your contacts and parties.
+              </CardDescription>
             </CardContent>
           </Card>
         </Link>

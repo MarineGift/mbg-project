@@ -13,10 +13,11 @@ import { useState, useTransition } from 'react';
 import { updateInvestorPriority } from '@/lib/actions/parties';
 import { cn } from '@/lib/utils';
 import type { InvestorPriority } from '@/types/party-detail';
+import type { PartyType } from '@/types/party-type';
 
 interface Props {
   partyId: string;
-  partyType: string;
+  partyType: PartyType;
   value: InvestorPriority | null;
 }
 
