@@ -18,6 +18,7 @@
     "worker:draft-expiry": "tsx src/workers/draft-expiry-worker.ts",
     "worker:mail-merge": "tsx src/workers/mail-merge-worker.ts",
     "worker:mailcarrier": "tsx --env-file=.env.local src/workers/mailcarrier-worker.ts",
+    "worker:mailrun": "tsx --env-file=.env.local src/workers/mailrun-worker.ts",
     "sim:inbound": "tsx --env-file=.env.local src/scripts/simulate-inbound.ts",
     "verify:smtp": "tsx --env-file=.env.local src/scripts/verify-smtp.ts"
   },

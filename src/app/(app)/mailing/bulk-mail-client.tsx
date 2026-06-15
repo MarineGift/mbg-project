@@ -1,12 +1,13 @@
 'use client';
 
 // src/app/(app)/mailing/bulk-mail-client.tsx
-// Audience -> message/options -> preview -> send. Recipients & dedup are
-// resolved server-side; the client may only narrow the recipient set (uncheck
-// rows) and choose recipient mode, recency guard, and whitelist bypass.
+// Audience -> message/options -> preview -> send now OR queue in background.
+// "Send now" runs the synchronous action (small batches). "Queue" enqueues a
+// mail_run drained by the mailrun-worker (no cap/timeout, rate-limited,
+// progress-tracked). Recipients & dedup are resolved server-side.
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Mail, Search, X, Send, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { Mail, Search, X, Send, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -23,7 +24,10 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { previewBulkMail, sendBulkMail, type BulkMailSendSummary } from '@/lib/actions/bulk-mail';
+import {
+  previewBulkMail, sendBulkMail, enqueueBulkMail, listRecentMailRuns,
+  type BulkMailSendSummary, type MailRunStatus,
+} from '@/lib/actions/bulk-mail';
 import type { BulkMailPreview, BulkMailSource, RecipientMode } from '@/lib/queries/bulk-mail';
 import { searchPartiesForCampaign } from '@/lib/actions/campaigns';
 
@@ -35,23 +39,19 @@ type PartyHit = { id: string; party_name: string; country_code: string | null; p
 
 const inputCls = 'w-full rounded-md border px-3 py-2 text-sm bg-background';
 const RECENCY_OPTIONS = [
-  { value: '0', label: 'Off' },
-  { value: '7', label: '7 days' },
-  { value: '14', label: '14 days' },
-  { value: '30', label: '30 days' },
-  { value: '90', label: '90 days' },
+  { value: '0', label: 'Off' }, { value: '7', label: '7 days' }, { value: '14', label: '14 days' },
+  { value: '30', label: '30 days' }, { value: '90', label: '90 days' },
 ];
+const RATE_OPTIONS = [
+  { value: '15', label: '15 / min' }, { value: '30', label: '30 / min' },
+  { value: '60', label: '60 / min' }, { value: '120', label: '120 / min' },
+];
+const TERMINAL = ['completed', 'failed', 'canceled'];
 
 export function BulkMailClient({
-  pipelines,
-  stages,
-  templates,
-  accounts,
+  pipelines, stages, templates, accounts,
 }: {
-  pipelines: Pipeline[];
-  stages: Stage[];
-  templates: Template[];
-  accounts: Account[];
+  pipelines: Pipeline[]; stages: Stage[]; templates: Template[]; accounts: Account[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -59,12 +59,8 @@ export function BulkMailClient({
   const [mode, setMode] = useState<'pipeline_stage' | 'parties'>('pipeline_stage');
   const [pipelineId, setPipelineId] = useState('');
   const [stageId, setStageId] = useState('');
-  const stageOptions = useMemo(
-    () => stages.filter((s) => s.pipelineId === pipelineId),
-    [stages, pipelineId],
-  );
+  const stageOptions = useMemo(() => stages.filter((s) => s.pipelineId === pipelineId), [stages, pipelineId]);
 
-  // parties mode
   const [partyQuery, setPartyQuery] = useState('');
   const [results, setResults] = useState<PartyHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -72,12 +68,12 @@ export function BulkMailClient({
 
   // ---- message / options ----
   const [templateId, setTemplateId] = useState('');
-  const [accountId, setAccountId] = useState(
-    accounts.find((a) => a.isDefault)?.id ?? accounts[0]?.id ?? '',
-  );
+  const [accountId, setAccountId] = useState(accounts.find((a) => a.isDefault)?.id ?? accounts[0]?.id ?? '');
   const [recipientMode, setRecipientMode] = useState<RecipientMode>('primary');
   const [recentDays, setRecentDays] = useState(0);
   const [bypassWhitelist, setBypassWhitelist] = useState(false);
+  const [sendMode, setSendMode] = useState<'now' | 'queue'>('now');
+  const [ratePerMinute, setRatePerMinute] = useState(30);
 
   // ---- preview / send ----
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
@@ -85,13 +81,32 @@ export function BulkMailClient({
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [summary, setSummary] = useState<BulkMailSendSummary | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // ---- background runs ----
+  const [runs, setRuns] = useState<MailRunStatus[]>([]);
 
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
   const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
   const resetPreview = () => { setPreview(null); setSummary(null); };
 
-  // debounced party search (parties mode)
+  const loadRuns = useCallback(async () => {
+    const res = await listRecentMailRuns(8);
+    if (res.ok && res.runs) setRuns(res.runs);
+  }, []);
+
+  useEffect(() => { void loadRuns(); }, [loadRuns]);
+
+  // poll while any run is still queued/running
+  useEffect(() => {
+    const active = runs.some((r) => !TERMINAL.includes(r.status));
+    if (!active) return;
+    const t = setInterval(() => { void loadRuns(); }, 4000);
+    return () => clearInterval(t);
+  }, [runs, loadRuns]);
+
+  // debounced party search
   useEffect(() => {
     if (mode !== 'parties') return;
     const q = partyQuery.trim();
@@ -108,9 +123,7 @@ export function BulkMailClient({
   }, [partyQuery, mode]);
 
   const buildSource = (): BulkMailSource | null => {
-    if (mode === 'pipeline_stage') {
-      return stageId ? { mode: 'pipeline_stage', stageId } : null;
-    }
+    if (mode === 'pipeline_stage') return stageId ? { mode: 'pipeline_stage', stageId } : null;
     const ids = Array.from(selectedParties.keys());
     return ids.length > 0 ? { mode: 'parties', partyIds: ids } : null;
   };
@@ -119,68 +132,59 @@ export function BulkMailClient({
   const canPreview = !!templateId && audienceReady;
 
   const runPreview = () => {
-    setError(null);
-    setSummary(null);
+    setError(null); setSummary(null); setNotice(null);
     const source = buildSource();
     if (!source || !templateId) { setError('Pick an audience and a template first.'); return; }
     startTransition(async () => {
-      const res = await previewBulkMail({
-        templateId,
-        source,
-        recipientMode,
-        recentDays: recentDays || undefined,
-      });
-      if (!res.ok || !res.preview) {
-        setError(res.errorMessage ?? 'Preview failed.');
-        setPreview(null);
-        return;
-      }
+      const res = await previewBulkMail({ templateId, source, recipientMode, recentDays: recentDays || undefined });
+      if (!res.ok || !res.preview) { setError(res.errorMessage ?? 'Preview failed.'); setPreview(null); return; }
       setPreview(res.preview);
       setChecked(new Set(res.preview.toSend.map((c) => c.key)));
     });
   };
 
   const toggleRow = (key: string) => {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setChecked((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   };
 
-  const checkedNotWhitelisted = useMemo(() => {
-    if (!preview) return 0;
-    return preview.toSend.filter((c) => checked.has(c.key) && !c.whitelisted).length;
-  }, [preview, checked]);
+  const checkedNotWhitelisted = useMemo(
+    () => (preview ? preview.toSend.filter((c) => checked.has(c.key) && !c.whitelisted).length : 0),
+    [preview, checked],
+  );
 
-  const runSend = () => {
+  const runNow = () => {
     setError(null);
     const source = buildSource();
-    if (!source || !templateId || !accountId) {
-      setError('Missing template, audience, or sending account.');
-      return;
-    }
+    if (!source || !templateId || !accountId) { setError('Missing template, audience, or sending account.'); return; }
     const onlyKeys = Array.from(checked);
     if (onlyKeys.length === 0) { setError('No recipients selected.'); return; }
     startTransition(async () => {
-      const res = await sendBulkMail({
-        templateId,
-        source,
-        mailAccountId: accountId,
-        recipientMode,
-        recentDays: recentDays || undefined,
-        bypassWhitelist,
-        onlyKeys,
-      });
+      const res = await sendBulkMail({ templateId, source, mailAccountId: accountId, recipientMode, recentDays: recentDays || undefined, bypassWhitelist, onlyKeys });
       setConfirmOpen(false);
       if (!res.ok || !res.summary) { setError(res.errorMessage ?? 'Send failed.'); return; }
       setSummary(res.summary);
-      runPreview(); // sent rows now carry template_id -> re-preview drops them
+      runPreview();
+    });
+  };
+
+  const runQueue = () => {
+    setError(null);
+    const source = buildSource();
+    if (!source || !templateId || !accountId) { setError('Missing template, audience, or sending account.'); return; }
+    const onlyKeys = Array.from(checked);
+    if (onlyKeys.length === 0) { setError('No recipients selected.'); return; }
+    startTransition(async () => {
+      const res = await enqueueBulkMail({ templateId, source, mailAccountId: accountId, recipientMode, recentDays: recentDays || undefined, bypassWhitelist, onlyKeys, ratePerMinute });
+      setConfirmOpen(false);
+      if (!res.ok) { setError(res.errorMessage ?? 'Queue failed.'); return; }
+      setNotice(`Queued ${res.total ?? onlyKeys.length} recipient(s). The worker will send them in the background.`);
+      resetPreview();
+      void loadRuns();
     });
   };
 
   const checkedCount = checked.size;
+  const actionLabel = sendMode === 'now' ? `Send to ${checkedCount}` : `Queue ${checkedCount}`;
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 space-y-6">
@@ -199,13 +203,9 @@ export function BulkMailClient({
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Button type="button" variant={mode === 'pipeline_stage' ? 'default' : 'outline'} size="sm"
-              onClick={() => { setMode('pipeline_stage'); resetPreview(); }}>
-              Pipeline stage
-            </Button>
+              onClick={() => { setMode('pipeline_stage'); resetPreview(); }}>Pipeline stage</Button>
             <Button type="button" variant={mode === 'parties' ? 'default' : 'outline'} size="sm"
-              onClick={() => { setMode('parties'); resetPreview(); }}>
-              Pick parties
-            </Button>
+              onClick={() => { setMode('parties'); resetPreview(); }}>Pick parties</Button>
           </div>
 
           {mode === 'pipeline_stage' ? (
@@ -214,18 +214,14 @@ export function BulkMailClient({
                 <Label>Pipeline</Label>
                 <Select value={pipelineId} onValueChange={(v) => { setPipelineId(v); setStageId(''); resetPreview(); }}>
                   <SelectTrigger><SelectValue placeholder="Select pipeline" /></SelectTrigger>
-                  <SelectContent>
-                    {pipelines.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
-                  </SelectContent>
+                  <SelectContent>{pipelines.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Stage</Label>
                 <Select value={stageId} onValueChange={(v) => { setStageId(v); resetPreview(); }} disabled={!pipelineId}>
                   <SelectTrigger><SelectValue placeholder="Select stage" /></SelectTrigger>
-                  <SelectContent>
-                    {stageOptions.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                  </SelectContent>
+                  <SelectContent>{stageOptions.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -251,20 +247,15 @@ export function BulkMailClient({
               )}
               {partyQuery.trim().length >= 2 && (
                 <div className="max-h-48 overflow-y-auto rounded-md border">
-                  {searching ? (
-                    <div className="p-3 text-sm text-muted-foreground">Searching&hellip;</div>
-                  ) : results.length === 0 ? (
-                    <div className="p-3 text-sm text-muted-foreground">No parties found.</div>
-                  ) : (
-                    results.map((p) => (
-                      <button key={p.id} type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
-                        onClick={() => { setSelectedParties((prev) => { const n = new Map(prev); n.set(p.id, p); return n; }); resetPreview(); }}>
-                        <span>{p.party_name}</span>
-                        {selectedParties.has(p.id) && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
-                      </button>
-                    ))
-                  )}
+                  {searching ? (<div className="p-3 text-sm text-muted-foreground">Searching&hellip;</div>)
+                    : results.length === 0 ? (<div className="p-3 text-sm text-muted-foreground">No parties found.</div>)
+                    : (results.map((p) => (
+                        <button key={p.id} type="button"
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                          onClick={() => { setSelectedParties((prev) => { const n = new Map(prev); n.set(p.id, p); return n; }); resetPreview(); }}>
+                          <span>{p.party_name}</span>
+                          {selectedParties.has(p.id) && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                        </button>)))}
                 </div>
               )}
             </div>
@@ -281,15 +272,9 @@ export function BulkMailClient({
               <Label>Template</Label>
               <Select value={templateId} onValueChange={(v) => { setTemplateId(v); resetPreview(); }}>
                 <SelectTrigger><SelectValue placeholder="Select template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}{t.module ? ` (${t.module})` : ''}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectContent>{templates.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}{t.module ? ` (${t.module})` : ''}</SelectItem>))}</SelectContent>
               </Select>
-              {selectedTemplate && (
-                <p className="text-xs text-muted-foreground truncate">Subject: {selectedTemplate.subject || '(none)'}</p>
-              )}
+              {selectedTemplate && (<p className="text-xs text-muted-foreground truncate">Subject: {selectedTemplate.subject || '(none)'}</p>)}
             </div>
             <div className="space-y-1.5">
               <Label>From</Label>
@@ -298,13 +283,7 @@ export function BulkMailClient({
               ) : (
                 <Select value={accountId} onValueChange={setAccountId}>
                   <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.displayName ? `${a.displayName} <${a.address}>` : a.address}{a.isDefault ? ' - default' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{accounts.map((a) => (<SelectItem key={a.id} value={a.id}>{a.displayName ? `${a.displayName} <${a.address}>` : a.address}{a.isDefault ? ' - default' : ''}</SelectItem>))}</SelectContent>
                 </Select>
               )}
             </div>
@@ -322,9 +301,7 @@ export function BulkMailClient({
               <Label>Skip recently contacted</Label>
               <Select value={String(recentDays)} onValueChange={(v) => { setRecentDays(Number(v)); resetPreview(); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RECENCY_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
-                </SelectContent>
+                <SelectContent>{RECENCY_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
               </Select>
             </div>
           </div>
@@ -332,29 +309,84 @@ export function BulkMailClient({
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
               <Label htmlFor="bypass">Bypass whitelist</Label>
-              <p className="text-xs text-muted-foreground">
-                Off (default): non-whitelisted recipients are blocked. On: send to everyone selected.
-              </p>
+              <p className="text-xs text-muted-foreground">Off (default): non-whitelisted recipients are blocked. On: send to everyone selected.</p>
             </div>
             <Switch id="bypass" checked={bypassWhitelist} onCheckedChange={setBypassWhitelist} />
+          </div>
+
+          {/* send mode */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Delivery</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={sendMode === 'now' ? 'default' : 'outline'} onClick={() => setSendMode('now')}>Send now</Button>
+                <Button type="button" size="sm" variant={sendMode === 'queue' ? 'default' : 'outline'} onClick={() => setSendMode('queue')}>Queue (background)</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {sendMode === 'now'
+                  ? 'Sends immediately (best for small batches; capped at 100).'
+                  : 'Hands off to the background worker - no cap, rate-limited, progress below.'}
+              </p>
+            </div>
+            {sendMode === 'queue' && (
+              <div className="space-y-1.5">
+                <Label>Rate</Label>
+                <Select value={String(ratePerMinute)} onValueChange={(v) => setRatePerMinute(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{RATE_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" onClick={runPreview} disabled={!canPreview || pending} variant="outline">
               {pending && !confirmOpen ? 'Working\u2026' : 'Preview recipients'}
             </Button>
-            <Button type="button" onClick={() => setConfirmOpen(true)}
-              disabled={!preview || checkedCount === 0 || !accountId || pending}>
-              <Send className="mr-1.5 h-4 w-4" />
-              Send to {checkedCount}
+            <Button type="button" onClick={() => setConfirmOpen(true)} disabled={!preview || checkedCount === 0 || !accountId || pending}>
+              <Send className="mr-1.5 h-4 w-4" />{actionLabel}
             </Button>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
+          {notice && <p className="text-sm text-emerald-700">{notice}</p>}
         </CardContent>
       </Card>
 
-      {/* ---- Send summary ---- */}
+      {/* ---- Background runs ---- */}
+      {runs.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Background runs</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {runs.map((r) => {
+              const done = r.sent + r.failed + r.blocked;
+              const pct = r.total > 0 ? Math.round((done / r.total) * 100) : 0;
+              const active = !TERMINAL.includes(r.status);
+              return (
+                <div key={r.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      {active ? <Clock className="h-3.5 w-3.5 animate-pulse text-blue-600" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                      <span className="font-medium capitalize">{r.status}</span>
+                      <span className="text-muted-foreground">{done}/{r.total}</span>
+                    </span>
+                    <span className="flex gap-1.5">
+                      <Badge className="bg-emerald-600">Sent {r.sent}</Badge>
+                      {r.blocked > 0 && <Badge className="bg-amber-600">Blocked {r.blocked}</Badge>}
+                      {r.failed > 0 && <Badge variant="destructive">Failed {r.failed}</Badge>}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-full bg-emerald-600 transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ---- Send-now summary ---- */}
       {summary && (
         <Card>
           <CardHeader><CardTitle className="text-base">Last run</CardTitle></CardHeader>
@@ -364,7 +396,7 @@ export function BulkMailClient({
               <Badge className="bg-emerald-600">Sent {summary.sent}</Badge>
               {summary.blocked > 0 && <Badge className="bg-amber-600">Blocked {summary.blocked}</Badge>}
               {summary.failed > 0 && <Badge variant="destructive">Failed {summary.failed}</Badge>}
-              {summary.capped && <Badge variant="outline">Capped (run again for the rest)</Badge>}
+              {summary.capped && <Badge variant="outline">Capped - queue the rest for the worker</Badge>}
             </div>
             {(summary.blocked > 0 || summary.failed > 0) && (
               <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -394,33 +426,24 @@ export function BulkMailClient({
             {preview.counts.notWhitelisted > 0 && !bypassWhitelist && (
               <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  {preview.counts.notWhitelisted} eligible recipient(s) are not whitelisted and will be
-                  blocked. Turn on &ldquo;Bypass whitelist&rdquo; to send to them, or add them to the whitelist.
-                </span>
+                <span>{preview.counts.notWhitelisted} eligible recipient(s) are not whitelisted and will be blocked. Turn on &ldquo;Bypass whitelist&rdquo; to send to them, or add them to the whitelist.</span>
               </div>
             )}
 
             {preview.toSend.length > 0 && (
               <div className="rounded-md border">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10"></TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead className="w-28">Whitelist</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow>
+                    <TableHead className="w-10"></TableHead><TableHead>Party</TableHead>
+                    <TableHead>Recipient</TableHead><TableHead className="w-28">Whitelist</TableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
                     {preview.toSend.map((c) => (
                       <TableRow key={c.key}>
                         <TableCell><Checkbox checked={checked.has(c.key)} onCheckedChange={() => toggleRow(c.key)} /></TableCell>
                         <TableCell className="font-medium">{c.partyName || '(unnamed)'}</TableCell>
                         <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                        <TableCell>
-                          {c.whitelisted ? <Badge variant="secondary">Whitelisted</Badge> : <Badge className="bg-amber-600">Not listed</Badge>}
-                        </TableCell>
+                        <TableCell>{c.whitelisted ? <Badge variant="secondary">Whitelisted</Badge> : <Badge className="bg-amber-600">Not listed</Badge>}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -433,14 +456,9 @@ export function BulkMailClient({
                 <summary className="cursor-pointer text-muted-foreground">Excluded ({preview.excluded.length})</summary>
                 <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                   {preview.excluded.map((c) => (
-                    <li key={c.key}>
-                      {c.partyName || '(unnamed)'} &mdash;{' '}
-                      {c.excludeReason === 'already_sent'
-                        ? 'already received this template'
-                        : c.excludeReason === 'recently_contacted'
-                          ? 'contacted recently'
-                          : 'no contact email'}
-                    </li>
+                    <li key={c.key}>{c.partyName || '(unnamed)'} &mdash;{' '}
+                      {c.excludeReason === 'already_sent' ? 'already received this template'
+                        : c.excludeReason === 'recently_contacted' ? 'contacted recently' : 'no contact email'}</li>
                   ))}
                 </ul>
               </details>
@@ -452,12 +470,14 @@ export function BulkMailClient({
       {/* ---- Confirm dialog ---- */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Send this mailing?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{sendMode === 'now' ? 'Send this mailing?' : 'Queue this mailing?'}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-sm">
             <p>
-              Sending <span className="font-medium">{selectedTemplate?.name ?? 'template'}</span> to{' '}
+              {sendMode === 'now' ? 'Sending ' : 'Queuing '}
+              <span className="font-medium">{selectedTemplate?.name ?? 'template'}</span> to{' '}
               <span className="font-medium">{checkedCount}</span> recipient(s) from{' '}
-              <span className="font-medium">{selectedAccount?.address ?? '(no account)'}</span>.
+              <span className="font-medium">{selectedAccount?.address ?? '(no account)'}</span>
+              {sendMode === 'queue' ? ` at ${ratePerMinute}/min.` : '.'}
             </p>
             {checkedNotWhitelisted > 0 && (
               <p className={bypassWhitelist ? 'text-amber-700' : 'text-red-600'}>
@@ -466,13 +486,13 @@ export function BulkMailClient({
               </p>
             )}
             <Separator />
-            <p className="text-xs text-muted-foreground">
-              This goes out over live mail. Recipients are re-checked on the server before sending.
-            </p>
+            <p className="text-xs text-muted-foreground">This goes out over live mail. Recipients are re-checked on the server before sending.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={pending}>Cancel</Button>
-            <Button onClick={runSend} disabled={pending}>{pending ? 'Sending\u2026' : `Send to ${checkedCount}`}</Button>
+            <Button onClick={sendMode === 'now' ? runNow : runQueue} disabled={pending}>
+              {pending ? (sendMode === 'now' ? 'Sending\u2026' : 'Queuing\u2026') : actionLabel}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

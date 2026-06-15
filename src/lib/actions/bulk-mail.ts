@@ -268,3 +268,217 @@ export async function sendBulkMail(input: {
 
   return { ok: true, summary };
 }
+
+/* ============================================================
+ * enqueueBulkMail - create a background run (drained by mailrun-worker)
+ * ============================================================ */
+
+export interface EnqueueResult extends BulkMailActionResult {
+  runId?: string;
+  total?: number;
+}
+
+export async function enqueueBulkMail(input: {
+  templateId: string;
+  source: BulkMailSource;
+  mailAccountId: string;
+  recipientMode?: RecipientMode;
+  recentDays?: number;
+  bypassWhitelist?: boolean;
+  onlyKeys?: string[];
+  ratePerMinute?: number;
+  concurrency?: number;
+}): Promise<EnqueueResult> {
+  let auth;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+
+  const parsed = z
+    .object({
+      templateId: z.string().uuid(),
+      source: sourceSchema,
+      mailAccountId: z.string().uuid(),
+      recipientMode: recipientModeSchema.optional().default('primary'),
+      recentDays: z.number().int().min(0).max(3650).optional(),
+      bypassWhitelist: z.boolean().optional().default(false),
+      onlyKeys: z.array(z.string()).optional(),
+      ratePerMinute: z.number().int().min(1).max(600).optional(),
+      concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, errorCode: 'validation', errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+  const { templateId, source, mailAccountId, recipientMode, recentDays, bypassWhitelist, onlyKeys } = parsed.data;
+
+  const supabase = await createSupabaseServerClient();
+
+  // template snapshot (frozen at enqueue)
+  const { data: tmplRaw, error: tErr } = await supabase
+    .schema('app')
+    .from('email_templates' as never)
+    .select('subject, body_html, body_plain')
+    .eq('id', templateId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (tErr) return { ok: false, errorCode: 'database', errorMessage: tErr.message };
+  if (!tmplRaw) return { ok: false, errorCode: 'not_found', errorMessage: 'Template not found' };
+  const t = tmplRaw as { subject: string | null; body_html: string | null; body_plain: string | null };
+  const snapshotSubject = t.subject ?? '';
+  const snapshotBody = t.body_html && t.body_html.trim() ? t.body_html : (t.body_plain ?? '');
+
+  // resolve recipients (server-side; client only narrows via onlyKeys)
+  let preview;
+  try {
+    preview = await resolveBulkCandidates(supabase, auth.organizationId, templateId, source, recipientMode, { recentDays });
+  } catch (err) {
+    return { ok: false, errorCode: 'database', errorMessage: err instanceof Error ? err.message : 'Resolve failed' };
+  }
+  const only = onlyKeys ? new Set(onlyKeys) : null;
+  const seen = new Set<string>();
+  const recipients = preview.toSend.filter((c) => {
+    if (!c.email || (only && !only.has(c.key))) return false;
+    const e = c.email.toLowerCase();
+    if (seen.has(e)) return false;
+    seen.add(e);
+    return true;
+  });
+  if (recipients.length === 0) {
+    return { ok: false, errorCode: 'validation', errorMessage: 'No eligible recipients to queue.' };
+  }
+
+  const { data: runRaw, error: rErr } = await supabase
+    .schema('app')
+    .from('mail_runs' as never)
+    .insert({
+      organization_id: auth.organizationId,
+      template_id: templateId,
+      template_subject: snapshotSubject,
+      template_body: snapshotBody,
+      mail_account_id: mailAccountId,
+      recipient_mode: recipientMode,
+      bypass_whitelist: bypassWhitelist,
+      rate_per_minute: parsed.data.ratePerMinute ?? 30,
+      concurrency: Math.min(parsed.data.concurrency ?? DEFAULT_CONCURRENCY, MAX_CONCURRENCY),
+      source_kind: source.mode,
+      source_ref: source.mode === 'pipeline_stage' ? source.stageId : null,
+      status: 'queued',
+      total_count: recipients.length,
+      created_by: auth.userId,
+    } as never)
+    .select('id')
+    .single();
+  if (rErr || !runRaw) return { ok: false, errorCode: 'database', errorMessage: rErr?.message ?? 'Run insert failed' };
+  const runId = (runRaw as { id: string }).id;
+
+  const rows = recipients.map((c) => ({
+    organization_id: auth.organizationId,
+    run_id: runId,
+    party_id: c.partyId,
+    contact_id: c.contactId,
+    email: (c.email as string).toLowerCase(),
+    status: 'pending',
+  }));
+  const { error: recErr } = await supabase
+    .schema('app')
+    .from('mail_run_recipients' as never)
+    .insert(rows as never);
+  if (recErr) {
+    await supabase.schema('app').from('mail_runs' as never).delete().eq('id', runId);
+    return { ok: false, errorCode: 'database', errorMessage: recErr.message };
+  }
+
+  return { ok: true, runId, total: recipients.length };
+}
+
+/* ============================================================
+ * Run status (for the progress UI)
+ * ============================================================ */
+
+export interface MailRunStatus {
+  id: string;
+  status: string;
+  total: number;
+  sent: number;
+  failed: number;
+  blocked: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+const RUN_COLS =
+  'id, status, total_count, sent_count, failed_count, blocked_count, created_at, started_at, completed_at';
+
+interface RawRun {
+  id: string;
+  status: string;
+  total_count: number;
+  sent_count: number;
+  failed_count: number;
+  blocked_count: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+const mapRun = (r: RawRun): MailRunStatus => ({
+  id: r.id,
+  status: r.status,
+  total: r.total_count,
+  sent: r.sent_count,
+  failed: r.failed_count,
+  blocked: r.blocked_count,
+  createdAt: r.created_at,
+  startedAt: r.started_at,
+  completedAt: r.completed_at,
+});
+
+export async function getMailRunStatus(
+  runId: string,
+): Promise<BulkMailActionResult & { run?: MailRunStatus }> {
+  let auth;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+  if (!z.string().uuid().safeParse(runId).success) {
+    return { ok: false, errorCode: 'validation', errorMessage: 'Bad runId' };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('mail_runs' as never)
+    .select(RUN_COLS)
+    .eq('id', runId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  if (!data) return { ok: false, errorCode: 'not_found', errorMessage: 'Run not found' };
+  return { ok: true, run: mapRun(data as unknown as RawRun) };
+}
+
+export async function listRecentMailRuns(
+  limit = 10,
+): Promise<BulkMailActionResult & { runs?: MailRunStatus[] }> {
+  let auth;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+  const n = Math.min(Math.max(limit, 1), 50);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('app')
+    .from('mail_runs' as never)
+    .select(RUN_COLS)
+    .eq('organization_id', auth.organizationId)
+    .order('created_at', { ascending: false })
+    .limit(n);
+  if (error) return { ok: false, errorCode: 'database', errorMessage: error.message };
+  return { ok: true, runs: ((data ?? []) as unknown as RawRun[]).map(mapRun) };
+}
