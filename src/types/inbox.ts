@@ -107,6 +107,8 @@ export interface InboxFilters {
   searchField: InboxSearchField;
   /** only inbound that has an AI draft */
   hasDraft: boolean;
+  /** only outbound emails composed via AI (communications.ai_generated) */
+  aiGenerated: boolean;
   /** a specific party (UUID) - Phase 1 supports only direct URL input */
   partyId: string | null;
 }
@@ -131,6 +133,7 @@ export const DEFAULT_INBOX_FILTERS: InboxFilters = {
   query: '',
   searchField: 'all',
   hasDraft: false,
+  aiGenerated: false,
   partyId: null,
 };
 

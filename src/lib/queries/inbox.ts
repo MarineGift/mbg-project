@@ -73,6 +73,7 @@ export function parseInboxFilters(
     ? (searchFieldRaw as InboxFilters['searchField'])
     : defaults.searchField;
   const hasDraft = single(params.hasDraft) === '1';
+  const aiGenerated = single(params.ai) === '1';
   const partyIdRaw = single(params.party);
   const partyId = partyIdRaw && /^[0-9a-f-]{36}$/i.test(partyIdRaw) ? partyIdRaw : null;
 
@@ -82,6 +83,7 @@ export function parseInboxFilters(
     query,
     searchField,
     hasDraft,
+    aiGenerated,
     partyId,
   };
 }
@@ -164,6 +166,9 @@ export async function fetchInbox(
   }
   if (filters.direction !== 'all') {
     query = query.eq('direction', filters.direction);
+  }
+  if (filters.aiGenerated) {
+    query = query.eq('ai_generated', true);
   }
   if (filters.partyId) {
     query = query.eq('party_id', filters.partyId);
