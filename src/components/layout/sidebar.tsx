@@ -34,6 +34,7 @@ import {
   Send,
   CalendarDays,
   Megaphone,
+  Mail,
   BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -100,6 +101,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays, badgeKey: 'calendarUpcomingCount' },
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
+  { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
 ] as const;
 

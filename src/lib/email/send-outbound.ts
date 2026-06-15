@@ -112,6 +112,10 @@ export interface SendOutboundInput {
 
   // safety (decision a) - core enforces whitelist unless explicitly skipped
   skipWhitelist?: boolean;
+
+  /** Free-form metadata merged into communications.external_data.
+   *  Used by the bulk-mail sender to tag a run (source:'bulk', mail_run_id). */
+  externalData?: Record<string, unknown>;
 }
 
 export interface SendOutboundResult {
@@ -420,6 +424,11 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
   };
   if (input.sentByUserId) insertRow.sent_by_user_id = input.sentByUserId;
   if (input.aiDraftId) insertRow.ai_draft_id = input.aiDraftId;
+  // template_id closes the bulk-mail dedup gap (communications.template_id was
+  // previously never recorded). Only set when a template render was requested,
+  // so compose/draft sends are unaffected.
+  if (input.merge?.templateId) insertRow.template_id = input.merge.templateId;
+  if (input.externalData) insertRow.external_data = input.externalData;
 
   const { data: insRaw, error: insErr } = await supabase
     .schema('app')
