@@ -52,9 +52,9 @@ async function main(): Promise<void> {
   const { data: party, error: pErr } = await supabase
     .schema('app')
     .from('parties')
-    .select('id, name, country_code')
+    .select('id, party_name, country_code')
     .eq('organization_id', ORG_ID)
-    .eq('name', TEST_PARTY_NAME)
+    .eq('party_name', TEST_PARTY_NAME)
     .maybeSingle();
 
   if (pErr) throw new Error(`Party lookup failed: ${pErr.message}`);
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       `'${TEST_PARTY_NAME}' party not found - did you apply supabase/seed/01-parties-paper-industry.sql?`,
     );
   }
-  console.log(`      ✓ ${party.name} (${party.country_code})`);
+  console.log(`      ✓ ${party.party_name} (${party.country_code})`);
   console.log(`        id: ${party.id}\n`);
 
   // ── [2] Communication INSERT ────────────────────────────────

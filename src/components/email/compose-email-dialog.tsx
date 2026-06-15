@@ -630,6 +630,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         useSignature,
         fromKind,
         mailAccountId: fromAccountId,
+        aiGenerated: activeTab === "ai",
       };
       const result = await sendEmail(payload);
       return {
@@ -656,6 +657,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       threadId: props.threadId ?? null,
       attachments: args.attachmentsMeta,
       useSignature,
+      aiGenerated: activeTab === "ai",
     });
     if (result.ok) return { ok: true };
     // sendOutboundManual does not echo the blocked address; fall back to To[0].

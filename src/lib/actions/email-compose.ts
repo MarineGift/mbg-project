@@ -39,6 +39,8 @@ export interface ComposePayload {
   /** Step 4: CC recipients (comma/semicolon separated). Not whitelist-checked
    *  (matches the core's cc policy) but recorded on the communication. */
   cc?: string;
+  /** True when composed via the AI Draft tab; stored as communications.ai_generated. */
+  aiGenerated?: boolean;
 }
 
 export interface AIReplyPayload {
@@ -162,6 +164,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     dealId: payload.dealId ?? null,
     threadId: payload.threadId ?? null,
     attachments: attachmentMetas,
+    aiGenerated: payload.aiGenerated ?? false,
     traceLabel: `dialog-compose:${user.id}`,
   });
 

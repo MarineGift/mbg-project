@@ -97,6 +97,8 @@ const composeSchema = z.object({
   bodyPlain: z.string().min(1, 'Body is required').max(50_000),
   /** Attach the org default signature (dialog toggle; default true). */
   useSignature: z.boolean().optional(),
+  /** True when composed via the AI Draft tab -> communications.ai_generated. */
+  aiGenerated: z.boolean().optional(),
   /** If a rich-text editor exists, HTML can be passed directly (otherwise bodyPlain -> auto-converted) */
   bodyHtml: z.string().max(200_000).optional().nullable(),
   /** Party link (if present, stored in communications.party_id) */
@@ -232,6 +234,7 @@ export async function sendOutboundManual(
     dealId: parsed.data.dealId ?? null,
     threadId: parsed.data.threadId ?? null,
     attachments: parsed.data.attachments ?? [],
+    aiGenerated: parsed.data.aiGenerated ?? false,
     traceLabel: `manual-compose:${auth.userId}`,
   });
 
