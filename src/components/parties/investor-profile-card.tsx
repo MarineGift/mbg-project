@@ -108,11 +108,12 @@ export function InvestorProfileCard({ profile, partyName, partyId }: Props) {
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 lg:grid-cols-3">
-          {/* Priority (relevance: who to contact now) with Sector Focus right beside it. */}
+          {/* Priority (relevance: who to contact now), with Sector + Geographic Focus beside it. */}
           <Field label="Priority">
             <InvestorPriorityEditor partyId={partyId} partyType="investor" value={profile.priority} />
           </Field>
           <Field label="Sector Focus"><Tags items={profile.sectorFocus} /></Field>
+          <Field label="Geographic Focus"><Tags items={profile.geographicFocus} /></Field>
           {showFundName && <Field label="Fund Name">{profile.fundName}</Field>}
           <Field label="Type">
             {profile.typeName ? (
