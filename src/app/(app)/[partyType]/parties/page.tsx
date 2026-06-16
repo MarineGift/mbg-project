@@ -404,7 +404,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - score sort   (score lives in app.account_scores, not app.parties)
   //   - investor type sort
   //   - grade filter (A/B/C, derived from the account score)
-  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority;
+  // `isInvestor` forces the in-memory path so the always-on exclusion of
+  // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
+  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -428,6 +430,26 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     }
     if (priorityFilter) {
       working = working.filter((p) => (investorPriorityAll[p.id] ?? '') === priorityFilter);
+    }
+    // Always hide investors whose focus is purely Fintech/SaaS (no relevance to
+    // mbg). An investor that also focuses on a relevant sector stays visible, and
+    // investors with no tagged sector are kept (unknown focus). Skipped when the
+    // user explicitly filters by one of these sectors, so that view still works.
+    // Matches by sector code and by label, to be robust to code naming.
+    const isFintechOrSaas = (s: { code: string; label: string }) => {
+      const c = (s.code ?? '').toLowerCase();
+      const l = (s.label ?? '').toLowerCase();
+      return c === 'fintech' || c === 'software' || c === 'saas'
+        || l.includes('fintech') || l.includes('saas');
+    };
+    const irrelevantSectorFilter =
+      ['fintech', 'software', 'saas'].includes(sectorFilter.toLowerCase());
+    if (isInvestor && !irrelevantSectorFilter) {
+      working = working.filter((p) => {
+        const secs = investorSectorAll[p.id] ?? [];
+        if (secs.length === 0) return true;
+        return !secs.every(isFintechOrSaas);
+      });
     }
 
     if (sortByScore) {
@@ -463,7 +485,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
-    totalCount = (gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
+    totalCount = (isInvestor || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
