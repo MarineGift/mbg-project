@@ -268,7 +268,7 @@ export default async function PartyMindmapPage({ params, searchParams }: PagePro
         </nav>
         <span className="ml-auto text-xs text-muted-foreground shrink-0">Mindmap</span>
       </div>
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 min-h-0 p-6">
         <PartyMindmap data={data} />
       </div>
     </div>

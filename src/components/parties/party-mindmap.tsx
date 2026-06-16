@@ -221,7 +221,7 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
   }, [recompute]);
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full h-full overflow-auto flex items-center justify-center">
       <div
         ref={containerRef}
         className="relative mx-auto flex items-stretch justify-center"
