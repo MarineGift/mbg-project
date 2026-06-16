@@ -246,7 +246,9 @@ Write a plain text reply draft for this email. Do not use any HTML tags.`;
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      // Use the app-configured Sonnet model (env-validated to claude-sonnet-4-6).
+      // A stale hardcoded model id was returning 404 (model not found).
+      model: process.env.ANTHROPIC_MODEL_SONNET ?? "claude-sonnet-4-6",
       max_tokens: 1000,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
