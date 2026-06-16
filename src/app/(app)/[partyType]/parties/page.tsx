@@ -80,7 +80,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
-    country?: string; type?: string; grade?: string;
+    country?: string; type?: string; grade?: string; priority?: string;
   }>;
 }
 
@@ -140,6 +140,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
+  // Manual investor Priority filter (relevance / who to contact now): ?priority=high|medium|low
+  const priorityFilter = (((sp as any).priority ?? '') as string).trim().toLowerCase();
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
@@ -147,6 +149,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const scoreAsc    = sortParam === 'score_asc';
   const sortByType  = isInvestor && (sortParam === 'type_asc' || sortParam === 'type_desc');
   const typeAsc     = sortParam === 'type_asc';
+  const sortByPriority = isInvestor && (sortParam === 'priority' || sortParam === 'priority_asc');
+  const priorityAsc    = sortParam === 'priority_asc';
   // DB-orderable sorts (everything except score, which is computed in JS).
   const DB_SORT: Record<string, { col: string; asc: boolean }> = {
     name_asc:      { col: 'party_name',   asc: true  },
@@ -279,6 +283,21 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .map(({ code, label, count }) => ({ code, label, count }));
   }
 
+  // Investor manual Priority (high/medium/low) per party, from investor_profile.
+  // Powers the Priority column, the Priority sort, and the Priority filter.
+  const investorPriorityAll: Record<string, 'high' | 'medium' | 'low'> = {};
+  if (isInvestor) {
+    const { data: prRows } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .select('party_id, priority');
+    for (const r of ((prRows ?? []) as any[])) {
+      if (r.party_id && (r.priority === 'high' || r.priority === 'medium' || r.priority === 'low')) {
+        investorPriorityAll[r.party_id] = r.priority;
+      }
+    }
+  }
+
   // Paper-mill paper-type facets.
   // The active facet SET + display order + parent come from app.paper_types
   // (so deactivated types like market_pulp / specialty(other) never leak in,
@@ -385,7 +404,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - score sort   (score lives in app.account_scores, not app.parties)
   //   - investor type sort
   //   - grade filter (A/B/C, derived from the account score)
-  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '';
+  const needMemory = sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -407,6 +426,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (sectorFilter) {
       working = working.filter((p) => (investorSectorAll[p.id] ?? []).some((s) => s.code === sectorFilter));
     }
+    if (priorityFilter) {
+      working = working.filter((p) => (investorPriorityAll[p.id] ?? '') === priorityFilter);
+    }
 
     if (sortByScore) {
       working = [...working].sort((a, b) =>
@@ -418,6 +440,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         const cb = investorCatAll[b.id]?.category ?? '';
         const cmp = ca.localeCompare(cb);
         return (typeAsc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
+      });
+    } else if (sortByPriority) {
+      const rank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+      working = [...working].sort((a, b) => {
+        const ra = rank[investorPriorityAll[a.id] ?? ''] ?? 0;
+        const rb = rank[investorPriorityAll[b.id] ?? ''] ?? 0;
+        const cmp = rb - ra; // high first by default
+        return (priorityAsc ? -cmp : cmp) || a.party_name.localeCompare(b.party_name);
       });
     } else {
       // Honor the column sort (name/country/location/state) in memory too, so
@@ -433,7 +463,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
-    totalCount = (gradeFilter || stageFilter || sectorFilter) ? working.length : (count ?? 0);
+    totalCount = (gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     const { data, error, count } = await query
@@ -484,6 +514,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (gradeFilter) qs.set('grade', gradeFilter);
     if (stageFilter) qs.set('stage', stageFilter);
     if (sectorFilter) qs.set('sector', sectorFilter);
+    if (priorityFilter) qs.set('priority', priorityFilter);
     if (value && value !== 'name_asc') qs.set('sort', value);
     const s = qs.toString();
     return `/${module}/parties${s ? `?${s}` : ''}`;
@@ -503,6 +534,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const hLocation = sortHeader('location_asc', 'location_desc');
   const hState    = sortHeader('state_asc', 'state_desc');
   const hType     = sortHeader('type_asc', 'type_desc');
+  const hPriority = sortHeader('priority', 'priority_asc');
 
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 h-full flex flex-col">
@@ -533,6 +565,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             q={searchQuery}
             sort={sortParam}
             grade={gradeFilter}
+            priority={priorityFilter}
+            showPriority={isInvestor}
             types={isInvestor ? investorFacets : isPaperMill ? paperTypeFacets : isFiller ? mineralFacets : undefined}
             type={typeFilter}
             typeLabel={isPaperMill ? 'Paper' : isFiller ? 'Mineral' : undefined}
@@ -579,6 +613,13 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">
+                      <Link href={hPriority.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hPriority.active ? 'text-foreground' : ''}`}>
+                        Priority <span className={`text-[10px] ${hPriority.active ? '' : 'opacity-40'}`}>{hPriority.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
                   {showLinks && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
                       {linkLabel}
@@ -647,6 +688,25 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           {p.party_name}
                         </Link>
                       </td>
+                      {isInvestor && (
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const pr = investorPriorityAll[p.id];
+                            if (!pr) return <span className="text-sm text-muted-foreground">-</span>;
+                            const cls = pr === 'high'
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                              : pr === 'medium'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                            const label = pr === 'high' ? 'High' : pr === 'medium' ? 'Medium' : 'Low';
+                            return (
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${cls}`}>
+                                {label}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
                       {showLinks && (
                         <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
                           {hasLinks ? (

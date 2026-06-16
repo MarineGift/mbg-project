@@ -21,6 +21,14 @@ const GRADE_OPTIONS: { value: string; label: string }[] = [
   { value: 'C', label: 'Tier C' },
 ];
 
+// Manual investor Priority (relevance / who to contact now): high > medium > low.
+const PRIORITY_OPTIONS: { value: string; label: string }[] = [
+  { value: '',       label: 'All priority' },
+  { value: 'high',   label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low',    label: 'Low' },
+];
+
 // Sector chips to surface in the investor directory filter. We intentionally
 // show only the sectors aligned with the mbg thesis (natural materials /
 // CaCO3 filler / eco / biomanufacturing) and hide the rest to reduce noise.
@@ -58,6 +66,10 @@ interface Props {
   sort?: string;
   /** Current ?grade= value (account tier A/B/C, or ''). */
   grade?: string;
+  /** Current ?priority= value (manual investor priority high/medium/low, or ''). */
+  priority?: string;
+  /** Whether to show the Priority control (investor list only). */
+  showPriority?: boolean;
   /** Investor type facets. When provided (investor list), render type chips. */
   types?: InvestorFacet[];
   /** Current ?type= value (investor_category, or ''). */
@@ -74,7 +86,7 @@ interface Props {
   sector?: string;
 }
 
-export function PartiesFilterBar({ countries, countryNames = {}, country, q, grade = '', types, type = '', typeLabel, stages, stage = '', sectors, sector = '' }: Props) {
+export function PartiesFilterBar({ countries, countryNames = {}, country, q, grade = '', priority = '', showPriority = false, types, type = '', typeLabel, stages, stage = '', sectors, sector = '' }: Props) {
   const [term, setTerm] = useState(q);
 
   const sortedCountries = [...countries].sort((a, b) =>
@@ -108,6 +120,13 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
     applyParams((sp) => {
       if (value) sp.set('grade', value);
       else sp.delete('grade');
+    });
+  }
+
+  function setPriority(value: string) {
+    applyParams((sp) => {
+      if (value) sp.set('priority', value);
+      else sp.delete('priority');
     });
   }
 
@@ -207,6 +226,22 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
           </select>
         </div>
 
+        {/* Priority (manual investor relevance) -- investor list only */}
+        {showPriority && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Priority</span>
+            <select
+              value={PRIORITY_OPTIONS.some((o) => o.value === priority) ? priority : ''}
+              onChange={(e) => setPriority(e.target.value)}
+              className="h-9 cursor-pointer rounded-md border border-input bg-background pl-2 pr-6 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {PRIORITY_OPTIONS.map((o) => (
+                <option key={o.value || 'all'} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Active country pill (quick clear) */}
         {country && (
           <button
@@ -227,6 +262,18 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
             className="inline-flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
           >
             <span className="font-medium">Tier {grade}</span>
+            <X className="h-3 w-3" />
+          </button>
+        )}
+
+        {/* Active priority pill (quick clear) */}
+        {priority && (
+          <button
+            type="button"
+            onClick={() => setPriority('')}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
+          >
+            <span className="font-medium capitalize">Priority: {priority}</span>
             <X className="h-3 w-3" />
           </button>
         )}

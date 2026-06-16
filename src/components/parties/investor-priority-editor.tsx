@@ -22,9 +22,9 @@ interface Props {
 }
 
 const OPTIONS: { value: InvestorPriority; label: string; active: string }[] = [
-  { value: 'high', label: 'High (Tier A)', active: 'bg-red-100 text-red-700 ring-red-300' },
-  { value: 'medium', label: 'Medium (Tier B)', active: 'bg-amber-100 text-amber-700 ring-amber-300' },
-  { value: 'low', label: 'Low (Tier C)', active: 'bg-slate-100 text-slate-600 ring-slate-300' },
+  { value: 'high', label: 'High', active: 'bg-red-100 text-red-700 ring-red-300' },
+  { value: 'medium', label: 'Medium', active: 'bg-amber-100 text-amber-700 ring-amber-300' },
+  { value: 'low', label: 'Low', active: 'bg-slate-100 text-slate-600 ring-slate-300' },
 ];
 
 export function InvestorPriorityEditor({ partyId, partyType, value }: Props) {
