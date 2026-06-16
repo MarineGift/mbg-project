@@ -525,6 +525,13 @@
     "introKoPlaceholder": "韓国語の会社紹介",
     "introEnPlaceholder": "英語の会社紹介 (ASCII)",
     "introHint": "パーティー概要の Introduction カードに表示されます。韓国語を先に、次に英語。",
+    "priority": "投資家の優先度",
+    "priorities": {
+      "none": "なし",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
     "create": "作成",
     "save": "保存",
     "cancel": "キャンセル",

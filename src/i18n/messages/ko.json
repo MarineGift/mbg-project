@@ -524,6 +524,13 @@
     "introKoPlaceholder": "한국어 회사 소개",
     "introEnPlaceholder": "영어 회사 소개 (ASCII)",
     "introHint": "파티 개요의 Introduction 카드에 표시됩니다. 한국어 먼저, 그다음 영어.",
+    "priority": "투자자 우선순위",
+    "priorities": {
+      "none": "없음",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
     "create": "생성",
     "save": "저장",
     "cancel": "취소",

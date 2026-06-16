@@ -35,9 +35,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { createParty, updateParty, deleteParty } from '@/lib/actions/parties';
+import {
+  createParty,
+  updateParty,
+  deleteParty,
+  updateInvestorPriority,
+} from '@/lib/actions/parties';
 import { PARTY_TYPES, type PartyType, type PartyKind } from '@/types/party-type';
-import type { PartyDetail, PartyTier } from '@/types/party-detail';
+import type { PartyDetail, PartyTier, InvestorPriority } from '@/types/party-detail';
 
 interface Props {
   /** existing party in edit mode; null + initial partyType in create mode */
@@ -54,6 +59,8 @@ const schema = z.object({
   partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
   partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),
+  // Investor priority lives on app.investor_profile; 'none' means unset (null).
+  priority: z.enum(['none', 'high', 'medium', 'low']),
   countryCode: z
     .string()
     .max(2)
@@ -128,6 +135,7 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
           partyType: existing.partyType,
           partyKind: 'company',
           tier: existing.tier ?? 'tier_3',
+          priority: existing.investorProfile?.priority ?? 'none',
           countryCode: existing.countryCode ?? '',
           region: '',
           city: '',
@@ -145,6 +153,7 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
           partyType: initialPartyType,
           partyKind: 'company',
           tier: 'tier_3',
+          priority: 'none',
           countryCode: '',
           region: '',
           city: '',
@@ -161,6 +170,7 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
   const selectedPartyType = watch('partyType');
   const selectedPartyKind = watch('partyKind');
   const selectedTier = watch('tier');
+  const selectedPriority = watch('priority');
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -185,9 +195,24 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
         introEn: values.introEn || null,
       };
 
+      // Investor priority lives on app.investor_profile, persisted via its own
+      // action (UPDATE-first, INSERT minimal otherwise). Only for investor parties.
+      const persistPriority = async (partyId: string) => {
+        if (values.partyType !== 'investor') return;
+        const pr: InvestorPriority | null =
+          values.priority === 'none' ? null : values.priority;
+        const res = await updateInvestorPriority({
+          partyId,
+          partyType: values.partyType,
+          priority: pr,
+        });
+        if (!res.ok) toast.error(res.errorMessage ?? t('saveFailed'));
+      };
+
       if (mode === 'create') {
         const result = await createParty(payload);
         if (result.ok && result.partyId) {
+          await persistPriority(result.partyId);
           toast.success(t('created'));
           router.push(`/${values.partyType}/parties/${result.partyId}`);
         } else {
@@ -196,6 +221,7 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
       } else if (existing) {
         const result = await updateParty({ partyId: existing.id, ...payload });
         if (result.ok) {
+          await persistPriority(existing.id);
           toast.success(t('updated'));
           router.push(`/${values.partyType}/parties/${existing.id}`);
         } else {
@@ -300,6 +326,30 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
               </Select>
             </div>
           </div>
+
+          {/* Investor Priority (only relevant for investor parties) */}
+          {selectedPartyType === 'investor' && (
+            <div className="space-y-2">
+              <Label htmlFor="party-priority">{t('priority')}</Label>
+              <Select
+                value={selectedPriority}
+                onValueChange={(v) =>
+                  setValue('priority', v as FormValues['priority'], { shouldDirty: true })
+                }
+                disabled={isPending}
+              >
+                <SelectTrigger id="party-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('priorities.none')}</SelectItem>
+                  <SelectItem value="high">{t('priorities.high')}</SelectItem>
+                  <SelectItem value="medium">{t('priorities.medium')}</SelectItem>
+                  <SelectItem value="low">{t('priorities.low')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Legal name */}
           <div className="space-y-2">
