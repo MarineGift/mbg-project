@@ -96,9 +96,9 @@ function preview(s: string, n = 42) {
 export function PartyMindmap({ data }: { data: MindmapData }) {
   const branches = useMemo<Branch[]>(() => {
     const list: Branch[] = [];
-    if (data.contacts.length > 0) {
-      list.push({ key: 'contacts', label: 'Contacts', icon: Users, tone: 'sky', count: data.counts.contacts, leaves: data.contacts });
-    }
+    // Contacts / Introduction / Notes always show (even when empty) so the
+    // layout is consistent across party types and gaps are visible.
+    list.push({ key: 'contacts', label: 'Contacts', icon: Users, tone: 'sky', count: data.counts.contacts, leaves: data.contacts });
     if (data.engagements.length > 0) {
       list.push({ key: 'deals', label: 'Deals & Engagements', icon: Handshake, tone: 'violet', count: data.engagements.length, leaves: data.engagements });
     }
@@ -118,15 +118,17 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
     if (data.partyType === 'investor' && data.investorFocus.length > 0) {
       list.push({ key: 'focus', label: 'Investor focus', icon: Target, tone: 'emerald', leaves: data.investorFocus });
     }
-    if (data.introKo || data.introEn) {
+    {
       const lv: MindLeaf[] = [];
       if (data.introKo) lv.push({ label: 'Korean', sub: preview(data.introKo), children: [{ label: data.introKo, wrap: true }] });
       if (data.introEn) lv.push({ label: 'English', sub: preview(data.introEn), children: [{ label: data.introEn, wrap: true }] });
       list.push({ key: 'introduction', label: 'Introduction', icon: FileText, tone: 'indigo', leaves: lv });
     }
-    if (data.notes && data.notes.trim()) {
-      list.push({ key: 'notes', label: 'Notes', icon: StickyNote, tone: 'teal',
-        leaves: [{ label: 'Notes', sub: preview(data.notes), children: [{ label: data.notes, wrap: true }] }] });
+    {
+      const lv: MindLeaf[] = (data.notes && data.notes.trim())
+        ? [{ label: 'Notes', sub: preview(data.notes), children: [{ label: data.notes, wrap: true }] }]
+        : [];
+      list.push({ key: 'notes', label: 'Notes', icon: StickyNote, tone: 'teal', leaves: lv });
     }
     {
       const loc: MindLeaf[] = [];
