@@ -14,9 +14,10 @@ import {
   useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactNode,
 } from 'react';
+import Link from 'next/link';
 import {
   Users, Handshake, Activity, Target, MapPin, Gauge, Building2,
-  FileText, StickyNote, ChevronRight,
+  FileText, StickyNote, ChevronRight, Factory, Share2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,9 +54,12 @@ export interface MindmapData {
   engagements: MindLeaf[];
   activity: MindLeaf[];
   investorFocus: MindLeaf[];
+  partners: MindLeaf[];        // co-investors / shared-deal parties
+  supplyLinks: MindLeaf[];     // filler<->paper-mill supply relationships
+  supplyLabel: string;         // branch label tailored to party type
 }
 
-type Tone = 'sky' | 'violet' | 'amber' | 'emerald' | 'rose' | 'slate' | 'indigo' | 'teal';
+type Tone = 'sky' | 'violet' | 'amber' | 'emerald' | 'rose' | 'slate' | 'indigo' | 'teal' | 'orange' | 'cyan';
 interface Branch {
   key: string;
   label: string;
@@ -74,6 +78,8 @@ const TONE: Record<Tone, { dot: string; head: string; ring: string }> = {
   slate:   { dot: '#64748b', head: 'bg-slate-50 dark:bg-slate-900/40',     ring: 'border-slate-200 dark:border-slate-800' },
   indigo:  { dot: '#6366f1', head: 'bg-indigo-50 dark:bg-indigo-950/40',   ring: 'border-indigo-200 dark:border-indigo-900' },
   teal:    { dot: '#14b8a6', head: 'bg-teal-50 dark:bg-teal-950/40',       ring: 'border-teal-200 dark:border-teal-900' },
+  orange:  { dot: '#f97316', head: 'bg-orange-50 dark:bg-orange-950/40',   ring: 'border-orange-200 dark:border-orange-900' },
+  cyan:    { dot: '#06b6d4', head: 'bg-cyan-50 dark:bg-cyan-950/40',       ring: 'border-cyan-200 dark:border-cyan-900' },
 };
 
 const CARD_W = 264;
@@ -95,6 +101,12 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
     }
     if (data.engagements.length > 0) {
       list.push({ key: 'deals', label: 'Deals & Engagements', icon: Handshake, tone: 'violet', count: data.engagements.length, leaves: data.engagements });
+    }
+    if (data.partners.length > 0) {
+      list.push({ key: 'partners', label: 'Partners & Co-investors', icon: Share2, tone: 'cyan', count: data.partners.length, leaves: data.partners });
+    }
+    if (data.supplyLinks.length > 0) {
+      list.push({ key: 'supply', label: data.supplyLabel, icon: Factory, tone: 'orange', count: data.supplyLinks.length, leaves: data.supplyLinks });
     }
     {
       const actLeaves: MindLeaf[] = [
@@ -306,8 +318,14 @@ function LeafRow({
 }) {
   const hasChildren = !!leaf.children?.length;
   const isOpen = expanded.has(pathKey);
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  const isInternal = !!leaf.href && leaf.href.startsWith('/');
   const labelEl = leaf.href ? (
-    <a href={leaf.href} className="truncate hover:underline" onClick={(e) => e.stopPropagation()}>{leaf.label}</a>
+    isInternal ? (
+      <Link href={leaf.href} className="truncate font-medium text-foreground hover:underline" onClick={stop}>{leaf.label}</Link>
+    ) : (
+      <a href={leaf.href} className="truncate hover:underline" onClick={stop}>{leaf.label}</a>
+    )
   ) : leaf.wrap ? (
     <span className="whitespace-pre-wrap break-words text-xs text-muted-foreground leading-relaxed">{leaf.label}</span>
   ) : (
