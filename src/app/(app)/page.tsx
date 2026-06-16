@@ -268,6 +268,18 @@ export default async function DashboardPage() {
                 </span>
               </div>
             </div>
+            <Link
+              href="/mailing"
+              className="mt-4 flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/60"
+            >
+              <Mail className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+              <span className="flex flex-col">
+                <span className="text-sm font-medium">Mailing</span>
+                <span className="text-xs text-muted-foreground">
+                  Send bulk email to your contacts and parties.
+                </span>
+              </span>
+            </Link>
           </CardContent>
         </Card>
         <Link href="/todo" className="block rounded-xl transition-colors hover:bg-muted/40">
@@ -299,19 +311,6 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/mailing" className="block rounded-xl transition-colors hover:bg-muted/40">
-          <Card className="h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Mailing</CardTitle>
-              <Mail className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Send bulk email to your contacts and parties.
-              </CardDescription>
             </CardContent>
           </Card>
         </Link>
