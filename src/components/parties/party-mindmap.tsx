@@ -202,7 +202,7 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
     add(rt, 'R');
     add(lf, 'L');
     setPaths((prev) => {
-      if (prev.length === out.length && prev.every((p, i) => p.d === out[i].d && p.key === out[i].key)) return prev;
+      if (prev.length === out.length && prev.every((p, i) => p.d === out[i]?.d && p.key === out[i]?.key)) return prev;
       return out;
     });
     setSize((prev) => {
