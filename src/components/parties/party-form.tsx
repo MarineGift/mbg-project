@@ -75,6 +75,8 @@ const schema = z.object({
   interestTags: z.string().max(500).optional().or(z.literal('')),
   source: z.string().max(120).optional().or(z.literal('')),
   notes: z.string().max(10_000).optional().or(z.literal('')),
+  introKo: z.string().max(10_000).optional().or(z.literal('')),
+  introEn: z.string().max(10_000).optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -134,6 +136,8 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
           interestTags: existing.interestTags.join(', '),
           source: existing.source ?? '',
           notes: existing.notes ?? '',
+          introKo: existing.introKo ?? '',
+          introEn: existing.introEn ?? '',
         }
       : {
           name: '',
@@ -149,6 +153,8 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
           interestTags: '',
           source: '',
           notes: '',
+          introKo: '',
+          introEn: '',
         },
   });
 
@@ -175,6 +181,8 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
         interestTags,
         source: values.source || null,
         notes: values.notes || null,
+        introKo: values.introKo || null,
+        introEn: values.introEn || null,
       };
 
       if (mode === 'create') {
@@ -378,6 +386,29 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
               disabled={isPending}
               placeholder={t('sourcePlaceholder')}
             />
+          </div>
+
+          {/* Introduction (KO / EN) - shown on the party Overview Introduction card */}
+          <div className="space-y-2">
+            <Label htmlFor="party-intro-ko">{t('introKo')}</Label>
+            <Textarea
+              id="party-intro-ko"
+              {...register('introKo')}
+              disabled={isPending}
+              rows={4}
+              placeholder={t('introKoPlaceholder')}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="party-intro-en">{t('introEn')}</Label>
+            <Textarea
+              id="party-intro-en"
+              {...register('introEn')}
+              disabled={isPending}
+              rows={4}
+              placeholder={t('introEnPlaceholder')}
+            />
+            <p className="text-xs text-muted-foreground">{t('introHint')}</p>
           </div>
 
           {/* Notes */}

@@ -507,6 +507,13 @@
     "newDraftTitle": "URM - New draft",
     "newDraftBody": "AI has generated a new reply draft. Check your review queue."
   },
+  "partyKinds": {
+    "company": "Company",
+    "organization": "Organization",
+    "individual": "Individual",
+    "fund": "Fund",
+    "government": "Government"
+  },
   "partyForm": {
     "industryTags": "Industry Tags",
     "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
@@ -542,6 +549,12 @@
     "source": "Source",
     "sourcePlaceholder": "LinkedIn, referral, conference ...",
     "notes": "Notes",
+    "partyKind": "Entity type",
+    "introKo": "Introduction (Korean)",
+    "introEn": "Introduction (English)",
+    "introKoPlaceholder": "Company introduction in Korean",
+    "introEnPlaceholder": "Company introduction in English (ASCII)",
+    "introHint": "Shown on the party Overview Introduction card. Korean first, then English.",
     "create": "Create",
     "save": "Save",
     "cancel": "Cancel",

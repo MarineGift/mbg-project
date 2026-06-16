@@ -64,6 +64,8 @@ const partySchema = z.object({
   interestTags: z.array(z.string().max(40)).max(20).optional().default([]),
   source: z.string().max(120).optional().nullable(),
   notes: z.string().max(10_000).optional().nullable(),
+  introKo: z.string().max(10_000).optional().nullable(),
+  introEn: z.string().max(10_000).optional().nullable(),
 });
 
 /* ============================================================
@@ -183,6 +185,8 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
+    intro_ko: parsed.data.introKo?.trim() || null,
+    intro_en: parsed.data.introEn?.trim() || null,
     created_by: auth.userId,
   };
 
@@ -272,6 +276,8 @@ export async function updateParty(
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
+    intro_ko: parsed.data.introKo?.trim() || null,
+    intro_en: parsed.data.introEn?.trim() || null,
     updated_by: auth.userId,
   };
 

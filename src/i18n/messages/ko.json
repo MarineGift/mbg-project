@@ -476,6 +476,13 @@
     "newDraftTitle": "URM — 새 초안",
     "newDraftBody": "AI가 새 회신 초안을 생성했습니다. 검토 큐에서 확인하세요."
   },
+  "partyKinds": {
+    "company": "회사",
+    "organization": "단체/기관",
+    "individual": "개인",
+    "fund": "펀드",
+    "government": "정부/공공"
+  },
   "partyForm": {
     "industryTags": "산업 태그",
     "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
@@ -511,6 +518,12 @@
     "source": "출처",
     "sourcePlaceholder": "LinkedIn, 추천, 콘퍼런스 ...",
     "notes": "메모",
+    "partyKind": "법인 형태",
+    "introKo": "회사 소개 (한국어)",
+    "introEn": "회사 소개 (영어)",
+    "introKoPlaceholder": "한국어 회사 소개",
+    "introEnPlaceholder": "영어 회사 소개 (ASCII)",
+    "introHint": "파티 개요의 Introduction 카드에 표시됩니다. 한국어 먼저, 그다음 영어.",
     "create": "생성",
     "save": "저장",
     "cancel": "취소",

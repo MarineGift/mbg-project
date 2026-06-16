@@ -477,6 +477,13 @@
     "newDraftTitle": "URM — 新規ドラフト",
     "newDraftBody": "AIが新しい返信ドラフトを生成しました。レビューキューを確認してください。"
   },
+  "partyKinds": {
+    "company": "会社",
+    "organization": "団体",
+    "individual": "個人",
+    "fund": "ファンド",
+    "government": "政府"
+  },
   "partyForm": {
     "industryTags": "業界タグ",
     "industryTagsPlaceholder": "paper-mill, packaging, sustainability",
@@ -512,6 +519,12 @@
     "source": "ソース",
     "sourcePlaceholder": "LinkedIn、紹介、カンファレンス ...",
     "notes": "メモ",
+    "partyKind": "法人形態",
+    "introKo": "会社紹介 (韓国語)",
+    "introEn": "会社紹介 (英語)",
+    "introKoPlaceholder": "韓国語の会社紹介",
+    "introEnPlaceholder": "英語の会社紹介 (ASCII)",
+    "introHint": "パーティー概要の Introduction カードに表示されます。韓国語を先に、次に英語。",
     "create": "作成",
     "save": "保存",
     "cancel": "キャンセル",
