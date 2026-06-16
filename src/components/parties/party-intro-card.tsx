@@ -4,7 +4,9 @@
  * Prominent "Introduction" card for the party Overview tab.
  * Renders the long free-text party introduction in Korean and English
  * (app.parties.intro_ko / intro_en). This is the headline party context,
- * so it sits at the top of the Overview. Hidden entirely when both are empty.
+ * so it sits at the top of the Overview and is ALWAYS shown (like Notes):
+ * when both fields are empty it shows a "-" placeholder so the section is
+ * always visible and obvious where to add the introduction.
  */
 
 import { BookOpen } from 'lucide-react';
@@ -18,7 +20,7 @@ interface Props {
 export function PartyIntroCard({ introKo, introEn }: Props) {
   const hasKo = !!introKo && introKo.trim().length > 0;
   const hasEn = !!introEn && introEn.trim().length > 0;
-  if (!hasKo && !hasEn) return null;
+  const isEmpty = !hasKo && !hasEn;
 
   return (
     <Card className="border-blue-200 bg-blue-50/40">
@@ -29,6 +31,11 @@ export function PartyIntroCard({ introKo, introEn }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
+        {isEmpty && (
+          <p className="text-sm text-muted-foreground">
+            - <span className="ml-1">아직 등록된 소개가 없습니다. (intro_ko / intro_en)</span>
+          </p>
+        )}
         {hasKo && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">한국어</p>
