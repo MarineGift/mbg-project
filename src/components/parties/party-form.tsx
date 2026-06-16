@@ -49,6 +49,8 @@ interface Props {
   mode: 'create' | 'edit';
   initialPartyType: PartyType;
   existing?: PartyDetail | null;
+  /** current investor_profile.priority in edit mode (lives on PartyDetailFull, not PartyDetail) */
+  existingPriority?: InvestorPriority | null;
 }
 
 const schema = z.object({
@@ -112,7 +114,7 @@ function parseTagsInput(raw: string | undefined): string[] {
   return out;
 }
 
-export function PartyForm({ mode, initialPartyType, existing }: Props) {
+export function PartyForm({ mode, initialPartyType, existing, existingPriority }: Props) {
   const router = useRouter();
   const t = useTranslations('partyForm');
   const tPartyTypes = useTranslations('partyTypes');
@@ -135,7 +137,7 @@ export function PartyForm({ mode, initialPartyType, existing }: Props) {
           partyType: existing.partyType,
           partyKind: 'company',
           tier: existing.tier ?? 'tier_3',
-          priority: existing.investorProfile?.priority ?? 'none',
+          priority: existingPriority ?? 'none',
           countryCode: existing.countryCode ?? '',
           region: '',
           city: '',

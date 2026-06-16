@@ -55,6 +55,7 @@ export default async function EditPartyPage({ params }: PageProps) {
         mode="edit"
         initialPartyType={full.party.partyType}
         existing={full.party}
+        existingPriority={full.investorProfile?.priority ?? null}
       />
     </div>
   );
