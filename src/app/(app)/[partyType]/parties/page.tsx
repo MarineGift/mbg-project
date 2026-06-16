@@ -660,11 +660,13 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Stage</th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
-                    </Link>
-                  </th>
+                  {!showLinks && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                        Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
@@ -830,9 +832,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           )}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
+                      {!showLinks && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                          {location || '-'}
+                        </td>
+                      )}
                       {isInvestor && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
                           {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
