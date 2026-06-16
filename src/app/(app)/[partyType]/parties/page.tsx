@@ -709,6 +709,42 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
+                        {/* Mobile-only: stack linked mill/filler + country under the
+                            name, since their dedicated columns are hidden on small
+                            screens. Wrapper is md:hidden (linked column appears at md+);
+                            the country line adds sm:hidden (country column appears at
+                            sm+) so nothing duplicates at the sm breakpoint. */}
+                        {showLinks && (
+                          <div className="mt-1 flex flex-col gap-1 md:hidden">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="text-[10px] font-medium uppercase tracking-wide text-orange-600">
+                                {linkLabel}
+                              </span>
+                              {hasLinks ? (
+                                <>
+                                  {linked.slice(0, 2).map((name) => (
+                                    <span key={name} className="inline-flex px-1.5 py-0.5 text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded max-w-[180px] truncate">
+                                      {name}
+                                    </span>
+                                  ))}
+                                  {linked.length > 2 && (
+                                    <span className="text-xs text-emerald-600 font-medium whitespace-nowrap">
+                                      +{linked.length - 2}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full whitespace-nowrap">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Unlinked
+                                </span>
+                              )}
+                            </div>
+                            <div className="sm:hidden text-xs text-muted-foreground">
+                              {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
+                            </div>
+                          </div>
+                        )}
                       </td>
                       {isInvestor && (
                         <td className="px-4 py-3">
