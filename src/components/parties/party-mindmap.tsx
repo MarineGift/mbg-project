@@ -332,11 +332,20 @@ function LeafRow({
   const isOpen = expanded.has(pathKey);
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
   const isInternal = !!leaf.href && leaf.href.startsWith('/');
+  const isHttp = !!leaf.href && /^https?:\/\//i.test(leaf.href);
   const labelEl = leaf.href ? (
     isInternal ? (
       <Link href={leaf.href} className="truncate font-medium text-foreground hover:underline" onClick={stop}>{leaf.label}</Link>
     ) : (
-      <a href={leaf.href} className="truncate hover:underline" onClick={stop}>{leaf.label}</a>
+      <a
+        href={leaf.href}
+        className="truncate hover:underline"
+        target={isHttp ? '_blank' : undefined}
+        rel={isHttp ? 'noopener noreferrer' : undefined}
+        onClick={stop}
+      >
+        {leaf.label}
+      </a>
     )
   ) : leaf.wrap ? (
     <span className="whitespace-pre-wrap break-words text-xs text-muted-foreground leading-relaxed">{leaf.label}</span>
