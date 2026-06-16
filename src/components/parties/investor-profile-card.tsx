@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Banknote } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import type { InvestorProfile } from '@/types/party-detail';
 import { InvestorPriorityEditor } from '@/components/parties/investor-priority-editor';
 
@@ -12,13 +13,30 @@ interface Props {
 
 const DASH = <span className="text-muted-foreground">-</span>;
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * One compact field cell: label stacked above value. Cells flow in a responsive
+ * grid (2 columns on mobile, 3 on desktop) so values pack together and the card
+ * never needs a horizontal scrollbar -- matches PartyInfoCard.
+ * `full` makes a field span the whole row (Priority editor, tag lists).
+ */
+function Field({
+  label,
+  children,
+  full,
+}: {
+  label: string;
+  children: ReactNode;
+  full?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-0.5 py-2 border-b border-border/50 last:border-0 sm:flex-row sm:items-start sm:gap-4">
-      <dt className="text-xs font-medium text-muted-foreground sm:w-40 sm:shrink-0 sm:pt-0.5">
-        {label}
-      </dt>
-      <dd className="text-sm break-words min-w-0 flex-1">{children}</dd>
+    <div
+      className={cn(
+        'flex flex-col gap-0.5 min-w-0 border-b border-border/40 pb-2',
+        full && 'col-span-2 lg:col-span-3',
+      )}
+    >
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm break-words min-w-0">{children}</dd>
     </div>
   );
 }
@@ -77,6 +95,9 @@ function Flags({ profile }: { profile: InvestorProfile }): ReactNode {
 }
 
 export function InvestorProfileCard({ profile, partyName, partyId }: Props) {
+  const showFundName =
+    !!profile.fundName && profile.fundName.trim() !== (partyName ?? '').trim();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -86,14 +107,13 @@ export function InvestorProfileCard({ profile, partyName, partyId }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <dl>
-          <Row label="Priority">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 lg:grid-cols-3">
+          {/* Priority spans the full row so the High/Medium/Low toggles fit. */}
+          <Field label="Priority" full>
             <InvestorPriorityEditor partyId={partyId} partyType="investor" value={profile.priority} />
-          </Row>
-          {!!profile.fundName && profile.fundName.trim() !== (partyName ?? "").trim() && (
-            <Row label="Fund Name">{profile.fundName}</Row>
-          )}
-          <Row label="Type">
+          </Field>
+          {showFundName && <Field label="Fund Name">{profile.fundName}</Field>}
+          <Field label="Type">
             {profile.typeName ? (
               <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 text-xs font-medium">
                 {profile.typeName}
@@ -101,14 +121,15 @@ export function InvestorProfileCard({ profile, partyName, partyId }: Props) {
             ) : (
               DASH
             )}
-          </Row>
-          <Row label="Fund Size">{fmtUsd(profile.fundSizeUsd)}</Row>
-          <Row label="AUM">{fmtUsd(profile.aumUsd)}</Row>
-          <Row label="Vintage Year">{profile.fundVintageYear ?? DASH}</Row>
-          <Row label="Ticket Size">{ticketRange(profile.ticketMinUsd, profile.ticketMaxUsd)}</Row>
-          <Row label="Sector Focus"><Tags items={profile.sectorFocus} /></Row>
-          <Row label="Geographic Focus"><Tags items={profile.geographicFocus} /></Row>
-          <Row label="Flags"><Flags profile={profile} /></Row>
+          </Field>
+          <Field label="Fund Size">{fmtUsd(profile.fundSizeUsd)}</Field>
+          <Field label="AUM">{fmtUsd(profile.aumUsd)}</Field>
+          <Field label="Vintage Year">{profile.fundVintageYear ?? DASH}</Field>
+          <Field label="Ticket Size">{ticketRange(profile.ticketMinUsd, profile.ticketMaxUsd)}</Field>
+          <Field label="Flags"><Flags profile={profile} /></Field>
+          {/* Tag lists span the full row so chips wrap instead of overflowing. */}
+          <Field label="Sector Focus" full><Tags items={profile.sectorFocus} /></Field>
+          <Field label="Geographic Focus" full><Tags items={profile.geographicFocus} /></Field>
         </dl>
       </CardContent>
     </Card>
