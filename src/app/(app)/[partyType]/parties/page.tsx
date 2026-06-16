@@ -31,7 +31,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
 const PHASE_1_MODULES: readonly PartyTypeCode[] = [
-  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier', 'buyer', 'government_grant',
+  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier', 'buyer', 'government_grant', 'self',
 ] as const;
 
 const MODULE_LABELS: Record<PartyTypeCode, string> = {

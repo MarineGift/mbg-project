@@ -18,6 +18,7 @@ const PHASE_1_MODULES: readonly PartyTypeCode[] = [
   'partner',
   'customer',
   'filler_supplier',
+  'self',
 ] as const;
 
 interface PageProps {
