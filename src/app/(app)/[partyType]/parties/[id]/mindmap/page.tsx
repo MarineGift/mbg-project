@@ -49,10 +49,18 @@ export default async function PartyMindmapPage({ params }: PageProps) {
 
   const p = full.party;
 
-  const contacts: MindLeaf[] = full.contacts.slice(0, 8).map((c) => ({
-    label: (c.fullName || c.email || 'Contact') + (c.isPrimary ? ' \u2605' : ''),
-    sub: c.jobTitle ?? null,
-  }));
+  const contacts: MindLeaf[] = full.contacts.slice(0, 8).map((c) => {
+    const children: MindLeaf[] = [];
+    if (c.email) children.push({ label: c.email, sub: 'email', href: `mailto:${c.email}` });
+    if (c.phone) children.push({ label: c.phone, sub: 'phone', href: `tel:${c.phone.replace(/[^+0-9]/g, '')}` });
+    if (c.profile?.coverageRegion) children.push({ label: c.profile.coverageRegion, sub: 'coverage' });
+    if (c.profile?.mbgFitRating) children.push({ label: c.profile.mbgFitRating, sub: 'mbg fit' });
+    return {
+      label: (c.fullName || c.email || 'Contact') + (c.isPrimary ? ' \u2605' : ''),
+      sub: c.jobTitle ?? null,
+      children: children.length ? children : undefined,
+    };
+  });
 
   const engagements: MindLeaf[] = full.engagements.slice(0, 8).map((e) => ({
     label: e.name,
@@ -91,6 +99,9 @@ export default async function PartyMindmapPage({ params }: PageProps) {
     city: p.city,
     website: p.website,
     source: p.source,
+    introKo: p.introKo,
+    introEn: p.introEn,
+    notes: p.notes,
     counts: full.party.counts,
     contacts,
     engagements,
