@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Globe, MapPin, Building2, Pencil } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Building2, Pencil, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import type { PartyDetail } from '@/types/party-detail';
@@ -67,6 +67,12 @@ export function PartyHeader({ party }: Props) {
           {party.status}
         </span>
         <Button asChild variant="outline" size="sm" className="ml-auto">
+          <Link href={`/${party.partyType}/parties/${party.id}/mindmap`}>
+            <Network className="h-3.5 w-3.5" />
+            Mindmap
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
           <Link href={`/${party.partyType}/parties/${party.id}/edit`}>
             <Pencil className="h-3.5 w-3.5" />
             Edit
