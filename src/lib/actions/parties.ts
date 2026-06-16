@@ -335,22 +335,38 @@ export async function updateInvestorPriority(
 
   const supabase = await createSupabaseServerClient();
 
-  const { error } = await supabase
+  // Update the existing 1:1 row first. We deliberately avoid upsert here: an
+  // upsert builds an INSERT tuple that trips other NOT NULL columns on
+  // investor_profile (e.g. investor_type_id) even when the row already exists.
+  const { data: updated, error: updErr } = await supabase
     .schema('app')
     .from('investor_profile' as never)
-    .upsert(
-      {
+    .update({ priority: parsed.data.priority, updated_by: auth.userId } as never)
+    .eq('party_id' as never, parsed.data.partyId)
+    .select('party_id');
+
+  if (updErr) {
+    console.error('[parties.updateInvestorPriority] update error:', updErr);
+    return { ok: false, errorCode: 'database', errorMessage: updErr.message };
+  }
+
+  // No profile row yet -> create a minimal one carrying just the priority.
+  // (investor_type_id is made nullable by the accompanying migration.)
+  if (!updated || (updated as unknown[]).length === 0) {
+    const { error: insErr } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .insert({
         party_id: parsed.data.partyId,
         organization_id: auth.organizationId,
         priority: parsed.data.priority,
+        created_by: auth.userId,
         updated_by: auth.userId,
-      } as never,
-      { onConflict: 'party_id' },
-    );
-
-  if (error) {
-    console.error('[parties.updateInvestorPriority] upsert error:', error);
-    return { ok: false, errorCode: 'database', errorMessage: error.message };
+      } as never);
+    if (insErr) {
+      console.error('[parties.updateInvestorPriority] insert error:', insErr);
+      return { ok: false, errorCode: 'database', errorMessage: insErr.message };
+    }
   }
 
   revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);
