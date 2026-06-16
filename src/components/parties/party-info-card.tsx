@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
+import { cn } from '@/lib/utils';
 import type { PartyContact, PartyDetail } from '@/types/party-detail';
 
 interface Props {
@@ -44,13 +45,30 @@ function isHttpUrl(s: string): boolean {
   return /^https?:\/\//i.test(s);
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * One compact field cell: label stacked above value. Cells flow in a responsive
+ * grid (2 columns on mobile, 3 on desktop) so short values pack together and
+ * fill the row instead of each stretching across the full width.
+ * `full` makes a field span the whole row (used for long content like Notes).
+ */
+function Field({
+  label,
+  children,
+  full,
+}: {
+  label: string;
+  children: ReactNode;
+  full?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-0.5 py-2 border-b border-border/50 last:border-0 sm:flex-row sm:items-start sm:gap-4">
-      <dt className="text-xs font-medium text-muted-foreground sm:w-40 sm:shrink-0 sm:pt-0.5">
-        {label}
-      </dt>
-      <dd className="text-sm break-words min-w-0 flex-1">{children}</dd>
+    <div
+      className={cn(
+        'flex flex-col gap-0.5 min-w-0 border-b border-border/40 pb-2',
+        full && 'col-span-2 lg:col-span-3',
+      )}
+    >
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm break-words min-w-0">{children}</dd>
     </div>
   );
 }
@@ -86,20 +104,20 @@ export function PartyInfoCard({ party, contacts }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <dl>
-          <Row label="Name">{party.name || DASH}</Row>
-          <Row label="Type">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 lg:grid-cols-3">
+          <Field label="Name">{party.name || DASH}</Field>
+          <Field label="Type">
             <PartyTypeBadge partyType={party.partyType} size="sm" />
-          </Row>
-          <Row label="Status">
+          </Field>
+          <Field label="Status">
             <span className="uppercase tracking-wide text-xs font-medium">
               {party.status}
             </span>
-          </Row>
-          <Row label="Country">{country || DASH}</Row>
-          <Row label="Location">{party.city || DASH}</Row>
-          <Row label="State">{stateLabel || DASH}</Row>
-          <Row label="Email">
+          </Field>
+          <Field label="Country">{country || DASH}</Field>
+          <Field label="Location">{party.city || DASH}</Field>
+          <Field label="State">{stateLabel || DASH}</Field>
+          <Field label="Email">
             {rep?.email ? (
               <a
                 href={`mailto:${rep.email}`}
@@ -110,8 +128,8 @@ export function PartyInfoCard({ party, contacts }: Props) {
             ) : (
               DASH
             )}
-          </Row>
-          <Row label="Phone">
+          </Field>
+          <Field label="Phone">
             {rep?.phone ? (
               <a href={`tel:${rep.phone}`} className="hover:underline">
                 {rep.phone}
@@ -119,8 +137,8 @@ export function PartyInfoCard({ party, contacts }: Props) {
             ) : (
               DASH
             )}
-          </Row>
-          <Row label="Website">
+          </Field>
+          <Field label="Website">
             {party.website ? (
               isHttpUrl(party.website) ? (
                 <a
@@ -137,17 +155,17 @@ export function PartyInfoCard({ party, contacts }: Props) {
             ) : (
               DASH
             )}
-          </Row>
-          <Row label="Source">{party.source || DASH}</Row>
-          <Row label="Notes">
+          </Field>
+          <Field label="Source">{party.source || DASH}</Field>
+          <Field label="Created">{fmtDate(party.createdAt)}</Field>
+          <Field label="Updated">{fmtDate(party.updatedAt)}</Field>
+          <Field label="Notes" full>
             {party.notes && party.notes.trim().length > 0 ? (
               <p className="whitespace-pre-wrap leading-relaxed">{party.notes}</p>
             ) : (
               DASH
             )}
-          </Row>
-          <Row label="Created">{fmtDate(party.createdAt)}</Row>
-          <Row label="Updated">{fmtDate(party.updatedAt)}</Row>
+          </Field>
         </dl>
       </CardContent>
     </Card>

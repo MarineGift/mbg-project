@@ -23,22 +23,22 @@ export function PartyIntroCard({ introKo, introEn }: Props) {
   return (
     <Card className="border-blue-200 bg-blue-50/40">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-blue-600" />
+        <CardTitle className="text-base flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-blue-600" />
           Introduction / 소개
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5 pb-6">
         {hasKo && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">한국어</p>
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{introKo}</p>
+            <p className="text-base whitespace-pre-wrap leading-relaxed">{introKo}</p>
           </div>
         )}
         {hasEn && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">English</p>
-            <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/80">
+            <p className="text-base whitespace-pre-wrap leading-relaxed text-foreground/80">
               {introEn}
             </p>
           </div>
