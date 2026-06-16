@@ -175,6 +175,12 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
   const recompute = useCallback(() => {
     const cont = containerRef.current, cen = centerRef.current;
     if (!cont || !cen) return;
+    // derive sides here from the stable `branches` memo (do NOT depend on the
+    // per-render right/left arrays, or this callback changes every render and
+    // the layout effect loops -> "Maximum update depth exceeded").
+    const rt: Branch[] = [];
+    const lf: Branch[] = [];
+    branches.forEach((b, i) => (i % 2 === 0 ? rt : lf).push(b));
     const cr = cont.getBoundingClientRect();
     const ce = cen.getBoundingClientRect();
     const cenY = ce.top - cr.top + ce.height / 2;
@@ -191,11 +197,17 @@ export function PartyMindmap({ data }: { data: MindmapData }) {
         out.push({ key: b.key, d: `M ${sx} ${cenY} C ${mx} ${cenY}, ${mx} ${ey}, ${ex} ${ey}`, color: TONE[b.tone].dot });
       }
     };
-    add(right, 'R');
-    add(left, 'L');
-    setPaths(out);
-    setSize({ w: cont.scrollWidth, h: cont.scrollHeight });
-  }, [right, left]);
+    add(rt, 'R');
+    add(lf, 'L');
+    setPaths((prev) => {
+      if (prev.length === out.length && prev.every((p, i) => p.d === out[i].d && p.key === out[i].key)) return prev;
+      return out;
+    });
+    setSize((prev) => {
+      const w = cont.scrollWidth, h = cont.scrollHeight;
+      return prev.w === w && prev.h === h ? prev : { w, h };
+    });
+  }, [branches]);
 
   useLayoutEffect(() => { recompute(); }, [recompute, collapsed, expanded]);
   useEffect(() => {
