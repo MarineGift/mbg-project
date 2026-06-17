@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await processSequence();
+    const sequenceId = req.nextUrl.searchParams.get('sequence_id');
+    const result = await processSequence(sequenceId);
     return NextResponse.json(result);
   } catch (err) {
     console.error('[sequences/process] Error:', err);

@@ -35,7 +35,7 @@ interface DueEnrollment {
   is_last_step: boolean;
 }
 
-export async function processSequence(): Promise<{
+export async function processSequence(sequenceId?: string | null): Promise<{
   processed: number;
   sent: number;
   failed: number;
@@ -50,7 +50,11 @@ export async function processSequence(): Promise<{
     return { processed: 0, sent: 0, failed: 0, skipped: 0 };
   }
 
-  const enrollments = (due as unknown as DueEnrollment[]) || [];
+  const allDue = (due as unknown as DueEnrollment[]) || [];
+  // Per-sequence Run Now: only process the requested sequence's due rows.
+  const enrollments = sequenceId
+    ? allDue.filter((e) => e.sequence_id === sequenceId)
+    : allDue;
   let sent = 0,
     failed = 0,
     skipped = 0;

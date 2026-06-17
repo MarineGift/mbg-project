@@ -122,15 +122,22 @@ export async function cancelEnrollment(
 // ===== Manual processor trigger (admin only) =====
 
 /** Called when the "Run Now" button in Settings is clicked -> calls the processor API */
-export async function triggerSequenceProcessor(): Promise<{
+export async function triggerSequenceProcessor(sequenceId?: string | null): Promise<{
   processed: number;
-  results: unknown[];
+  sent: number;
+  failed: number;
+  skipped: number;
+  errors?: unknown[];
 } | { error: string }> {
   const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const cronSecret = process.env.CRON_SECRET ?? '';
 
+  const url = sequenceId
+    ? `${appUrl}/api/sequences/process?sequence_id=${encodeURIComponent(sequenceId)}`
+    : `${appUrl}/api/sequences/process`;
+
   try {
-    const res = await fetch(`${appUrl}/api/sequences/process`, {
+    const res = await fetch(url, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',

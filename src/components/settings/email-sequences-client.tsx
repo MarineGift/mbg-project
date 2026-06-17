@@ -23,6 +23,7 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
   const [editTarget,    setEditTarget]    = useState<EmailSequenceWithSteps | undefined>();
   const [runResult,     setRunResult]     = useState<string | null>(null);
   const [bulkTarget,    setBulkTarget]    = useState<EmailSequence | null>(null);
+  const [runningSeqId,  setRunningSeqId]  = useState<string | null>(null);
   const [isPending,     startTransition]  = useTransition();
 
   function handleCreate() {
@@ -46,20 +47,19 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
     });
   }
 
-  function handleRunNow() {
+  function runProcessor(seqId?: string) {
     setRunResult(null);
+    setRunningSeqId(seqId ?? 'all');
     startTransition(async () => {
-      const res = await triggerSequenceProcessor();
+      const res = await triggerSequenceProcessor(seqId ?? null);
+      setRunningSeqId(null);
       if ('error' in res) {
         setRunResult(`Error: ${res.error}`);
       } else {
-        const sent    = (res.results as { status: string }[]).filter(r => r.status === 'sent').length;
-        const skipped = (res.results as { status: string }[]).filter(r => r.status === 'skipped').length;
-        const errors  = (res.results as { status: string }[]).filter(r => r.status === 'error').length;
         setRunResult(
           res.processed === 0
-            ? 'No sequences due right now.'
-            : `Processed ${res.processed}: ✅ ${sent} sent · ⏭ ${skipped} skipped · ❌ ${errors} errors`,
+            ? 'Nothing due right now.'
+            : `Processed ${res.processed}: ✅ ${res.sent} sent · ⏭ ${res.skipped} skipped · ❌ ${res.failed} failed`,
         );
       }
     });
@@ -82,12 +82,12 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleRunNow}
+            onClick={() => runProcessor()}
             disabled={isPending}
             className="px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            title="Manually trigger processor (sends overdue steps)"
+            title="Run every sequence's due steps now (same as the cron)"
           >
-            {isPending ? '⏳ Running…' : '▶ Run Now'}
+            {runningSeqId === 'all' ? '⏳ Running…' : '▶ Run All'}
           </button>
           <button
             onClick={handleCreate}
@@ -153,6 +153,14 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
                   <td className="px-4 py-3 text-right text-gray-600">{seq.total_sends}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => runProcessor(seq.id)}
+                        disabled={isPending}
+                        className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+                        title="Send this sequence's due steps now"
+                      >
+                        {runningSeqId === seq.id ? 'Running…' : 'Run Now'}
+                      </button>
                       <button
                         onClick={() => setBulkTarget(seq)}
                         className="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
