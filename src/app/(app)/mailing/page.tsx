@@ -7,7 +7,8 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { listMailAccountOptions } from '@/lib/actions/mail-account-options';
-import { BulkMailClient } from './bulk-mail-client';
+import { fetchSequences } from '@/lib/queries/email-sequences';
+import { MailingTabsClient } from './mailing-tabs-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,12 +74,23 @@ export default async function MailingPage() {
     isDefault: a.isDefault,
   }));
 
+  // Email sequences (for the second tab). Same org source as the
+  // settings/email-sequences page.
+  const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID ?? '';
+  let sequences: Awaited<ReturnType<typeof fetchSequences>> = [];
+  if (orgId) {
+    try {
+      sequences = await fetchSequences(orgId);
+    } catch {
+      sequences = [];
+    }
+  }
+
   return (
-    <BulkMailClient
-      pipelines={pipelines}
-      stages={stages}
-      templates={templates}
-      accounts={accounts}
+    <MailingTabsClient
+      mailing={{ pipelines, stages, templates, accounts }}
+      sequences={sequences}
+      orgId={orgId}
     />
   );
 }
