@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { archiveSequence, triggerSequenceProcessor, getSequenceForEdit } from '@/lib/actions/email-sequences';
 import { SequenceFormDialog } from './sequence-form-dialog';
 import { BulkEnrollDialog } from './bulk-enroll-dialog';
+import { SequenceOpensDialog } from './sequence-opens-dialog';
 import type { EmailSequence, EmailSequenceWithSteps } from '@/types/phase21b';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -23,6 +24,7 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
   const [editTarget,    setEditTarget]    = useState<EmailSequenceWithSteps | undefined>();
   const [runResult,     setRunResult]     = useState<string | null>(null);
   const [bulkTarget,    setBulkTarget]    = useState<EmailSequence | null>(null);
+  const [opensTarget,   setOpensTarget]   = useState<EmailSequence | null>(null);
   const [runningSeqId,  setRunningSeqId]  = useState<string | null>(null);
   const [isPending,     startTransition]  = useTransition();
 
@@ -162,6 +164,13 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
                         {runningSeqId === seq.id ? 'Running…' : 'Run Now'}
                       </button>
                       <button
+                        onClick={() => setOpensTarget(seq)}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        title="See who opened this sequence's emails"
+                      >
+                        Opens
+                      </button>
+                      <button
                         onClick={() => setBulkTarget(seq)}
                         className="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
                       >
@@ -206,6 +215,15 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
           orgId={orgId}
           sequenceId={bulkTarget.id}
           sequenceName={bulkTarget.name}
+        />
+      )}
+      {/* Read-receipts (opens) Dialog */}
+      {opensTarget && (
+        <SequenceOpensDialog
+          open={true}
+          onClose={() => setOpensTarget(null)}
+          sequenceId={opensTarget.id}
+          sequenceName={opensTarget.name}
         />
       )}
     </>
