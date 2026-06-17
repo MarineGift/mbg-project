@@ -57,6 +57,7 @@ export async function processSequence(): Promise<{
   let sent = 0,
     failed = 0,
     skipped = 0;
+  const errors: Array<{ enrollment_id: string; error: string }> = [];
 
   const fromAddress = process.env.TABS_MAILER_USERNAME!;
   const transporter = nodemailer.createTransport({
@@ -171,6 +172,7 @@ export async function processSequence(): Promise<{
 
       if (insErr) {
         console.error("[processSequence] insert error", insErr);
+        errors.push({ enrollment_id: e.enrollment_id, error: `insert: ${insErr.message ?? JSON.stringify(insErr)}` });
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
           p_status: "failed",
@@ -201,6 +203,7 @@ export async function processSequence(): Promise<{
         } catch (smtpErr) {
           const msg = smtpErr instanceof Error ? smtpErr.message : String(smtpErr);
           console.error("[processSequence] SMTP error", smtpErr);
+          errors.push({ enrollment_id: e.enrollment_id, error: `smtp: ${msg}` });
           await supabase
             .schema("app")
             .from("communications")
@@ -252,12 +255,14 @@ export async function processSequence(): Promise<{
 
       sent++;
     } catch (err) {
+      const emsg = err instanceof Error ? `${err.message}` : String(err);
       console.error("[processSequence] unhandled error for enrollment", e.enrollment_id, err);
+      errors.push({ enrollment_id: e.enrollment_id, error: emsg });
       failed++;
     }
   }
 
-  return { processed: enrollments.length, sent, failed, skipped };
+  return { processed: enrollments.length, sent, failed, skipped, errors };
 }
 
 // ============================================================
