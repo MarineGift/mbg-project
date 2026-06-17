@@ -43,18 +43,19 @@ WITH rel(mill_id, filler_id, link_type, supply_type, product_grade,
   ('ea842041-1311-4d41-b76f-a0c7a212f30e'::uuid,'3bccf3f8-8b1e-43af-9fdd-049b62af066b'::uuid,'pcc_nearsite','active','PCC filler-grade','supplied from Nekoosa','high','2024-09-01'::date,'https://www.domtar.com/nekoosa-mill-pcc-plant/','Domtar / Omya','near-site (from Nekoosa Omya plant)','Domtar Rothschild - Omya near-site')
 )
 INSERT INTO app.party_supply_links
-  (id, organization_id, mill_party_id, filler_party_id, link_type, supply_type,
+  (id, organization_id, mill_party_id, filler_party_id, link_type,
    product_grade, volume_estimate, confidence, active_since, notes, extra_data, created_at, updated_at)
 SELECT
   gen_random_uuid(),
   'b25de8f2-1020-482f-9012-183f63883169',
-  r.mill_id, r.filler_id, r.link_type,
-  r.supply_type::app.supply_link_type,
+  r.mill_id, r.filler_id,
+  'active',
   r.product_grade, r.volume_estimate, r.confidence, r.active_since,
   r.label || ' | ' || r.structure || ' | src: ' || r.src,
   jsonb_build_object(
     'evidence_url', r.evidence_url,
     'supply_structure', r.structure,
+    'link_kind', r.link_type,
     'source', r.src,
     'batch', 'omya_smi_batch1',
     'researched_at', '2026-06-17'
@@ -73,7 +74,8 @@ COMMIT;
 -- ----------------------------------------------------------------------------
 -- VERIFY (optional, read-only)
 -- ----------------------------------------------------------------------------
--- SELECT m.party_name AS mill, f.party_name AS filler, l.link_type, l.supply_type,
+-- SELECT m.party_name AS mill, f.party_name AS filler, l.link_type,
+--        l.extra_data->>'link_kind' AS kind,
 --        l.volume_estimate, l.active_since, l.extra_data->>'evidence_url' AS evidence
 -- FROM app.party_supply_links l
 -- JOIN app.parties m ON m.id = l.mill_party_id

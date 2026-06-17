@@ -12,7 +12,7 @@
 
 - 제지사 = `app.parties` (party_type=`paper_mill`, id=2), 이름 컬럼 `party_name`. **약 600+ mill이 이미 등록**돼 있음.
 - 공급사 = `app.parties` (party_type=`filler_supplier`, id=3). **Omya(국가별)·Specialty Minerals(국가+plant별)가 이미 등록**돼 있고, SM은 satellite 위치와 1:1로 맞는 plant 변형까지 있음 (예: `Specialty Minerals (India - Rayagada)`, `(Malaysia - Sipitang)`, `(USA - Wickliffe KY)`).
-- 거래관계 = `app.party_supply_links` (`mill_party_id`, `filler_party_id`, `link_type`, `supply_type` enum active/potential/historical, `product_grade`, `volume_estimate`, `confidence`, `active_since/until`, `notes`, `extra_data` jsonb).
+- 거래관계 = `app.party_supply_links` (`mill_party_id`, `filler_party_id`, `link_type`, `link_type`(상태 텍스트: active/potential/pilot/historical), `product_grade`, `volume_estimate`, `confidence`, `active_since/until`, `notes`, `extra_data` jsonb).
 
 즉 **빠진 건 둘을 잇는 link 행**뿐이었습니다. 그래서 이번 배치는 이름 해석 없이 **실제 UUID 양쪽을 직접 연결**합니다(가장 안전·정확).
 
@@ -20,7 +20,7 @@
 
 ## 1. 적용되는 14건 (실 UUID 연결)
 
-리서치 16건 중 14건이 양쪽 party가 존재해 즉시 연결됩니다. 모두 confidence=high(1차 출처), supply_type=active.
+리서치 16건 중 14건이 양쪽 party가 존재해 즉시 연결됩니다. 모두 confidence=high(1차 출처), link_type=active.
 
 | 제지사 (mill_party) | 공급사 (filler_party) | link_type | 용량 | active_since |
 |---|---|---|---|---|
@@ -65,7 +65,7 @@
 - `SM (USA - Escanaba MI)` ↔ Billerud Escanaba
 - `SM (USA - Spring Grove PA)` ↔ Pixelle Spring Grove
 - `SM (USA - Ticonderoga NY)` ↔ Sylvamo Ticonderoga
-- `SM (USA - Jay ME)` ↔ (구 IP Androscoggin / Pixelle, 2023 폐쇄 → supply_type=historical)
+- `SM (USA - Jay ME)` ↔ (구 IP Androscoggin / Pixelle, 2023 폐쇄 → link_type=historical)
 - 그 외 Adams MA, Barretts MT, Bucksport ME, Chillicothe OH, Sartell MN, Ste. Genevieve MO, Wisconsin Rapids WI 등 — 각 mill party 확인 후 연결.
 
 유럽 SM plant 변형(Finland Lappeenranta/Oulu/Tervakoski/Äänekoski, France Saillat/Arches, Germany Stockstadt, Sweden Hallstavik, UK Kemsley, Portugal Figueira 등)도 인접 mill과 매칭 가능. APP Dagang/Suzhou mill party 신설 + 연결. Omya 추가 on-site/merchant. 이후 Imerys로 확장.
