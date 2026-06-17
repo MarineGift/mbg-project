@@ -3,6 +3,7 @@
 
 import { useState, useTransition } from 'react';
 import { createSequence, updateSequence } from '@/lib/actions/email-sequences';
+import { SequenceSenderPreview } from './sequence-sender-preview';
 import type { EmailSequenceWithSteps, StepDraft } from '@/types/phase21b';
 
 interface Props {
@@ -130,6 +131,15 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
               />
             </div>
           </div>
+
+          {/* Sender + send-document preview (existing sequences only) */}
+          {initial?.id && (
+            <SequenceSenderPreview
+              sequenceId={initial.id}
+              orgId={orgId}
+              steps={steps}
+            />
+          )}
 
           {/* Steps */}
           <div>
