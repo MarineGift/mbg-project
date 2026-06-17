@@ -69,6 +69,9 @@ export async function processSequence(): Promise<{
     },
   });
 
+  // Org default signature, fetched once per org per run (mirrors send-outbound).
+  const sigCache = new Map<string, string | null>();
+
   for (const e of enrollments) {
     try {
       if (!e.contact_email) {
@@ -102,8 +105,27 @@ export async function processSequence(): Promise<{
       const messageId = `<${commId}.${Date.now()}@marinebiogroup.com>`;
       const occurredAt = new Date().toISOString();
 
+      // [signature] append the org default signature, same format as
+      // send-outbound.ts, so sequence sends carry the signature too.
+      let bodyHtmlWithSig = bodyHtml;
+      let sigHtml = sigCache.get(e.organization_id);
+      if (sigHtml === undefined) {
+        const { data: sigRow } = await supabase
+          .schema("app")
+          .from("email_signatures")
+          .select("html_content")
+          .eq("organization_id", e.organization_id)
+          .eq("is_default", true)
+          .maybeSingle();
+        sigHtml = (sigRow as { html_content: string | null } | null)?.html_content ?? null;
+        sigCache.set(e.organization_id, sigHtml);
+      }
+      if (sigHtml) {
+        bodyHtmlWithSig = `${bodyHtml}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sigHtml}`;
+      }
+
       // Add tracking pixel
-      const trackedHtml = injectTrackingPixel(bodyHtml, commId);
+      const trackedHtml = injectTrackingPixel(bodyHtmlWithSig, commId);
 
       // Insert communications row (with full threading fields)
       const { error: insErr } = await supabase
