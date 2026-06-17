@@ -8,6 +8,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export interface SequenceOpenRow {
   recipient:     string;
+  partyId:       string | null;
+  partyType:     string | null; // party_types.code, e.g. "investor" — for /{type}/parties/{id}
   partyName:     string | null;
   subject:       string | null;
   openCount:     number;
@@ -58,28 +60,43 @@ export async function getSequenceOpenReport(
     party_id:        string | null;
   }[]);
 
-  // 3) resolve party names
+  // 3) resolve party names + type codes (for detail-page links)
   const partyIds = [...new Set(trackList.map((t) => t.party_id).filter(Boolean))] as string[];
-  const nameById: Record<string, string> = {};
+  const partyById: Record<string, { name: string; typeId: number }> = {};
+  const codeByTypeId: Record<number, string> = {};
   if (partyIds.length) {
     const { data: parties } = await supabase
       .schema('app')
       .from('parties' as never)
-      .select('id, party_name')
+      .select('id, party_name, party_type_id')
       .in('id', partyIds);
-    for (const p of (parties ?? []) as { id: string; party_name: string }[]) {
-      nameById[p.id] = p.party_name;
+    const partyRows = (parties ?? []) as { id: string; party_name: string; party_type_id: number }[];
+    for (const p of partyRows) partyById[p.id] = { name: p.party_name, typeId: p.party_type_id };
+
+    const typeIds = [...new Set(partyRows.map((p) => p.party_type_id))];
+    if (typeIds.length) {
+      const { data: types } = await supabase
+        .schema('app')
+        .from('party_types' as never)
+        .select('id, code')
+        .in('id', typeIds);
+      for (const t of (types ?? []) as { id: number; code: string }[]) codeByTypeId[t.id] = t.code;
     }
   }
 
-  const rows: SequenceOpenRow[] = trackList.map((t) => ({
-    recipient:     t.sent_to,
-    partyName:     t.party_id ? nameById[t.party_id] ?? null : null,
-    subject:       t.subject,
-    openCount:     t.open_count ?? 0,
-    firstOpenedAt: t.first_opened_at,
-    clickCount:    t.click_count ?? 0,
-  }));
+  const rows: SequenceOpenRow[] = trackList.map((t) => {
+    const party = t.party_id ? partyById[t.party_id] : undefined;
+    return {
+      recipient:     t.sent_to,
+      partyId:       t.party_id,
+      partyType:     party ? codeByTypeId[party.typeId] ?? null : null,
+      partyName:     party ? party.name : null,
+      subject:       t.subject,
+      openCount:     t.open_count ?? 0,
+      firstOpenedAt: t.first_opened_at,
+      clickCount:    t.click_count ?? 0,
+    };
+  });
 
   // opened first, then earliest open
   rows.sort((a, b) =>

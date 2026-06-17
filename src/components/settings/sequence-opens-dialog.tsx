@@ -105,7 +105,21 @@ export function SequenceOpensDialog({ open, onClose, sequenceId, sequenceName }:
                   <tr key={i} className={r.openCount > 0 ? '' : 'opacity-50'}>
                     <td className="py-2">
                       <div className="text-gray-900">{r.recipient}</div>
-                      {r.partyName && <div className="text-xs text-gray-400">{r.partyName}</div>}
+                      {r.partyName && (
+                        r.partyId && r.partyType ? (
+                          <a
+                            href={`/${r.partyType}/parties/${r.partyId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
+                            title="Open company detail in a new tab"
+                          >
+                            {r.partyName} ↗
+                          </a>
+                        ) : (
+                          <div className="text-xs text-gray-400">{r.partyName}</div>
+                        )
+                      )}
                     </td>
                     <td className="py-2 text-right">
                       {r.openCount > 0 ? (
