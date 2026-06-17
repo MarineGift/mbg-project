@@ -183,6 +183,7 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
 
       {/* Create / Edit Dialog */}
       <SequenceFormDialog
+        key={`${dialogOpen ? 'open' : 'closed'}-${editTarget?.id ?? 'new'}`}
         open={dialogOpen}
         onClose={handleDialogClose}
         orgId={orgId}
