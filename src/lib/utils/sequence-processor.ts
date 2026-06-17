@@ -32,6 +32,7 @@ interface DueEnrollment {
   contact_given_name: string | null;
   contact_family_name: string | null;
   party_name: string;
+  is_last_step: boolean;
 }
 
 export async function processSequence(): Promise<{
@@ -92,31 +93,44 @@ export async function processSequence(): Promise<{
       if (!e.contact_email) {
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
+          p_step_id: e.step_id,
+          p_step_order: e.step_order,
+          p_communication_id: null,
+          p_is_last_step: e.is_last_step,
           p_status: "skipped",
         });
         skipped++;
         continue;
       }
 
-      // Render merge fields
-      const ctx = {
-        contact: {
-          given_name: e.contact_given_name || "",
-          family_name: e.contact_family_name || "",
-          email: e.contact_email,
-        },
-        party: { name: e.party_name },
+      // Render merge fields. renderMergeFields takes a FLAT key map
+      // (e.g. "contact.firstName"), not a nested object. firstName falls back
+      // to "there" for role inboxes with no personal name.
+      const firstName = (e.contact_given_name ?? "").trim();
+      const fullName = [e.contact_given_name, e.contact_family_name]
+        .map((s) => (s ?? "").trim())
+        .filter(Boolean)
+        .join(" ");
+      const mergeData: Record<string, string> = {
+        "party.name": e.party_name ?? "",
+        "contact.firstName": firstName || "there",
+        "contact.fullName": fullName || e.party_name || "there",
+        "contact.email": e.contact_email,
       };
-      const subject = unwrapMerge(renderMergeFields(e.step_subject || "", ctx as never));
-      const bodyPlain = unwrapMerge(renderMergeFields(e.step_body || "", ctx as never));
+      const subject = renderMergeFields(e.step_subject || "", mergeData);
+      const bodyPlain = renderMergeFields(e.step_body || "", mergeData);
       const bodyHtml = e.step_body_html
-        ? unwrapMerge(renderMergeFields(e.step_body_html, ctx as never))
+        ? renderMergeFields(e.step_body_html, mergeData)
         : plainToHtml(bodyPlain);
 
       if (isMock) {
         console.log(`[MOCK SEND] ${e.contact_email} - ${subject}`);
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
+          p_step_id: e.step_id,
+          p_step_order: e.step_order,
+          p_communication_id: null,
+          p_is_last_step: e.is_last_step,
           p_status: "sent",
         });
         sent++;
@@ -152,19 +166,15 @@ export async function processSequence(): Promise<{
       });
 
       if (result.ok && result.communicationId) {
-        await supabase
-          .schema("app")
-          .from("email_sequence_sends")
-          .insert({
-            enrollment_id: e.enrollment_id,
-            step_id: e.step_id,
-            communication_id: result.communicationId,
-            sent_at: new Date().toISOString(),
-            status: "sent",
-          } as never);
-
+        // advance_enrollment logs the send into email_sequence_sends AND
+        // advances next_step_order / next_send_at (or marks completed on the
+        // last step). Pass all args so the real 6-arg overload runs.
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
+          p_step_id: e.step_id,
+          p_step_order: e.step_order,
+          p_communication_id: result.communicationId,
+          p_is_last_step: e.is_last_step,
           p_status: "sent",
         });
         sent++;
@@ -174,6 +184,10 @@ export async function processSequence(): Promise<{
         errors.push({ enrollment_id: e.enrollment_id, error: `${result.status}: ${msg}` });
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
+          p_step_id: e.step_id,
+          p_step_order: e.step_order,
+          p_communication_id: null,
+          p_is_last_step: e.is_last_step,
           p_status: "failed",
         });
         failed++;
@@ -192,19 +206,6 @@ export async function processSequence(): Promise<{
 // ============================================================
 // Helpers
 // ============================================================
-function unwrapMerge(result: unknown): string {
-  if (typeof result === "string") return result;
-  if (
-    result &&
-    typeof result === "object" &&
-    "rendered" in result &&
-    typeof (result as { rendered: unknown }).rendered === "string"
-  ) {
-    return (result as { rendered: string }).rendered;
-  }
-  return "";
-}
-
 function plainToHtml(plain: string): string {
   if (!plain) return "";
   const escaped = plain
