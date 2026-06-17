@@ -15,10 +15,49 @@
 // ============================================================
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rpc } from "@/lib/rpc/typed-rpc";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 
+// Final-fallback display name (used only if a kind has no MAIL_<KIND>_DISPLAY_NAME).
 const FROM_NAME = process.env.TABS_MAILER_FROM_NAME || "URM";
+
+// Per-sequence sender routing.
+// 'role' -> MAIL_ROLE_* (e.g. ceo@), 'personal' -> MAIL_PERSONAL_* (e.g. yunyoung.heo@),
+// 'shared' -> MAIL_SHARED_*. Mirrors SendingAddressKind in src/types/email.ts.
+type SeqKind = "personal" | "role" | "shared";
+interface SeqSender {
+  user: string;
+  pass: string;
+  name: string;
+}
+
+function normalizeKind(raw: string | null | undefined): SeqKind {
+  return raw === "role" || raw === "shared" || raw === "personal" ? raw : "personal";
+}
+
+function resolveSeqSender(kind: SeqKind): SeqSender {
+  switch (kind) {
+    case "role":
+      return {
+        user: process.env.MAIL_ROLE_USERNAME || "",
+        pass: process.env.MAIL_ROLE_PASSWORD || "",
+        name: process.env.MAIL_ROLE_DISPLAY_NAME || FROM_NAME,
+      };
+    case "shared":
+      return {
+        user: process.env.MAIL_SHARED_USERNAME || "",
+        pass: process.env.MAIL_SHARED_PASSWORD || "",
+        name: process.env.MAIL_SHARED_DISPLAY_NAME || FROM_NAME,
+      };
+    case "personal":
+    default:
+      return {
+        user: process.env.MAIL_PERSONAL_USERNAME || "",
+        pass: process.env.MAIL_PERSONAL_PASSWORD || "",
+        name: process.env.MAIL_PERSONAL_DISPLAY_NAME || FROM_NAME,
+      };
+  }
+}
 
 interface DueEnrollment {
   enrollment_id: string;
@@ -59,16 +98,50 @@ export async function processSequence(): Promise<{
     skipped = 0;
   const errors: Array<{ enrollment_id: string; error: string }> = [];
 
-  const fromAddress = process.env.TABS_MAILER_USERNAME!;
-  const transporter = nodemailer.createTransport({
-    host: process.env.TABS_MAILER_HOST!,
-    port: Number(process.env.TABS_MAILER_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.TABS_MAILER_USERNAME!,
-      pass: process.env.TABS_MAILER_PASSWORD!,
-    },
-  });
+  // Per-sequence sender routing.
+  // Each sequence carries app.email_sequences.from_kind
+  // ('personal' | 'role' | 'shared'); the processor authenticates and sends
+  // From the matching MAIL_<KIND>_* account so different sequences can use
+  // different senders (e.g. investors -> ceo@, others -> yunyoung.heo@)
+  // without touching env/redeploy. Fetched here per distinct sequence id so
+  // the live get_due_enrollments RPC does not need to change.
+  const seqKindMap = new Map<string, SeqKind>();
+  const distinctSeqIds = [...new Set(enrollments.map((e) => e.sequence_id))];
+  if (distinctSeqIds.length > 0) {
+    const { data: seqRows, error: seqErr } = await (
+      supabase.schema("app").from("email_sequences") as unknown as {
+        select: (cols: string) => {
+          in: (
+            col: string,
+            vals: string[],
+          ) => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      }
+    )
+      .select("id, from_kind")
+      .in("id", distinctSeqIds);
+    if (seqErr) {
+      console.error("[processSequence] from_kind lookup error", seqErr);
+    }
+    for (const row of (seqRows ?? []) as Array<{ id: string; from_kind: string | null }>) {
+      seqKindMap.set(row.id, normalizeKind(row.from_kind));
+    }
+  }
+
+  // Transporter cache keyed by kind (same SMTP host/port, different login).
+  const transporterCache = new Map<SeqKind, Transporter>();
+  const getTransporterForKind = (kind: SeqKind, sender: SeqSender): Transporter => {
+    const cached = transporterCache.get(kind);
+    if (cached) return cached;
+    const t = nodemailer.createTransport({
+      host: process.env.TABS_MAILER_HOST!,
+      port: Number(process.env.TABS_MAILER_PORT || 587),
+      secure: false,
+      auth: { user: sender.user, pass: sender.pass },
+    });
+    transporterCache.set(kind, t);
+    return t;
+  };
 
   // Org default signature, fetched once per org per run (mirrors send-outbound).
   const sigCache = new Map<string, string | null>();
@@ -83,6 +156,26 @@ export async function processSequence(): Promise<{
         skipped++;
         continue;
       }
+
+      // Resolve the sender for THIS enrollment's sequence.
+      const kind = seqKindMap.get(e.sequence_id) ?? "personal";
+      const sender = resolveSeqSender(kind);
+      if (!sender.user || !sender.pass) {
+        // Required mailbox not configured: do NOT silently fall back to a
+        // different From (an investor mail must come from ceo@, never contact@).
+        const cfgMsg = `MAIL_${kind.toUpperCase()} credentials not configured (sequence ${e.sequence_id} requires kind="${kind}")`;
+        console.error("[processSequence]", cfgMsg);
+        errors.push({ enrollment_id: e.enrollment_id, error: cfgMsg });
+        await (rpc as any)(supabase, "advance_enrollment", {
+          p_enrollment_id: e.enrollment_id,
+          p_status: "failed",
+        });
+        failed++;
+        continue;
+      }
+      const transporter = getTransporterForKind(kind, sender);
+      const fromAddress = sender.user;
+      const fromName = sender.name;
 
       // Render merge fields
       const ctx = {
@@ -143,7 +236,7 @@ export async function processSequence(): Promise<{
           in_reply_to: null,
           thread_id: messageId,  // new thread
           from_address: fromAddress,
-          from_name: FROM_NAME,
+          from_name: fromName,
           to_addresses: [e.contact_email],
           cc_addresses: [],
           bcc_addresses: [],
@@ -187,7 +280,7 @@ export async function processSequence(): Promise<{
       } else {
         try {
           await transporter.sendMail({
-            from: `${FROM_NAME} <${fromAddress}>`,
+            from: `${fromName} <${fromAddress}>`,
             to: e.contact_email,
             subject,
             text: bodyPlain,
