@@ -13,7 +13,7 @@
 //   - Adds List-Unsubscribe headers (RFC 8058)
 //   - Calls classifyInboundEmail not needed here (inbound only)
 // ============================================================
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rpc } from "@/lib/rpc/typed-rpc";
 import nodemailer from "nodemailer";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
@@ -44,7 +44,7 @@ export async function processSequence(): Promise<{
   failed: number;
   skipped: number;
 }> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   // Get due enrollments
   const { data: due, error: dueErr } = await rpc(supabase, "get_due_enrollments", {} as never);
