@@ -170,6 +170,7 @@ export interface BulkEnrollFilters {
   countryCode?:   string | null;
   industryTag?:   string | null;
   nameContains?:  string | null;
+  priorities?:    string[] | null;   // investor priority: high | medium | low (multi)
 }
 
 export interface BulkEnrollResult {
@@ -197,6 +198,7 @@ async function callBulkEnrollRpc(
     p_country_code:  filters.countryCode  ?? undefined,
     p_industry_tag:  filters.industryTag  ?? undefined,
     p_name_contains: filters.nameContains ?? undefined,
+    p_priority:      filters.priorities && filters.priorities.length > 0 ? filters.priorities : undefined,
     p_enrolled_by:   enrolledBy ?? undefined,
     p_dry_run:       dryRun,
   });

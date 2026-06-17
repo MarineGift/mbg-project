@@ -33,6 +33,12 @@ const TIERS = [
   { value: 'cold',   label: 'Cold' },
 ];
 
+const PRIORITIES = [
+  { value: 'high',   label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low',    label: 'Low' },
+];
+
 const STATUSES = [
   { value: 'active',   label: 'Active only' },
   { value: '',         label: 'Any status' },
@@ -41,6 +47,7 @@ const STATUSES = [
 export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceName }: Props) {
   const [module,      setModule]      = useState('');
   const [tiers,       setTiers]       = useState<string[]>([]);
+  const [priorities,  setPriorities]  = useState<string[]>([]);
   const [status,      setStatus]      = useState('active');
   const [countryCode, setCountryCode] = useState('');
   const [preview,     setPreview]     = useState<BulkEnrollResult | null>(null);
@@ -57,11 +64,16 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
       tiers:       tiers.length > 0 ? tiers : null,
       status:      status || null,
       countryCode: countryCode.trim().toUpperCase() || null,
+      priorities:  priorities.length > 0 ? priorities : null,
     };
   }
 
   function handleToggleTier(tier: string) {
     setTiers(prev => prev.includes(tier) ? prev.filter(t => t !== tier) : [...prev, tier]);
+  }
+
+  function handleTogglePriority(priority: string) {
+    setPriorities(prev => prev.includes(priority) ? prev.filter(p => p !== priority) : [...prev, priority]);
   }
 
   function handlePreview() {
@@ -94,6 +106,7 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
     // reset then close
     setModule('');
     setTiers([]);
+    setPriorities([]);
     setStatus('active');
     setCountryCode('');
     setPreview(null);
@@ -159,6 +172,29 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
                       }
                     >
                       {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Priority <span className="font-normal text-gray-400">(investors; none selected = all)</span>
+                </label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {PRIORITIES.map(p => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => handleTogglePriority(p.value)}
+                      className={
+                        `text-xs px-3 py-1.5 rounded-full border transition-colors ` +
+                        (priorities.includes(p.value)
+                          ? 'bg-blue-100 border-blue-300 text-blue-700 font-medium'
+                          : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400')
+                      }
+                    >
+                      {p.label}
                     </button>
                   ))}
                 </div>

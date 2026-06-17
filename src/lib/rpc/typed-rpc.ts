@@ -38,6 +38,7 @@ type Augmentation = {
       p_dry_run?: boolean | null;
       p_industry_tag?: string | null;
       p_name_contains?: string | null;
+      p_priority?: string[] | null;
     };
     Returns: {
       total_matching: number | null;
