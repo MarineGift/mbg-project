@@ -1,71 +1,20 @@
-// src/lib/utils/sequence-processor.ts (v7 ??Phase 22a)
+// src/lib/utils/sequence-processor.ts
 // ============================================================
-// Phase 22a ??Updated sequence processor with proper threading
-// Changes vs v5:
-//   - Generates RFC-compliant Message-ID for each outbound
-//   - Sets thread_id = message_id (new threads)
-//   - Sets occurred_at = NOW()
-//   - Sets from_address / from_name explicitly
-//   - Sets to_addresses[] correctly
-//   - Sets template_id (from sequence step)
-//   - Sets ai_generated = false
-//   - Passes Message-ID header to nodemailer (so replies match)
-//   - Adds List-Unsubscribe headers (RFC 8058)
-//   - Calls classifyInboundEmail not needed here (inbound only)
+// Sequence processor.
+//
+// Sending is delegated to sendOutboundEmail() - the same path the reply /
+// compose dialog and the bulk-mail sender use. The From account is chosen
+// per sequence via app.email_sequences.from_account_id (an
+// app.inbound_mailboxes id, i.e. the exact accounts the compose From dropdown
+// lists). null -> the org default account. sendOutboundEmail handles account
+// resolution, SMTP password decryption, per-account transport, signature,
+// open-tracking and the communications row, so this file no longer builds its
+// own transport or writes communications directly.
 // ============================================================
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rpc } from "@/lib/rpc/typed-rpc";
-import nodemailer, { type Transporter } from "nodemailer";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
-
-// Final-fallback display name (used only if a kind has no MAIL_<KIND>_DISPLAY_NAME).
-const FROM_NAME = process.env.TABS_MAILER_FROM_NAME || "URM";
-
-// Per-sequence sender routing.
-// 'role' -> MAIL_ROLE_* (e.g. ceo@), 'personal' -> MAIL_PERSONAL_* (e.g. yunyoung.heo@),
-// 'shared' -> MAIL_SHARED_*. Mirrors SendingAddressKind in src/types/email.ts.
-type SeqKind = "personal" | "role" | "shared";
-interface SeqSender {
-  user: string;
-  pass: string;
-  name: string;
-}
-
-function normalizeKind(raw: string | null | undefined): SeqKind {
-  return raw === "role" || raw === "shared" || raw === "personal" ? raw : "personal";
-}
-
-function resolveSeqSender(kind: SeqKind): SeqSender {
-  switch (kind) {
-    case "role":
-      return {
-        user: process.env.MAIL_ROLE_USERNAME || "",
-        pass: process.env.MAIL_ROLE_PASSWORD || "",
-        name: process.env.MAIL_ROLE_DISPLAY_NAME || FROM_NAME,
-      };
-    case "shared":
-      // contact@. Falls back to the existing TABS_MAILER_* creds when
-      // MAIL_SHARED_* is unset (TABS_MAILER_USERNAME is already contact@).
-      return {
-        user: process.env.MAIL_SHARED_USERNAME || process.env.TABS_MAILER_USERNAME || "",
-        pass: process.env.MAIL_SHARED_PASSWORD || process.env.TABS_MAILER_PASSWORD || "",
-        name:
-          process.env.MAIL_SHARED_DISPLAY_NAME ||
-          process.env.TABS_MAILER_FROM_NAME ||
-          FROM_NAME,
-      };
-    case "personal":
-    default:
-      // Default sender = yunyoung.heo@ (MAIL_PERSONAL_*). No fallback: if these
-      // are unset the send fails (the guard below) rather than silently going
-      // out from a different address.
-      return {
-        user: process.env.MAIL_PERSONAL_USERNAME || "",
-        pass: process.env.MAIL_PERSONAL_PASSWORD || "",
-        name: process.env.MAIL_PERSONAL_DISPLAY_NAME || FROM_NAME,
-      };
-  }
-}
+import { sendOutboundEmail } from "@/lib/email/send-outbound";
 
 interface DueEnrollment {
   enrollment_id: string;
@@ -106,14 +55,10 @@ export async function processSequence(): Promise<{
     skipped = 0;
   const errors: Array<{ enrollment_id: string; error: string }> = [];
 
-  // Per-sequence sender routing.
-  // Each sequence carries app.email_sequences.from_kind
-  // ('personal' | 'role' | 'shared'); the processor authenticates and sends
-  // From the matching MAIL_<KIND>_* account so different sequences can use
-  // different senders (e.g. investors -> ceo@, others -> yunyoung.heo@)
-  // without touching env/redeploy. Fetched here per distinct sequence id so
-  // the live get_due_enrollments RPC does not need to change.
-  const seqKindMap = new Map<string, SeqKind>();
+  // Per-sequence From account (app.inbound_mailboxes id). Fetched once per
+  // distinct sequence so the live get_due_enrollments RPC does not change.
+  // null -> sendOutboundEmail routes to the org default account.
+  const seqAccountMap = new Map<string, string | null>();
   const distinctSeqIds = [...new Set(enrollments.map((e) => e.sequence_id))];
   if (distinctSeqIds.length > 0) {
     const { data: seqRows, error: seqErr } = await (
@@ -126,33 +71,21 @@ export async function processSequence(): Promise<{
         };
       }
     )
-      .select("id, from_kind")
+      .select("id, from_account_id")
       .in("id", distinctSeqIds);
     if (seqErr) {
-      console.error("[processSequence] from_kind lookup error", seqErr);
+      console.error("[processSequence] from_account_id lookup error", seqErr);
     }
-    for (const row of (seqRows ?? []) as Array<{ id: string; from_kind: string | null }>) {
-      seqKindMap.set(row.id, normalizeKind(row.from_kind));
+    for (const row of (seqRows ?? []) as Array<{ id: string; from_account_id: string | null }>) {
+      seqAccountMap.set(row.id, row.from_account_id ?? null);
     }
   }
 
-  // Transporter cache keyed by kind (same SMTP host/port, different login).
-  const transporterCache = new Map<SeqKind, Transporter>();
-  const getTransporterForKind = (kind: SeqKind, sender: SeqSender): Transporter => {
-    const cached = transporterCache.get(kind);
-    if (cached) return cached;
-    const t = nodemailer.createTransport({
-      host: process.env.TABS_MAILER_HOST!,
-      port: Number(process.env.TABS_MAILER_PORT || 587),
-      secure: false,
-      auth: { user: sender.user, pass: sender.pass },
-    });
-    transporterCache.set(kind, t);
-    return t;
-  };
-
-  // Org default signature, fetched once per org per run (mirrors send-outbound).
-  const sigCache = new Map<string, string | null>();
+  // Legacy fallback identity (only used when the org has no smtp-ready DB
+  // accounts; sendOutboundEmail then falls back to the env TABS_MAILER path).
+  const fallbackFromAddress = process.env.TABS_MAILER_USERNAME || "";
+  const fallbackFromName = process.env.TABS_MAILER_FROM_NAME || "URM";
+  const isMock = process.env.TABS_MAILER_USE_MOCK === "true";
 
   for (const e of enrollments) {
     try {
@@ -165,26 +98,6 @@ export async function processSequence(): Promise<{
         continue;
       }
 
-      // Resolve the sender for THIS enrollment's sequence.
-      const kind = seqKindMap.get(e.sequence_id) ?? "personal";
-      const sender = resolveSeqSender(kind);
-      if (!sender.user || !sender.pass) {
-        // Required mailbox not configured: do NOT silently fall back to a
-        // different From (an investor mail must come from ceo@, never contact@).
-        const cfgMsg = `MAIL_${kind.toUpperCase()} credentials not configured (sequence ${e.sequence_id} requires kind="${kind}")`;
-        console.error("[processSequence]", cfgMsg);
-        errors.push({ enrollment_id: e.enrollment_id, error: cfgMsg });
-        await (rpc as any)(supabase, "advance_enrollment", {
-          p_enrollment_id: e.enrollment_id,
-          p_status: "failed",
-        });
-        failed++;
-        continue;
-      }
-      const transporter = getTransporterForKind(kind, sender);
-      const fromAddress = sender.user;
-      const fromName = sender.name;
-
       // Render merge fields
       const ctx = {
         contact: {
@@ -194,167 +107,77 @@ export async function processSequence(): Promise<{
         },
         party: { name: e.party_name },
       };
-      const subjectResult = renderMergeFields(e.step_subject || "", ctx as never);
-      const bodyResult = renderMergeFields(e.step_body || "", ctx as never);
-      const subject = unwrapMerge(subjectResult);
-      const bodyPlain = unwrapMerge(bodyResult);
+      const subject = unwrapMerge(renderMergeFields(e.step_subject || "", ctx as never));
+      const bodyPlain = unwrapMerge(renderMergeFields(e.step_body || "", ctx as never));
       const bodyHtml = e.step_body_html
         ? unwrapMerge(renderMergeFields(e.step_body_html, ctx as never))
         : plainToHtml(bodyPlain);
 
-      // Generate communication id + Message-ID
-      const commId = crypto.randomUUID();
-      const messageId = `<${commId}.${Date.now()}@marinebiogroup.com>`;
-      const occurredAt = new Date().toISOString();
+      if (isMock) {
+        console.log(`[MOCK SEND] ${e.contact_email} - ${subject}`);
+        await (rpc as any)(supabase, "advance_enrollment", {
+          p_enrollment_id: e.enrollment_id,
+          p_status: "sent",
+        });
+        sent++;
+        continue;
+      }
 
-      // [signature] append the org default signature, same format as
-      // send-outbound.ts, so sequence sends carry the signature too.
-      let bodyHtmlWithSig = bodyHtml;
-      let sigHtml = sigCache.get(e.organization_id);
-      if (sigHtml === undefined) {
-        const { data: sigRow } = await supabase
+      // Delegate to the shared outbound path. mailAccountId picks the From
+      // account (same accounts as the compose dropdown); skipWhitelist because
+      // a sequence is intentional outbound, not a reply-guarded send.
+      const result = await sendOutboundEmail({
+        supabase,
+        organizationId: e.organization_id,
+        to: e.contact_email,
+        fromName: fallbackFromName,
+        fromAddress: fallbackFromAddress,
+        mailAccountId: seqAccountMap.get(e.sequence_id) ?? null,
+        subject,
+        bodyHtml,
+        bodyText: bodyPlain,
+        partyId: e.party_id,
+        contactId: e.contact_id,
+        useSignature: true,
+        skipWhitelist: true,
+        aiGenerated: false,
+        externalData: {
+          source: "sequence",
+          sequence_id: e.sequence_id,
+          step_id: e.step_id,
+          enrollment_id: e.enrollment_id,
+          step_order: e.step_order,
+        },
+        traceLabel: "sequence",
+      });
+
+      if (result.ok && result.communicationId) {
+        await supabase
           .schema("app")
-          .from("email_signatures")
-          .select("html_content")
-          .eq("organization_id", e.organization_id)
-          .eq("is_default", true)
-          .maybeSingle();
-        sigHtml = (sigRow as { html_content: string | null } | null)?.html_content ?? null;
-        sigCache.set(e.organization_id, sigHtml);
-      }
-      if (sigHtml) {
-        bodyHtmlWithSig = `${bodyHtml}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sigHtml}`;
-      }
-
-      // Add tracking pixel
-      const trackedHtml = injectTrackingPixel(bodyHtmlWithSig, commId);
-
-      // Insert communications row (with full threading fields)
-      const { error: insErr } = await supabase
-        .schema("app")
-        .from("communications")
-        .insert({
-          id: commId,
-          organization_id: e.organization_id,
-          party_id: e.party_id,
-          contact_id: e.contact_id,
-          channel: "email",
-          direction: "outbound",
-          message_id: messageId,
-          in_reply_to: null,
-          thread_id: messageId,  // new thread
-          from_address: fromAddress,
-          from_name: fromName,
-          to_addresses: [e.contact_email],
-          cc_addresses: [],
-          bcc_addresses: [],
-          subject,
-          body_html: trackedHtml,
-          body_plain: bodyPlain,
-          status: "sending",
-          occurred_at: occurredAt,
-          template_id: e.step_template_id,
-          template_variables: {
+          .from("email_sequence_sends")
+          .insert({
             enrollment_id: e.enrollment_id,
             step_id: e.step_id,
-            step_order: e.step_order,
-            sequence_id: e.sequence_id,
-          },
-          external_data: {
-            source: "sequence",
-            sequence_id: e.sequence_id,
-            step_id: e.step_id,
-          },
-          ai_generated: false,
-          ai_processing_status: "skipped",
-          is_starred: false,
-          is_important: false,
-        });
+            communication_id: result.communicationId,
+            sent_at: new Date().toISOString(),
+            status: "sent",
+          } as never);
 
-      if (insErr) {
-        console.error("[processSequence] insert error", insErr);
-        errors.push({ enrollment_id: e.enrollment_id, error: `insert: ${insErr.message ?? JSON.stringify(insErr)}` });
+        await (rpc as any)(supabase, "advance_enrollment", {
+          p_enrollment_id: e.enrollment_id,
+          p_status: "sent",
+        });
+        sent++;
+      } else {
+        const msg = result.errorMessage ?? `send ${result.status}`;
+        console.error("[processSequence] send failed", e.enrollment_id, result.status, msg);
+        errors.push({ enrollment_id: e.enrollment_id, error: `${result.status}: ${msg}` });
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
           p_status: "failed",
         });
         failed++;
-        continue;
       }
-
-      // Send via SMTP with full headers
-      if (process.env.TABS_MAILER_USE_MOCK === "true") {
-        console.log(`[MOCK SEND] ${e.contact_email} - ${subject}`);
-      } else {
-        try {
-          await transporter.sendMail({
-            from: `${fromName} <${fromAddress}>`,
-            to: e.contact_email,
-            subject,
-            text: bodyPlain,
-            html: trackedHtml,
-            headers: {
-              "Message-ID": messageId,
-              "List-Unsubscribe": `<mailto:unsubscribe@marinebiogroup.com>`,
-              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-              "X-URM-Sequence-Id": e.sequence_id,
-              "X-URM-Step-Order": String(e.step_order),
-            },
-          });
-        } catch (smtpErr) {
-          const msg = smtpErr instanceof Error ? smtpErr.message : String(smtpErr);
-          console.error("[processSequence] SMTP error", smtpErr);
-          errors.push({ enrollment_id: e.enrollment_id, error: `smtp: ${msg}` });
-          await supabase
-            .schema("app")
-            .from("communications")
-            .update({
-              status: "failed",
-              bounce_reason: msg,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", commId);
-          await (rpc as any)(supabase, "advance_enrollment", {
-            p_enrollment_id: e.enrollment_id,
-            p_status: "failed",
-          });
-          failed++;
-          continue;
-        }
-      }
-
-      // Mark sent
-      const sentAt = new Date().toISOString();
-      await supabase
-        .schema("app")
-        .from("communications")
-        .update({
-          status: "sent",
-          sent_at: sentAt,
-          delivered_at: sentAt,
-          updated_at: sentAt,
-        })
-        .eq("id", commId);
-
-      // Record send in email_sequence_sends
-      await supabase
-        .schema("app")
-        .from("email_sequence_sends")
-        .insert({
-          enrollment_id: e.enrollment_id,
-          step_id: e.step_id,
-          communication_id: commId,
-          sent_at: sentAt,
-          status: "sent",
-        } as never);
-
-      // Advance enrollment
-      await (rpc as any)(supabase, "advance_enrollment", {
-        p_enrollment_id: e.enrollment_id,
-        p_status: "sent",
-      });
-
-      sent++;
     } catch (err) {
       const emsg = err instanceof Error ? `${err.message}` : String(err);
       console.error("[processSequence] unhandled error for enrollment", e.enrollment_id, err);
@@ -393,15 +216,4 @@ function plainToHtml(plain: string): string {
     .split(/\n\n+/)
     .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
     .join("\n");
-}
-
-function injectTrackingPixel(html: string, communicationId: string): string {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "https://app.marinebiogroup.com";
-  const pixel = `<img src="${baseUrl}/api/email/track/open/${communicationId}.gif" width="1" height="1" style="display:none" alt=""/>`;
-  // Insert before closing body tag, or append
-  if (html.includes("</body>")) {
-    return html.replace("</body>", `${pixel}</body>`);
-  }
-  return html + pixel;
 }
