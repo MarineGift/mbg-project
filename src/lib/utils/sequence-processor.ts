@@ -44,13 +44,21 @@ function resolveSeqSender(kind: SeqKind): SeqSender {
         name: process.env.MAIL_ROLE_DISPLAY_NAME || FROM_NAME,
       };
     case "shared":
+      // contact@. Falls back to the existing TABS_MAILER_* creds when
+      // MAIL_SHARED_* is unset (TABS_MAILER_USERNAME is already contact@).
       return {
-        user: process.env.MAIL_SHARED_USERNAME || "",
-        pass: process.env.MAIL_SHARED_PASSWORD || "",
-        name: process.env.MAIL_SHARED_DISPLAY_NAME || FROM_NAME,
+        user: process.env.MAIL_SHARED_USERNAME || process.env.TABS_MAILER_USERNAME || "",
+        pass: process.env.MAIL_SHARED_PASSWORD || process.env.TABS_MAILER_PASSWORD || "",
+        name:
+          process.env.MAIL_SHARED_DISPLAY_NAME ||
+          process.env.TABS_MAILER_FROM_NAME ||
+          FROM_NAME,
       };
     case "personal":
     default:
+      // Default sender = yunyoung.heo@ (MAIL_PERSONAL_*). No fallback: if these
+      // are unset the send fails (the guard below) rather than silently going
+      // out from a different address.
       return {
         user: process.env.MAIL_PERSONAL_USERNAME || "",
         pass: process.env.MAIL_PERSONAL_PASSWORD || "",

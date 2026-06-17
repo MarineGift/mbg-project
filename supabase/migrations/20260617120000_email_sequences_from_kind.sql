@@ -2,13 +2,13 @@
 -- 20260617120000_email_sequences_from_kind.sql
 -- Per-sequence sender routing for app.email_sequences.
 --
--- from_kind selects which MAIL_<KIND>_* mailbox the sequence-processor
--- authenticates as and sends From:
---   'role'     -> MAIL_ROLE_*     (e.g. ceo@marinebiogroup.com)
---   'personal' -> MAIL_PERSONAL_* (e.g. yunyoung.heo@marinebiogroup.com)
---   'shared'   -> MAIL_SHARED_*
+-- from_kind selects which mailbox the sequence-processor authenticates as
+-- and sends From:
+--   'personal' -> MAIL_PERSONAL_* (yunyoung.heo@marinebiogroup.com)  [DEFAULT]
+--   'role'     -> MAIL_ROLE_*     (ceo@marinebiogroup.com)
+--   'shared'   -> MAIL_SHARED_*   (falls back to TABS_MAILER_* = contact@marinebiogroup.com)
 --
--- Default 'personal' => existing/other sequences send from yunyoung.heo@.
+-- Default 'personal' => yunyoung.heo@.
 -- Investor cold-outreach sequence is set to 'role' => ceo@.
 --
 -- IMPORTANT: this file is a record only. Run it in the Supabase SQL Editor;
