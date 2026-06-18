@@ -130,6 +130,8 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 |---|---|---|---|
 | Batch 1 | `omya_smi_batch1` | 14 (SMI 12 + Omya 2) | `20260617150000_app_party_supply_links_omya_smi_batch1.sql` |
 | Batch 2 | `omya_smi_batch2` | 4 (SMI 3 + Omya 1) | `20260617160000_app_party_supply_links_omya_smi_batch2.sql` |
+| Batch 3 | `omya_smi_batch3` | 3 (SMI 3) | `20260617170000_app_party_supply_links_omya_smi_batch3.sql` |
+| Batch 4 | `omya_smi_batch4` | 14 (SMI 14) | `20260617180000_app_party_supply_links_omya_smi_batch4.sql` |
 
 폐기: `20260617140000_industry_*` (industry.* 참조, 실행 불가 — 제거 권장).
 
@@ -137,16 +139,22 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 
 **Batch 2 (4)**: Billerud Escanaba-Omya(on-site, 2013), Andhra Paper Rajahmundry-SM(2024, NewYield LO), Nine Dragons Beihai-SM(2024), Zhejiang Zhefeng Quzhou-SM(2024).
 
+**Batch 3 (3)**: Gold East Paper=APP Dagang-SM(active), Gold Huasheng=APP Suzhou-SM(active), Consolidated Papers Wisconsin Rapids-SM(historical; MTI first satellite 1986).
+
+**Batch 4 (14, MTI 2006 10-K Item 2)**: Sylvamo Ticonderoga, Gold East Zhenjiang, PT Indah Kiat Perawang 1&2, Nippon Paper Shiraoi, Mondi Merebank(Durban), Double A/Advance Agro Tha Toom, Navigator Figueira da Foz, Sylvamo Saillat, Metsa Board Aanekoski, Mondi SCP Ruzomberok, UPM Schongau, Suzano(SP) -- all active; Pixelle Androscoggin/Jay ME -- historical(closed 2023). Mills mapped to CURRENT owner; 2006 customer in extra_data.principal_customer_2006.
+
 ---
 
 ## 4. 다음 작업 백로그 (검증 후 입력)
 
 ### 검증 필요한 고확률 후보 (위치 추정 — 반드시 1차 출처 확인)
-- **APP China Dagang / Suzhou mill 신설 + SM 연결** — SM filler 변형(`China - Dagang/Tianjin`, `China - Suzhou`)은 있으나 대응 mill party 없음 → mill 신설 후 batch1 SMI 관계 연결.
+- ~~APP China Dagang / Suzhou~~ **완료(batch3)**: Dagang=Gold East Paper, Suzhou=Gold Huasheng Paper로 매핑(신설 불필요).
 - **JK Paper Songadh** (`JK Paper - Unit CPM (Songadh)`) ↔ SM `India - Songadh` — JK 2nd mill. satellite 여부 1차 출처 확인 필요.
 - 미국 SM satellite-at-mill (소유 변동·가동상태 확인 필수, active vs historical 주의):
-  - SM `USA - Rumford ME` ↔ ND Paper Rumford / SM `USA - Biron WI` ↔ ND Paper Biron / SM `USA - Spring Grove PA` ↔ Pixelle Spring Grove / SM `USA - Ticonderoga NY` ↔ Sylvamo Ticonderoga / SM `USA - Jay ME(Androscoggin)` ↔ Pixelle Androscoggin(2023 폐쇄→historical) / SM `USA - Wisconsin Rapids WI`(idled 2020→historical).
+  - 남은 미국 satellite(party·SM변형 매칭 + 상태확인 필요): SM `USA - Rumford ME` ↔ ND Paper Rumford / SM `USA - Biron WI` ↔ ND Paper Biron / SM `USA - Spring Grove PA` ↔ Pixelle Spring Grove. (Ticonderoga·Jay·Wisconsin Rapids는 완료.)
 - 유럽 SM 변형(Finland Lappeenranta/Oulu/Tervakoski/Äänekoski, France Saillat/Arches, Germany Stockstadt, Sweden Hallstavik, UK Kemsley, Portugal Figueira da Foz 등) ↔ 인접 mill.
+- **권장 방법(적용중)**: MTI 10-K **Item 2 'Properties'**(satellite 위치+주고객사)가 1차 출처. batch4가 2006 10-K(node/12751/html, 51개 satellite)에서 추출. **다음**: 최신 10-K의 Properties를 fetch해 (a) 2006 이후 신규 satellite 추가, (b) 현재 가동/폐쇄로 active↔historical 갱신.
+- **2006 10-K 잔여 satellite(미입력 — party 또는 SM변형 부재/상태확인 필요)**: US Courtland/Selma/Pensacola/Eastover/Franklin(IP), Jackson/Intl Falls/Wallula(Boise), Port Hudson/Camas(GP), Madison(closed)/Millinocket(Katahdin,closed)/Quinnesec(Verso)/Plymouth(Weyerhaeuser)/Chillicothe(Glatfelter)/West Carrollton(Appleton)/Cloquet(Sappi)/Kimberly(Stora,closed)/Park Falls(Flambeau)/Longview(Weyerhaeuser)/Ashdown(Domtar); Canada Dryden/St-Jerome/Windsor; Brazil Jacarei/Luiz Antonio(VCP→Suzano/Sylvamo); Finland Anjalankoski/Tervakoski; France Alizay/Docelles(closed); Mexico Chihuahua(Copamex); Poland Kwidzyn(→MM). 대부분 mill party는 있으나 전용 SM 변형이 없거나 상태확인 필요.
 - **Omya 추가 on-site**: Finch Paper(Glens Falls NY — mill party 없음, 신설 필요), 구 J.M. Huber on-site PCC(2005 Omya 인수, mill별 확인), 유럽 Omya PCC(Austria Golling 등).
 
 ### 절대 연결 금지 (제지사 satellite 아님 = SM 자체 광산/가공)
