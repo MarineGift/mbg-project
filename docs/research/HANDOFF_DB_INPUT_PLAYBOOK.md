@@ -131,6 +131,7 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 | Batch 1 | `omya_smi_batch1` | 14 (SMI 12 + Omya 2) | `20260617150000_app_party_supply_links_omya_smi_batch1.sql` |
 | Batch 2 | `omya_smi_batch2` | 4 (SMI 3 + Omya 1) | `20260617160000_app_party_supply_links_omya_smi_batch2.sql` |
 | Batch 3 | `omya_smi_batch3` | 3 (SMI 3) | `20260617170000_app_party_supply_links_omya_smi_batch3.sql` |
+| Batch 4 | `omya_smi_batch4` | 10 (SMI 10) | `20260617180000_app_party_supply_links_omya_smi_batch4.sql` |
 | Batch 4 | `omya_smi_batch4` | 14 (SMI 14) | `20260617180000_app_party_supply_links_omya_smi_batch4.sql` |
 
 폐기: `20260617140000_industry_*` (industry.* 참조, 실행 불가 — 제거 권장).
@@ -140,6 +141,8 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 **Batch 2 (4)**: Billerud Escanaba-Omya(on-site, 2013), Andhra Paper Rajahmundry-SM(2024, NewYield LO), Nine Dragons Beihai-SM(2024), Zhejiang Zhefeng Quzhou-SM(2024).
 
 **Batch 3 (3)**: Gold East Paper=APP Dagang-SM(active), Gold Huasheng=APP Suzhou-SM(active), Consolidated Papers Wisconsin Rapids-SM(historical; MTI first satellite 1986).
+
+**Batch 4 (10)** [출처: MTI 10-K FY2006 Item 2 Properties]: Sylvamo Ticonderoga, PT Indah Kiat Perawang(unit1+2), Nippon Paper Shiraoi, Mondi Merebank/Durban, Double A/Prachinburi, Navigator Figueira da Foz, Sylvamo Saillat, Metsa Board Aanekoski(medium), Mondi SCP Ruzomberok. (제외: UPM Schongau=Germany-Schongau 변형 없음; Gold East-Zhenjiang=batch3 중복)
 
 **Batch 4 (14, MTI 2006 10-K Item 2)**: Sylvamo Ticonderoga, Gold East Zhenjiang, PT Indah Kiat Perawang 1&2, Nippon Paper Shiraoi, Mondi Merebank(Durban), Double A/Advance Agro Tha Toom, Navigator Figueira da Foz, Sylvamo Saillat, Metsa Board Aanekoski, Mondi SCP Ruzomberok, UPM Schongau, Suzano(SP) -- all active; Pixelle Androscoggin/Jay ME -- historical(closed 2023). Mills mapped to CURRENT owner; 2006 customer in extra_data.principal_customer_2006.
 
@@ -152,7 +155,7 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 - **JK Paper Songadh** (`JK Paper - Unit CPM (Songadh)`) ↔ SM `India - Songadh` — JK 2nd mill. satellite 여부 1차 출처 확인 필요.
 - 미국 SM satellite-at-mill (소유 변동·가동상태 확인 필수, active vs historical 주의):
   - 남은 미국 satellite(party·SM변형 매칭 + 상태확인 필요): SM `USA - Rumford ME` ↔ ND Paper Rumford / SM `USA - Biron WI` ↔ ND Paper Biron / SM `USA - Spring Grove PA` ↔ Pixelle Spring Grove. (Ticonderoga·Jay·Wisconsin Rapids는 완료.)
-- 유럽 SM 변형(Finland Lappeenranta/Oulu/Tervakoski/Äänekoski, France Saillat/Arches, Germany Stockstadt, Sweden Hallstavik, UK Kemsley, Portugal Figueira da Foz 등) ↔ 인접 mill.
+- ~~Saillat, Figueira da Foz, Aanekoski, Ruzomberok~~ **완료(batch4)**. 남은 EU/intl 10-K(2006) satellite: **UPM Schongau**(Germany-Schongau 단위 SM 변형 신설 필요 또는 generic Germany 사용 결정), France Alizay/Docelles(M-real/UPM), Finland Anjalankoski(Myllykoski)/Tervakoski(Trierenberg), Poland Kwidzyn(IP), Mexico Chihuahua(Copamex), Brazil Jacarei/Luiz Antonio(Votorantim→현 Suzano), Canada Dryden/St.Jerome/Windsor. mill party + SM 변형 매칭 확인 후 입력.
 - **권장 방법(적용중)**: MTI 10-K **Item 2 'Properties'**(satellite 위치+주고객사)가 1차 출처. batch4가 2006 10-K(node/12751/html, 51개 satellite)에서 추출. **다음**: 최신 10-K의 Properties를 fetch해 (a) 2006 이후 신규 satellite 추가, (b) 현재 가동/폐쇄로 active↔historical 갱신.
 - **2006 10-K 잔여 satellite(미입력 — party 또는 SM변형 부재/상태확인 필요)**: US Courtland/Selma/Pensacola/Eastover/Franklin(IP), Jackson/Intl Falls/Wallula(Boise), Port Hudson/Camas(GP), Madison(closed)/Millinocket(Katahdin,closed)/Quinnesec(Verso)/Plymouth(Weyerhaeuser)/Chillicothe(Glatfelter)/West Carrollton(Appleton)/Cloquet(Sappi)/Kimberly(Stora,closed)/Park Falls(Flambeau)/Longview(Weyerhaeuser)/Ashdown(Domtar); Canada Dryden/St-Jerome/Windsor; Brazil Jacarei/Luiz Antonio(VCP→Suzano/Sylvamo); Finland Anjalankoski/Tervakoski; France Alizay/Docelles(closed); Mexico Chihuahua(Copamex); Poland Kwidzyn(→MM). 대부분 mill party는 있으나 전용 SM 변형이 없거나 상태확인 필요.
 - **Omya 추가 on-site**: Finch Paper(Glens Falls NY — mill party 없음, 신설 필요), 구 J.M. Huber on-site PCC(2005 Omya 인수, mill별 확인), 유럽 Omya PCC(Austria Golling 등).
