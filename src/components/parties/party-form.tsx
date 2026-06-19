@@ -220,9 +220,8 @@ export function PartyForm({
           priority: existingProfile?.priority ?? 'none',
           countryCode: existing.countryCode ?? '',
           region:
-            (existing.countryCode ?? '') === 'US'
-              ? 'Texas'
-              : existing.region ?? '',
+            existing.region ??
+            ((existing.countryCode ?? '') === 'US' ? 'Texas' : ''),
           city: existing.city ?? '',
           website: existing.website ?? '',
           industryTags: existing.industryTags.join(', '),
@@ -529,7 +528,7 @@ export function PartyForm({
                   onValueChange={(v) => {
                     const code = v === '__none' ? '' : v;
                     setValue('countryCode', code, { shouldDirty: true });
-                    if (code === 'US') {
+                    if (code === 'US' && !watch('region')) {
                       setValue('region', 'Texas', { shouldDirty: true });
                     }
                   }}
