@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, CalendarDays } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Sidebar } from './sidebar';
 import { TopBar } from './topbar';
@@ -43,6 +44,10 @@ export function AppShell({ email, displayName, children }: AppShellProps) {
             <Menu className="h-5 w-5" />
           </button>
           <span className="font-semibold text-sm truncate">{tCommon('appName')}</span>
+          <Link href="/calendar" aria-label="Calendar" className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium hover:bg-accent">
+            <CalendarDays className="h-5 w-5" />
+            <span>Calendar</span>
+          </Link>
         </div>
 
         {/* Desktop top bar */}
