@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition, useState } from 'react';
+import { useTransition, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,6 +20,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -39,28 +41,44 @@ import {
   createParty,
   updateParty,
   deleteParty,
-  updateInvestorPriority,
+  updateInvestorProfile,
 } from '@/lib/actions/parties';
 import { PARTY_TYPES, type PartyType, type PartyKind } from '@/types/party-type';
-import type { PartyDetail, PartyTier, InvestorPriority } from '@/types/party-detail';
+import type {
+  PartyDetail,
+  PartyTier,
+  PartyStatus,
+  InvestorPriority,
+  InvestorProfile,
+} from '@/types/party-detail';
+import type { InvestorTypeOption } from '@/lib/queries/investor-types';
 
 interface Props {
   /** existing party in edit mode; null + initial partyType in create mode */
   mode: 'create' | 'edit';
   initialPartyType: PartyType;
   existing?: PartyDetail | null;
-  /** current investor_profile.priority in edit mode (lives on PartyDetailFull, not PartyDetail) */
-  existingPriority?: InvestorPriority | null;
+  /** full investor_profile in edit mode (null when none / not an investor) */
+  existingProfile?: InvestorProfile | null;
+  /** app.investor_types options for the "Investor type" select */
+  investorTypeOptions?: InvestorTypeOption[];
 }
+
+const PARTY_STATUSES = [
+  'active',
+  'paused',
+  'closed_won',
+  'closed_lost',
+  'archived',
+] as const;
 
 const schema = z.object({
   name: z.string().min(1, 'Required').max(200),
   legalName: z.string().max(200).optional().or(z.literal('')),
-  // Tracks the canonical PARTY_TYPES list (types/party-type.ts) so new
-  // party types never require editing this schema by hand.
   partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
   partyKind: z.enum(['company', 'organization', 'individual', 'fund', 'government']),
   tier: z.enum(['tier_1', 'tier_2', 'tier_3', 'cold']),
+  status: z.enum(PARTY_STATUSES),
   // Investor priority lives on app.investor_profile; 'none' means unset (null).
   priority: z.enum(['none', 'high', 'medium', 'low']),
   countryCode: z
@@ -76,16 +94,25 @@ const schema = z.object({
     .max(500)
     .optional()
     .or(z.literal(''))
-    .refine(
-      (s) => !s || /^https?:\/\/.+/.test(s),
-      'Must start with http:// or https://',
-    ),
+    .refine((s) => !s || /^https?:\/\/.+/.test(s), 'Must start with http:// or https://'),
   industryTags: z.string().max(500).optional().or(z.literal('')),
   interestTags: z.string().max(500).optional().or(z.literal('')),
   source: z.string().max(120).optional().or(z.literal('')),
   notes: z.string().max(10_000).optional().or(z.literal('')),
   introKo: z.string().max(10_000).optional().or(z.literal('')),
   introEn: z.string().max(10_000).optional().or(z.literal('')),
+  // ---- investor profile (only persisted for investor parties) ----
+  investorType: z.string().max(64).optional().or(z.literal('')),
+  fundName: z.string().max(200).optional().or(z.literal('')),
+  fundSizeUsd: z.string().max(40).optional().or(z.literal('')),
+  aumUsd: z.string().max(40).optional().or(z.literal('')),
+  fundVintageYear: z.string().max(8).optional().or(z.literal('')),
+  ticketMinUsd: z.string().max(40).optional().or(z.literal('')),
+  ticketMaxUsd: z.string().max(40).optional().or(z.literal('')),
+  sectorFocus: z.string().max(500).optional().or(z.literal('')),
+  geographicFocus: z.string().max(500).optional().or(z.literal('')),
+  isLeadInvestor: z.boolean(),
+  isStrategic: z.boolean(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -99,6 +126,14 @@ const PARTY_KINDS: readonly PartyKind[] = [
 ] as const;
 
 const TIERS: readonly PartyTier[] = ['tier_1', 'tier_2', 'tier_3', 'cold'] as const;
+
+const STATUS_LABELS: Record<PartyStatus, string> = {
+  active: 'Active',
+  paused: 'Paused',
+  closed_won: 'Closed — won',
+  closed_lost: 'Closed — lost',
+  archived: 'Archived',
+};
 
 function parseTagsInput(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -114,7 +149,50 @@ function parseTagsInput(raw: string | undefined): string[] {
   return out;
 }
 
-export function PartyForm({ mode, initialPartyType, existing, existingPriority }: Props) {
+/** Parse a USD amount; accepts plain numbers, commas, and K/M/B suffixes. */
+function parseUsd(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const s = raw.trim().replace(/[$,\s]/g, '');
+  if (!s) return null;
+  const m = /^(-?\d+(?:\.\d+)?)([kKmMbB]?)$/.exec(s);
+  if (!m || m[1] === undefined) {
+    const n = Number(s);
+    return Number.isFinite(n) ? Math.round(n) : null;
+  }
+  let n = parseFloat(m[1]);
+  const suf = (m[2] ?? '').toLowerCase();
+  if (suf === 'k') n *= 1_000;
+  else if (suf === 'm') n *= 1_000_000;
+  else if (suf === 'b') n *= 1_000_000_000;
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function parseYear(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = parseInt(raw.trim(), 10);
+  return Number.isFinite(n) && n >= 1800 && n <= 2200 ? n : null;
+}
+
+function numToStr(n: number | null | undefined): string {
+  return n == null ? '' : String(n);
+}
+
+/** Small uppercase section heading, consistent with the detail cards. */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h3>
+  );
+}
+
+export function PartyForm({
+  mode,
+  initialPartyType,
+  existing,
+  existingProfile,
+  investorTypeOptions = [],
+}: Props) {
   const router = useRouter();
   const t = useTranslations('partyForm');
   const tPartyTypes = useTranslations('partyTypes');
@@ -137,7 +215,8 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
           partyType: existing.partyType,
           partyKind: 'company',
           tier: existing.tier ?? 'tier_3',
-          priority: existingPriority ?? 'none',
+          status: existing.status ?? 'active',
+          priority: existingProfile?.priority ?? 'none',
           countryCode: existing.countryCode ?? '',
           region: '',
           city: '',
@@ -148,6 +227,17 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
           notes: existing.notes ?? '',
           introKo: existing.introKo ?? '',
           introEn: existing.introEn ?? '',
+          investorType: existingProfile?.typeCode ?? '',
+          fundName: existingProfile?.fundName ?? '',
+          fundSizeUsd: numToStr(existingProfile?.fundSizeUsd),
+          aumUsd: numToStr(existingProfile?.aumUsd),
+          fundVintageYear: numToStr(existingProfile?.fundVintageYear),
+          ticketMinUsd: numToStr(existingProfile?.ticketMinUsd),
+          ticketMaxUsd: numToStr(existingProfile?.ticketMaxUsd),
+          sectorFocus: (existingProfile?.sectorFocus ?? []).join(', '),
+          geographicFocus: (existingProfile?.geographicFocus ?? []).join(', '),
+          isLeadInvestor: existingProfile?.isLeadInvestor ?? false,
+          isStrategic: existingProfile?.isStrategic ?? false,
         }
       : {
           name: '',
@@ -155,6 +245,7 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
           partyType: initialPartyType,
           partyKind: 'company',
           tier: 'tier_3',
+          status: 'active',
           priority: 'none',
           countryCode: '',
           region: '',
@@ -166,13 +257,29 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
           notes: '',
           introKo: '',
           introEn: '',
+          investorType: '',
+          fundName: '',
+          fundSizeUsd: '',
+          aumUsd: '',
+          fundVintageYear: '',
+          ticketMinUsd: '',
+          ticketMaxUsd: '',
+          sectorFocus: '',
+          geographicFocus: '',
+          isLeadInvestor: false,
+          isStrategic: false,
         },
   });
 
   const selectedPartyType = watch('partyType');
   const selectedPartyKind = watch('partyKind');
   const selectedTier = watch('tier');
+  const selectedStatus = watch('status');
   const selectedPriority = watch('priority');
+  const selectedInvestorType = watch('investorType');
+  const isLead = watch('isLeadInvestor');
+  const isStrategic = watch('isStrategic');
+  const isInvestor = selectedPartyType === 'investor';
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -185,6 +292,7 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
         partyType: values.partyType,
         partyKind: values.partyKind,
         tier: values.tier,
+        status: values.status,
         countryCode: values.countryCode || null,
         region: values.region || null,
         city: values.city || null,
@@ -197,16 +305,24 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
         introEn: values.introEn || null,
       };
 
-      // Investor priority lives on app.investor_profile, persisted via its own
-      // action (UPDATE-first, INSERT minimal otherwise). Only for investor parties.
-      const persistPriority = async (partyId: string) => {
+      // Full investor profile lives on app.investor_profile (its own action).
+      const persistProfile = async (partyId: string) => {
         if (values.partyType !== 'investor') return;
-        const pr: InvestorPriority | null =
-          values.priority === 'none' ? null : values.priority;
-        const res = await updateInvestorPriority({
+        const res = await updateInvestorProfile({
           partyId,
           partyType: values.partyType,
-          priority: pr,
+          priority: values.priority === 'none' ? null : values.priority,
+          investorTypeCode: values.investorType || null,
+          fundName: values.fundName || null,
+          fundSizeUsd: parseUsd(values.fundSizeUsd),
+          aumUsd: parseUsd(values.aumUsd),
+          fundVintageYear: parseYear(values.fundVintageYear),
+          ticketMinUsd: parseUsd(values.ticketMinUsd),
+          ticketMaxUsd: parseUsd(values.ticketMaxUsd),
+          sectorFocus: parseTagsInput(values.sectorFocus),
+          geographicFocus: parseTagsInput(values.geographicFocus),
+          isLeadInvestor: values.isLeadInvestor,
+          isStrategic: values.isStrategic,
         });
         if (!res.ok) toast.error(res.errorMessage ?? t('saveFailed'));
       };
@@ -214,7 +330,7 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
       if (mode === 'create') {
         const result = await createParty(payload);
         if (result.ok && result.partyId) {
-          await persistPriority(result.partyId);
+          await persistProfile(result.partyId);
           toast.success(t('created'));
           router.push(`/${values.partyType}/parties/${result.partyId}`);
         } else {
@@ -223,7 +339,7 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
       } else if (existing) {
         const result = await updateParty({ partyId: existing.id, ...payload });
         if (result.ok) {
-          await persistPriority(existing.id);
+          await persistProfile(existing.id);
           toast.success(t('updated'));
           router.push(`/${values.partyType}/parties/${existing.id}`);
         } else {
@@ -253,226 +369,412 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
             {mode === 'create' ? t('createDescription') : t('editDescription')}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="party-name">{t('name')} *</Label>
-            <Input
-              id="party-name"
-              {...register('name')}
-              disabled={isPending}
-              aria-invalid={errors.name ? 'true' : undefined}
-            />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
-            )}
-          </div>
 
-          {/* PartyType + PartyKind + Tier */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="party-type">{t('partyType')} *</Label>
-              <Select
-                value={selectedPartyType}
-                onValueChange={(v) => setValue('partyType', v as PartyType, { shouldDirty: true })}
-                disabled={isPending}
-              >
-                <SelectTrigger id="party-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PARTY_TYPES.map((pt) => (
-                    <SelectItem key={pt} value={pt}>
-                      {tPartyTypes(pt)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="party-kind">{t('partyKind')}</Label>
-              <Select
-                value={selectedPartyKind}
-                onValueChange={(v) => setValue('partyKind', v as PartyKind, { shouldDirty: true })}
-                disabled={isPending}
-              >
-                <SelectTrigger id="party-kind">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PARTY_KINDS.map((pk) => (
-                    <SelectItem key={pk} value={pk}>
-                      {tPartyKinds(pk)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="party-tier">{t('tier')}</Label>
-              <Select
-                value={selectedTier}
-                onValueChange={(v) => setValue('tier', v as PartyTier, { shouldDirty: true })}
-                disabled={isPending}
-              >
-                <SelectTrigger id="party-tier">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIERS.map((tier) => (
-                    <SelectItem key={tier} value={tier}>
-                      {t(`tiers.${tier}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <CardContent className="space-y-8">
+          {/* ===================== Basic information ===================== */}
+          <section className="space-y-4">
+            <SectionLabel>Basic information</SectionLabel>
 
-          {/* Investor Priority (only relevant for investor parties) */}
-          {selectedPartyType === 'investor' && (
-            <div className="space-y-2">
-              <Label htmlFor="party-priority">{t('priority')}</Label>
-              <Select
-                value={selectedPriority}
-                onValueChange={(v) =>
-                  setValue('priority', v as FormValues['priority'], { shouldDirty: true })
-                }
-                disabled={isPending}
-              >
-                <SelectTrigger id="party-priority">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t('priorities.none')}</SelectItem>
-                  <SelectItem value="high">{t('priorities.high')}</SelectItem>
-                  <SelectItem value="medium">{t('priorities.medium')}</SelectItem>
-                  <SelectItem value="low">{t('priorities.low')}</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+              {/* Name */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="party-name">{t('name')} *</Label>
+                <Input
+                  id="party-name"
+                  {...register('name')}
+                  disabled={isPending}
+                  aria-invalid={errors.name ? 'true' : undefined}
+                />
+                {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              </div>
+
+              {/* Type / Entity type / Tier */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2">
+                <div className="space-y-2">
+                  <Label htmlFor="party-type">{t('partyType')} *</Label>
+                  <Select
+                    value={selectedPartyType}
+                    onValueChange={(v) => setValue('partyType', v as PartyType, { shouldDirty: true })}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id="party-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PARTY_TYPES.map((pt) => (
+                        <SelectItem key={pt} value={pt}>
+                          {tPartyTypes(pt)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="party-kind">{t('partyKind')}</Label>
+                  <Select
+                    value={selectedPartyKind}
+                    onValueChange={(v) => setValue('partyKind', v as PartyKind, { shouldDirty: true })}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id="party-kind">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PARTY_KINDS.map((pk) => (
+                        <SelectItem key={pk} value={pk}>
+                          {tPartyKinds(pk)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="party-tier">{t('tier')}</Label>
+                  <Select
+                    value={selectedTier}
+                    onValueChange={(v) => setValue('tier', v as PartyTier, { shouldDirty: true })}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id="party-tier">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIERS.map((tier) => (
+                        <SelectItem key={tier} value={tier}>
+                          {t(`tiers.${tier}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Legal name */}
+              <div className="space-y-2">
+                <Label htmlFor="party-legal">{t('legalName')}</Label>
+                <Input
+                  id="party-legal"
+                  {...register('legalName')}
+                  disabled={isPending}
+                  placeholder={t('legalNamePlaceholder')}
+                />
+              </div>
+
+              {/* Status */}
+              <div className="space-y-2">
+                <Label htmlFor="party-status">Status</Label>
+                <Select
+                  value={selectedStatus}
+                  onValueChange={(v) => setValue('status', v as PartyStatus, { shouldDirty: true })}
+                  disabled={isPending}
+                >
+                  <SelectTrigger id="party-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PARTY_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {STATUS_LABELS[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Website */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="party-website">{t('website')}</Label>
+                <Input
+                  id="party-website"
+                  {...register('website')}
+                  disabled={isPending}
+                  placeholder="https://example.com"
+                  aria-invalid={errors.website ? 'true' : undefined}
+                />
+                {errors.website && (
+                  <p className="text-xs text-destructive">{errors.website.message}</p>
+                )}
+              </div>
+
+              {/* Source */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="party-source">{t('source')}</Label>
+                <Input
+                  id="party-source"
+                  {...register('source')}
+                  disabled={isPending}
+                  placeholder={t('sourcePlaceholder')}
+                />
+              </div>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* ===================== Location ===================== */}
+          <section className="space-y-4">
+            <SectionLabel>Location</SectionLabel>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="party-country">{t('countryCode')}</Label>
+                <Input
+                  id="party-country"
+                  {...register('countryCode')}
+                  disabled={isPending}
+                  placeholder="KR"
+                  maxLength={2}
+                  aria-invalid={errors.countryCode ? 'true' : undefined}
+                />
+                {errors.countryCode && (
+                  <p className="text-xs text-destructive">{errors.countryCode.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-region">{t('region')}</Label>
+                <Input id="party-region" {...register('region')} disabled={isPending} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-city">{t('city')}</Label>
+                <Input id="party-city" {...register('city')} disabled={isPending} />
+              </div>
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* ===================== Tags ===================== */}
+          <section className="space-y-4">
+            <SectionLabel>Tags</SectionLabel>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="party-industry-tags">{t('industryTags')}</Label>
+                <Input
+                  id="party-industry-tags"
+                  {...register('industryTags')}
+                  disabled={isPending}
+                  placeholder={t('industryTagsPlaceholder')}
+                />
+                <p className="text-xs text-muted-foreground">{t('industryTagsHint')}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-interest-tags">{t('interestTags')}</Label>
+                <Input
+                  id="party-interest-tags"
+                  {...register('interestTags')}
+                  disabled={isPending}
+                  placeholder={t('interestTagsPlaceholder')}
+                />
+                <p className="text-xs text-muted-foreground">{t('interestTagsHint')}</p>
+              </div>
+            </div>
+          </section>
+
+          {/* ===================== Investor profile ===================== */}
+          {isInvestor && (
+            <>
+              <Separator />
+              <section className="space-y-4">
+                <SectionLabel>Investor profile</SectionLabel>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                  {/* Priority */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-priority">{t('priority')}</Label>
+                    <Select
+                      value={selectedPriority}
+                      onValueChange={(v) =>
+                        setValue('priority', v as FormValues['priority'], { shouldDirty: true })
+                      }
+                      disabled={isPending}
+                    >
+                      <SelectTrigger id="party-priority">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('priorities.none')}</SelectItem>
+                        <SelectItem value="high">{t('priorities.high')}</SelectItem>
+                        <SelectItem value="medium">{t('priorities.medium')}</SelectItem>
+                        <SelectItem value="low">{t('priorities.low')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Investor type */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-investor-type">Investor type</Label>
+                    <Select
+                      value={selectedInvestorType || '__none'}
+                      onValueChange={(v) =>
+                        setValue('investorType', v === '__none' ? '' : v, { shouldDirty: true })
+                      }
+                      disabled={isPending}
+                    >
+                      <SelectTrigger id="party-investor-type">
+                        <SelectValue placeholder="Select a type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">— Not set —</SelectItem>
+                        {investorTypeOptions.map((opt) => (
+                          <SelectItem key={opt.code} value={opt.code}>
+                            {opt.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Fund name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-fund-name">Fund name</Label>
+                    <Input id="party-fund-name" {...register('fundName')} disabled={isPending} />
+                  </div>
+
+                  {/* Vintage year */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-vintage">Vintage year</Label>
+                    <Input
+                      id="party-vintage"
+                      {...register('fundVintageYear')}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      placeholder="2009"
+                    />
+                  </div>
+
+                  {/* Fund size */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-fund-size">Fund size (USD)</Label>
+                    <Input
+                      id="party-fund-size"
+                      {...register('fundSizeUsd')}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      placeholder="e.g. 150M or 150000000"
+                    />
+                  </div>
+
+                  {/* AUM */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-aum">AUM (USD)</Label>
+                    <Input
+                      id="party-aum"
+                      {...register('aumUsd')}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      placeholder="e.g. 150M or 150000000"
+                    />
+                  </div>
+
+                  {/* Ticket min / max */}
+                  <div className="space-y-2">
+                    <Label htmlFor="party-ticket-min">Ticket min (USD)</Label>
+                    <Input
+                      id="party-ticket-min"
+                      {...register('ticketMinUsd')}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      placeholder="e.g. 1M"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="party-ticket-max">Ticket max (USD)</Label>
+                    <Input
+                      id="party-ticket-max"
+                      {...register('ticketMaxUsd')}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      placeholder="e.g. 10M"
+                    />
+                  </div>
+
+                  {/* Sector focus */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="party-sector-focus">Sector focus</Label>
+                    <Input
+                      id="party-sector-focus"
+                      {...register('sectorFocus')}
+                      disabled={isPending}
+                      placeholder="materials, industrial, healthcare, sustainability"
+                    />
+                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                  </div>
+
+                  {/* Geographic focus */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="party-geo-focus">Geographic focus</Label>
+                    <Input
+                      id="party-geo-focus"
+                      {...register('geographicFocus')}
+                      disabled={isPending}
+                      placeholder="US, Global"
+                    />
+                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                  </div>
+
+                  {/* Lead / Strategic toggles */}
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <Label htmlFor="party-lead" className="cursor-pointer">
+                      Lead investor
+                    </Label>
+                    <Switch
+                      id="party-lead"
+                      checked={isLead}
+                      onCheckedChange={(v) => setValue('isLeadInvestor', v, { shouldDirty: true })}
+                      disabled={isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <Label htmlFor="party-strategic" className="cursor-pointer">
+                      Strategic investor
+                    </Label>
+                    <Switch
+                      id="party-strategic"
+                      checked={isStrategic}
+                      onCheckedChange={(v) => setValue('isStrategic', v, { shouldDirty: true })}
+                      disabled={isPending}
+                    />
+                  </div>
+                </div>
+              </section>
+            </>
           )}
 
-          {/* Legal name */}
-          <div className="space-y-2">
-            <Label htmlFor="party-legal">{t('legalName')}</Label>
-            <Input
-              id="party-legal"
-              {...register('legalName')}
-              disabled={isPending}
-              placeholder={t('legalNamePlaceholder')}
-            />
-          </div>
+          <Separator />
 
-          {/* Location grid */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="party-country">{t('countryCode')}</Label>
-              <Input
-                id="party-country"
-                {...register('countryCode')}
-                disabled={isPending}
-                placeholder="KR"
-                maxLength={2}
-                aria-invalid={errors.countryCode ? 'true' : undefined}
-              />
-              {errors.countryCode && (
-                <p className="text-xs text-destructive">{errors.countryCode.message}</p>
-              )}
+          {/* ===================== Introduction ===================== */}
+          <section className="space-y-4">
+            <SectionLabel>Introduction</SectionLabel>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="party-intro-ko">{t('introKo')}</Label>
+                <Textarea
+                  id="party-intro-ko"
+                  {...register('introKo')}
+                  disabled={isPending}
+                  rows={6}
+                  placeholder={t('introKoPlaceholder')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-intro-en">{t('introEn')}</Label>
+                <Textarea
+                  id="party-intro-en"
+                  {...register('introEn')}
+                  disabled={isPending}
+                  rows={6}
+                  placeholder={t('introEnPlaceholder')}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground md:col-span-2">{t('introHint')}</p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="party-region">{t('region')}</Label>
-              <Input id="party-region" {...register('region')} disabled={isPending} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="party-city">{t('city')}</Label>
-              <Input id="party-city" {...register('city')} disabled={isPending} />
-            </div>
-          </div>
+          </section>
 
-          {/* Website */}
-          <div className="space-y-2">
-            <Label htmlFor="party-website">{t('website')}</Label>
-            <Input
-              id="party-website"
-              {...register('website')}
-              disabled={isPending}
-              placeholder="https://example.com"
-              aria-invalid={errors.website ? 'true' : undefined}
-            />
-            {errors.website && (
-              <p className="text-xs text-destructive">{errors.website.message}</p>
-            )}
-          </div>
+          <Separator />
 
-          {/* Industry Tags */}
-          <div className="space-y-2">
-            <Label htmlFor="party-industry-tags">{t('industryTags')}</Label>
-            <Input
-              id="party-industry-tags"
-              {...register('industryTags')}
-              disabled={isPending}
-              placeholder={t('industryTagsPlaceholder')}
-            />
-            <p className="text-xs text-muted-foreground">{t('industryTagsHint')}</p>
-          </div>
-
-          {/* Interest Tags */}
-          <div className="space-y-2">
-            <Label htmlFor="party-interest-tags">{t('interestTags')}</Label>
-            <Input
-              id="party-interest-tags"
-              {...register('interestTags')}
-              disabled={isPending}
-              placeholder={t('interestTagsPlaceholder')}
-            />
-            <p className="text-xs text-muted-foreground">{t('interestTagsHint')}</p>
-          </div>
-
-          {/* Source */}
-          <div className="space-y-2">
-            <Label htmlFor="party-source">{t('source')}</Label>
-            <Input
-              id="party-source"
-              {...register('source')}
-              disabled={isPending}
-              placeholder={t('sourcePlaceholder')}
-            />
-          </div>
-
-          {/* Introduction (KO / EN) - shown on the party Overview Introduction card */}
-          <div className="space-y-2">
-            <Label htmlFor="party-intro-ko">{t('introKo')}</Label>
-            <Textarea
-              id="party-intro-ko"
-              {...register('introKo')}
-              disabled={isPending}
-              rows={4}
-              placeholder={t('introKoPlaceholder')}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="party-intro-en">{t('introEn')}</Label>
-            <Textarea
-              id="party-intro-en"
-              {...register('introEn')}
-              disabled={isPending}
-              rows={4}
-              placeholder={t('introEnPlaceholder')}
-            />
-            <p className="text-xs text-muted-foreground">{t('introHint')}</p>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="party-notes">{t('notes')}</Label>
-            <Textarea
-              id="party-notes"
-              {...register('notes')}
-              disabled={isPending}
-              rows={5}
-            />
-          </div>
+          {/* ===================== Notes ===================== */}
+          <section className="space-y-2">
+            <SectionLabel>{t('notes')}</SectionLabel>
+            <Textarea id="party-notes" {...register('notes')} disabled={isPending} rows={5} />
+          </section>
         </CardContent>
 
         <CardFooter className="flex justify-between">
@@ -487,7 +789,7 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
               {t('delete')}
             </Button>
           )}
-          <div className="flex gap-2 ml-auto">
+          <div className="ml-auto flex gap-2">
             <Button
               type="button"
               variant="outline"
@@ -519,15 +821,15 @@ export function PartyForm({ mode, initialPartyType, existing, existingPriority }
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowDelete(false)}
-                disabled={isPending}
-              >
+              <Button variant="outline" onClick={() => setShowDelete(false)} disabled={isPending}>
                 {t('cancel')}
               </Button>
               <Button variant="destructive" onClick={onDelete} disabled={isPending}>
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
                 {t('deleteConfirm')}
               </Button>
             </DialogFooter>

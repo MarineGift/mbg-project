@@ -9,6 +9,7 @@
 
 import { notFound } from 'next/navigation';
 import { PartyForm } from '@/components/parties/party-form';
+import { fetchInvestorTypeOptions } from '@/lib/queries/investor-types';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import type { PartyTypeCode } from '@/types/ai';
 
@@ -37,9 +38,16 @@ export default async function NewPartyPage({ params }: PageProps) {
   // auth check (redirect to /login if not authenticated)
   await requireAuthOrRedirect();
 
+  const investorTypeOptions =
+    module === 'investor' ? await fetchInvestorTypeOptions() : [];
+
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <PartyForm mode="create" initialPartyType={module} />
+    <div className="mx-auto max-w-5xl p-6">
+      <PartyForm
+        mode="create"
+        initialPartyType={module}
+        investorTypeOptions={investorTypeOptions}
+      />
     </div>
   );
 }

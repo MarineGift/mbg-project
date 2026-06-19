@@ -216,8 +216,17 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
   return { ok: true, partyId };
 }
 
+const PARTY_STATUSES = [
+  'active',
+  'paused',
+  'closed_won',
+  'closed_lost',
+  'archived',
+] as const;
+
 const updateSchema = partySchema.extend({
   partyId: z.string().uuid(),
+  status: z.enum(PARTY_STATUSES).optional(),
 });
 
 export async function updateParty(
@@ -280,6 +289,11 @@ export async function updateParty(
     intro_en: parsed.data.introEn?.trim() || null,
     updated_by: auth.userId,
   };
+
+  // status lives on app.parties (PartyStatus CHECK); only write when provided.
+  if (parsed.data.status) {
+    updates.status = parsed.data.status;
+  }
 
   const { error, data } = await supabase
     .schema('app')
@@ -371,6 +385,124 @@ export async function updateInvestorPriority(
       } as never);
     if (insErr) {
       console.error('[parties.updateInvestorPriority] insert error:', insErr);
+      return { ok: false, errorCode: 'database', errorMessage: insErr.message };
+    }
+  }
+
+  revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);
+  return { ok: true, partyId: parsed.data.partyId };
+}
+
+/* ============================================================
+ * Investor profile (full) - app.investor_profile
+ * ============================================================ */
+
+const investorProfileSchema = z.object({
+  partyId: z.string().uuid(),
+  partyType: z.enum(PARTY_TYPES as unknown as [PartyType, ...PartyType[]]),
+  priority: z.enum(['high', 'medium', 'low']).nullable(),
+  /** investor_types.code; null = leave the type unchanged */
+  investorTypeCode: z.string().max(64).nullable(),
+  fundName: z.string().max(200).nullable(),
+  fundSizeUsd: z.number().nonnegative().nullable(),
+  aumUsd: z.number().nonnegative().nullable(),
+  fundVintageYear: z.number().int().min(1800).max(2200).nullable(),
+  ticketMinUsd: z.number().nonnegative().nullable(),
+  ticketMaxUsd: z.number().nonnegative().nullable(),
+  sectorFocus: z.array(z.string().max(64)).max(50),
+  geographicFocus: z.array(z.string().max(64)).max(50),
+  isLeadInvestor: z.boolean(),
+  isStrategic: z.boolean(),
+});
+
+/**
+ * Upsert the full investor profile (app.investor_profile, 1:1 by party_id).
+ * UPDATE-first then minimal INSERT, matching updateInvestorPriority so it works
+ * whether or not a profile row already exists. sector_focus / geographic_focus
+ * are plain text[] columns. investor_type_id is resolved from investorTypeCode
+ * (only written when a non-null code is supplied, so an empty selection never
+ * nulls an existing FK by accident).
+ */
+export async function updateInvestorProfile(
+  input: z.input<typeof investorProfileSchema>,
+): Promise<PartyActionResult> {
+  let auth: AuthContext;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, errorCode: 'unauthorized' };
+  }
+  const parsed = investorProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errorCode: 'validation',
+      errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input',
+    };
+  }
+  // Only investor parties carry an investor_profile row.
+  if (parsed.data.partyType !== 'investor') {
+    return { ok: true, partyId: parsed.data.partyId };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Resolve investor type code -> id (optional).
+  let investorTypeId: number | null = null;
+  if (parsed.data.investorTypeCode) {
+    const { data: itRow } = await supabase
+      .schema('app')
+      .from('investor_types' as never)
+      .select('id')
+      .eq('code' as never, parsed.data.investorTypeCode)
+      .maybeSingle();
+    if (itRow) investorTypeId = (itRow as { id: number }).id;
+  }
+
+  const fields: Record<string, unknown> = {
+    priority: parsed.data.priority,
+    fund_name: parsed.data.fundName,
+    fund_size_usd: parsed.data.fundSizeUsd,
+    aum_usd: parsed.data.aumUsd,
+    fund_vintage_year: parsed.data.fundVintageYear,
+    ticket_min_usd: parsed.data.ticketMinUsd,
+    ticket_max_usd: parsed.data.ticketMaxUsd,
+    sector_focus: parsed.data.sectorFocus,
+    geographic_focus: parsed.data.geographicFocus,
+    is_lead_investor: parsed.data.isLeadInvestor,
+    is_strategic: parsed.data.isStrategic,
+    updated_by: auth.userId,
+  };
+  // Write the FK only when the user actually picked a type.
+  if (parsed.data.investorTypeCode) {
+    fields.investor_type_id = investorTypeId;
+  }
+
+  const { data: updated, error: updErr } = await supabase
+    .schema('app')
+    .from('investor_profile' as never)
+    .update(fields as never)
+    .eq('party_id' as never, parsed.data.partyId)
+    .select('party_id');
+
+  if (updErr) {
+    console.error('[parties.updateInvestorProfile] update error:', updErr);
+    return { ok: false, errorCode: 'database', errorMessage: updErr.message };
+  }
+
+  if (!updated || (updated as unknown[]).length === 0) {
+    const insertRow: Record<string, unknown> = {
+      ...fields,
+      party_id: parsed.data.partyId,
+      organization_id: auth.organizationId,
+      created_by: auth.userId,
+    };
+    const { error: insErr } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .insert(insertRow as never);
+    if (insErr) {
+      console.error('[parties.updateInvestorProfile] insert error:', insErr);
       return { ok: false, errorCode: 'database', errorMessage: insErr.message };
     }
   }

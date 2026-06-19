@@ -10,6 +10,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { fetchPartyDetail } from '@/lib/queries/party-detail';
+import { fetchInvestorTypeOptions } from '@/lib/queries/investor-types';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { PartyForm } from '@/components/parties/party-form';
 import type { PartyTypeCode } from '@/types/ai';
@@ -49,13 +50,18 @@ export default async function EditPartyPage({ params }: PageProps) {
     redirect(`/${full.party.partyType}/parties/${id}/edit`);
   }
 
+  // investor type options only needed when editing an investor party
+  const investorTypeOptions =
+    full.party.partyType === 'investor' ? await fetchInvestorTypeOptions() : [];
+
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="mx-auto max-w-5xl p-6">
       <PartyForm
         mode="edit"
         initialPartyType={full.party.partyType}
         existing={full.party}
-        existingPriority={full.investorProfile?.priority ?? null}
+        existingProfile={full.investorProfile}
+        investorTypeOptions={investorTypeOptions}
       />
     </div>
   );
