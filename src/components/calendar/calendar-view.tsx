@@ -187,6 +187,32 @@ function WeekGrid({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Day header (weekday + date) */}
+      <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
+        <div />
+        {days.map((day, i) => {
+          const dh = isSameDay(day, today)
+          return (
+            <div key={i} className="border-l border-border px-1 py-1 text-center">
+              <div className={cn(
+                'text-[11px] uppercase',
+                day.getDay() === 0 ? 'text-red-500'
+                  : day.getDay() === 6 ? 'text-blue-500'
+                  : 'text-muted-foreground',
+              )}>
+                {WEEKDAYS[day.getDay()]}
+              </div>
+              <div className={cn(
+                'mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-sm',
+                dh ? 'bg-blue-600 text-white font-semibold' : 'text-foreground',
+              )}>
+                {day.getDate()}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
       {/* All-day row */}
       <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
         <div className="text-xs text-muted-foreground p-1 pt-2">All day</div>

@@ -1,5 +1,6 @@
 // src/lib/queries/calendar.ts  (v2 - includes meetings)
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 
 // ─────────────────────────────────────────────
 // Types
@@ -182,11 +183,18 @@ export interface CreateCalendarEventInput {
 }
 
 export async function createCalendarEvent(input: CreateCalendarEventInput) {
+  const auth = await requireAuth()
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase
     .schema('app')
     .from('calendar_events' as never)
-    .insert({ ...input, source: 'internal', is_all_day: input.is_all_day ?? false } as never)
+    .insert({
+      ...input,
+      source: 'internal',
+      is_all_day: input.is_all_day ?? false,
+      organization_id: auth.organizationId,
+      user_id: auth.userId,
+    } as never)
     .select()
     .single()
   if (error) throw error
