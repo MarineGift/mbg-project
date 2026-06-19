@@ -204,7 +204,10 @@ export async function processSequence(sequenceId?: string | null): Promise<{
     }
   }
 
-  return { processed: enrollments.length, sent, failed, skipped, errors };
+  if (errors.length > 0) {
+    console.error(`[processSequence] ${errors.length} enrollment error(s):`, errors);
+  }
+  return { processed: enrollments.length, sent, failed, skipped };
 }
 
 // ============================================================
