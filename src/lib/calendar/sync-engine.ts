@@ -90,10 +90,35 @@ async function syncGoogle(conn: DecryptedConnection): Promise<number> {
   }
 
   const isIncremental = !!conn.sync_token
+  const fullSyncTimeMin = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
   const { events, syncToken } = await fetchAllGoogleEvents({
     accessToken: token,
     syncToken:   conn.sync_token ?? undefined,
+    timeMin:     isIncremental ? undefined : fullSyncTimeMin,
   })
+
+  // Deletion reconciliation (full sync only): mark local google events that
+  // Google did NOT return as cancelled (the calendar query hides cancelled).
+  if (!isIncremental) {
+    const sbDel = serviceClient()
+    const returnedIds = new Set(events.map(e => e.id))
+    const { data: localRows } = await sbDel
+      .from('calendar_events')
+      .select('id, external_id')
+      .eq('connection_id', conn.id)
+      .eq('source', 'google')
+      .neq('status', 'cancelled')
+      .gte('start_at', fullSyncTimeMin)
+    const toCancel = (localRows ?? [])
+      .filter(r => !returnedIds.has((r as { external_id: string | null }).external_id ?? ''))
+      .map(r => (r as { id: string }).id)
+    for (let i = 0; i < toCancel.length; i += 200) {
+      await sbDel
+        .from('calendar_events')
+        .update({ status: 'cancelled' })
+        .in('id', toCancel.slice(i, i + 200))
+    }
+  }
 
   if (events.length === 0) {
     await updateSyncState(conn.id, { syncToken, status: 'success' })
