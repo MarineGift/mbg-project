@@ -220,8 +220,9 @@ export function PartyForm({
           priority: existingProfile?.priority ?? 'none',
           countryCode: existing.countryCode ?? '',
           region:
-            existing.region ??
-            ((existing.countryCode ?? '') === 'US' ? 'Texas' : ''),
+            (existing.countryCode ?? '') === 'US'
+              ? 'Texas'
+              : existing.region ?? '',
           city: existing.city ?? '',
           website: existing.website ?? '',
           industryTags: existing.industryTags.join(', '),
@@ -525,9 +526,13 @@ export function PartyForm({
                 <Label htmlFor="party-country">Country</Label>
                 <Select
                   value={selectedCountry || '__none'}
-                  onValueChange={(v) =>
-                    setValue('countryCode', v === '__none' ? '' : v, { shouldDirty: true })
-                  }
+                  onValueChange={(v) => {
+                    const code = v === '__none' ? '' : v;
+                    setValue('countryCode', code, { shouldDirty: true });
+                    if (code === 'US') {
+                      setValue('region', 'Texas', { shouldDirty: true });
+                    }
+                  }}
                   disabled={isPending}
                 >
                   <SelectTrigger id="party-country">
