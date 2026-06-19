@@ -1,6 +1,7 @@
 // src/lib/queries/calendar.ts  (v2 - includes meetings)
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
+import { z } from 'zod'
 
 // ─────────────────────────────────────────────
 // Types
@@ -8,6 +9,12 @@ import { requireAuth } from '@/lib/auth'
 
 export type CalendarItemType = 'meeting' | 'event' | 'task' | 'communication'
 export type CalendarEventSource = 'internal' | 'google' | 'microsoft'
+
+export interface CalendarAttendee {
+  email: string
+  name?: string
+  [key: string]: unknown
+}
 
 export interface CalendarItem {
   id:            string
@@ -27,6 +34,13 @@ export interface CalendarItem {
   location?:     string | null
   // meeting-specific
   meeting_type?: string
+  // event edit fields (Phase 1)
+  description?:   string | null
+  visibility?:    string | null
+  attendees?:     CalendarAttendee[] | null
+  external_id?:   string | null
+  connection_id?: string | null
+  timezone?:      string | null
 }
 
 // ─────────────────────────────────────────────
@@ -43,8 +57,9 @@ export async function fetchCalendarItems(
 
     // 1. calendar_events (Google/MS/internal - those without a meeting_id)
     supabase.schema('app').from('calendar_events' as never).select(`
-      id, title, location, meeting_url,
+      id, title, description, location, meeting_url,
       start_at, end_at, is_all_day, status, source,
+      visibility, attendees, external_id, connection_id, timezone,
       party_id, engagement_id, meeting_id,
       parties ( name:party_name )
     `)
@@ -105,6 +120,12 @@ export async function fetchCalendarItems(
       status:        e.status,
       location:      e.location,
       meeting_url:   e.meeting_url,
+      description:   e.description ?? null,
+      visibility:    e.visibility ?? null,
+      attendees:     (e.attendees as CalendarAttendee[]) ?? [],
+      external_id:   e.external_id ?? null,
+      connection_id: e.connection_id ?? null,
+      timezone:      e.timezone ?? null,
       party_id:      e.party_id    ?? null,
       party_name:    (e.parties as any)?.name ?? null,
       engagement_id: e.engagement_id ?? null,
@@ -199,4 +220,82 @@ export async function createCalendarEvent(input: CreateCalendarEventInput) {
     .single()
   if (error) throw error
   return data
+}
+
+
+// --------------------------------------------------
+// updateCalendarEvent / deleteCalendarEvent (Phase 1)
+// --------------------------------------------------
+
+const attendeeSchema = z.object({
+  email: z.string().email(),
+  name:  z.string().optional(),
+})
+
+const updateCalendarEventSchema = z.object({
+  title:       z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  location:    z.string().nullable().optional(),
+  start_at:    z.string().optional(),
+  end_at:      z.string().optional(),
+  is_all_day:  z.boolean().optional(),
+  visibility:  z.string().optional(),
+  attendees:   z.array(attendeeSchema).optional(),
+})
+
+export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>
+
+export async function updateCalendarEvent(
+  id: string,
+  fields: UpdateCalendarEventInput,
+) {
+  const parsed = updateCalendarEventSchema.parse(fields)
+
+  // Only update keys that were actually provided.
+  const patch: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(parsed)) {
+    if (v !== undefined) patch[k] = v
+  }
+  patch.updated_at = new Date().toISOString()
+
+  // user-session client -> RLS (pol_calendar_events_modify) enforces
+  // organization_id / user_id match. org/user are never touched here.
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .schema('app')
+    .from('calendar_events' as never)
+    .update(patch as never)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCalendarEvent(
+  id: string,
+  source: CalendarEventSource = 'internal',
+) {
+  const supabase = await createSupabaseServerClient()
+
+  if (source === 'internal') {
+    // internal events: hard delete
+    const { error } = await supabase
+      .schema('app')
+      .from('calendar_events' as never)
+      .delete()
+      .eq('id', id)
+    if (error) throw error
+    return { id, deleted: 'hard' as const }
+  }
+
+  // google / microsoft: soft delete (status = 'cancelled') so the next
+  // full-sync reconcile pass stays consistent.
+  const { error } = await supabase
+    .schema('app')
+    .from('calendar_events' as never)
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() } as never)
+    .eq('id', id)
+  if (error) throw error
+  return { id, deleted: 'soft' as const }
 }

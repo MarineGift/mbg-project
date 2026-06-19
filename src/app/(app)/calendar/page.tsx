@@ -7,7 +7,9 @@ import type { CalendarItem } from '@/lib/queries/calendar'
 import {
   fetchCalendarItemsAction as fetchCalendarItems,
   createCalendarEventAction as createCalendarEvent,
+  deleteCalendarEventAction as deleteCalendarEvent,
 } from '@/app/actions/calendar'
+import { EditEventModal } from '@/components/calendar/edit-event-modal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -15,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Label }  from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 // --------------------------------------------------
@@ -125,20 +127,70 @@ function QuickEventModal({
 // --------------------------------------------------
 
 function ItemDetailPopup({
-  item, onClose,
-}: { item: CalendarItem | null; onClose: () => void }) {
+  item, onClose, onEdit,
+}: {
+  item: CalendarItem | null
+  onClose: () => void
+  onEdit: (item: CalendarItem) => void
+}) {
+  const router = useRouter()
+  const [deleting, setDeleting] = useState(false)
   if (!item) return null
+
+  const isEvent    = item.type === 'event'
+  const isExternal = item.source === 'google' || item.source === 'microsoft'
 
   const typeLabel: Record<string, string> = {
     meeting: 'Meeting', event: 'Event', task: 'Task', communication: 'Communication',
   }
 
+  async function handleDelete() {
+    if (!item) return
+    const msg = isExternal
+      ? 'Delete this event? It will be hidden locally but may reappear on the next sync from your external calendar.'
+      : 'Delete this event? This cannot be undone.'
+    if (!window.confirm(msg)) return
+    setDeleting(true)
+    try {
+      await deleteCalendarEvent(item.id, item.source ?? 'internal')
+      router.refresh()
+      onClose()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Dialog open={!!item} onOpenChange={v => !v && onClose()}>
+      {/* DialogContent renders its own close (X) at top-right; edit/delete sit to its left via pr-8 */}
       <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="text-base">{item.title}</DialogTitle>
-        </DialogHeader>
+        <div className="flex items-start justify-between gap-2 pr-8">
+          <DialogTitle className="text-base font-semibold leading-snug break-words min-w-0">
+            {item.title}
+          </DialogTitle>
+          {isEvent && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                title="Edit"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => onEdit(item)}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                title="Delete"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-2 text-sm">
           <div className="text-muted-foreground">
             {typeLabel[item.type]}
@@ -166,14 +218,14 @@ function ItemDetailPopup({
             </a>
           )}
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          {item.type === 'meeting' && (
+
+        {item.type === 'meeting' && (
+          <div className="flex justify-end pt-2">
             <Button variant="outline" size="sm" asChild>
               <a href={`/meetings/${item.id}`}>View details</a>
             </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-        </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -189,6 +241,7 @@ export default function CalendarPage() {
   const [createDate,  setCreateDate]  = useState<Date | null>(null)
   const [createMode,  setCreateMode]  = useState<'event' | 'meeting'>('event')
   const [detailItem,  setDetailItem]  = useState<CalendarItem | null>(null)
+  const [editItem,    setEditItem]    = useState<CalendarItem | null>(null)
 
   // Initial load - current month
   useEffect(() => {
@@ -270,6 +323,13 @@ export default function CalendarPage() {
       <ItemDetailPopup
         item={detailItem}
         onClose={() => setDetailItem(null)}
+        onEdit={(it) => { setDetailItem(null); setEditItem(it) }}
+      />
+
+      {/* Edit Event Modal (Phase 1) */}
+      <EditEventModal
+        item={editItem}
+        onClose={() => setEditItem(null)}
       />
     </div>
   )
