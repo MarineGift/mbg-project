@@ -52,6 +52,7 @@ import type {
   InvestorProfile,
 } from '@/types/party-detail';
 import type { InvestorTypeOption } from '@/lib/queries/investor-types';
+import { COUNTRIES, US_STATES } from '@/lib/constants/countries';
 
 interface Props {
   /** existing party in edit mode; null + initial partyType in create mode */
@@ -247,8 +248,8 @@ export function PartyForm({
           tier: 'tier_3',
           status: 'active',
           priority: 'none',
-          countryCode: '',
-          region: '',
+          countryCode: 'US',
+          region: 'Texas',
           city: '',
           website: '',
           industryTags: '',
@@ -275,11 +276,14 @@ export function PartyForm({
   const selectedPartyKind = watch('partyKind');
   const selectedTier = watch('tier');
   const selectedStatus = watch('status');
+  const selectedCountry = watch('countryCode');
+  const selectedRegion = watch('region');
   const selectedPriority = watch('priority');
   const selectedInvestorType = watch('investorType');
   const isLead = watch('isLeadInvestor');
   const isStrategic = watch('isStrategic');
   const isInvestor = selectedPartyType === 'investor';
+  const isUS = selectedCountry === 'US';
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
@@ -516,22 +520,56 @@ export function PartyForm({
             <SectionLabel>Location</SectionLabel>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="party-country">{t('countryCode')}</Label>
-                <Input
-                  id="party-country"
-                  {...register('countryCode')}
+                <Label htmlFor="party-country">Country</Label>
+                <Select
+                  value={selectedCountry || '__none'}
+                  onValueChange={(v) =>
+                    setValue('countryCode', v === '__none' ? '' : v, { shouldDirty: true })
+                  }
                   disabled={isPending}
-                  placeholder="KR"
-                  maxLength={2}
-                  aria-invalid={errors.countryCode ? 'true' : undefined}
-                />
+                >
+                  <SelectTrigger id="party-country">
+                    <SelectValue placeholder="Select a country" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="US">United States (US)</SelectItem>
+                    <SelectItem value="__none">(none)</SelectItem>
+                    {COUNTRIES.filter((c) => c.code !== 'US').map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.name} ({c.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {errors.countryCode && (
                   <p className="text-xs text-destructive">{errors.countryCode.message}</p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="party-region">{t('region')}</Label>
-                <Input id="party-region" {...register('region')} disabled={isPending} />
+                <Label htmlFor="party-region">{isUS ? 'State' : t('region')}</Label>
+                {isUS ? (
+                  <Select
+                    value={selectedRegion || '__none'}
+                    onValueChange={(v) =>
+                      setValue('region', v === '__none' ? '' : v, { shouldDirty: true })
+                    }
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id="party-region">
+                      <SelectValue placeholder="Select a state" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value="__none">(none)</SelectItem>
+                      {US_STATES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input id="party-region" {...register('region')} disabled={isPending} />
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="party-city">{t('city')}</Label>
