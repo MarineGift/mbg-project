@@ -219,8 +219,10 @@ export function PartyForm({
           status: existing.status ?? 'active',
           priority: existingProfile?.priority ?? 'none',
           countryCode: existing.countryCode ?? '',
-          region: '',
-          city: '',
+          region:
+            existing.region ??
+            ((existing.countryCode ?? '') === 'US' ? 'Texas' : ''),
+          city: existing.city ?? '',
           website: existing.website ?? '',
           industryTags: existing.industryTags.join(', '),
           interestTags: existing.interestTags.join(', '),
@@ -815,7 +817,7 @@ export function PartyForm({
           </section>
         </CardContent>
 
-        <CardFooter className="flex justify-between">
+        <CardFooter className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t bg-card px-6 py-4">
           {mode === 'edit' && (
             <Button
               type="button"
