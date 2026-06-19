@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Label }  from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -30,6 +31,7 @@ function QuickEventModal({
   const [title,    setTitle]   = useState('')
   const [startAt,  setStartAt] = useState('')
   const [endAt,    setEndAt]   = useState('')
+  const [allDay,   setAllDay]  = useState(false)
   const [saving,   setSaving]  = useState(false)
 
   useEffect(() => {
@@ -37,6 +39,7 @@ function QuickEventModal({
       const d = defaultDate
       const base = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
       setTitle('')
+      setAllDay(false)
       setStartAt(`${base}T09:00`)
       setEndAt(`${base}T10:00`)
     }
@@ -48,8 +51,9 @@ function QuickEventModal({
     try {
       await createCalendarEvent({
         title:    title.trim(),
-        start_at: new Date(startAt).toISOString(),
-        end_at:   new Date(endAt).toISOString(),
+        start_at: new Date(allDay ? `${startAt}T00:00:00` : startAt).toISOString(),
+        end_at:   new Date(allDay ? `${endAt}T23:59:59`   : endAt).toISOString(),
+        is_all_day: allDay,
       })
       router.refresh()
       onClose()
@@ -75,14 +79,28 @@ function QuickEventModal({
               autoFocus
             />
           </div>
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <Label htmlFor="quick-allday">All day</Label>
+            <Switch
+              id="quick-allday"
+              checked={allDay}
+              onCheckedChange={(v) => {
+                const sDate = (startAt || '').slice(0, 10)
+                const eDate = (endAt || '').slice(0, 10)
+                setAllDay(v)
+                if (v) { setStartAt(sDate); setEndAt(eDate) }
+                else   { setStartAt(`${sDate}T09:00`); setEndAt(`${eDate}T10:00`) }
+              }}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label>Start</Label>
-              <Input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} />
+              <Input type={allDay ? 'date' : 'datetime-local'} value={allDay ? startAt.slice(0, 10) : startAt} onChange={e => setStartAt(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label>End</Label>
-              <Input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} />
+              <Input type={allDay ? 'date' : 'datetime-local'} value={allDay ? endAt.slice(0, 10) : endAt} onChange={e => setEndAt(e.target.value)} />
             </div>
           </div>
         </div>
