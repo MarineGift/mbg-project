@@ -177,3 +177,12 @@ SMI satellite 전세계 ~55–70개(시기별), 인도 8개 plant(322 KTPA). MTI
   market_role = 'No direct presence'. Idempotent + reversible (original kept in notes).
 - Deferred: Group 2 (13 rows with genuine operational descriptions, e.g. Omya Korea
   Yeongwol) - handled separately by judgment.
+## (B2) filler_supplier_profile - supply_model backfill (filler_profile_B2 2026-06-20)
+- Migration: supabase/migrations/20260620020000_app_filler_profile_B2_supply_model_backfill.sql  (RUN IN SUPABASE SQL EDITOR to apply data)
+- Link-aware + keyword derivation of supply_model for all NULL rows:
+  satellite link -> 'satellite (on-site)'; 'No direct presence' -> 'None (no local presence)';
+  satellite/on-site keyword -> satellite; merchant/lime/cement/mineral/presence/global -> 'Merchant'.
+- SMI own mines/HQ have no satellite link -> never mislabeled as satellite.
+- Idempotent (supply_model IS NULL + non-null derivation). Residual NULLs reported by the
+  trailing SELECT for a later follow-up pass.
+- Next: (B1) evidence_level backfill, then Group 2 (market_role operational-text cleanup).
