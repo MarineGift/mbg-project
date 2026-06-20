@@ -126,6 +126,18 @@ function QuickEventModal({
 // Item Detail Popup
 // --------------------------------------------------
 
+// Phase 2: human-readable summary of an RRULE string for the read-only popup.
+function rruleSummary(rr: string | null | undefined): string {
+  const v = (rr || '').trim().toUpperCase().replace(/^RRULE:/, '')
+  if (!v) return ''
+  if (v === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR') return 'Every weekday'
+  if (v === 'FREQ=DAILY')   return 'Daily'
+  if (v === 'FREQ=WEEKLY')  return 'Weekly'
+  if (v === 'FREQ=MONTHLY') return 'Monthly'
+  if (v === 'FREQ=YEARLY')  return 'Annually'
+  return 'Custom'
+}
+
 function ItemDetailPopup({
   item, onClose, onEdit,
 }: {
@@ -205,6 +217,14 @@ function ItemDetailPopup({
           )}
           {item.location && (
             <div className="text-muted-foreground">Location: {item.location}</div>
+          )}
+          {isEvent && item.recurrence_rule && (
+            <div className="text-muted-foreground">Repeats: {rruleSummary(item.recurrence_rule)}</div>
+          )}
+          {isEvent && Array.isArray(item.reminders) && item.reminders.length > 0 && (
+            <div className="text-muted-foreground">
+              Reminders: {item.reminders.length}
+            </div>
           )}
           {item.meeting_url && (
             <a

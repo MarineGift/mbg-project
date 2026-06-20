@@ -16,6 +16,12 @@ export interface CalendarAttendee {
   [key: string]: unknown
 }
 
+export interface CalendarReminder {
+  minutes: number
+  method?: string
+  [key: string]: unknown
+}
+
 export interface CalendarItem {
   id:            string
   type:          CalendarItemType
@@ -41,6 +47,11 @@ export interface CalendarItem {
   external_id?:   string | null
   connection_id?: string | null
   timezone?:      string | null
+  // event edit fields (Phase 2)
+  color?:           string | null
+  recurrence_rule?: string | null
+  reminders?:       CalendarReminder[] | null
+  transparency?:    string | null
 }
 
 // ─────────────────────────────────────────────
@@ -60,6 +71,7 @@ export async function fetchCalendarItems(
       id, title, description, location, meeting_url,
       start_at, end_at, is_all_day, status, source,
       visibility, attendees, external_id, connection_id, timezone,
+      color, recurrence_rule, reminders, transparency,
       party_id, engagement_id, meeting_id,
       parties ( name:party_name )
     `)
@@ -126,6 +138,10 @@ export async function fetchCalendarItems(
       external_id:   e.external_id ?? null,
       connection_id: e.connection_id ?? null,
       timezone:      e.timezone ?? null,
+      color:           e.color ?? null,
+      recurrence_rule: e.recurrence_rule ?? null,
+      reminders:       (e.reminders as CalendarReminder[]) ?? [],
+      transparency:    e.transparency ?? null,
       party_id:      e.party_id    ?? null,
       party_name:    (e.parties as any)?.name ?? null,
       engagement_id: e.engagement_id ?? null,
@@ -232,6 +248,11 @@ const attendeeSchema = z.object({
   name:  z.string().optional(),
 })
 
+const reminderSchema = z.object({
+  minutes: z.number().int().min(0).max(40320),
+  method:  z.string().optional(),
+})
+
 const updateCalendarEventSchema = z.object({
   title:       z.string().min(1).optional(),
   description: z.string().nullable().optional(),
@@ -241,6 +262,11 @@ const updateCalendarEventSchema = z.object({
   is_all_day:  z.boolean().optional(),
   visibility:  z.string().optional(),
   attendees:   z.array(attendeeSchema).optional(),
+  // Phase 2
+  color:           z.string().nullable().optional(),
+  recurrence_rule: z.string().nullable().optional(),
+  reminders:       z.array(reminderSchema).optional(),
+  transparency:    z.string().optional(),
 })
 
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>

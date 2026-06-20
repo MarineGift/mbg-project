@@ -61,13 +61,17 @@ export function CalendarEventChip({ item, compact, onClick }: Props) {
         hour12: false,
       })
 
+  // Phase 2: per-event custom color overrides the source/type chip color.
+  const customColor = item.type === 'event' && item.color ? item.color : null
+
   return (
     <button
       onClick={onClick}
+      style={customColor ? { backgroundColor: customColor } : undefined}
       className={cn(
         'w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate',
         'hover:opacity-90 transition-opacity cursor-pointer',
-        chipStyle(item),
+        customColor ? 'text-white' : chipStyle(item),
         compact && 'py-0'
       )}
       title={`${item.title}${item.party_name ? ` · ${item.party_name}` : ''}`}
