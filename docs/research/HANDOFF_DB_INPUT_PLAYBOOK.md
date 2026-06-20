@@ -186,3 +186,15 @@ SMI satellite 전세계 ~55–70개(시기별), 인도 8개 plant(322 KTPA). MTI
 - Idempotent (supply_model IS NULL + non-null derivation). Residual NULLs reported by the
   trailing SELECT for a later follow-up pass.
 - Next: (B1) evidence_level backfill, then Group 2 (market_role operational-text cleanup).
+## (B2b)+(B1) filler_supplier_profile - residual supply_model + evidence_level (filler_profile_B2b_B1 2026-06-20)
+- Migrations (RUN IN SUPABASE SQL EDITOR, in this order):
+    1) supabase/migrations/20260620030000_app_filler_profile_B2b_supply_model_residual.sql
+    2) supabase/migrations/20260620040000_app_filler_profile_B1_evidence_level_backfill.sql
+- (B2b): residual supply_model for the 52 NULLs left by (B2):
+    40 -> 'satellite (on-site)' (link-evidenced SMI sites; link_type was 'active'/'historical'),
+    11 -> 'Merchant' (SMI US own mines + Indonesia aggregate + Imerys/Artemyn + Omya Brazil
+          + Petro Caspian + Trzuskawica), 1 left NULL (Omya HQ - corporate, no supply model).
+- (B1): evidence_level backfill from final supply_model: satellite -> 'B', merchant -> 'C',
+    else left NULL. Existing 64 values untouched. CHECK set A/B/C/D.
+- Both idempotent. After this only Omya (HQ) keeps supply_model NULL.
+- Remaining roadmap item: Group 2 (market_role operational-text cleanup, 13 rows).
