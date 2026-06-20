@@ -169,3 +169,11 @@ VALUES (gen_random_uuid(), 'b25de8f2-1020-482f-9012-183f63883169', 2 /*paper_mil
 
 ### 참고 통계 (MTI/SMI)
 SMI satellite 전세계 ~55–70개(시기별), 인도 8개 plant(322 KTPA). MTI 최대 고객은 International Paper. Omya는 50+개국, on-site/near-site PCC 다수(유럽 강세). 신규 발표는 MTI investors.mineralstech.com / GLOBE NEWSWIRE, 업계 Papermart·Paperadvance·PulpaperNews에서 추적.
+
+## (D) filler_supplier_profile market_role cleanup (marketrole_cleanup_D 2026-06-20)
+- Migration: supabase/migrations/20260620000000_app_filler_profile_marketrole_cleanup_D.sql  (RUN IN SUPABASE SQL EDITOR to apply data)
+- Scope: 15 'Specialty Minerals (Country)' placeholder rows (Group 1, diagnostic _7).
+- Action: moved boilerplate note text out of market_role into notes; set
+  market_role = 'No direct presence'. Idempotent + reversible (original kept in notes).
+- Deferred: Group 2 (13 rows with genuine operational descriptions, e.g. Omya Korea
+  Yeongwol) - handled separately by judgment.
