@@ -198,3 +198,12 @@ SMI satellite 전세계 ~55–70개(시기별), 인도 8개 plant(322 KTPA). MTI
     else left NULL. Existing 64 values untouched. CHECK set A/B/C/D.
 - Both idempotent. After this only Omya (HQ) keeps supply_model NULL.
 - Remaining roadmap item: Group 2 (market_role operational-text cleanup, 13 rows).
+## (Group 2) filler_supplier_profile - market_role operational-text cleanup (groupB2_marketrole_cleanup 2026-06-20)
+- Migration: supabase/migrations/20260620050000_app_filler_profile_groupB2_marketrole_cleanup.sql  (RUN IN SUPABASE SQL EDITOR to apply data)
+- 13 rows whose market_role held operational descriptions (plant lists, capacities,
+  HQ/sales detail). Long text moved to notes (preserved); market_role set to a short
+  per-row role (e.g. Omya Korea -> 'Domestic merchant (Yeongwol GCC)').
+- Idempotent + reversible (original kept in notes).
+- COMPLETES the filler_supplier_profile cleanup roadmap: (D) + (B3) + (B2) + (B2b)
+  + (B1) + (Group 2). supply_model now filled except Omya (HQ); evidence_level filled
+  for satellite/merchant rows; market_role contamination resolved.
