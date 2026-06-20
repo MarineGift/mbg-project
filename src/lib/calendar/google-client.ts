@@ -199,3 +199,46 @@ export async function fetchAllGoogleEvents(
 
   return { events: allEvents, syncToken: finalSyncToken }
 }
+
+// ─────────────────────────────────────────────
+// Write-back: update / delete an event (Phase 5)
+// ─────────────────────────────────────────────
+
+export async function updateGoogleEvent(
+  accessToken: string,
+  eventId: string,
+  patch: Record<string, unknown>,
+  calendarId = 'primary',
+): Promise<void> {
+  const calId = encodeURIComponent(calendarId)
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_BASE}/calendars/${calId}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization:  `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patch),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(`Google event update failed ${res.status}: ${await res.text()}`)
+  }
+}
+
+export async function deleteGoogleEvent(
+  accessToken: string,
+  eventId: string,
+  calendarId = 'primary',
+): Promise<void> {
+  const calId = encodeURIComponent(calendarId)
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_BASE}/calendars/${calId}/events/${encodeURIComponent(eventId)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  // 404/410 = already gone -> treat as success
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw new Error(`Google event delete failed ${res.status}: ${await res.text()}`)
+  }
+}

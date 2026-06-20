@@ -213,3 +213,39 @@ export async function fetchAllMicrosoftEvents(
   // performs a full fetch next time.
   return { events: allEvents, deltaLink: '' }
 }
+
+// ─────────────────────────────────────────────
+// Write-back: update / delete an event (Phase 5)
+// ─────────────────────────────────────────────
+
+export async function updateMicrosoftEvent(
+  accessToken: string,
+  eventId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch(`${MS_GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization:  `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    throw new Error(`Microsoft event update failed ${res.status}: ${await res.text()}`)
+  }
+}
+
+export async function deleteMicrosoftEvent(
+  accessToken: string,
+  eventId: string,
+): Promise<void> {
+  const res = await fetch(`${MS_GRAPH_BASE}/me/events/${encodeURIComponent(eventId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  // 404/410 = already gone -> treat as success
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw new Error(`Microsoft event delete failed ${res.status}: ${await res.text()}`)
+  }
+}

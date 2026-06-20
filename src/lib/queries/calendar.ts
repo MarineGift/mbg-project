@@ -2,6 +2,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
+import { pushEventUpdate, pushEventDelete } from '@/lib/calendar/write-back'
 
 // ─────────────────────────────────────────────
 // Types
@@ -295,6 +296,30 @@ export async function updateCalendarEvent(
     .select()
     .single()
   if (error) throw error
+
+  // Phase 5: best-effort write-back to the external calendar.
+  const urow = data as Record<string, unknown>
+  if (
+    (urow.source === 'google' || urow.source === 'microsoft') &&
+    urow.connection_id && urow.external_id
+  ) {
+    const wb = await pushEventUpdate({
+      source:       urow.source as 'google' | 'microsoft',
+      connectionId: urow.connection_id as string,
+      externalId:   urow.external_id as string,
+      fields: {
+        title:       urow.title as string,
+        description: (urow.description as string | null) ?? null,
+        location:    (urow.location as string | null) ?? null,
+        start_at:    urow.start_at as string,
+        end_at:      urow.end_at as string,
+        is_all_day:  urow.is_all_day as boolean,
+        timezone:    (urow.timezone as string | null) ?? null,
+      },
+    })
+    if (!wb.ok) console.error('[calendar write-back][update]', wb.error)
+  }
+
   return data
 }
 
@@ -315,7 +340,37 @@ export async function deleteCalendarEvent(
     return { id, deleted: 'hard' as const }
   }
 
-  // google / microsoft: soft delete (status = 'cancelled') so the next
+  // google / microsoft: try to delete on the external calendar first (Phase 5),
+  // then mirror locally. We need connection_id + external_id, so read the row.
+  const { data: linkRaw } = await supabase
+    .schema('app')
+    .from('calendar_events' as never)
+    .select('connection_id, external_id')
+    .eq('id', id)
+    .single()
+  const link = (linkRaw ?? {}) as { connection_id?: string | null; external_id?: string | null }
+
+  let wb: { ok: boolean; error?: string } = { ok: false, error: 'missing external linkage' }
+  if (link.connection_id && link.external_id) {
+    wb = await pushEventDelete({
+      source:       source as 'google' | 'microsoft',
+      connectionId: link.connection_id,
+      externalId:   link.external_id,
+    })
+  }
+
+  if (wb.ok) {
+    // external delete succeeded -> remove locally too
+    const { error: delErr } = await supabase
+      .schema('app')
+      .from('calendar_events' as never)
+      .delete()
+      .eq('id', id)
+    if (delErr) throw delErr
+    return { id, deleted: 'hard' as const, external: 'deleted' as const }
+  }
+
+  // external delete failed/absent -> fall back to local soft-cancel so the next
   // full-sync reconcile pass stays consistent.
   const { error } = await supabase
     .schema('app')
@@ -323,5 +378,6 @@ export async function deleteCalendarEvent(
     .update({ status: 'cancelled', updated_at: new Date().toISOString() } as never)
     .eq('id', id)
   if (error) throw error
-  return { id, deleted: 'soft' as const }
+  console.error('[calendar write-back][delete]', wb.error)
+  return { id, deleted: 'soft' as const, external: 'failed' as const, error: wb.error }
 }
