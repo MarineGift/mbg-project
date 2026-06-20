@@ -10,6 +10,7 @@ import {
   deleteCalendarEventAction as deleteCalendarEvent,
 } from '@/app/actions/calendar'
 import { EditEventModal } from '@/components/calendar/edit-event-modal'
+import { EmailAttendeesModal } from '@/components/calendar/email-attendees-modal'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -17,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Label }  from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
+import { ExternalLink, Pencil, Trash2, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 // --------------------------------------------------
@@ -139,11 +140,12 @@ function rruleSummary(rr: string | null | undefined): string {
 }
 
 function ItemDetailPopup({
-  item, onClose, onEdit,
+  item, onClose, onEdit, onEmail,
 }: {
   item: CalendarItem | null
   onClose: () => void
   onEdit: (item: CalendarItem) => void
+  onEmail: (item: CalendarItem) => void
 }) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
@@ -182,6 +184,14 @@ function ItemDetailPopup({
           </DialogTitle>
           {isEvent && (
             <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                title="Email attendees"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => onEmail(item)}
+              >
+                <Mail className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 title="Edit"
@@ -262,6 +272,7 @@ export default function CalendarPage() {
   const [createMode,  setCreateMode]  = useState<'event' | 'meeting'>('event')
   const [detailItem,  setDetailItem]  = useState<CalendarItem | null>(null)
   const [editItem,    setEditItem]    = useState<CalendarItem | null>(null)
+  const [emailItem,   setEmailItem]   = useState<CalendarItem | null>(null)
 
   // Initial load - current month
   useEffect(() => {
@@ -344,12 +355,19 @@ export default function CalendarPage() {
         item={detailItem}
         onClose={() => setDetailItem(null)}
         onEdit={(it) => { setDetailItem(null); setEditItem(it) }}
+        onEmail={(it) => { setDetailItem(null); setEmailItem(it) }}
       />
 
       {/* Edit Event Modal (Phase 1) */}
       <EditEventModal
         item={editItem}
         onClose={() => setEditItem(null)}
+      />
+
+      {/* Email Attendees Modal (Phase 3) */}
+      <EmailAttendeesModal
+        item={emailItem}
+        onClose={() => setEmailItem(null)}
       />
     </div>
   )

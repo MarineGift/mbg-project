@@ -9,6 +9,7 @@ import {
   deleteCalendarEvent as _deleteCalendarEvent,
   type CalendarItem,
 } from '@/lib/queries/calendar'
+import { sendOutboundManual } from '@/lib/actions/communications'
 
 export async function fetchCalendarItemsAction(
   ...args: Parameters<typeof _fetchCalendarItems>
@@ -33,4 +34,22 @@ export async function deleteCalendarEventAction(
   ...args: Parameters<typeof _deleteCalendarEvent>
 ) {
   return _deleteCalendarEvent(...args)
+}
+
+// Phase 3: email the attendees of an event. Reuses the verified manual-compose
+// outbound path (whitelist + tracking + communications insert all in the core).
+export async function sendEventEmailAction(input: {
+  to: string
+  subject: string
+  bodyPlain: string
+  cc?: string
+  partyId?: string | null
+}) {
+  return sendOutboundManual({
+    to:        input.to,
+    subject:   input.subject,
+    bodyPlain: input.bodyPlain,
+    cc:        input.cc,
+    partyId:   input.partyId ?? null,
+  })
 }
