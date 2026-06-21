@@ -33,6 +33,7 @@ import {
   X,
   Send,
   CalendarDays,
+  CalendarCheck,
   Megaphone,
   Mail,
   BarChart3,
@@ -90,6 +91,7 @@ interface NavItem {
 
 const TOP_ITEMS: readonly NavItem[] = [
   { href: '/',         labelKey: 'dashboard', icon: LayoutDashboard },
+  { href: '/today',    labelKey: 'today',     icon: CalendarCheck, label: 'Today' },
   // AI Drafts moved into Inbox (Inbox shows Inbound / Outbound / AI Drafts),
   // so the standalone /drafts sidebar item was removed.
   { href: '/inbox',    labelKey: 'inbox',     icon: Inbox,       badgeKey: 'inboxUnreadCount' },
