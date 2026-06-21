@@ -6,7 +6,7 @@ import {
   Loader2, CheckCircle2, AlertCircle, X, Pencil,
 } from "lucide-react";
 import {
-  addMailbox, updateMailbox, toggleMailbox, deleteMailbox,
+  addMailbox, updateMailbox, updateMailboxSmtp, toggleMailbox, deleteMailbox,
 } from "@/lib/actions/inbound-mailboxes";
 import type { InboundMailbox } from "@/lib/actions/inbound-mailboxes";
 
@@ -211,6 +211,28 @@ function MailboxForm({
   const [isPending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  // SMTP (sending) - edit mode only; saved independently of the IMAP upsert so
+  // host/port/TLS/username can change without re-entering the IMAP password.
+  const [smtpHost, setSmtpHost] = useState(existing?.smtp_host ?? "");
+  const [smtpPort, setSmtpPort] = useState(existing?.smtp_port ?? 587);
+  const [smtpUseTls, setSmtpUseTls] = useState(existing?.smtp_use_tls ?? true);
+  const [smtpUsername, setSmtpUsername] = useState(existing?.smtp_username ?? "");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpPending, setSmtpPending] = useState(false);
+  const [smtpNote, setSmtpNote] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const saveSmtp = () => {
+    setSmtpNote(null);
+    setSmtpPending(true);
+    void (async () => {
+      const res = await updateMailboxSmtp(address, smtpHost, smtpPort, smtpUseTls, smtpUsername, smtpPassword);
+      setSmtpPending(false);
+      if (!res.ok) { setSmtpNote({ msg: res.error || "Error", ok: false }); return; }
+      setSmtpPassword("");
+      setSmtpNote({ msg: "SMTP settings saved. Restart the worker to apply.", ok: true });
+    })();
+  };
+
   // on address entry (add mode only), auto-suggest host/port from the domain preset
   const onAddressChange = (v: string) => {
     setAddress(v);
@@ -309,6 +331,71 @@ function MailboxForm({
         <input type="checkbox" checked={useTls} onChange={e => setUseTls(e.target.checked)} />
         Use TLS (recommended; port 993)
       </label>
+
+      {isEdit && (
+        <div className="mt-2 pt-3 border-t border-blue-200 space-y-3">
+          <h4 className="font-medium text-sm">SMTP (sending)</h4>
+          <p className="text-xs text-gray-500">
+            Used to send mail from this address. Gmail/Naver on port 587 require &quot;Use TLS / STARTTLS&quot; ON.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2 space-y-2">
+              <label className="block text-xs text-gray-600">SMTP Host</label>
+              <input
+                type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value)}
+                placeholder="e.g. smtp.gmail.com"
+                className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-600">Port</label>
+              <input
+                type="number" value={smtpPort} onChange={e => setSmtpPort(Number(e.target.value))}
+                className="w-full px-3 py-2 border rounded-md text-sm"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">SMTP Username</label>
+            <input
+              type="text" value={smtpUsername} onChange={e => setSmtpUsername(e.target.value)}
+              placeholder="usually the full email address"
+              className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs text-gray-600">SMTP Password / App Password</label>
+            <input
+              type="password" value={smtpPassword} onChange={e => setSmtpPassword(e.target.value)}
+              placeholder={existing?.has_smtp_pw ? "Leave blank to keep current" : "App password (encrypted when saved)"}
+              autoComplete="new-password"
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            />
+            <p className="text-xs text-gray-500">
+              {existing?.has_smtp_pw
+                ? "A password is stored. Leave blank to keep it, or enter a new one to replace it."
+                : "No SMTP password stored yet. Enter the app password to enable sending."}
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={smtpUseTls} onChange={e => setSmtpUseTls(e.target.checked)} />
+            Use TLS / STARTTLS (port 587 = STARTTLS, port 465 = SSL)
+          </label>
+          {smtpNote && (
+            <p className={smtpNote.ok ? "text-xs text-green-600" : "text-xs text-red-600"}>{smtpNote.msg}</p>
+          )}
+          <div className="flex justify-end">
+            <button
+              onClick={saveSmtp}
+              disabled={!smtpHost.trim() || smtpPending}
+              className="px-3 py-1.5 bg-emerald-600 text-white rounded-md text-sm disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              {smtpPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Pencil className="w-3 h-3" />}
+              Save SMTP
+            </button>
+          </div>
+        </div>
+      )}
 
       {err && <p className="text-xs text-red-600">Error: {err}</p>}
 
