@@ -41,7 +41,7 @@ export function PartyHeader({ party }: Props) {
 
   return (
     <header className="border-b bg-background">
-      <div className="px-6 py-3 border-b flex items-center gap-3">
+      <div className="max-w-app mx-auto px-6 py-3 border-b flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" className="h-8 w-8">
           <Link href={`/${party.partyType}/parties`} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
@@ -80,7 +80,7 @@ export function PartyHeader({ party }: Props) {
         </Button>
       </div>
 
-      <div className="px-6 py-4">
+      <div className="max-w-app mx-auto px-6 py-4">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Building2 className="h-6 w-6 text-muted-foreground" />
           {party.name}
