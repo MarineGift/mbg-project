@@ -8,6 +8,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { rpc } from '@/lib/rpc/typed-rpc';
 import type { SequenceDraft } from '@/types/phase21b';
 import { getSequenceFromAccountId, setSequenceFromAccount } from '@/lib/actions/sequence-sender';
+import { resolveOutboundMailAccount } from '@/lib/email/mail-accounts';
 
 // ===== Sequence CRUD =====
 
@@ -190,9 +191,20 @@ export async function duplicateSequence(
   if ('error' in created) return created;
 
   // Copy the From (sender) account so the duplicate sends identically.
+  // If the source pins an explicit from_account_id, copy it verbatim. If it is
+  // null the source would resolve to the org default account at send time, so
+  // pin that resolved default onto the copy -- otherwise the copy silently
+  // floats to whatever the default happens to be later (the bug that dropped
+  // copies onto the broken Gmail/STARTTLS account).
   const from = await getSequenceFromAccountId(sequenceId);
-  if ('accountId' in from && from.accountId) {
-    await setSequenceFromAccount(created.id, from.accountId);
+  let copyFromAccountId: string | null = 'accountId' in from ? from.accountId : null;
+  if (!copyFromAccountId) {
+    const supabase = await createSupabaseServerClient();
+    const def = await resolveOutboundMailAccount(supabase, orgId, {});
+    copyFromAccountId = def?.id ?? null;
+  }
+  if (copyFromAccountId) {
+    await setSequenceFromAccount(created.id, copyFromAccountId);
   }
 
   revalidatePath('/settings/email-sequences');
