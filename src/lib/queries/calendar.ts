@@ -1,4 +1,26 @@
-// src/lib/queries/calendar.ts  (v2 - includes meetings)
+// src/lib/queries/calendar.ts  (v3 - todo_v2: unified getCalendarFeed read-model)
+//
+// getCalendarFeed(start, end, opts?) is the single aggregation read-model for the
+// calendar + Today cockpit. It merges up to 7 feed sources into one CalendarItem[]:
+//   event              app.calendar_events  (google / microsoft / internal)
+//   meeting            app.meetings
+//   deal_task          app.tasks.due_at
+//   communication      app.communications.occurred_at
+//   todo               app.todo_items.due_date          (pure memo To-Do; no deal_id)
+//   milestone_next_step app.deals.next_step_date
+//   milestone_close    app.deals.expected_close_date
+//
+// fetchCalendarItems(start,end) is kept as a thin back-compat wrapper that returns
+// ONLY the legacy 4 sources, so the existing /calendar page is byte-for-byte
+// unchanged until it is explicitly repointed to getCalendarFeed.
+//
+// Conventions (mbg-project, Gotcha #45): the server client does NOT default to the
+// app schema at runtime -> target it explicitly with .schema('app').from('T' as never).
+// todo_items / deals embeds to parties are NOT used (FK not verified); party names are
+// resolved via a single batched lookup against app.parties to avoid PostgREST
+// relationship errors. All-day date-only items emit start_at='YYYY-MM-DDT00:00:00'
+// (no Z) so the calendar-view local-date bucketing lands on the correct day in any tz.
+
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 import { z } from 'zod'
@@ -8,8 +30,43 @@ import { pushEventUpdate, pushEventDelete } from '@/lib/calendar/write-back'
 // Types
 // ─────────────────────────────────────────────
 
-export type CalendarItemType = 'meeting' | 'event' | 'task' | 'communication'
+export type CalendarItemType =
+  | 'meeting' | 'event' | 'task' | 'communication' | 'todo' | 'milestone'
 export type CalendarEventSource = 'internal' | 'google' | 'microsoft'
+
+/** Filterable feed source. The calendar/cockpit filter UI keys off this. */
+export type CalendarFeedSource =
+  | 'event'
+  | 'meeting'
+  | 'deal_task'
+  | 'communication'
+  | 'todo'
+  | 'milestone_next_step'
+  | 'milestone_close'
+
+export interface CalendarFeedSourceMeta {
+  label: string
+  color: string
+  /** Whether this source's layer is shown by default in the filter UI. */
+  defaultVisible: boolean
+}
+
+/** Per-source color + default visibility. Decision: close-date layer defaults OFF. */
+export const CALENDAR_FEED_META: Record<CalendarFeedSource, CalendarFeedSourceMeta> = {
+  event:               { label: 'Calendar events', color: '#3b82f6', defaultVisible: true  },
+  meeting:             { label: 'Meetings',        color: '#8b5cf6', defaultVisible: true  },
+  deal_task:           { label: 'Deal tasks',      color: '#0ea5e9', defaultVisible: true  },
+  communication:       { label: 'Communications',  color: '#64748b', defaultVisible: true  },
+  todo:                { label: 'To-Do',           color: '#10b981', defaultVisible: true  },
+  milestone_next_step: { label: 'Deal: next step', color: '#f59e0b', defaultVisible: true  },
+  milestone_close:     { label: 'Deal: close',     color: '#ef4444', defaultVisible: false },
+}
+
+export const CALENDAR_FEED_SOURCES: CalendarFeedSource[] =
+  Object.keys(CALENDAR_FEED_META) as CalendarFeedSource[]
+
+const LEGACY_SOURCES: CalendarFeedSource[] =
+  ['event', 'meeting', 'deal_task', 'communication']
 
 export interface CalendarAttendee {
   email: string
@@ -53,70 +110,148 @@ export interface CalendarItem {
   recurrence_rule?: string | null
   reminders?:       CalendarReminder[] | null
   transparency?:    string | null
+  // todo_v2 unified feed additions
+  feed_source?:    CalendarFeedSource
+  milestone_kind?: 'next_step' | 'close'
+  deal_id?:        string | null
+  board_id?:       string | null
 }
 
 // ─────────────────────────────────────────────
-// fetchCalendarItems - unified query
+// getCalendarFeed - unified read-model (todo_v2)
 // ─────────────────────────────────────────────
 
-export async function fetchCalendarItems(
+export interface GetCalendarFeedOptions {
+  /** Which feed sources to include. Defaults to ALL sources. */
+  sources?: CalendarFeedSource[]
+}
+
+export async function getCalendarFeed(
   rangeStart: string,
-  rangeEnd:   string
+  rangeEnd:   string,
+  opts?: GetCalendarFeedOptions,
 ): Promise<CalendarItem[]> {
   const supabase = await createSupabaseServerClient()
 
-  const [eventsRes, meetingsRes, tasksRes, commsRes] = await Promise.all([
+  const sources = opts?.sources ?? CALENDAR_FEED_SOURCES
+  const want = (s: CalendarFeedSource) => sources.includes(s)
 
-    // 1. calendar_events (Google/MS/internal - those without a meeting_id)
-    supabase.schema('app').from('calendar_events' as never).select(`
-      id, title, description, location, meeting_url,
-      start_at, end_at, is_all_day, status, source,
-      visibility, attendees, external_id, connection_id, timezone,
-      color, recurrence_rule, reminders, transparency,
-      party_id, engagement_id, meeting_id,
-      parties ( name:party_name )
-    `)
-    .gte('start_at', rangeStart)
-    .lte('start_at', rangeEnd)
-    .is('meeting_id', null)            // rows that have a meeting go through the meetings query
-    .neq('status', 'cancelled')
-    .order('start_at'),
+  // Date-typed columns (todo.due_date, deals.*_date) compare cleanly on the date part.
+  const startDate = rangeStart.slice(0, 10)
+  const endDate   = rangeEnd.slice(0, 10)
+  const inRange = (d: string | null | undefined): d is string =>
+    !!d && d >= startDate && d <= endDate
 
-    // 2. meetings (includes both with and without a calendar_event_id)
-    supabase.schema('app').from('meetings' as never).select(`
-      id, title, meeting_type,
-      scheduled_at, duration_min, status,
-      location, meeting_url,
-      party_id, engagement_id,
-      parties ( name:party_name )
-    `)
-    .gte('scheduled_at', rangeStart)
-    .lte('scheduled_at', rangeEnd)
-    .neq('status', 'cancelled')
-    .order('scheduled_at'),
+  const noRows = Promise.resolve({ data: [] as unknown[] } as { data: unknown[] })
+  const wantDeals = want('milestone_next_step') || want('milestone_close')
 
-    // 3. tasks with due_at
-    supabase.schema('app').from('tasks' as never).select(`
-      id, title, due_at, deal_id
-    `)
-    .not('due_at', 'is', null)
-    .gte('due_at', rangeStart)
-    .lte('due_at', rangeEnd)
-    .is('deleted_at', null)
-    .order('due_at'),
+  const [eventsRes, meetingsRes, tasksRes, commsRes, todosRes, dealsRes] =
+    await Promise.all([
+      // 1. calendar_events (google/ms/internal - those without a meeting_id)
+      want('event')
+        ? supabase.schema('app').from('calendar_events' as never).select(`
+            id, title, description, location, meeting_url,
+            start_at, end_at, is_all_day, status, source,
+            visibility, attendees, external_id, connection_id, timezone,
+            color, recurrence_rule, reminders, transparency,
+            party_id, engagement_id, meeting_id,
+            parties ( name:party_name )
+          `)
+          .gte('start_at', rangeStart)
+          .lte('start_at', rangeEnd)
+          .is('meeting_id', null)
+          .neq('status', 'cancelled')
+          .order('start_at')
+        : noRows,
 
-    // 4. communications with occurred_at
-    supabase.schema('app').from('communications' as never).select(`
-      id, subject, occurred_at,
-      party_id,
-      parties ( name:party_name )
-    `)
-    .not('occurred_at', 'is', null)
-    .gte('occurred_at', rangeStart)
-    .lte('occurred_at', rangeEnd)
-    .is('deleted_at', null)
-    .order('occurred_at'),
-  ])
+      // 2. meetings
+      want('meeting')
+        ? supabase.schema('app').from('meetings' as never).select(`
+            id, title, meeting_type,
+            scheduled_at, duration_min, status,
+            location, meeting_url,
+            party_id, engagement_id,
+            parties ( name:party_name )
+          `)
+          .gte('scheduled_at', rangeStart)
+          .lte('scheduled_at', rangeEnd)
+          .neq('status', 'cancelled')
+          .order('scheduled_at')
+        : noRows,
+
+      // 3. deal tasks with due_at
+      want('deal_task')
+        ? supabase.schema('app').from('tasks' as never).select(`
+            id, title, due_at, deal_id
+          `)
+          .not('due_at', 'is', null)
+          .gte('due_at', rangeStart)
+          .lte('due_at', rangeEnd)
+          .is('deleted_at', null)
+          .order('due_at')
+        : noRows,
+
+      // 4. communications with occurred_at
+      want('communication')
+        ? supabase.schema('app').from('communications' as never).select(`
+            id, subject, occurred_at,
+            party_id,
+            parties ( name:party_name )
+          `)
+          .not('occurred_at', 'is', null)
+          .gte('occurred_at', rangeStart)
+          .lte('occurred_at', rangeEnd)
+          .is('deleted_at', null)
+          .order('occurred_at')
+        : noRows,
+
+      // 5. To-Do items with due_date (pure memo; no parties embed - FK unverified)
+      want('todo')
+        ? supabase.schema('app').from('todo_items' as never).select(`
+            id, title, due_date, status, priority, party_id, board_id
+          `)
+          .not('due_date', 'is', null)
+          .gte('due_date', startDate)
+          .lte('due_date', endDate)
+          .is('archived_at', null)
+          .order('due_date')
+        : noRows,
+
+      // 6. Deal milestones (open deals only); one row -> up to two items
+      wantDeals
+        ? supabase.schema('app').from('deals' as never).select(`
+            id, deal_name, next_step, next_step_date, expected_close_date,
+            status, party_id
+          `)
+          .eq('status', 'active')
+          .is('deleted_at', null)
+          .or(
+            `and(next_step_date.gte.${startDate},next_step_date.lte.${endDate}),` +
+            `and(expected_close_date.gte.${startDate},expected_close_date.lte.${endDate})`,
+          )
+        : noRows,
+    ])
+
+  const todoRows  = (todosRes.data ?? []) as any[]
+  const dealRows  = (dealsRes.data ?? []) as any[]
+
+  // Batched party-name lookup for the two embed-free sources (todo + milestones).
+  const partyIds = Array.from(new Set(
+    [...todoRows, ...dealRows]
+      .map((r) => r.party_id as string | null)
+      .filter((x): x is string => !!x),
+  ))
+  const nameMap = new Map<string, string>()
+  if (partyIds.length) {
+    const { data: pr } = await supabase
+      .schema('app')
+      .from('parties' as never)
+      .select('id, name')
+      .in('id', partyIds)
+    for (const p of (pr ?? []) as any[]) nameMap.set(p.id, p.name)
+  }
+  const nameOf = (id: string | null | undefined): string | null =>
+    id ? nameMap.get(id) ?? null : null
 
   const items: CalendarItem[] = []
 
@@ -125,6 +260,7 @@ export async function fetchCalendarItems(
     items.push({
       id:            e.id,
       type:          'event',
+      feed_source:   'event',
       title:         e.title,
       start_at:      e.start_at,
       end_at:        e.end_at,
@@ -139,7 +275,7 @@ export async function fetchCalendarItems(
       external_id:   e.external_id ?? null,
       connection_id: e.connection_id ?? null,
       timezone:      e.timezone ?? null,
-      color:           e.color ?? null,
+      color:           e.color ?? CALENDAR_FEED_META.event.color,
       recurrence_rule: e.recurrence_rule ?? null,
       reminders:       (e.reminders as CalendarReminder[]) ?? [],
       transparency:    e.transparency ?? null,
@@ -152,11 +288,12 @@ export async function fetchCalendarItems(
   // meetings
   for (const m of (meetingsRes.data ?? []) as any[]) {
     const endAt = new Date(
-      new Date(m.scheduled_at).getTime() + (m.duration_min ?? 30) * 60_000
+      new Date(m.scheduled_at).getTime() + (m.duration_min ?? 30) * 60_000,
     ).toISOString()
     items.push({
       id:            m.id,
       type:          'meeting',
+      feed_source:   'meeting',
       title:         m.title,
       start_at:      m.scheduled_at,
       end_at:        endAt,
@@ -165,24 +302,28 @@ export async function fetchCalendarItems(
       location:      m.location,
       meeting_url:   m.meeting_url,
       meeting_type:  m.meeting_type,
+      color:         CALENDAR_FEED_META.meeting.color,
       party_id:      m.party_id      ?? null,
       party_name:    (m.parties as any)?.name ?? null,
       engagement_id: m.engagement_id ?? null,
     })
   }
 
-  // tasks
+  // deal tasks
   for (const t of (tasksRes.data ?? []) as any[]) {
     items.push({
       id:            t.id,
       type:          'task',
+      feed_source:   'deal_task',
       title:         t.title,
       start_at:      t.due_at,
       end_at:        t.due_at,
       is_all_day:    true,
+      color:         CALENDAR_FEED_META.deal_task.color,
       party_id:      null,
       party_name:    null,
       engagement_id: t.deal_id ?? null,
+      deal_id:       t.deal_id ?? null,
     })
   }
 
@@ -191,17 +332,96 @@ export async function fetchCalendarItems(
     items.push({
       id:            c.id,
       type:          'communication',
+      feed_source:   'communication',
       title:         c.subject ?? '(No subject)',
       start_at:      c.occurred_at,
       end_at:        c.occurred_at,
       is_all_day:    false,
+      color:         CALENDAR_FEED_META.communication.color,
       party_id:      c.party_id ?? null,
       party_name:    (c.parties as any)?.name ?? null,
       engagement_id: null,
     })
   }
 
+  // To-Do items (all-day; local-midnight format to avoid tz off-by-one)
+  for (const t of todoRows) {
+    const d = t.due_date as string  // 'YYYY-MM-DD'
+    items.push({
+      id:            t.id,
+      type:          'todo',
+      feed_source:   'todo',
+      title:         t.title,
+      start_at:      `${d}T00:00:00`,
+      end_at:        `${d}T00:00:00`,
+      is_all_day:    true,
+      status:        t.status ?? undefined,
+      color:         CALENDAR_FEED_META.todo.color,
+      party_id:      t.party_id ?? null,
+      party_name:    nameOf(t.party_id),
+      engagement_id: null,
+      board_id:      t.board_id ?? null,
+      deal_id:       null,
+    })
+  }
+
+  // Deal milestones - emit up to two items per open deal
+  for (const dl of dealRows) {
+    const dealName = dl.deal_name as string
+
+    if (want('milestone_next_step') && inRange(dl.next_step_date)) {
+      const d = dl.next_step_date as string
+      items.push({
+        id:             `${dl.id}:next_step`,
+        type:           'milestone',
+        feed_source:    'milestone_next_step',
+        milestone_kind: 'next_step',
+        title:          dl.next_step ? `${dealName} - ${dl.next_step}` : `${dealName} - next step`,
+        start_at:       `${d}T00:00:00`,
+        end_at:         `${d}T00:00:00`,
+        is_all_day:     true,
+        status:         dl.status ?? undefined,
+        color:          CALENDAR_FEED_META.milestone_next_step.color,
+        party_id:       dl.party_id ?? null,
+        party_name:     nameOf(dl.party_id),
+        engagement_id:  dl.id,
+        deal_id:        dl.id,
+      })
+    }
+
+    if (want('milestone_close') && inRange(dl.expected_close_date)) {
+      const d = dl.expected_close_date as string
+      items.push({
+        id:             `${dl.id}:close`,
+        type:           'milestone',
+        feed_source:    'milestone_close',
+        milestone_kind: 'close',
+        title:          `${dealName} - expected close`,
+        start_at:       `${d}T00:00:00`,
+        end_at:         `${d}T00:00:00`,
+        is_all_day:     true,
+        status:         dl.status ?? undefined,
+        color:          CALENDAR_FEED_META.milestone_close.color,
+        party_id:       dl.party_id ?? null,
+        party_name:     nameOf(dl.party_id),
+        engagement_id:  dl.id,
+        deal_id:        dl.id,
+      })
+    }
+  }
+
   return items.sort((a, b) => a.start_at.localeCompare(b.start_at))
+}
+
+// ─────────────────────────────────────────────
+// fetchCalendarItems - back-compat wrapper (legacy 4 sources only)
+// ─────────────────────────────────────────────
+
+export async function fetchCalendarItems(
+  rangeStart: string,
+  rangeEnd:   string,
+): Promise<CalendarItem[]> {
+  return getCalendarFeed(rangeStart, rangeEnd, { sources: LEGACY_SOURCES })
 }
 
 // ─────────────────────────────────────────────

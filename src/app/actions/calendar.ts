@@ -4,6 +4,7 @@
 
 import {
   fetchCalendarItems as _fetchCalendarItems,
+  getCalendarFeed as _getCalendarFeed,
   createCalendarEvent as _createCalendarEvent,
   updateCalendarEvent as _updateCalendarEvent,
   deleteCalendarEvent as _deleteCalendarEvent,
@@ -15,6 +16,12 @@ export async function fetchCalendarItemsAction(
   ...args: Parameters<typeof _fetchCalendarItems>
 ) {
   return _fetchCalendarItems(...args)
+}
+
+export async function getCalendarFeedAction(
+  ...args: Parameters<typeof _getCalendarFeed>
+) {
+  return _getCalendarFeed(...args)
 }
 
 export async function createCalendarEventAction(
