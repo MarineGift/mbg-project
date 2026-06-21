@@ -1,7 +1,9 @@
 'use client';
 // src/components/settings/sequence-form-dialog.tsx
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
+import { listMailAccountOptions, type MailAccountOption } from '@/lib/actions/mail-account-options';
+import { setSequenceFromAccount } from '@/lib/actions/sequence-sender';
 import { createSequence, updateSequence } from '@/lib/actions/email-sequences';
 import { SequenceSenderPreview } from './sequence-sender-preview';
 import type { EmailSequenceWithSteps, StepDraft } from '@/types/phase21b';
@@ -35,6 +37,21 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
   );
   const [error,       setError]       = useState<string | null>(null);
   const [isPending,   startTransition] = useTransition();
+
+  // Sender (From account) for NEW sequences. Existing sequences use
+  // SequenceSenderPreview below (which saves from_account_id inline).
+  const [accounts,    setAccounts]    = useState<MailAccountOption[]>([]);
+  const [fromId,      setFromId]      = useState<string>(''); // '' = org default account
+
+  useEffect(() => {
+    if (initial?.id) return; // edit mode handles the sender via SequenceSenderPreview
+    let alive = true;
+    (async () => {
+      const opt = await listMailAccountOptions();
+      if (alive && opt.ok) setAccounts(opt.accounts);
+    })();
+    return () => { alive = false; };
+  }, [initial?.id]);
 
   if (!open) return null;
 
@@ -86,6 +103,10 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
       if ('error' in result && result.error) {
         setError(result.error);
       } else {
+        // New sequence: persist the chosen From account (edit mode saves it inline).
+        if (!initial && 'id' in result && result.id) {
+          await setSequenceFromAccount(result.id, fromId || null);
+        }
         onClose();
       }
     });
@@ -131,6 +152,26 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
               />
             </div>
           </div>
+
+          {/* Sender (From account) for NEW sequences (edit mode uses the preview below) */}
+          {!initial?.id && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From (sender)</label>
+              <select
+                value={fromId}
+                onChange={e => setFromId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Org default account</option>
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {(a.displayName ? `${a.displayName} (${a.address})` : a.address) + (a.isDefault ? ' (default)' : '')}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">You can change this later when editing the sequence.</p>
+            </div>
+          )}
 
           {/* Sender + send-document preview (existing sequences only) */}
           {initial?.id && (
