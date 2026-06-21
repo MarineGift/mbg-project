@@ -17,14 +17,15 @@
 
 import { runMailCarrierWorker } from './mailcarrier-worker';
 import { runMailRunWorker } from './mailrun-worker';
+import { runSequenceWorker } from './sequence-worker';
 import { isMainEntry } from './runtime';
 
 async function main(): Promise<void> {
   // eslint-disable-next-line no-console
-  console.log('[all-workers] starting: mailcarrier + mailrun');
-  const results = await Promise.allSettled([runMailCarrierWorker(), runMailRunWorker()]);
+  console.log('[all-workers] starting: mailcarrier + mailrun + sequence');
+  const results = await Promise.allSettled([runMailCarrierWorker(), runMailRunWorker(), runSequenceWorker()]);
   results.forEach((r, i) => {
-    const name = i === 0 ? 'mailcarrier' : 'mailrun';
+    const name = i === 0 ? 'mailcarrier' : i === 1 ? 'mailrun' : 'sequence';
     if (r.status === 'rejected') {
       // eslint-disable-next-line no-console
       console.error(`[all-workers] ${name} exited with error:`, r.reason);
