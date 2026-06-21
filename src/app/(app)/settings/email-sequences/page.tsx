@@ -9,7 +9,7 @@ export default async function EmailSequencesPage() {
 
   if (!orgId) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="max-w-app mx-auto p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
           The NEXT_PUBLIC_DEFAULT_ORG_ID environment variable is not set.
           <br />
@@ -22,7 +22,7 @@ export default async function EmailSequencesPage() {
   const sequences = await fetchSequences(orgId);
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-app mx-auto p-6">
       <EmailSequencesClient sequences={sequences} orgId={orgId} />
     </div>
   );

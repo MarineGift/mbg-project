@@ -15,7 +15,7 @@ export default function PartyDetailLoading() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
+        <div className="max-w-app mx-auto space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-20 w-full" />

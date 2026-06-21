@@ -13,10 +13,13 @@ const config: Config = {
       center: true,
       padding: '1rem',
       screens: {
-        '2xl': '1400px',
+        '2xl': '1600px',
       },
     },
     extend: {
+      maxWidth: {
+        app: '1600px',
+      },
       fontFamily: {
         sans: [
           'var(--font-inter)',

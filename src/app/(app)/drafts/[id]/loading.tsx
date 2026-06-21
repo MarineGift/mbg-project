@@ -15,7 +15,7 @@ export default function DraftDetailLoading() {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] max-w-7xl mx-auto">
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] max-w-app mx-auto">
           <div className="space-y-4">
             <Skeleton className="h-44 w-full" />
             <Skeleton className="h-36 w-full" />

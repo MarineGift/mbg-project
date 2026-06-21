@@ -15,7 +15,7 @@ export default async function EmailWhitelistPage() {
     .map(e => e.pattern);
   const assignments = await getAddressAssignments(addressEmails);
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-app mx-auto">
       <EmailWhitelistClient
         initialEntries={entries}
         unregisteredDomains={unregistered}

@@ -8,7 +8,7 @@ export default async function EmailHistoryPage() {
   const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID ?? '';
   if (!orgId) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-app mx-auto p-6">
         <div className="text-red-700 bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
           NEXT_PUBLIC_DEFAULT_ORG_ID not set.
         </div>
@@ -22,7 +22,7 @@ export default async function EmailHistoryPage() {
   ]);
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-app mx-auto p-6">
       <EmailHistoryClient rows={rows} totalCount={total} />
     </div>
   );

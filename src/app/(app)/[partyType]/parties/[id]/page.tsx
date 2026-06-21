@@ -123,7 +123,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
       <PartyHeader party={full.party} />
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-app mx-auto">
           <PartyDetailTabs
             overview={
               <>

@@ -78,6 +78,11 @@
   * {
     @apply border-border;
   }
+
+  /* Global type scale-up (modest). Remove this html rule to revert. */
+  html {
+    font-size: 106.25%;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'rlig' 1, 'calt' 1;

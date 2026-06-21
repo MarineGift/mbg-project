@@ -37,7 +37,7 @@ export default async function DraftDetailPage({ params }: PageProps) {
       <DraftDetailHeader draft={draft} />
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] max-w-7xl mx-auto">
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] max-w-app mx-auto">
           {/* Left column — context panels */}
           <div className="space-y-4">
             <ClassificationPanel draft={draft} />

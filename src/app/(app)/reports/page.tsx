@@ -174,7 +174,7 @@ export default async function ReportsPage({
   const maxDeals = Math.max(1, ...stageRows.map((r) => r.deals));
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
+    <div className="mx-auto max-w-app p-6">
       <div className="mb-1 flex items-baseline justify-between">
         <h1 className="text-xl font-semibold text-foreground">Reports</h1>
         <span className="text-xs text-muted-foreground">Cycle-time analysis</span>

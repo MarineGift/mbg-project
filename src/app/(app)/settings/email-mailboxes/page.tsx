@@ -5,7 +5,7 @@ import { InboundMailboxesClient } from "@/components/settings/inbound-mailboxes-
 export default async function EmailMailboxesPage() {
   const mailboxes = await listMailboxes();
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-app mx-auto">
       <InboundMailboxesClient initialMailboxes={mailboxes} />
     </div>
   );

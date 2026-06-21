@@ -223,7 +223,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="max-w-app mx-auto p-6 space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">URM (Marinebio Group)</h1>
         <p className="text-sm text-muted-foreground mt-1">{auth.email}</p>
