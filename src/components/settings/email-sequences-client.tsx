@@ -2,7 +2,7 @@
 // src/components/settings/email-sequences-client.tsx
 
 import { useState, useTransition } from 'react';
-import { archiveSequence, triggerSequenceProcessor, getSequenceForEdit } from '@/lib/actions/email-sequences';
+import { archiveSequence, triggerSequenceProcessor, getSequenceForEdit, duplicateSequence } from '@/lib/actions/email-sequences';
 import { SequenceFormDialog } from './sequence-form-dialog';
 import { BulkEnrollDialog } from './bulk-enroll-dialog';
 import { SequenceOpensDialog } from './sequence-opens-dialog';
@@ -46,6 +46,29 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
     startTransition(async () => {
       await archiveSequence(seqId);
       setSequences(prev => prev.filter(s => s.id !== seqId));
+    });
+  }
+
+  function handleDuplicate(seq: EmailSequence) {
+    setRunResult(null);
+    startTransition(async () => {
+      const res = await duplicateSequence(orgId, seq.id);
+      if ('error' in res) {
+        setRunResult(`Duplicate failed: ${res.error}`);
+      } else {
+        setSequences(prev => [
+          ...prev,
+          {
+            ...seq,
+            id: res.id,
+            name: `${seq.name} (copy)`,
+            active_enrollments: 0,
+            total_sends: 0,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        setRunResult(`Duplicated "${seq.name}" -> "${seq.name} (copy)". Enroll the test party on the copy, then Run Now.`);
+      }
     });
   }
 
@@ -175,6 +198,18 @@ export function EmailSequencesClient({ sequences: initial, orgId }: Props) {
                         className="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
                       >
                         Bulk Enroll
+                      </button>
+                      <button
+                        onClick={() => handleDuplicate(seq)}
+                        disabled={isPending}
+                        className="text-gray-400 hover:text-blue-600 disabled:opacity-50"
+                        title="Duplicate - clone name, steps, and sender into a new sequence"
+                        aria-label="Duplicate sequence"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
                       </button>
                       <button
                         onClick={() => handleEdit(seq)}

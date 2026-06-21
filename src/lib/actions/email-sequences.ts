@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { rpc } from '@/lib/rpc/typed-rpc';
 import type { SequenceDraft } from '@/types/phase21b';
+import { getSequenceFromAccountId, setSequenceFromAccount } from '@/lib/actions/sequence-sender';
 
 // ===== Sequence CRUD =====
 
@@ -156,6 +157,47 @@ export async function triggerSequenceProcessor(sequenceId?: string | null): Prom
 
 
 // ===== Read action (for client components that need sequence + steps) =====
+
+/**
+ * Duplicate a sequence: creates a new sequence with the same name + " (copy)",
+ * the same description, identical steps, and the same From (sender) account.
+ * Active enrollments and send history are NOT copied (the copy starts clean) --
+ * ideal for testing without touching the live sequence's enrollments.
+ */
+export async function duplicateSequence(
+  orgId: string,
+  sequenceId: string,
+): Promise<{ id: string } | { error: string }> {
+  const src = await getSequenceForEdit(sequenceId);
+  if ('error' in src) return { error: src.error };
+  const seq = src.data;
+
+  const draft: SequenceDraft = {
+    name: `${seq.name} (copy)`,
+    description: seq.description ?? '',
+    steps: seq.steps
+      .slice()
+      .sort((a, b) => a.step_order - b.step_order)
+      .map(s => ({
+        step_order: s.step_order,
+        day_offset: s.day_offset,
+        subject:    s.subject,
+        body_plain: s.body_plain,
+      })),
+  };
+
+  const created = await createSequence(orgId, draft);
+  if ('error' in created) return created;
+
+  // Copy the From (sender) account so the duplicate sends identically.
+  const from = await getSequenceFromAccountId(sequenceId);
+  if ('accountId' in from && from.accountId) {
+    await setSequenceFromAccount(created.id, from.accountId);
+  }
+
+  revalidatePath('/settings/email-sequences');
+  return { id: created.id };
+}
 
 export async function getSequenceForEdit(
   sequenceId: string
