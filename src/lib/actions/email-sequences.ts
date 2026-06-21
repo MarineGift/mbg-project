@@ -91,7 +91,7 @@ export async function enrollParty(
     p_organization_id: orgId,
     p_sequence_id: sequenceId,
     p_party_id:    partyId,
-    p_contact_id:  contactId ?? '',
+    p_contact_id:  contactId ?? null,
     p_enrolled_by: user.id,
   });
 
