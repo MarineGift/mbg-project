@@ -160,3 +160,5 @@ patch-d6-*.ps1
 
 # Env setup notes (contains secrets - never commit)
 env.download
+*.bak
+*.bak_*
