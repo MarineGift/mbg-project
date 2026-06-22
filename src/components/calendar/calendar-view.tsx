@@ -22,6 +22,7 @@ interface Props {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MAX_CHIPS_PER_DAY = 3
+const MAX_WEEK_ALLDAY = 4
 
 // CRM-internal item types that are hidden by default (toggle to show)
 const CRM_TYPES: ReadonlyArray<CalendarItem['type']> = ['task', 'communication']
@@ -154,13 +155,14 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 function WeekGrid({
   weekStart, items, today,
-  onSlotClick, onItemClick,
+  onSlotClick, onItemClick, onDayClick,
 }: {
   weekStart: Date
   items: CalendarItem[]
   today: Date
   onSlotClick: (d: Date) => void
   onItemClick: (item: CalendarItem) => void
+  onDayClick: (d: Date) => void
 }) {
   const days: Date[] = []
   for (let i = 0; i < 7; i++) {
@@ -195,7 +197,11 @@ function WeekGrid({
         {days.map((day, i) => {
           const dh = isSameDay(day, today)
           return (
-            <div key={i} className="border-l border-border px-1 py-1 text-center">
+            <div
+              key={i}
+              onClick={() => onDayClick(day)}
+              className="cursor-pointer border-l border-border px-1 py-1 text-center hover:bg-muted/50"
+            >
               <div className={cn(
                 'text-[11px] uppercase',
                 day.getDay() === 0 ? 'text-red-500'
@@ -218,15 +224,27 @@ function WeekGrid({
       {/* All-day row */}
       <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
         <div className="text-xs text-muted-foreground p-1 pt-2">All day</div>
-        {days.map((day, i) => (
-          <div key={i} className="border-l border-border min-h-[28px] p-0.5 space-y-0.5">
-            {allDayItems
-              .filter(item => isSameDay(new Date(item.start_at), day))
-              .map(item => (
+        {days.map((day, i) => {
+          const dayAll = allDayItems.filter(item => isSameDay(new Date(item.start_at), day))
+          const shown  = dayAll.slice(0, MAX_WEEK_ALLDAY)
+          const extra  = dayAll.length - shown.length
+          return (
+            <div key={i} className="border-l border-border min-h-[28px] p-0.5 space-y-0.5">
+              {shown.map(item => (
                 <CalendarEventChip key={item.id} item={item} compact onClick={() => onItemClick(item)} />
               ))}
-          </div>
-        ))}
+              {extra > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onDayClick(day)}
+                  className="w-full rounded px-1 py-0.5 text-left text-[11px] text-muted-foreground hover:bg-muted"
+                >
+                  +{extra} more
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Timed grid */}
@@ -433,6 +451,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           today={today}
           onSlotClick={d => onCreateEvent?.(d)}
           onItemClick={item => onItemClick?.(item)}
+          onDayClick={d => setDayModal(d)}
         />
       )}
 
