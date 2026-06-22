@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import { useTranslations } from 'next-intl';
 import {
   Star,
@@ -29,6 +30,8 @@ interface Props {
   partyId: string;
   /** activity per contact id, fetched server-side */
   activitiesByContact: Record<string, ContactActivity[]>;
+  /** email templates for the compose dialog (optional) */
+  templates?: unknown[];
 }
 
 function displayName(c: PartyContact): string {
@@ -130,12 +133,13 @@ function ContactProfileBlock({ profile }: { profile: ContactProfile }) {
   );
 }
 
-export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: Props) {
+export function PartyContactsPanel({ contacts, partyId, activitiesByContact, templates }: Props) {
   const t = useTranslations('partyDetail.contacts');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     contacts[0]?.id ?? null,
   );
+  const [composeTo, setComposeTo] = useState<{ email: string; contactId: string } | null>(null);
 
   const selected = contacts.find((c) => c.id === selectedId) ?? null;
   const activities = selected ? (activitiesByContact[selected.id] ?? []) : [];
@@ -243,11 +247,12 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                         return (
                           <>
                             {shown.map((em) => (
-                              <a
+                              <button
                                 key={em.email}
-                                href={`/compose?to=${encodeURIComponent(em.email)}&contact=${selected.id}`}
+                                type="button"
+                                onClick={() => setComposeTo({ email: em.email, contactId: selected.id })}
                                 className={[
-                                  'text-xs flex items-center gap-1 hover:text-foreground truncate',
+                                  'text-xs flex items-center gap-1 hover:text-foreground truncate text-left w-full',
                                   em.isPrimary ? 'text-foreground font-medium' : 'text-muted-foreground',
                                 ].join(' ')}
                               >
@@ -256,7 +261,7 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                                 <span className="text-[10px] opacity-70 shrink-0">
                                   {em.isPrimary ? '· primary' : em.label ? `· ${em.label}` : '· alt'}
                                 </span>
-                              </a>
+                              </button>
                             ))}
                             {extra > 0 && (
                               <span className="text-[10px] text-muted-foreground pl-4">+{extra} more</span>
@@ -352,6 +357,17 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         partyId={partyId}
+      />
+
+      <ComposeEmailDialog
+        open={!!composeTo}
+        onOpenChange={(open) => { if (!open) setComposeTo(null); }}
+        mode="new"
+        initialTab="direct"
+        partyId={partyId}
+        defaultTo={composeTo?.email}
+        contactId={composeTo?.contactId ?? null}
+        templates={templates ?? []}
       />
     </>
   );

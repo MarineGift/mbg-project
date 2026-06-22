@@ -185,6 +185,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 contacts={full.contacts}
                 partyId={full.party.id}
                 activitiesByContact={contactActivities}
+                templates={templates}
               />
             }
             tasks={
