@@ -23,6 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { createMeetingAction as createMeeting } from '@/app/actions/create-meeting'
+import { searchPartiesForMeeting, type PartySearchResult } from '@/app/actions/search-parties'
 import type { MeetingType, MeetingChannel } from '@/lib/queries/meetings'
 import {
   loadPartyEngagementsForForm,
@@ -94,6 +95,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
   const [stageId,      setStageId]      = useState<string | null>(null)
   const [engagements,  setEngagements]  = useState<KanbanCard[]>([])
   const [stages,       setStages]       = useState<KanbanStage[]>([])
+  const [partyResults, setPartyResults] = useState<PartySearchResult[]>([])
   const [loadingEngagements, setLoadingEngagements] = useState(false)
   const [loadingStages,      setLoadingStages]      = useState(false)
 
@@ -154,13 +156,27 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
     return () => { cancelled = true }
   }, [engagementId, engagements])
 
+  // Party search (name -> party UUID). Selection is cleared while typing.
+  useEffect(() => {
+    if (!open) return
+    const q = partySearch.trim()
+    if (partyId || q.length < 2) { setPartyResults([]); return }
+    let cancelled = false
+    const t = setTimeout(() => {
+      searchPartiesForMeeting(q)
+        .then((res) => { if (!cancelled) setPartyResults(res) })
+        .catch(() => { if (!cancelled) setPartyResults([]) })
+    }, 250)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [open, partySearch, partyId])
+
   function reset() {
     setTitle(''); setPartyId(''); setPartySearch('')
     setScheduledAt(defaultDt); setDuration(30)
     setMeetingType('discovery'); setMeetingMode('video_call')
     setMeetingUrl(''); setAgenda(''); setError(null)
     setEngagementId(null); setStageId(null)
-    setEngagements([]); setStages([])
+    setEngagements([]); setStages([]); setPartyResults([])
   }
 
   function handleClose() { reset(); onClose() }
@@ -214,18 +230,35 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
             />
           </div>
 
-          {/* Party - simple text input (to be replaced by a Party search component) */}
-          <div className="space-y-1">
+          {/* Party search -> resolves to a party UUID */}
+          <div className="space-y-1 relative">
             <Label htmlFor="mtg-party">Party *</Label>
             <Input
               id="mtg-party"
-              placeholder="Enter Party ID (Party search UI to be wired up)"
-              value={partyId}
-              onChange={e => setPartyId(e.target.value)}
+              placeholder="Search party by name..."
+              value={partySearch}
+              autoComplete="off"
+              onChange={e => { setPartySearch(e.target.value); setPartyId('') }}
             />
-            <p className="text-xs text-muted-foreground">
-              TODO: replace with PartySearchCombobox
-            </p>
+            {partyId ? (
+              <p className="text-xs text-green-600">Party selected</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Type at least 2 letters, then pick a party</p>
+            )}
+            {!partyId && partyResults.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-56 overflow-y-auto">
+                {partyResults.map(pr => (
+                  <button
+                    key={pr.id}
+                    type="button"
+                    onClick={() => { setPartyId(pr.id); setPartySearch(pr.party_name); setPartyResults([]) }}
+                    className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    {pr.party_name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Stage 26 - Engagement (optional, shown after partyId is selected) */}
