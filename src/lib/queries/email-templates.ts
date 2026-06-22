@@ -20,6 +20,7 @@ export interface EmailTemplate {
   bodyPlain: string;
   bodyHtml: string | null;
   module: string | null;
+  stageCode: string | null;
   isActive: boolean;
   createdBy: string | null;
   createdAt: string;
@@ -35,6 +36,7 @@ interface RawEmailTemplate {
   body_plain: string;
   body_html: string | null;
   module: string | null;
+  stage_code: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -42,7 +44,7 @@ interface RawEmailTemplate {
 }
 
 const SELECT_COLS =
-  'id, organization_id, name, category, subject, body_plain, body_html, module:party_type, is_active, created_by, created_at, updated_at';
+  'id, organization_id, name, category, subject, body_plain, body_html, module:party_type, stage_code, is_active, created_by, created_at, updated_at';
 
 function mapTemplate(row: RawEmailTemplate): EmailTemplate {
   return {
@@ -54,6 +56,7 @@ function mapTemplate(row: RawEmailTemplate): EmailTemplate {
     bodyPlain: row.body_plain,
     bodyHtml: row.body_html,
     module: row.module,
+    stageCode: row.stage_code,
     isActive: row.is_active,
     createdBy: row.created_by,
     createdAt: row.created_at,

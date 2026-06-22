@@ -11,6 +11,37 @@ import {
 const MODULES = ['investor', 'paper_mill', 'partner', 'customer', 'filler_supplier'] as const;
 type ModuleValue = (typeof MODULES)[number] | '';
 
+const STAGE_OPTIONS: Record<string, { code: string; label: string }[]> = {
+  investor: [
+    { code: 'cold_outreach', label: 'Cold outreach' },
+    { code: 'reply_received', label: 'Reply received' },
+    { code: 'first_meeting', label: 'First meeting' },
+    { code: 'due_diligence', label: 'Due diligence' },
+    { code: 'followup_meeting', label: 'Follow-up meeting' },
+    { code: 'term_sheet', label: 'Term sheet' },
+    { code: 'contract', label: 'Contract' },
+  ],
+  paper_mill: [
+    { code: 'lead', label: 'Lead' },
+    { code: 'qualified', label: 'Qualified' },
+    { code: 'sample_sent', label: 'Sample sent' },
+    { code: 'trial_eval', label: 'Trial / Eval' },
+    { code: 'quotation', label: 'Quotation' },
+    { code: 'negotiation', label: 'Negotiation' },
+    { code: 'won', label: 'Won' },
+  ],
+  filler_supplier: [
+    { code: 'prospect', label: 'Prospect' },
+    { code: 'contacted', label: 'Contacted' },
+    { code: 'nda', label: 'NDA' },
+    { code: 'lab_test', label: 'Lab test' },
+    { code: 'evaluation', label: 'Evaluation' },
+    { code: 'pilot', label: 'Pilot' },
+    { code: 'royalty', label: 'Royalty Agreement' },
+    { code: 'mass_production', label: 'Mass Production' },
+  ],
+};
+
 interface Props {
   open: boolean;
   editing: EmailTemplate | null;
@@ -25,6 +56,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
   const [bodyPlain, setBodyPlain] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
   const [moduleVal, setModuleVal] = useState<ModuleValue>('');
+  const [stageVal, setStageVal] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -38,6 +70,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
       setBodyPlain(editing.bodyPlain);
       setBodyHtml(editing.bodyHtml ?? '');
       setModuleVal((editing.module as ModuleValue) ?? '');
+      setStageVal(editing.stageCode ?? '');
       setIsActive(editing.isActive);
     } else {
       setName('');
@@ -46,6 +79,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
       setBodyPlain('');
       setBodyHtml('');
       setModuleVal('');
+      setStageVal('');
       setIsActive(true);
     }
     setErrorMsg(null);
@@ -62,6 +96,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
       bodyPlain,
       bodyHtml: bodyHtml || null,
       module: (moduleVal || null) as TemplateInput['module'],
+      stage_code: stageVal || null,
       isActive,
     };
 
@@ -85,6 +120,7 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
         bodyPlain,
         bodyHtml: bodyHtml.trim() || null,
         module: moduleVal || null,
+        stageCode: stageVal || null,
         isActive,
         createdBy: editing?.createdBy ?? null,
         createdAt: editing?.createdAt ?? nowIso,
@@ -129,13 +165,29 @@ export function TemplateFormModal({ open, editing, onClose, onSaved }: Props) {
               <label className="block text-sm font-medium text-gray-700">Party type</label>
               <select
                 value={moduleVal}
-                onChange={(e) => setModuleVal(e.target.value as ModuleValue)}
+                onChange={(e) => { setModuleVal(e.target.value as ModuleValue); setStageVal(""); }}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">(none)</option>
                 {MODULES.map((m) => (
                   <option key={m} value={m}>
                     {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Stage</label>
+              <select
+                value={stageVal}
+                onChange={(e) => setStageVal(e.target.value)}
+                disabled={!moduleVal || !STAGE_OPTIONS[moduleVal]}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:opacity-60"
+              >
+                <option value="">(none)</option>
+                {(STAGE_OPTIONS[moduleVal] ?? []).map((st) => (
+                  <option key={st.code} value={st.code}>
+                    {st.label}
                   </option>
                 ))}
               </select>

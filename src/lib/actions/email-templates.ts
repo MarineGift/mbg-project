@@ -27,6 +27,7 @@ const TemplateInputSchema = z.object({
   bodyPlain: z.string().min(1, 'Body is required'),
   bodyHtml: z.string().nullable().optional(),
   module: z.enum(MODULES).nullable().optional(),
+  stage_code: z.string().max(100).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -58,6 +59,7 @@ export async function createEmailTemplate(
     body_plain: parsed.data.bodyPlain,
     body_html: parsed.data.bodyHtml?.trim() || null,
     party_type: parsed.data.module || null,
+    stage_code: parsed.data.stage_code || null,
     is_active: parsed.data.isActive ?? true,
     created_by: auth.userId,
   };
@@ -103,6 +105,7 @@ export async function updateEmailTemplate(
     body_plain: parsed.data.bodyPlain,
     body_html: parsed.data.bodyHtml?.trim() || null,
     party_type: parsed.data.module || null,
+    stage_code: parsed.data.stage_code || null,
     is_active: parsed.data.isActive ?? true,
     updated_at: new Date().toISOString(),
   };
