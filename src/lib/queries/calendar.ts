@@ -30,102 +30,24 @@ import { pushEventUpdate, pushEventDelete } from '@/lib/calendar/write-back'
 // Types
 // ─────────────────────────────────────────────
 
-export type CalendarItemType =
-  | 'meeting' | 'event' | 'task' | 'communication' | 'todo' | 'milestone'
-export type CalendarEventSource = 'internal' | 'google' | 'microsoft'
-
-/** Filterable feed source. The calendar/cockpit filter UI keys off this. */
-export type CalendarFeedSource =
-  | 'event'
-  | 'meeting'
-  | 'deal_task'
-  | 'communication'
-  | 'todo'
-  | 'milestone_next_step'
-  | 'milestone_close'
-
-export interface CalendarFeedSourceMeta {
-  label: string
-  color: string
-  /** Whether this source's layer is shown by default in the filter UI. */
-  defaultVisible: boolean
-}
-
-/** Per-source color + default visibility. Decision: close-date layer defaults OFF. */
-export const CALENDAR_FEED_META: Record<CalendarFeedSource, CalendarFeedSourceMeta> = {
-  event:               { label: 'Calendar events', color: '#3b82f6', defaultVisible: true  },
-  meeting:             { label: 'Meetings',        color: '#8b5cf6', defaultVisible: true  },
-  deal_task:           { label: 'Deal tasks',      color: '#0ea5e9', defaultVisible: true  },
-  communication:       { label: 'Communications',  color: '#64748b', defaultVisible: true  },
-  todo:                { label: 'To-Do',           color: '#10b981', defaultVisible: true  },
-  milestone_next_step: { label: 'Deal: next step', color: '#f59e0b', defaultVisible: true  },
-  milestone_close:     { label: 'Deal: close',     color: '#ef4444', defaultVisible: false },
-}
-
-export const CALENDAR_FEED_SOURCES: CalendarFeedSource[] =
-  Object.keys(CALENDAR_FEED_META) as CalendarFeedSource[]
-
-const LEGACY_SOURCES: CalendarFeedSource[] =
-  ['event', 'meeting', 'deal_task', 'communication']
-
-export interface CalendarAttendee {
-  email: string
-  name?: string
-  [key: string]: unknown
-}
-
-export interface CalendarReminder {
-  minutes: number
-  method?: string
-  [key: string]: unknown
-}
-
-export interface CalendarItem {
-  id:            string
-  type:          CalendarItemType
-  title:         string
-  start_at:      string
-  end_at:        string
-  is_all_day:    boolean
-  // context
-  party_id:      string | null
-  party_name:    string | null
-  engagement_id: string | null
-  // extras
-  source?:       CalendarEventSource
-  meeting_url?:  string | null
-  status?:       string
-  location?:     string | null
-  // meeting-specific
-  meeting_type?: string
-  // event edit fields (Phase 1)
-  description?:   string | null
-  visibility?:    string | null
-  attendees?:     CalendarAttendee[] | null
-  external_id?:   string | null
-  connection_id?: string | null
-  timezone?:      string | null
-  // event edit fields (Phase 2)
-  color?:           string | null
-  recurrence_rule?: string | null
-  reminders?:       CalendarReminder[] | null
-  transparency?:    string | null
-  // todo_v2 unified feed additions
-  feed_source?:    CalendarFeedSource
-  milestone_kind?: 'next_step' | 'close'
-  deal_id?:        string | null
-  board_id?:       string | null
-}
-
-// ─────────────────────────────────────────────
-// getCalendarFeed - unified read-model (todo_v2)
-// ─────────────────────────────────────────────
-
-export interface GetCalendarFeedOptions {
-  /** Which feed sources to include. Defaults to ALL sources. */
-  sources?: CalendarFeedSource[]
-}
-
+// ---------------------------------------------------------------
+// Types + constants moved to ./calendar-meta (client-safe, no server imports).
+// Re-exported here for back-compat with all '@/lib/queries/calendar' importers.
+// ---------------------------------------------------------------
+export * from './calendar-meta'
+import {
+  CALENDAR_FEED_META,
+  CALENDAR_FEED_SOURCES,
+  LEGACY_SOURCES,
+} from './calendar-meta'
+import type {
+  CalendarEventSource,
+  CalendarFeedSource,
+  CalendarAttendee,
+  CalendarReminder,
+  CalendarItem,
+  GetCalendarFeedOptions,
+} from './calendar-meta'
 export async function getCalendarFeed(
   rangeStart: string,
   rangeEnd:   string,

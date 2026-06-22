@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CalendarView } from '@/components/calendar/calendar-view'
 import { MeetingCreateModal } from '@/components/meetings/meeting-create-modal'
-import type { CalendarItem, CalendarFeedSource } from '@/lib/queries/calendar'
-import { CALENDAR_FEED_META, CALENDAR_FEED_SOURCES } from '@/lib/queries/calendar'
+import type { CalendarItem, CalendarFeedSource } from '@/lib/queries/calendar-meta'
+import { CALENDAR_FEED_META, CALENDAR_FEED_SOURCES } from '@/lib/queries/calendar-meta'
 import { cn } from '@/lib/utils'
 import {
   getCalendarFeedAction as getCalendarFeed,
