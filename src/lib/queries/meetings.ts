@@ -17,6 +17,7 @@
 //
 import 'server-only'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 
 // =============================================================
 // Types - exactly aligned with the DB enum / schema
@@ -273,6 +274,7 @@ export async function createMeeting(
   input: CreateMeetingInput,
 ): Promise<MeetingRow> {
   const supabase = await createSupabaseServerClient()
+  const auth = await requireAuth()
   const { attendees, ...meetingData } = input
 
   const occurredAt = meetingData.scheduled_at ?? new Date().toISOString()
@@ -281,6 +283,7 @@ export async function createMeeting(
     .schema('app')
     .from('meetings' as never)
     .insert({
+      organization_id: auth.organizationId,
       party_id:      meetingData.party_id,
       engagement_id: meetingData.engagement_id ?? null,
       stage_id:      meetingData.stage_id ?? null,
@@ -294,7 +297,7 @@ export async function createMeeting(
       agenda:        meetingData.agenda ?? null,
       location:      meetingData.location ?? null,
       meeting_url:   meetingData.meeting_url ?? null,
-      user_id:       meetingData.user_id ?? null,
+      user_id:       meetingData.user_id ?? auth.userId,
       action_items:  [],
       follow_up_task_ids: [],
     } as never)
