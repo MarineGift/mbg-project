@@ -242,9 +242,12 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       if (cancelled || !res.ok) return;
       setDealOptions(res.deals);
       // auto-select when exactly one open deal and nothing preset
-      setDealId((prev) =>
-        prev !== NO_DEAL ? prev : res.deals.length === 1 ? (res.deals[0]?.dealId ?? NO_DEAL) : NO_DEAL,
-      );
+      const targetDealId =
+        props.dealId ?? (res.deals.length === 1 ? (res.deals[0]?.dealId ?? null) : null);
+      setDealId((prev) => (prev !== NO_DEAL ? prev : targetDealId ?? NO_DEAL));
+      // Auto-set the Template stage filter to the selected deal's current stage.
+      const selDeal = res.deals.find((d) => d.dealId === targetDealId);
+      if (selDeal?.stageCode) setFilterStage(selDeal.stageCode);
     });
     return () => {
       cancelled = true;

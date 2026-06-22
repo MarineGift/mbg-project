@@ -28,6 +28,7 @@ export interface OpenDealOption {
   dealId: string;
   dealName: string;
   status: string;
+  stageCode: string | null;
 }
 
 const TERMINAL_DEAL_STATUSES = ['won', 'lost', 'archived'];
@@ -136,16 +137,39 @@ export async function listOpenDealsForParty(
   const { data: deals, error: dealErr } = await supabase
     .schema('app')
     .from('deals' as never)
-    .select('id, deal_name, status')
+    .select('id, deal_name, status, current_stage_id')
     .in('id', dealIds)
     .is('deleted_at', null)
     .order('updated_at', { ascending: false });
 
   if (dealErr) return { ok: false, error: dealErr.message };
 
-  const open = ((deals ?? []) as Array<{ id: string; deal_name: string; status: string }>)
-    .filter((d) => !TERMINAL_DEAL_STATUSES.includes(d.status))
-    .map((d) => ({ dealId: d.id, dealName: d.deal_name, status: d.status }));
+  const dealRows = ((deals ?? []) as Array<{
+    id: string; deal_name: string; status: string; current_stage_id: string | null;
+  }>).filter((d) => !TERMINAL_DEAL_STATUSES.includes(d.status));
+
+  // Resolve current_stage_id -> stages.code (separate fetch; avoids embed cache issues)
+  const stageIds = Array.from(
+    new Set(dealRows.map((d) => d.current_stage_id).filter(Boolean)),
+  ) as string[];
+  const stageCodeById = new Map<string, string>();
+  if (stageIds.length > 0) {
+    const { data: st } = await supabase
+      .schema('app')
+      .from('stages' as never)
+      .select('id, code')
+      .in('id', stageIds);
+    for (const r of (st ?? []) as Array<{ id: string; code: string }>) {
+      stageCodeById.set(r.id, r.code);
+    }
+  }
+
+  const open = dealRows.map((d) => ({
+    dealId: d.id,
+    dealName: d.deal_name,
+    status: d.status,
+    stageCode: d.current_stage_id ? (stageCodeById.get(d.current_stage_id) ?? null) : null,
+  }));
 
   return { ok: true, deals: open };
 }
