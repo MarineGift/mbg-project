@@ -74,6 +74,7 @@ interface PartyRow {
   party_level: PartyLevel | null; parent_party_id: string | null;
   country_code: string | null; city: string | null; region: string | null;
   interest_tags: string[] | null; website: string | null; created_at: string;
+  entity_type_id: number | null;
 }
 
 interface PageProps {
@@ -161,6 +162,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     location_desc: { col: 'city',         asc: false },
     state_asc:     { col: 'region',       asc: true  },
     state_desc:    { col: 'region',       asc: false },
+    etype_asc:     { col: 'entity_type_id', asc: true  },
+    etype_desc:    { col: 'entity_type_id', asc: false },
   };
   const dbSort = DB_SORT[sortParam] ?? { col: 'party_name', asc: true };
   const page        = Math.max(1, Number(sp.page ?? 1));
@@ -383,7 +386,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, party_name, status, country_code, city, region, website, interest_tags, created_at',
+      'id, party_name, status, country_code, city, region, website, interest_tags, created_at, entity_type_id',
       { count: 'exact' },
     )
     .eq('party_type_id' as never, partyTypeId)
@@ -573,6 +576,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const hLocation = sortHeader('location_asc', 'location_desc');
   const hState    = sortHeader('state_asc', 'state_desc');
   const hType     = sortHeader('type_asc', 'type_desc');
+  const hEntityType = sortHeader('etype_asc', 'etype_desc');
   const hPriority = sortHeader('priority', 'priority_asc');
 
   return (
@@ -653,7 +657,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                     </Link>
                   </th>
                   {showEntityType && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Type</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hEntityType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hEntityType.active ? 'text-foreground' : ''}`}>
+                        Type <span className={`text-[10px] ${hEntityType.active ? '' : 'opacity-40'}`}>{hEntityType.arrow}</span>
+                      </Link>
+                    </th>
                   )}
                   {showLinks ? (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
@@ -732,7 +740,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         {showEntityType && (
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
                             {entityTypeAll[p.id] && (
-                              <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.en}</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.ko}</span>
                             )}
                             <span>
                               {[
@@ -777,7 +785,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </td>
                       {showEntityType && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                          {entityTypeAll[p.id]?.en ?? '-'}
+                          {entityTypeAll[p.id]?.ko ?? '-'}
                         </td>
                       )}
                       {showLinks && (
