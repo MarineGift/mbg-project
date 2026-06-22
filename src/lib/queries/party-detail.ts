@@ -172,7 +172,7 @@ export async function fetchPartyDetail(
     supabase
       .schema('app')
       .from('contacts' as never)
-      .select('id, full_name, email, title_text, phone_e164, is_primary, notes, contact_emails(email, is_primary, label)', {
+      .select('id, full_name, email, title_text, phone_e164, is_primary, notes', {
         count: 'exact',
       })
       .eq('party_id', partyId)
@@ -278,8 +278,37 @@ export async function fetchPartyDetail(
     }
   }
 
+  // contact_emails (all emails per contact, primary first). Separate fetch -
+  // new table; embedding risks a stale PostgREST schema cache.
+  const emailsByContact = new Map<string, { email: string; isPrimary: boolean; label: string | null }[]>();
+  if (contactIds.length > 0) {
+    const emailsRes = await supabase
+      .schema('app')
+      .from('contact_emails' as never)
+      .select('contact_id, email, is_primary, label')
+      .in('contact_id', contactIds);
+    if (emailsRes.error) {
+      console.error('[party-detail] contact_emails error:', emailsRes.error);
+    } else {
+      for (const raw of (emailsRes.data ?? []) as unknown[]) {
+        const r = raw as Record<string, unknown>;
+        const cid = r.contact_id as string;
+        const arr = emailsByContact.get(cid) ?? [];
+        arr.push({
+          email: (r.email as string) ?? '',
+          isPrimary: (r.is_primary as boolean) ?? false,
+          label: (r.label as string | null) ?? null,
+        });
+        emailsByContact.set(cid, arr);
+      }
+      for (const arr of emailsByContact.values()) {
+        arr.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+      }
+    }
+  }
+
   const contacts: PartyContact[] = ((contactsRes.data ?? []) as unknown[]).map(
-    (raw) => mapContact(raw, profilesByContact),
+    (raw) => mapContact(raw, profilesByContact, emailsByContact),
   );
   const engagements: PartyEngagement[] = (
     (engagementsRes.data ?? []) as unknown[]
@@ -371,6 +400,7 @@ export async function fetchPartyDetail(
 function mapContact(
   raw: unknown,
   profilesByContact: Map<string, ContactProfile>,
+  emailsByContact: Map<string, { email: string; isPrimary: boolean; label: string | null }[]>,
 ): PartyContact {
   const r = raw as Record<string, unknown>;
   const id = r.id as string;
@@ -382,16 +412,7 @@ function mapContact(
     phone: (r.phone_e164 as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
-    emails: Array.isArray(r.contact_emails)
-      ? (r.contact_emails as Array<Record<string, unknown>>)
-          .map((e) => ({
-            email: (e.email as string) ?? '',
-            isPrimary: (e.is_primary as boolean) ?? false,
-            label: (e.label as string | null) ?? null,
-          }))
-          .filter((e) => e.email)
-          .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
-      : [],
+    emails: emailsByContact.get(id) ?? [],
     profile: profilesByContact.get(id),
   };
 }

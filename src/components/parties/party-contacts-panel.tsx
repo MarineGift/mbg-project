@@ -231,22 +231,39 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                           {selected.jobTitle}
                         </p>
                       )}
-                      {(selected.emails && selected.emails.length > 0
-                        ? selected.emails
-                        : selected.email
-                          ? [{ email: selected.email, isPrimary: true, label: null }]
-                          : []
-                      ).map((em) => (
-                        <a
-                          key={em.email}
-                          href={`mailto:${em.email}`}
-                          className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground truncate"
-                        >
-                          <Mail className="h-3 w-3" />
-                          <span className="truncate">{em.email}</span>
-                          {em.label && <span className="text-[10px] opacity-60 shrink-0">({em.label})</span>}
-                        </a>
-                      ))}
+                      {(() => {
+                        const list =
+                          selected.emails && selected.emails.length > 0
+                            ? selected.emails
+                            : selected.email
+                              ? [{ email: selected.email, isPrimary: true, label: null }]
+                              : [];
+                        const shown = list.slice(0, 2);
+                        const extra = list.length - shown.length;
+                        return (
+                          <>
+                            {shown.map((em) => (
+                              <a
+                                key={em.email}
+                                href={`/compose?to=${encodeURIComponent(em.email)}&contact=${selected.id}`}
+                                className={[
+                                  'text-xs flex items-center gap-1 hover:text-foreground truncate',
+                                  em.isPrimary ? 'text-foreground font-medium' : 'text-muted-foreground',
+                                ].join(' ')}
+                              >
+                                <Mail className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{em.email}</span>
+                                <span className="text-[10px] opacity-70 shrink-0">
+                                  {em.isPrimary ? '· primary' : em.label ? `· ${em.label}` : '· alt'}
+                                </span>
+                              </a>
+                            ))}
+                            {extra > 0 && (
+                              <span className="text-[10px] text-muted-foreground pl-4">+{extra} more</span>
+                            )}
+                          </>
+                        );
+                      })()}
                       {selected.phone && (
                         <a
                           href={`tel:${selected.phone}`}
