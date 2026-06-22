@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition } from 'react'
 import type { CalendarItem } from '@/lib/queries/calendar'
 import { CalendarEventChip } from './calendar-event-chip'
+import { CALENDAR_FEED_META, CALENDAR_FEED_SOURCES } from '@/lib/queries/calendar-meta'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus } from 'lucide-react'
@@ -475,9 +476,17 @@ function DayEventsModal({
     day: 'numeric',
     weekday: 'long',
   })
+  // Group by feed source, in the canonical legend order.
+  const groups = CALENDAR_FEED_SOURCES
+    .map((src) => ({
+      src,
+      meta: CALENDAR_FEED_META[src],
+      list: sorted.filter((it) => (it.feed_source ?? 'event') === src),
+    }))
+    .filter((g) => g.list.length > 0)
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{dateLabel}</DialogTitle>
         </DialogHeader>
@@ -493,18 +502,32 @@ function DayEventsModal({
             {sorted.length} items
           </span>
         </div>
-        <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
-          {sorted.length === 0 ? (
+        <div className="max-h-[68vh] space-y-4 overflow-y-auto pr-1">
+          {groups.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No items on this day.
             </p>
           ) : (
-            sorted.map(item => (
-              <CalendarEventChip
-                key={item.id}
-                item={item}
-                onClick={(() => onItemClick(item)) as never}
-              />
+            groups.map((g) => (
+              <div key={g.src} className="space-y-1">
+                <div className="sticky top-0 z-10 flex items-center gap-2 bg-background py-1">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: g.meta.color }}
+                  />
+                  <span className="text-sm font-semibold">{g.meta.label}</span>
+                  <span className="text-xs text-muted-foreground">{g.list.length}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  {g.list.map((item) => (
+                    <CalendarEventChip
+                      key={item.id}
+                      item={item}
+                      onClick={(() => onItemClick(item)) as never}
+                    />
+                  ))}
+                </div>
+              </div>
             ))
           )}
         </div>
