@@ -172,7 +172,7 @@ export async function fetchPartyDetail(
     supabase
       .schema('app')
       .from('contacts' as never)
-      .select('id, full_name, email, title_text, phone_e164, is_primary, notes', {
+      .select('id, full_name, email, title_text, phone_e164, is_primary, notes, contact_emails(email, is_primary, label)', {
         count: 'exact',
       })
       .eq('party_id', partyId)
@@ -382,6 +382,16 @@ function mapContact(
     phone: (r.phone_e164 as string | null) ?? null,
     notes: (r.notes as string | null) ?? null,
     isPrimary: (r.is_primary as boolean) ?? false,
+    emails: Array.isArray(r.contact_emails)
+      ? (r.contact_emails as Array<Record<string, unknown>>)
+          .map((e) => ({
+            email: (e.email as string) ?? '',
+            isPrimary: (e.is_primary as boolean) ?? false,
+            label: (e.label as string | null) ?? null,
+          }))
+          .filter((e) => e.email)
+          .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
+      : [],
     profile: profilesByContact.get(id),
   };
 }

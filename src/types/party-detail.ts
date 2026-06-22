@@ -116,6 +116,8 @@ export interface PartyContact {
   phone: string | null;
   notes: string | null;
   isPrimary: boolean;
+  /** all emails from app.contact_emails, primary first; [] when none */
+  emails: { email: string; isPrimary: boolean; label: string | null }[];
   /** undefined when no app.contact_profiles row exists for this contact */
   profile?: ContactProfile;
 }

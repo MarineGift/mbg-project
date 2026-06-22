@@ -231,15 +231,22 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact }: P
                           {selected.jobTitle}
                         </p>
                       )}
-                      {selected.email && (
+                      {(selected.emails && selected.emails.length > 0
+                        ? selected.emails
+                        : selected.email
+                          ? [{ email: selected.email, isPrimary: true, label: null }]
+                          : []
+                      ).map((em) => (
                         <a
-                          href={`mailto:${selected.email}`}
+                          key={em.email}
+                          href={`mailto:${em.email}`}
                           className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground truncate"
                         >
                           <Mail className="h-3 w-3" />
-                          {selected.email}
+                          <span className="truncate">{em.email}</span>
+                          {em.label && <span className="text-[10px] opacity-60 shrink-0">({em.label})</span>}
                         </a>
-                      )}
+                      ))}
                       {selected.phone && (
                         <a
                           href={`tel:${selected.phone}`}
