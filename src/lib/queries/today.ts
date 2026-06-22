@@ -191,14 +191,22 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
     })
   }
 
-  const byDue = (a: CockpitItem, b: CockpitItem) =>
-    (a.due ?? '9999').localeCompare(b.due ?? '9999')
-  overdue.sort(byDue)
-  thisWeek.sort(byDue)
-  waitingFor.sort(byDue)
+  // True totals BEFORE capping (the UI badge shows these).
+  const counts = {
+    overdue: overdue.length, thisWeek: thisWeek.length, waitingFor: waitingFor.length,
+  }
+  const byDueAsc  = (a: CockpitItem, b: CockpitItem) => (a.due ?? '9999').localeCompare(b.due ?? '9999')
+  const byDueDesc = (a: CockpitItem, b: CockpitItem) => (b.due ?? '0000').localeCompare(a.due ?? '0000')
+  overdue.sort(byDueDesc)   // freshest-overdue first; ancient stale items truncate off the bottom
+  thisWeek.sort(byDueAsc)   // soonest first
+  waitingFor.sort(byDueAsc)
 
+  const LANE_LIMIT = 50
   return {
-    today, weekEnd, overdue, thisWeek, waitingFor,
-    counts: { overdue: overdue.length, thisWeek: thisWeek.length, waitingFor: waitingFor.length },
+    today, weekEnd,
+    overdue:    overdue.slice(0, LANE_LIMIT),
+    thisWeek:   thisWeek.slice(0, LANE_LIMIT),
+    waitingFor: waitingFor.slice(0, LANE_LIMIT),
+    counts,
   }
 }

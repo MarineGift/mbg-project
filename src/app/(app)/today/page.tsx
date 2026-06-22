@@ -47,10 +47,12 @@ function Lane(props: {
   icon: typeof AlertTriangle
   accent?: boolean
   items: CockpitItem[]
+  total: number
   emptyText: string
 }) {
-  const { title, icon: Icon, accent, items, emptyText } = props
-  const hot = !!accent && items.length > 0
+  const { title, icon: Icon, accent, items, total, emptyText } = props
+  const hot = !!accent && total > 0
+  const more = total - items.length
   return (
     <Card className={cn(hot && 'border-destructive/40')}>
       <CardHeader className="pb-3">
@@ -58,7 +60,7 @@ function Lane(props: {
           <Icon className={cn('h-4 w-4', accent ? 'text-destructive' : 'text-muted-foreground')} />
           <span>{title}</span>
           <Badge variant={hot ? 'destructive' : 'secondary'} className="ml-auto">
-            {items.length}
+            {total}
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -71,6 +73,9 @@ function Lane(props: {
               <ItemRow key={`${it.source}:${it.id}`} item={it} />
             ))}
           </div>
+        )}
+        {more > 0 && (
+          <p className="pt-2 text-xs text-muted-foreground">+{more} more</p>
         )}
       </CardContent>
     </Card>
@@ -101,11 +106,11 @@ export default async function TodayPage() {
       </header>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Lane title="Overdue" icon={AlertTriangle} accent items={cockpit.overdue}
+        <Lane title="Overdue" icon={AlertTriangle} accent items={cockpit.overdue} total={cockpit.counts.overdue}
           emptyText="Nothing overdue. Nice." />
-        <Lane title="This Week" icon={CalendarRange} items={cockpit.thisWeek}
+        <Lane title="This Week" icon={CalendarRange} items={cockpit.thisWeek} total={cockpit.counts.thisWeek}
           emptyText="No deadlines in the next 7 days." />
-        <Lane title="Waiting For" icon={Hourglass} items={cockpit.waitingFor}
+        <Lane title="Waiting For" icon={Hourglass} items={cockpit.waitingFor} total={cockpit.counts.waitingFor}
           emptyText="Nothing blocked or waiting." />
       </div>
     </div>
