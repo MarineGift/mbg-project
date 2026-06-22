@@ -578,7 +578,8 @@ function CalendarView(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-slate-200">
+      <div className="-mx-1 overflow-x-auto sm:mx-0">
+      <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-slate-200 min-w-[680px]">
         {WEEKDAYS.map((w) => (
           <div key={w}
             className="border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -625,6 +626,7 @@ function CalendarView(props: {
             </div>
           );
         })}
+      </div>
       </div>
 
       <p className="mt-2 text-[11px] text-slate-400">
