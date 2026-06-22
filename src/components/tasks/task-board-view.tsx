@@ -15,7 +15,7 @@
 //
 // Server actions: createItem / updateItem / deleteItem / moveItem.
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import type {
   BoardData,
   TaskItem,
@@ -669,6 +669,20 @@ function GanttView(props: {
     [items],
   );
 
+  // Responsive scale: stretch day columns to fill the container on wide screens,
+  // with a DAY_W floor so narrow screens keep a readable scale + horizontal scroll.
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [containerW, setContainerW] = useState(0);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const measure = () => setContainerW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rows.length]);
+
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
@@ -686,10 +700,13 @@ function GanttView(props: {
   for (let d = minDay; d <= maxDay; d++) days.push(d);
 
   const today = toDays(todayStr());
-  const trackW = days.length * DAY_W;
+  const dayW = containerW > 0
+    ? Math.max(DAY_W, Math.floor((containerW - LABEL_W) / days.length))
+    : DAY_W;
+  const trackW = days.length * dayW;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div ref={trackRef} className="overflow-x-auto rounded-xl border border-slate-200">
       <div style={{ width: LABEL_W + trackW }}>
         <div className="flex border-b border-slate-200 bg-slate-50">
           <div className="shrink-0 border-r border-slate-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
@@ -706,7 +723,7 @@ function GanttView(props: {
                 <div key={d}
                   className={'relative shrink-0 border-r border-slate-100 py-2 text-center text-[10px] ' +
                     (weekend ? 'bg-slate-100/60 text-slate-400' : 'text-slate-400')}
-                  style={{ width: DAY_W }}>
+                  style={{ width: dayW }}>
                   {dom === 1 && (
                     <span className="absolute left-1 top-0.5 text-[9px] font-bold text-emerald-600">
                       {MONTHS[Number(s.slice(5, 7)) - 1]}
@@ -720,8 +737,8 @@ function GanttView(props: {
         </div>
 
         {rows.map(({ item, ds, de }) => {
-          const left = (ds - minDay) * DAY_W;
-          const width = (de - ds + 1) * DAY_W;
+          const left = (ds - minDay) * dayW;
+          const width = (de - ds + 1) * dayW;
           const p = priMeta(item.priority);
           return (
             <div key={item.id} className="flex border-b border-slate-100 last:border-b-0">
@@ -737,19 +754,19 @@ function GanttView(props: {
                   if (dow !== 0 && dow !== 6) return null;
                   return (
                     <div key={`w${d}`} className="absolute top-0 h-full bg-slate-50"
-                      style={{ left: (d - minDay) * DAY_W, width: DAY_W }} />
+                      style={{ left: (d - minDay) * dayW, width: dayW }} />
                   );
                 })}
                 {today >= minDay && today <= maxDay && (
                   <div className="absolute top-0 z-10 h-full w-px bg-emerald-500/70"
-                    style={{ left: (today - minDay) * DAY_W + DAY_W / 2 }} />
+                    style={{ left: (today - minDay) * dayW + dayW / 2 }} />
                 )}
                 <div
                   onClick={() => onEdit(item)}
                   className="absolute top-1/2 z-20 flex -translate-y-1/2 cursor-pointer items-center overflow-hidden rounded-md px-2 text-[10.5px] font-medium text-white shadow-sm hover:brightness-95"
                   style={{
                     left: left + 2,
-                    width: Math.max(width - 4, DAY_W - 4),
+                    width: Math.max(width - 4, dayW - 4),
                     height: 22,
                     background: statusColor(item.status),
                   }}
