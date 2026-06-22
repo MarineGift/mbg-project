@@ -393,16 +393,6 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
             {isPending ? 'Syncing...' : 'Sync'}
           </Button>
 
-          {/* Create */}
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
-            onClick={() => onCreateEvent?.(new Date())}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New event
-          </Button>
-
           {/* View toggle */}
           <div className="flex rounded-md border border-border overflow-hidden">
             {(['month', 'week'] as ViewMode[]).map(v => (
@@ -412,7 +402,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
                 className={cn(
                   'px-3 py-1 text-xs font-medium transition-colors',
                   view === v
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-foreground text-background'
                     : 'bg-background text-muted-foreground hover:bg-accent'
                 )}
               >

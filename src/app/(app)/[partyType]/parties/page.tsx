@@ -706,7 +706,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
                       <td className="px-4 py-3 w-full">
-                        <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
+                        <Link href={`/${module}/parties/${p.id}`} className={`font-medium hover:underline line-clamp-1 ${isInvestor ? 'text-sm' : ''}`}>
                           {p.party_name}
                         </Link>
                         {showLinks && (
