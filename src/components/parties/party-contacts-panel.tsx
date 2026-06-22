@@ -32,6 +32,8 @@ interface Props {
   activitiesByContact: Record<string, ContactActivity[]>;
   /** email templates for the compose dialog (optional) */
   templates?: unknown[];
+  /** current party's type code; default filter in compose dialog */
+  partyType?: string;
 }
 
 function displayName(c: PartyContact): string {
@@ -133,7 +135,7 @@ function ContactProfileBlock({ profile }: { profile: ContactProfile }) {
   );
 }
 
-export function PartyContactsPanel({ contacts, partyId, activitiesByContact, templates }: Props) {
+export function PartyContactsPanel({ contacts, partyId, activitiesByContact, templates, partyType }: Props) {
   const t = useTranslations('partyDetail.contacts');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -365,6 +367,7 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact, tem
         mode="new"
         initialTab="direct"
         partyId={partyId}
+        defaultPartyType={partyType}
         defaultTo={composeTo?.email}
         contactId={composeTo?.contactId ?? null}
         templates={templates ?? []}

@@ -167,6 +167,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           mode="reply"
           initialTab={initialTab}
           partyId={replyTarget.party?.id ?? null}
+          defaultPartyType={partyContext?.partyType ?? undefined}
           dealId={root?.dealId ?? latest?.dealId ?? replyTarget.dealId ?? null}
           defaultTo={replyTarget.fromAddress ?? ''}
           defaultSubject={

@@ -169,6 +169,8 @@ interface ComposeEmailDialogProps {
   orgId?: string;
   /** Initial tab to show when dialog opens (default: "direct") */
   initialTab?: "direct" | "template" | "ai";
+  /** preselect the Template-tab party_type filter (e.g. current party's type) */
+  defaultPartyType?: string;
 }
 
 interface AttachmentItem {
@@ -337,7 +339,11 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     props.templateId ?? "",
   );
-  const [filterPartyType, setFilterPartyType] = useState<string>("all");
+  const [filterPartyType, setFilterPartyType] = useState<string>(
+    PARTY_TYPE_OPTIONS.some((opt) => opt.value === props.defaultPartyType)
+      ? (props.defaultPartyType as string)
+      : "all",
+  );
   const [filterStage, setFilterStage] = useState<string>("all");
   // Raw (un-rendered) template kept so tokens can be re-rendered when the
   // recipient contact changes after the template was applied.
