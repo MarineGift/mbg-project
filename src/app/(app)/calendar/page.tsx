@@ -38,6 +38,7 @@ function QuickEventModal({
   const [endAt,    setEndAt]   = useState('')
   const [allDay,   setAllDay]  = useState(false)
   const [saving,   setSaving]  = useState(false)
+  const [recurrence, setRecurrence] = useState('')
 
   useEffect(() => {
     if (open) {
@@ -45,6 +46,7 @@ function QuickEventModal({
       const base = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
       setTitle('')
       setAllDay(false)
+      setRecurrence('')
       setStartAt(`${base}T09:00`)
       setEndAt(`${base}T10:00`)
     }
@@ -59,6 +61,7 @@ function QuickEventModal({
         start_at: new Date(allDay ? `${startAt}T00:00:00` : startAt).toISOString(),
         end_at:   new Date(allDay ? `${endAt}T23:59:59`   : endAt).toISOString(),
         is_all_day: allDay,
+        recurrence_rule: recurrence || null,
       })
       router.refresh()
       onClose()
@@ -69,7 +72,7 @@ function QuickEventModal({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Quick add event</DialogTitle>
         </DialogHeader>
@@ -97,6 +100,21 @@ function QuickEventModal({
                 else   { setStartAt(`${sDate}T09:00`); setEndAt(`${eDate}T10:00`) }
               }}
             />
+          </div>
+          <div className="space-y-1">
+            <Label>Repeat</Label>
+            <select
+              value={recurrence}
+              onChange={e => setRecurrence(e.target.value)}
+              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Does not repeat</option>
+              <option value="FREQ=DAILY">Daily</option>
+              <option value="FREQ=WEEKLY">Weekly</option>
+              <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">Every weekday (Mon-Fri)</option>
+              <option value="FREQ=MONTHLY">Monthly</option>
+              <option value="FREQ=YEARLY">Annually</option>
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">

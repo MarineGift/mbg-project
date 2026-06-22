@@ -358,6 +358,7 @@ export interface CreateCalendarEventInput {
   start_at:      string
   end_at:        string
   is_all_day?:   boolean
+  recurrence_rule?: string | null
   party_id?:     string
   engagement_id?: string
 }
