@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CalendarView } from '@/components/calendar/calendar-view'
 import { MeetingCreateModal } from '@/components/meetings/meeting-create-modal'
-import type { CalendarItem } from '@/lib/queries/calendar'
+import type { CalendarItem, CalendarFeedSource } from '@/lib/queries/calendar'
+import { CALENDAR_FEED_META, CALENDAR_FEED_SOURCES } from '@/lib/queries/calendar'
+import { cn } from '@/lib/utils'
 import {
-  fetchCalendarItemsAction as fetchCalendarItems,
+  getCalendarFeedAction as getCalendarFeed,
   createCalendarEventAction as createCalendarEvent,
   deleteCalendarEventAction as deleteCalendarEvent,
 } from '@/app/actions/calendar'
@@ -156,6 +158,7 @@ function ItemDetailPopup({
 
   const typeLabel: Record<string, string> = {
     meeting: 'Meeting', event: 'Event', task: 'Task', communication: 'Communication',
+    todo: 'To-Do', milestone: 'Milestone',
   }
 
   async function handleDelete() {
@@ -274,6 +277,18 @@ export default function CalendarPage() {
   const [editItem,    setEditItem]    = useState<CalendarItem | null>(null)
   const [emailItem,   setEmailItem]   = useState<CalendarItem | null>(null)
 
+  // Source visibility filter (close-date milestones default OFF per CALENDAR_FEED_META)
+  const [visibleSources, setVisibleSources] = useState<Set<CalendarFeedSource>>(
+    () => new Set(CALENDAR_FEED_SOURCES.filter((s) => CALENDAR_FEED_META[s].defaultVisible)),
+  )
+  const toggleSource = (s: CalendarFeedSource) =>
+    setVisibleSources((prev) => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s); else next.add(s)
+      return next
+    })
+  const visibleItems = items.filter((it) => !it.feed_source || visibleSources.has(it.feed_source))
+
   // Initial load - current month
   useEffect(() => {
     const now = new Date()
@@ -285,7 +300,7 @@ export default function CalendarPage() {
   async function loadItems(start: string, end: string) {
     setLoading(true)
     try {
-      const data = await fetchCalendarItems(start, end)
+      const data = await getCalendarFeed(start, end)
       setItems(data)
     } finally {
       setLoading(false)
@@ -319,13 +334,42 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Source filter (todo_v2) */}
+      <div className="flex flex-wrap items-center gap-1.5 px-6 py-2 border-b border-border shrink-0">
+        {CALENDAR_FEED_SOURCES.map((s) => {
+          const on = visibleSources.has(s)
+          const meta = CALENDAR_FEED_META[s]
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => toggleSource(s)}
+              aria-pressed={on}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                on
+                  ? 'border-border bg-muted/50 text-foreground'
+                  : 'border-transparent text-muted-foreground opacity-60 hover:opacity-100',
+              )}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: meta.color, opacity: on ? 1 : 0.4 }}
+                aria-hidden
+              />
+              {meta.label}
+            </button>
+          )
+        })}
+      </div>
+
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
           Loading...
         </div>
       ) : (
         <CalendarView
-          items={items}
+          items={visibleItems}
           onCreateEvent={handleCreateEvent}
           onItemClick={setDetailItem}
           onRangeChange={loadItems as never}
