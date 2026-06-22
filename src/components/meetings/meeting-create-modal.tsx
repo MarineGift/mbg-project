@@ -171,7 +171,7 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
 
     startTransition(async () => {
       try {
-        await createMeeting({
+        const res = await createMeeting({
           title:            title.trim(),
           party_id:         partyId,
           engagement_id:    engagementId ?? undefined,
@@ -183,10 +183,14 @@ export function MeetingCreateModal({ open, onClose, defaultDate, defaultPartyId,
           meeting_url:      meetingUrl.trim() || undefined,
           agenda:           agenda.trim() || undefined,
         })
+        if (!res || !res.ok) {
+          setError(res?.error ?? 'Failed to create meeting')
+          return
+        }
         router.refresh()
         handleClose()
       } catch (e: any) {
-        setError(e.message)
+        setError(e?.message ?? String(e))
       }
     })
   }
