@@ -10,38 +10,60 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────
-// color mapping
+// color mapping (per feed source; events sub-keyed by sync source)
 // ─────────────────────────────────────────────
 
 const CHIP_STYLES: Record<string, string> = {
-  // type
-  meeting:       'bg-blue-600 text-white',
-  task:          'bg-orange-500 text-white',
-  communication: 'bg-slate-400 text-white',
-  // event by source
-  event_internal:  'bg-violet-500 text-white',
-  event_google:    'bg-emerald-500 text-white',
-  event_microsoft: 'bg-indigo-500 text-white',
+  // calendar events, by sync source
+  event_internal:  'bg-violet-500 text-white',   // URM-created
+  event_google:    'bg-emerald-500 text-white',  // Google
+  event_microsoft: 'bg-indigo-500 text-white',   // Microsoft
+  // other feed sources
+  meeting:             'bg-blue-600 text-white',
+  deal_task:           'bg-orange-500 text-white',
+  communication:       'bg-slate-400 text-white',
+  todo:                'bg-cyan-600 text-white',
+  milestone_next_step: 'bg-amber-500 text-white',
+  milestone_close:     'bg-rose-600 text-white',
 }
 
-// source prefix icon
 const SOURCE_ICON: Record<string, string> = {
   google:    '🟢',
   microsoft: '🔵',
   internal:  '🟣',
 }
 
-const TYPE_ICON: Record<string, string> = {
-  meeting:       '📅',
-  task:          '✓',
-  communication: '✉',
+const FEED_ICON: Record<string, string> = {
+  meeting:             '📅',
+  deal_task:           '✓',
+  communication:       '✉',
+  todo:                '📝',
+  milestone_next_step: '🎯',
+  milestone_close:     '🏁',
+  // legacy type keys (back-compat if feed_source is absent)
+  task:                '✓',
 }
 
-function chipStyle(item: CalendarItem): string {
-  if (item.type === 'event') {
-    return CHIP_STYLES[`event_${item.source ?? 'internal'}`] ?? CHIP_STYLES.event_internal!!
+function isEventLike(item: CalendarItem): boolean {
+  return item.feed_source === 'event' || item.type === 'event'
+}
+
+function chipClass(item: CalendarItem): string {
+  if (isEventLike(item)) {
+    return CHIP_STYLES[`event_${item.source ?? 'internal'}`] ?? CHIP_STYLES.event_internal!
   }
-  return CHIP_STYLES[item.type] ?? 'bg-gray-400 text-white'
+  const fs = item.feed_source
+  if (fs && CHIP_STYLES[fs]) return CHIP_STYLES[fs]!
+  // legacy fallback by type
+  if (item.type === 'task') return CHIP_STYLES.deal_task!
+  if (item.type === 'meeting') return CHIP_STYLES.meeting!
+  if (item.type === 'communication') return CHIP_STYLES.communication!
+  return 'bg-gray-400 text-white'
+}
+
+function chipIcon(item: CalendarItem): string {
+  if (isEventLike(item)) return SOURCE_ICON[item.source ?? 'internal'] ?? '🟣'
+  return FEED_ICON[item.feed_source ?? ''] ?? FEED_ICON[item.type] ?? ''
 }
 
 // ─────────────────────────────────────────────
@@ -49,9 +71,7 @@ function chipStyle(item: CalendarItem): string {
 // ─────────────────────────────────────────────
 
 export function CalendarEventChip({ item, compact, onClick }: Props) {
-  const icon = item.type === 'event'
-    ? SOURCE_ICON[item.source ?? 'internal']
-    : TYPE_ICON[item.type]
+  const icon = chipIcon(item)
 
   const timeStr = item.is_all_day
     ? null
@@ -61,8 +81,8 @@ export function CalendarEventChip({ item, compact, onClick }: Props) {
         hour12: false,
       })
 
-  // Phase 2: per-event custom color overrides the source/type chip color.
-  const customColor = item.type === 'event' && item.color ? item.color : null
+  // Only a real per-event Google color overrides the source/feed chip color.
+  const customColor = isEventLike(item) && item.color ? item.color : null
 
   return (
     <button
@@ -71,7 +91,7 @@ export function CalendarEventChip({ item, compact, onClick }: Props) {
       className={cn(
         'w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate',
         'hover:opacity-90 transition-opacity cursor-pointer',
-        customColor ? 'text-white' : chipStyle(item),
+        customColor ? 'text-white' : chipClass(item),
         compact && 'py-0'
       )}
       title={`${item.title}${item.party_name ? ` · ${item.party_name}` : ''}`}

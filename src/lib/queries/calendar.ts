@@ -275,7 +275,7 @@ export async function getCalendarFeed(
       external_id:   e.external_id ?? null,
       connection_id: e.connection_id ?? null,
       timezone:      e.timezone ?? null,
-      color:           e.color ?? CALENDAR_FEED_META.event.color,
+      color:           e.color ?? null,  // keep null so chip uses per-source color; only real Google colors override
       recurrence_rule: e.recurrence_rule ?? null,
       reminders:       (e.reminders as CalendarReminder[]) ?? [],
       transparency:    e.transparency ?? null,
