@@ -100,7 +100,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
   const [commTimeline, commStats, templates, contactActivities] = await Promise.all([
     getPartyCommunicationsTimeline(full.party.id, 100),
     getPartyCommunicationStats(full.party.id),
-    listTemplatesForCompose(orgId, full.party.partyType),
+    listTemplatesForCompose(orgId),
     fetchContactActivities(full.party.id),
   ]);
 

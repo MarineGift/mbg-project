@@ -89,7 +89,7 @@ export async function listTemplatesForCompose(
   let q = supabase
     .schema('app')
     .from('email_templates' as never)
-    .select('id, name, category, subject, body_plain, body_html')
+    .select('id, name, category, subject, body_plain, body_html, party_type, stage_code')
     .eq('is_active' as never, true as never);
   if (partyType) {
     q = q.eq('party_type' as never, partyType as never);

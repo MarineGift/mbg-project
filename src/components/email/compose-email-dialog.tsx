@@ -66,10 +66,68 @@ interface TemplateLite {
   body_plain: string | null;
   body_html: string | null;
   module: string | null;
+  party_type: string | null;
+  stage_code: string | null;
 }
 
 // Tabs
 type TabId = "direct" | "template" | "ai";
+
+const PARTY_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "All party types" },
+  { value: "investor", label: "Investors" },
+  { value: "paper_mill", label: "Paper Mill" },
+  { value: "filler_supplier", label: "Filler Suppliers" },
+  { value: "government_grant", label: "Government Grant" },
+  { value: "crowdfunding_platform", label: "Crowdfunding" },
+  { value: "partner", label: "Partners" },
+];
+const PARTY_STAGE_OPTIONS: Record<string, { code: string; label: string }[]> = {
+  investor: [
+    { code: "cold_outreach", label: "Cold outreach" },
+    { code: "reply_received", label: "Reply received" },
+    { code: "first_meeting", label: "First meeting" },
+    { code: "due_diligence", label: "Due diligence" },
+    { code: "followup_meeting", label: "Follow-up meeting" },
+    { code: "term_sheet", label: "Term sheet" },
+    { code: "contract", label: "Contract" },
+  ],
+  paper_mill: [
+    { code: "lead", label: "Lead" },
+    { code: "qualified", label: "Qualified" },
+    { code: "sample_sent", label: "Sample sent" },
+    { code: "trial_eval", label: "Trial / Eval" },
+    { code: "quotation", label: "Quotation" },
+    { code: "negotiation", label: "Negotiation" },
+    { code: "won", label: "Won" },
+  ],
+  filler_supplier: [
+    { code: "prospect", label: "Prospect" },
+    { code: "contacted", label: "Contacted" },
+    { code: "nda", label: "NDA" },
+    { code: "lab_test", label: "Lab test" },
+    { code: "evaluation", label: "Evaluation" },
+    { code: "pilot", label: "Pilot" },
+    { code: "royalty", label: "Royalty Agreement" },
+    { code: "mass_production", label: "Mass Production" },
+  ],
+  government_grant: [
+    { code: "identified", label: "Identified" },
+    { code: "eligibility", label: "Eligibility" },
+    { code: "preparing", label: "Preparing" },
+    { code: "submitted", label: "Submitted" },
+    { code: "under_review", label: "Under review" },
+    { code: "awarded", label: "Awarded" },
+  ],
+  crowdfunding_platform: [
+    { code: "research", label: "Research" },
+    { code: "outreach", label: "Outreach" },
+    { code: "application", label: "Application" },
+    { code: "review", label: "Review" },
+    { code: "live_campaign", label: "Live campaign" },
+    { code: "funded", label: "Funded" },
+  ],
+};
 
 // D6-7c-2: From kind selector options (same labels as compose-form.tsx)
 // Display labels are user-facing; actual email resolved server-side from env.MAIL_<KIND>_*.
@@ -279,6 +337,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     props.templateId ?? "",
   );
+  const [filterPartyType, setFilterPartyType] = useState<string>("all");
+  const [filterStage, setFilterStage] = useState<string>("all");
   // Raw (un-rendered) template kept so tokens can be re-rendered when the
   // recipient contact changes after the template was applied.
   const [rawTemplate, setRawTemplate] = useState<{ subject: string; body: string } | null>(null);
@@ -681,11 +741,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const templatesByCategory = useMemo(() => {
     const out: Record<string, TemplateLite[]> = {};
     for (const t of templates) {
+      if (filterPartyType !== "all" && t.party_type && t.party_type !== filterPartyType) continue;
+      if (filterStage !== "all" && t.stage_code && t.stage_code !== filterStage) continue;
       const cat = t.category ?? "General";
       (out[cat] ??= []).push(t);
     }
     return out;
-  }, [templates]);
+  }, [templates, filterPartyType, filterStage]);
 
   // ?? Tab button helper ???????????????????????????????????
   const tabBtnClass = (id: TabId) =>
@@ -798,6 +860,34 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           {/* Tab-specific top section */}
           {activeTab === "template" && (
             <div className="space-y-1">
+              <div className="flex gap-2 mb-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Party type</Label>
+                  <select
+                    value={filterPartyType}
+                    onChange={(e) => { setFilterPartyType(e.target.value); setFilterStage("all"); }}
+                    className="w-full h-8 px-2 text-xs rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {PARTY_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Stage</Label>
+                  <select
+                    value={filterStage}
+                    onChange={(e) => setFilterStage(e.target.value)}
+                    disabled={filterPartyType === "all" || !PARTY_STAGE_OPTIONS[filterPartyType]}
+                    className="w-full h-8 px-2 text-xs rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                  >
+                    <option value="all">All stages</option>
+                    {(PARTY_STAGE_OPTIONS[filterPartyType] ?? []).map((st) => (
+                      <option key={st.code} value={st.code}>{st.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <Label htmlFor="template-select">Choose template</Label>
               {templates.length === 0 ? (
                 <div className="rounded border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center gap-1.5">
