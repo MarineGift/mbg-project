@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from 'react'
 import type { CalendarItem } from '@/lib/queries/calendar'
 import { CalendarEventChip } from './calendar-event-chip'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { triggerCalendarSync } from '@/app/actions/calendar-sync'
@@ -294,6 +295,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
   const [isPending, startTransition] = useTransition()
 
   const [view,  setView]  = useState<ViewMode>('month')
+  const [dayModal, setDayModal] = useState<Date | null>(null)
   const [pivot, setPivot] = useState(startOfDay(new Date()))   // current month/week anchor
   const [showCrm, setShowCrm] = useState(false)                // tasks + communications hidden by default
 
@@ -420,7 +422,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           month={pivot.getMonth()}
           items={visibleItems}
           today={today}
-          onDayClick={d => onCreateEvent?.(d)}
+          onDayClick={d => setDayModal(d)}
           onItemClick={item => onItemClick?.(item)}
         />
       ) : (
@@ -432,6 +434,81 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           onItemClick={item => onItemClick?.(item)}
         />
       )}
+
+      {dayModal && (
+        <DayEventsModal
+          date={dayModal}
+          items={itemsForDay(visibleItems, dayModal)}
+          onClose={() => setDayModal(null)}
+          onItemClick={item => { setDayModal(null); onItemClick?.(item) }}
+          onCreateEvent={d => { setDayModal(null); onCreateEvent?.(d) }}
+        />
+      )}
     </div>
+  )
+}
+
+
+/**
+ * DayEventsModal - full list of items for a single day.
+ * Opened when a calendar day cell is clicked (overflow beyond MAX_CHIPS_PER_DAY).
+ */
+function DayEventsModal({
+  date,
+  items,
+  onClose,
+  onItemClick,
+  onCreateEvent,
+}: {
+  date: Date
+  items: CalendarItem[]
+  onClose: () => void
+  onItemClick: (item: CalendarItem) => void
+  onCreateEvent: (date: Date) => void
+}) {
+  const sorted = [...items].sort(
+    (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
+  )
+  const dateLabel = date.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  })
+  return (
+    <Dialog open onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{dateLabel}</DialogTitle>
+        </DialogHeader>
+        <div className="flex items-center gap-2 pb-1">
+          <button
+            type="button"
+            onClick={() => onCreateEvent(date)}
+            className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
+          >
+            + Add on this day
+          </button>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {sorted.length} items
+          </span>
+        </div>
+        <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+          {sorted.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No items on this day.
+            </p>
+          ) : (
+            sorted.map(item => (
+              <CalendarEventChip
+                key={item.id}
+                item={item}
+                onClick={(() => onItemClick(item)) as never}
+              />
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
