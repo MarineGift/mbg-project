@@ -191,6 +191,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
   const linkRole  = module === 'filler_supplier' ? 'filler_supplier' : 'paper_mill';
   const linkLabel = module === 'filler_supplier' ? 'Linked Paper Mill' : 'Linked Filler';
+  // Partner-style directories get an org "Type" (entity_type) column; suppliers keep
+  // their linked column and investors keep their investor-type column.
+  const showEntityType = !isInvestor && !showLinks;
 
   // Investor type lookup (all investors): one fetch powers facets, badges,
   // the type filter, and type sorting.
@@ -520,6 +523,20 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   ]);
   scores = pageScores;
 
+  // Org kind (entity_type) per visible party -> Type column + mobile sub-info.
+  const entityTypeAll: Record<string, { en: string; ko: string }> = {};
+  if (partyIds.length > 0) {
+    const { data: etRows } = await supabase
+      .schema('app')
+      .from('parties' as never)
+      .select('id, entity_types(display_name_en, display_name_ko)')
+      .in('id' as never, partyIds);
+    for (const r of ((etRows ?? []) as any[])) {
+      const et = Array.isArray(r.entity_types) ? r.entity_types[0] : r.entity_types;
+      if (et) entityTypeAll[r.id] = { en: et.display_name_en, ko: et.display_name_ko };
+    }
+  }
+
   // Stats for link coverage (only filler/paper_mill)
   const linkedCount   = showLinks ? partyIds.filter(id => (supplyLinks[id]?.length ?? 0) > 0).length : 0;
   const unlinkedCount = showLinks ? partyIds.length - linkedCount : 0;
@@ -635,6 +652,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {showEntityType && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Type</th>
+                  )}
                   {showLinks ? (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
                       {linkLabel}
@@ -706,9 +726,23 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
                       <td className="px-4 py-3 w-full">
-                        <Link href={`/${module}/parties/${p.id}`} className={`font-medium hover:underline line-clamp-1 ${isInvestor ? 'text-sm' : ''}`}>
+                        <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
+                        {showEntityType && (
+                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
+                            {entityTypeAll[p.id] && (
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.ko}</span>
+                            )}
+                            <span>
+                              {[
+                                p.country_code ? (countryNames[p.country_code] ?? p.country_code) : null,
+                                location || null,
+                                p.region ? (US_STATES[p.region] ?? p.region) : null,
+                              ].filter(Boolean).join(' · ') || '-'}
+                            </span>
+                          </div>
+                        )}
                         {showLinks && (
                           <div className="mt-1 flex flex-col gap-1 md:hidden">
                             <div className="flex flex-wrap items-center gap-1">
@@ -741,6 +775,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
+                      {showEntityType && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                          {entityTypeAll[p.id]?.ko ?? '-'}
+                        </td>
+                      )}
                       {showLinks && (
                         <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
                           {hasLinks ? (
