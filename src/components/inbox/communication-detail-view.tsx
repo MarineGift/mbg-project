@@ -330,9 +330,23 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone }: Th
           </div>
 
           {/* Body */}
-          {msg.bodyPlain ? (
-            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap font-mono leading-relaxed max-h-[500px] overflow-y-auto scrollbar-thin">
-              {msg.bodyPlain}
+          {msg.bodyHtml ? (
+            <iframe
+              title="email-body"
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              className="w-full rounded-md border border-border bg-white min-h-[240px] max-h-[600px]"
+              srcDoc={
+                '<base target="_blank">' +
+                '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+                'font-size:14px;line-height:1.6;color:#111;padding:12px;' +
+                'word-break:break-word;overflow-wrap:anywhere;">' +
+                msg.bodyHtml +
+                '</div>'
+              }
+            />
+          ) : msg.bodyPlain ? (
+            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto scrollbar-thin break-words">
+              <Linkified text={msg.bodyPlain} />
             </div>
           ) : (
             <p className="text-sm text-muted-foreground italic">{t('noBody')}</p>
@@ -384,5 +398,33 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone }: Th
         </CardContent>
       )}
     </Card>
+  );
+}
+
+
+/**
+ * Linkified - render plain-text body with clickable URLs.
+ * Used only as a fallback when an email has no HTML part.
+ */
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s<>]+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline break-all"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
