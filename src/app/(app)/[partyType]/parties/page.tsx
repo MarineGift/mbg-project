@@ -647,7 +647,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             <table className="w-full min-w-[520px]">
               <thead className="border-b bg-indigo-50/80 dark:bg-indigo-950/30">
                 <tr className="text-left text-xs uppercase tracking-wide font-semibold text-indigo-700/80 dark:text-indigo-300">
-                  <th className="px-4 py-3 font-medium whitespace-nowrap w-full">
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">
                     <Link href={hName.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hName.active ? 'text-foreground' : ''}`}>
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
@@ -679,7 +679,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
                     </Link>
                   </th>
-                  {isInvestor && (
+                  {(isInvestor || showEntityType) && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
                         State <span className={`text-[10px] ${hState.active ? '' : 'opacity-40'}`}>{hState.arrow}</span>
@@ -704,8 +704,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
                     </Link>
                   </th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -725,7 +725,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       key={p.id}
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
-                      <td className="px-4 py-3 w-full">
+                      <td className="px-4 py-3">
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
@@ -844,7 +844,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
                         {location || '-'}
                       </td>
-                      {isInvestor && (
+                      {(isInvestor || showEntityType) && (
                         <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
                           {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
                         </td>
@@ -895,15 +895,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       <td className="px-3 py-3 text-center">
                         <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                       </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {p.status ? (
-                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
-                            {String(p.status).replace(/_/g, ' ')}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">-</span>
-                        )}
-                      </td>
                       <td className="px-4 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
                           <a href={p.website} target="_blank" rel="noopener noreferrer"
@@ -913,6 +904,15 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </a>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {p.status ? (
+                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
+                            {String(p.status).replace(/_/g, ' ')}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
                         )}
                       </td>
                     </tr>
