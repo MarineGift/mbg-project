@@ -564,7 +564,7 @@ function CalendarView(props: {
   };
 
   return (
-    <div className="max-w-[960px]">
+    <div className="w-full">
       <div className="mb-3 flex items-center gap-2">
         <button type="button" onClick={() => shiftMonth(-1)}
           className="rounded-lg border border-slate-200 px-2.5 py-1 text-sm text-slate-500 hover:bg-slate-50">‹</button>
