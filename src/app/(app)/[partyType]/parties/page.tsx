@@ -732,7 +732,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         {showEntityType && (
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
                             {entityTypeAll[p.id] && (
-                              <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.ko}</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.en}</span>
                             )}
                             <span>
                               {[
@@ -777,7 +777,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </td>
                       {showEntityType && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                          {entityTypeAll[p.id]?.ko ?? '-'}
+                          {entityTypeAll[p.id]?.en ?? '-'}
                         </td>
                       )}
                       {showLinks && (
