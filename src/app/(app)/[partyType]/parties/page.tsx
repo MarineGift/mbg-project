@@ -630,11 +630,18 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             <table className="w-full min-w-[520px]">
               <thead className="border-b bg-indigo-50/80 dark:bg-indigo-950/30">
                 <tr className="text-left text-xs uppercase tracking-wide font-semibold text-indigo-700/80 dark:text-indigo-300">
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">
+                  <th className="px-4 py-3 font-medium whitespace-nowrap w-full">
                     <Link href={hName.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hName.active ? 'text-foreground' : ''}`}>
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {showLinks ? (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
+                      {linkLabel}
+                    </th>
+                  ) : (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
+                  )}
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">
                       <Link href={hPriority.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hPriority.active ? 'text-foreground' : ''}`}>
@@ -659,13 +666,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
-                  {showLinks ? (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell text-orange-600">
-                      {linkLabel}
-                    </th>
-                  ) : (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
-                  )}
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">
                       <Link href={hType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hType.active ? 'text-foreground' : ''}`}>
@@ -679,12 +679,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   {!isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                   <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                     <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
                       Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
                     </Link>
                   </th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
                 </tr>
               </thead>
@@ -705,7 +705,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       key={p.id}
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-full">
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
@@ -741,36 +741,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
-                      {isInvestor && (
-                        <td className="px-4 py-3">
-                          {(() => {
-                            const pr = investorPriorityAll[p.id];
-                            if (!pr) return <span className="text-sm text-muted-foreground">-</span>;
-                            const cls = pr === 'high'
-                              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                              : pr === 'medium'
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
-                            const label = pr === 'high' ? 'High' : pr === 'medium' ? 'Medium' : 'Low';
-                            return (
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${cls}`}>
-                                {label}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
-                      {isInvestor && (
-                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
-                          {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
-                        </td>
-                      )}
                       {showLinks && (
                         <td className="px-4 py-3 hidden md:table-cell max-w-[260px]">
                           {hasLinks ? (
@@ -808,6 +778,36 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                               </span>
                             )}
                           </div>
+                        </td>
+                      )}
+                      {isInvestor && (
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const pr = investorPriorityAll[p.id];
+                            if (!pr) return <span className="text-sm text-muted-foreground">-</span>;
+                            const cls = pr === 'high'
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                              : pr === 'medium'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                            const label = pr === 'high' ? 'High' : pr === 'medium' ? 'Medium' : 'Low';
+                            return (
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${cls}`}>
+                                {label}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
+                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                        {location || '-'}
+                      </td>
+                      {isInvestor && (
+                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
+                          {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
                         </td>
                       )}
                       {isInvestor && (
@@ -853,6 +853,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         </td>
                       )}
+                      <td className="px-3 py-3 text-center">
+                        <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
+                      </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
                         {p.status ? (
                           <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
@@ -861,9 +864,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         ) : (
                           <span className="text-sm text-muted-foreground">-</span>
                         )}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
