@@ -36,7 +36,7 @@ export function MailingTabsClient({ mailing, sequences, orgId }: Props) {
     <div>
       {/* Tab strip */}
       <div className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-app px-4 sm:px-6">
+        <div className="px-4 sm:px-6">
           <nav className="flex gap-6">
             {TABS.map((t) => {
               const active = tab === t.key;
@@ -76,7 +76,7 @@ export function MailingTabsClient({ mailing, sequences, orgId }: Props) {
           accounts={mailing.accounts}
         />
       ) : (
-        <div className="mx-auto max-w-app p-4 sm:p-6">
+        <div className="p-4 sm:p-6">
           {orgId ? (
             <EmailSequencesClient sequences={sequences} orgId={orgId} />
           ) : (

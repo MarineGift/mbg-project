@@ -187,7 +187,7 @@ export function BulkMailClient({
   const actionLabel = sendMode === 'now' ? `Send to ${checkedCount}` : `Queue ${checkedCount}`;
 
   return (
-    <div className="mx-auto max-w-app p-4 sm:p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-center gap-2">
         <Mail className="h-5 w-5" />
         <h1 className="text-xl font-semibold">Mailing</h1>
