@@ -63,11 +63,11 @@ function Column({
   const meta = SOURCE_META[source]
   const more = total - items.length
   return (
-    <section className="flex w-80 shrink-0 flex-col rounded-lg border bg-card md:min-h-0">
+    <section className="flex shrink-0 basis-[88vw] snap-start flex-col rounded-lg border bg-card md:min-h-0 md:min-w-0 md:shrink md:basis-0 md:flex-1">
       <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
-        <span className={cn('h-2.5 w-2.5 rounded-full', meta.dot)} aria-hidden />
-        <span className="text-sm font-semibold text-foreground">{meta.label}</span>
-        <Badge variant="secondary" className="ml-auto">{total}</Badge>
+        <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', meta.dot)} aria-hidden />
+        <span className="truncate text-sm font-semibold text-foreground">{meta.label}</span>
+        <Badge variant="secondary" className="ml-auto shrink-0">{total}</Badge>
       </header>
       <div className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto p-2 md:max-h-none md:min-h-0 md:flex-1">
         {items.length === 0 ? (
@@ -96,7 +96,7 @@ export default async function TodayPage() {
         <p className="text-sm text-muted-foreground">{todayLabel}</p>
       </header>
 
-      <div className="flex gap-4 overflow-x-auto pb-2 md:min-h-0 md:flex-1">
+      <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:min-h-0 md:flex-1 md:snap-none md:gap-4 md:overflow-x-hidden">
         {board.columns.map((col) => (
           <Column key={col.source} source={col.source} items={col.items} total={col.total} />
         ))}

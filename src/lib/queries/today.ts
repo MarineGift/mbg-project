@@ -269,7 +269,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   const todayTs   = `${today}T00:00:00.000Z`
   const weekEndTs = `${weekEnd}T23:59:59.999Z`
 
-  const [doneOptsRes, eventsRes, meetingsRes, tasksRes, commsRes, todosRes, dealsRes] =
+  const [doneOptsRes, eventsRes, meetingsRes, tasksRes, commsRes, todosRes, dealsRes, pipelinesRes] =
     await Promise.all([
       supabase.schema('app').from('todo_status_options' as never)
         .select('board_id, key, is_done').eq('is_done', true),
@@ -317,11 +317,23 @@ export async function getTodayBoard(): Promise<TodayBoard> {
 
       // active deals with next_step_date OR expected_close_date <= weekEnd
       supabase.schema('app').from('deals' as never)
-        .select('id, deal_name, next_step, next_step_date, expected_close_date, party_id')
+        .select('id, deal_name, next_step, next_step_date, expected_close_date, party_id, pipeline_id')
         .eq('status', 'active')
         .is('deleted_at', null)
         .or(`next_step_date.lte.${weekEnd},expected_close_date.lte.${weekEnd}`),
+
+      // pipelines: id -> code, to build deal board links /pipelines/{code}
+      supabase.schema('app').from('pipelines' as never)
+        .select('id, code'),
     ])
+
+  // pipeline id -> code (deal board route is /pipelines/{code})
+  const pipelineCode = new Map<string, string>()
+  for (const p of (pipelinesRes.data ?? []) as any[]) pipelineCode.set(p.id, p.code)
+  const dealHref = (dealId: string, pipelineId: string | null): string => {
+    const code = pipelineId ? pipelineCode.get(pipelineId) : undefined
+    return code ? `/pipelines/${code}?deal=${dealId}` : '/'
+  }
 
   const doneKeys = new Set<string>()
   for (const o of (doneOptsRes.data ?? []) as any[]) doneKeys.add(`${o.board_id}|${o.key}`)
@@ -346,13 +358,17 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       ? supabase.schema('app').from('parties' as never).select('id, name').in('id', partyIds)
       : Promise.resolve({ data: [] as unknown[] }),
     dealIds.length
-      ? supabase.schema('app').from('deals' as never).select('id, deal_name').in('id', dealIds)
+      ? supabase.schema('app').from('deals' as never).select('id, deal_name, pipeline_id').in('id', dealIds)
       : Promise.resolve({ data: [] as unknown[] }),
   ])
   const partyName = new Map<string, string>()
   for (const p of (partyRes.data ?? []) as any[]) partyName.set(p.id, p.name)
   const dealName = new Map<string, string>()
-  for (const d of (taskDealRes.data ?? []) as any[]) dealName.set(d.id, d.deal_name)
+  const dealPipeline = new Map<string, string | null>()
+  for (const d of (taskDealRes.data ?? []) as any[]) {
+    dealName.set(d.id, d.deal_name)
+    dealPipeline.set(d.id, d.pipeline_id ?? null)
+  }
 
   const buckets: Record<BoardSource, BoardItem[]> = {
     event: [], meeting: [], deal_task: [], communication: [],
@@ -386,7 +402,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       id: t.id, source: 'deal_task', title: t.title,
       context: t.deal_id ? dealName.get(t.deal_id) ?? null : null,
       when, overdue: !!when && when < today,
-      href: t.deal_id ? `/pipelines?deal=${t.deal_id}` : '/pipelines',
+      href: t.deal_id ? dealHref(t.deal_id, dealPipeline.get(t.deal_id) ?? null) : '/',
     })
   }
   // communications
@@ -418,7 +434,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
         id: `${d.id}:next_step`, source: 'milestone_next_step',
         title: d.next_step ? `${d.deal_name} - ${d.next_step}` : `${d.deal_name} - next step`,
         context: ctx, when: ns, overdue: ns < today,
-        href: `/pipelines?deal=${d.id}`,
+        href: dealHref(d.id, d.pipeline_id ?? null),
       })
     }
     const cl = d.expected_close_date as string | null
@@ -427,7 +443,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
         id: `${d.id}:close`, source: 'milestone_close',
         title: `${d.deal_name} - expected close`,
         context: ctx, when: cl, overdue: cl < today,
-        href: `/pipelines?deal=${d.id}`,
+        href: dealHref(d.id, d.pipeline_id ?? null),
       })
     }
   }
