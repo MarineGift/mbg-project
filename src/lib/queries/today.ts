@@ -79,7 +79,7 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
 
     // next-step milestones: active deals with a next_step_date <= weekEnd
     supabase.schema('app').from('deals' as never)
-      .select('id, deal_name, next_step, next_step_date, party_id')
+      .select('id, deal_name, next_step, next_step_date, party_id, pipeline_id')
       .eq('status', 'active')
       .is('deleted_at', null)
       .not('next_step_date', 'is', null)
@@ -102,19 +102,31 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
     taskRows.map((r) => r.deal_id as string | null).filter((x): x is string => !!x),
   ))
 
-  const [partyRes, taskDealRes] = await Promise.all([
+  const [partyRes, taskDealRes, pipelinesRes] = await Promise.all([
     partyIds.length
       ? supabase.schema('app').from('parties' as never).select('id, name').in('id', partyIds)
       : Promise.resolve({ data: [] as unknown[] }),
     dealIds.length
-      ? supabase.schema('app').from('deals' as never).select('id, deal_name').in('id', dealIds)
+      ? supabase.schema('app').from('deals' as never).select('id, deal_name, pipeline_id').in('id', dealIds)
       : Promise.resolve({ data: [] as unknown[] }),
+    supabase.schema('app').from('pipelines' as never).select('id, code'),
   ])
 
   const partyName = new Map<string, string>()
   for (const p of (partyRes.data ?? []) as any[]) partyName.set(p.id, p.name)
+  const pipelineCode = new Map<string, string>()
+  for (const p of (pipelinesRes.data ?? []) as any[]) pipelineCode.set(p.id, p.code)
   const dealName = new Map<string, string>()
-  for (const d of (taskDealRes.data ?? []) as any[]) dealName.set(d.id, d.deal_name)
+  const dealPipeline = new Map<string, string | null>()
+  for (const d of (taskDealRes.data ?? []) as any[]) {
+    dealName.set(d.id, d.deal_name)
+    dealPipeline.set(d.id, d.pipeline_id ?? null)
+  }
+  // deal board route is /pipelines/{code}; fall back to root if code unresolved
+  const cockpitDealHref = (dealId: string, pipelineId: string | null): string => {
+    const code = pipelineId ? pipelineCode.get(pipelineId) : undefined
+    return code ? `/pipelines/${code}?deal=${dealId}` : '/'
+  }
 
   const overdue: CockpitItem[] = []
   const thisWeek: CockpitItem[] = []
@@ -169,7 +181,7 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
       context: t.deal_id ? dealName.get(t.deal_id) ?? null : null,
       board_id: null,
       deal_id: t.deal_id ?? null,
-      href: t.deal_id ? `/pipelines?deal=${t.deal_id}` : '/pipelines',
+      href: t.deal_id ? cockpitDealHref(t.deal_id, dealPipeline.get(t.deal_id) ?? null) : '/',
     })
   }
 
@@ -187,7 +199,7 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
       context: d.party_id ? partyName.get(d.party_id) ?? null : (d.deal_name ?? null),
       board_id: null,
       deal_id: d.id,
-      href: `/pipelines?deal=${d.id}`,
+      href: cockpitDealHref(d.id, d.pipeline_id ?? null),
     })
   }
 

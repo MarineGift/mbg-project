@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { triggerCalendarSync } from '@/app/actions/calendar-sync'
 import { useRouter } from 'next/navigation'
 
-type ViewMode = 'month' | 'week'
+type ViewMode = 'month' | 'week' | 'day'
 
 interface Props {
   items:             CalendarItem[]
@@ -356,8 +356,10 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
       const d = new Date(prev)
       if (view === 'month') {
         d.setMonth(d.getMonth() + dir)
-      } else {
+      } else if (view === 'week') {
         d.setDate(d.getDate() + dir * 7)
+      } else {
+        d.setDate(d.getDate() + dir)
       }
       return d
     })
@@ -367,6 +369,9 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
   const title = useMemo(() => {
     if (view === 'month') {
       return pivot.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
+    }
+    if (view === 'day') {
+      return pivot.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })
     }
     const weekEnd = new Date(pivot)
     weekEnd.setDate(weekEnd.getDate() + 6)
@@ -437,7 +442,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
 
           {/* View toggle */}
           <div className="flex rounded-md border border-border overflow-hidden">
-            {(['month', 'week'] as ViewMode[]).map(v => (
+            {(['month', 'week', 'day'] as ViewMode[]).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -448,7 +453,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
                     : 'bg-background text-muted-foreground hover:bg-accent'
                 )}
               >
-                {v === 'month' ? 'Month' : 'Week'}
+                {v === 'month' ? 'Month' : v === 'week' ? 'Week' : 'Day'}
               </button>
             ))}
           </div>
@@ -465,7 +470,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           onDayClick={d => setDayModal(d)}
           onItemClick={item => onItemClick?.(item)}
         />
-      ) : (
+      ) : view === 'week' ? (
         <WeekGrid
           weekStart={weekStart}
           items={visibleItems}
@@ -473,6 +478,13 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           onSlotClick={d => onCreateEvent?.(d)}
           onItemClick={item => onItemClick?.(item)}
           onDayClick={d => setDayModal(d)}
+        />
+      ) : (
+        <DayBoard
+          date={pivot}
+          items={visibleItems}
+          onItemClick={item => onItemClick?.(item)}
+          onCreateEvent={d => onCreateEvent?.(d)}
         />
       )}
 
@@ -485,6 +497,79 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           onCreateEvent={d => { setDayModal(null); onCreateEvent?.(d) }}
         />
       )}
+    </div>
+  )
+}
+
+
+/**
+ * DayBoard - single-day kanban: all 7 feed sources as columns (canonical order),
+ * shown for `date`. Changes as the date navigates. Desktop fits all columns;
+ * mobile scroll-snaps one column at a time. Chips link via onItemClick.
+ */
+function DayBoard({
+  date,
+  items,
+  onItemClick,
+  onCreateEvent,
+}: {
+  date: Date
+  items: CalendarItem[]
+  onItemClick: (item: CalendarItem) => void
+  onCreateEvent: (date: Date) => void
+}) {
+  const dayItems = itemsForDay(items, date)   // already feed-rank + time sorted
+  const columns = CALENDAR_FEED_SOURCES.map((src) => ({
+    src,
+    meta: CALENDAR_FEED_META[src],
+    list: dayItems.filter((it) => (it.feed_source ?? 'event') === src),
+  }))
+  const dateLabel = date.toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+  })
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
+        <span className="text-sm font-medium">{dateLabel}</span>
+        <span className="text-xs text-muted-foreground">{dayItems.length} items</span>
+        <button
+          type="button"
+          onClick={() => onCreateEvent(date)}
+          className="ml-auto rounded-md border px-2 py-1 text-xs hover:bg-muted"
+        >
+          + Add on this day
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto snap-x snap-mandatory p-3 md:snap-none md:overflow-x-hidden">
+        {columns.map((col) => (
+          <section
+            key={col.src}
+            className="flex shrink-0 basis-[88vw] snap-start flex-col rounded-lg border bg-card md:min-h-0 md:min-w-0 md:shrink md:basis-0 md:flex-1"
+          >
+            <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: col.meta.color }}
+              />
+              <span className="truncate text-sm font-semibold">{col.meta.label}</span>
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">{col.list.length}</span>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+              {col.list.length === 0 ? (
+                <p className="px-1 py-4 text-center text-xs text-muted-foreground">—</p>
+              ) : (
+                col.list.map((item) => (
+                  <CalendarEventChip
+                    key={item.id}
+                    item={item}
+                    onClick={(() => onItemClick(item)) as never}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   )
 }
