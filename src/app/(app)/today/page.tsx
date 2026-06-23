@@ -16,6 +16,27 @@ const SOURCE_META: Record<CockpitSource, { label: string; dot: string }> = {
   milestone: { label: 'Next step', dot: 'bg-amber-500' },
 }
 
+// Canonical cross-app ordering (same as the calendar legend):
+// event -> meeting -> deal_task -> communication -> todo -> next_step -> close.
+// The Today read-model currently emits only todo / deal_task / milestone(next_step),
+// but the full map is kept so ordering stays correct if more sources are added.
+const SOURCE_RANK: Record<string, number> = {
+  event: 0, meeting: 1, deal_task: 2, communication: 3,
+  todo: 4, milestone: 5, milestone_next_step: 5, milestone_close: 6,
+}
+function rankOf(it: CockpitItem): number {
+  const r = SOURCE_RANK[it.source]
+  return r === undefined ? 99 : r
+}
+// Order by source priority, then by due date (nulls last) within each source.
+function orderItems(items: CockpitItem[]): CockpitItem[] {
+  return [...items].sort((a, b) => {
+    const r = rankOf(a) - rankOf(b)
+    if (r !== 0) return r
+    return (a.due ?? '9999-12-31').localeCompare(b.due ?? '9999-12-31')
+  })
+}
+
 function fmtDue(due: string | null): string {
   if (!due) return ''
   return new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -53,9 +74,10 @@ function Lane(props: {
   const { title, icon: Icon, accent, items, total, emptyText } = props
   const hot = !!accent && total > 0
   const more = total - items.length
+  const ordered = orderItems(items)
   return (
-    <Card className={cn(hot && 'border-destructive/40')}>
-      <CardHeader className="pb-3">
+    <Card className={cn('flex flex-col md:min-h-0', hot && 'border-destructive/40')}>
+      <CardHeader className="shrink-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon className={cn('h-4 w-4', accent ? 'text-destructive' : 'text-muted-foreground')} />
           <span>{title}</span>
@@ -64,12 +86,12 @@ function Lane(props: {
           </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-0">
-        {items.length === 0 ? (
+      <CardContent className="max-h-[70vh] overflow-y-auto pt-0 md:max-h-none md:min-h-0 md:flex-1">
+        {ordered.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>
         ) : (
           <div className="flex flex-col divide-y divide-border">
-            {items.map((it) => (
+            {ordered.map((it) => (
               <ItemRow key={`${it.source}:${it.id}`} item={it} />
             ))}
           </div>
@@ -89,8 +111,8 @@ export default async function TodayPage() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-app space-y-6 p-4 md:p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex w-full flex-col gap-6 p-4 md:h-[calc(100vh-64px)] md:overflow-hidden md:p-6">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Today</h1>
           <p className="text-sm text-muted-foreground">{todayLabel}</p>
@@ -105,7 +127,7 @@ export default async function TodayPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:min-h-0 md:flex-1 md:grid-cols-3">
         <Lane title="Overdue" icon={AlertTriangle} accent items={cockpit.overdue} total={cockpit.counts.overdue}
           emptyText="Nothing overdue. Nice." />
         <Lane title="This Week" icon={CalendarRange} items={cockpit.thisWeek} total={cockpit.counts.thisWeek}
