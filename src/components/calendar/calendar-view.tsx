@@ -45,11 +45,30 @@ function isSameDay(a: Date, b: Date) {
       && a.getDate()     === b.getDate()
 }
 
+// Canonical feed-source priority (legend order): event, meeting, deal_task,
+// communication, todo, milestone_next_step, milestone_close. Used to order the
+// capped chips in a day cell so important items (events/meetings) surface first
+// instead of being buried under all-day milestones that sort earlier by time.
+const FEED_RANK: Record<string, number> = Object.fromEntries(
+  CALENDAR_FEED_SOURCES.map((s, i) => [s, i]),
+)
+function feedRank(item: CalendarItem): number {
+  const r = FEED_RANK[item.feed_source ?? 'event']
+  return r === undefined ? 99 : r
+}
+function compareByFeedThenTime(a: CalendarItem, b: CalendarItem): number {
+  const fr = feedRank(a) - feedRank(b)
+  if (fr !== 0) return fr
+  return new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+}
+
 function itemsForDay(items: CalendarItem[], day: Date): CalendarItem[] {
-  return items.filter(item => {
-    const s = startOfDay(new Date(item.start_at))
-    return isSameDay(s, day)
-  })
+  return items
+    .filter(item => {
+      const s = startOfDay(new Date(item.start_at))
+      return isSameDay(s, day)
+    })
+    .sort(compareByFeedThenTime)
 }
 
 // ─────────────────────────────────────────────
@@ -225,7 +244,9 @@ function WeekGrid({
       <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
         <div className="text-xs text-muted-foreground p-1 pt-2">All day</div>
         {days.map((day, i) => {
-          const dayAll = allDayItems.filter(item => isSameDay(new Date(item.start_at), day))
+          const dayAll = allDayItems
+            .filter(item => isSameDay(new Date(item.start_at), day))
+            .sort(compareByFeedThenTime)
           const shown  = dayAll.slice(0, MAX_WEEK_ALLDAY)
           const extra  = dayAll.length - shown.length
           return (
