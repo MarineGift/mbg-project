@@ -20,6 +20,7 @@ const PARTY_TYPE_LABELS: Record<string, string> = {
   filler_supplier: 'Filler Suppliers',
   investor:        'Investors',
   partner:         'Partners',
+  self:            'MarineBio Group',
 };
 
 const MODULE_COLORS: Record<string, string> = {
@@ -27,6 +28,7 @@ const MODULE_COLORS: Record<string, string> = {
   filler_supplier: 'text-emerald-600 dark:text-emerald-400',
   investor:        'text-purple-600 dark:text-purple-400',
   partner:         'text-orange-600 dark:text-orange-400',
+  self:            'text-teal-600 dark:text-teal-400',
 };
 const FALLBACK_PARTY_COLOR = 'text-foreground';
 
