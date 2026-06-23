@@ -210,3 +210,245 @@ export async function getTodayCockpit(): Promise<TodayCockpit> {
     counts,
   }
 }
+
+// ───────────────────────────────────────────────────────────
+// getTodayBoard() — Today as a source-typed kanban (todo_v2 Phase 1.5)
+//
+// Seven columns in canonical order:
+//   event -> meeting -> deal_task -> communication -> todo -> next_step -> close
+//
+// Window:
+//   - deadline sources (deal_task / todo / next_step / close): due <= weekEnd,
+//     not done  (so OVERDUE items are included, sorted newest-first so the most
+//     relevant stay visible and ancient stale items truncate off the bottom).
+//   - time sources (event / meeting / communication): timestamp in [today, weekEnd]
+//     (upcoming only; past events/meetings/logs are not "to do"), soonest first.
+// Every item carries an href so the row links straight to the right place.
+// Timezone: v1 buckets on the server (UTC) date, same caveat as getTodayCockpit.
+// ───────────────────────────────────────────────────────────
+
+export type BoardSource =
+  | 'event' | 'meeting' | 'deal_task' | 'communication'
+  | 'todo'  | 'milestone_next_step' | 'milestone_close'
+
+export interface BoardItem {
+  id:      string
+  source:  BoardSource
+  title:   string
+  context: string | null       // party or deal name
+  when:    string | null       // 'YYYY-MM-DD' for display
+  overdue: boolean
+  href:    string
+}
+
+export interface BoardColumn {
+  source: BoardSource
+  items:  BoardItem[]
+  total:  number               // true total before the per-column cap
+}
+
+export interface TodayBoard {
+  today:   string
+  weekEnd: string
+  columns: BoardColumn[]
+}
+
+const BOARD_ORDER: BoardSource[] = [
+  'event', 'meeting', 'deal_task', 'communication',
+  'todo', 'milestone_next_step', 'milestone_close',
+]
+const COLUMN_LIMIT = 50
+
+export async function getTodayBoard(): Promise<TodayBoard> {
+  await requireAuth()
+  const supabase = await createSupabaseServerClient()
+
+  const now       = new Date()
+  const today     = now.toISOString().slice(0, 10)
+  const weekEnd   = new Date(now.getTime() + 7 * 86_400_000).toISOString().slice(0, 10)
+  const todayTs   = `${today}T00:00:00.000Z`
+  const weekEndTs = `${weekEnd}T23:59:59.999Z`
+
+  const [doneOptsRes, eventsRes, meetingsRes, tasksRes, commsRes, todosRes, dealsRes] =
+    await Promise.all([
+      supabase.schema('app').from('todo_status_options' as never)
+        .select('board_id, key, is_done').eq('is_done', true),
+
+      // calendar events happening today..weekEnd (exclude meeting-backed + cancelled)
+      supabase.schema('app').from('calendar_events' as never)
+        .select('id, title, start_at, party_id, parties ( name )')
+        .is('meeting_id', null)
+        .neq('status', 'cancelled')
+        .gte('start_at', todayTs)
+        .lte('start_at', weekEndTs)
+        .order('start_at'),
+
+      // meetings scheduled today..weekEnd
+      supabase.schema('app').from('meetings' as never)
+        .select('id, title, scheduled_at, party_id, parties ( name )')
+        .neq('status', 'cancelled')
+        .gte('scheduled_at', todayTs)
+        .lte('scheduled_at', weekEndTs)
+        .order('scheduled_at'),
+
+      // deal tasks: not deleted, not completed; due_at <= weekEnd (includes overdue)
+      supabase.schema('app').from('tasks' as never)
+        .select('id, title, due_at, status, deal_id')
+        .is('deleted_at', null)
+        .is('completed_at', null)
+        .not('due_at', 'is', null)
+        .lte('due_at', weekEndTs),
+
+      // communications logged today..weekEnd
+      supabase.schema('app').from('communications' as never)
+        .select('id, subject, occurred_at, party_id, parties ( name )')
+        .is('deleted_at', null)
+        .not('occurred_at', 'is', null)
+        .gte('occurred_at', todayTs)
+        .lte('occurred_at', weekEndTs)
+        .order('occurred_at'),
+
+      // todo_items: not archived; due_date <= weekEnd (includes overdue)
+      supabase.schema('app').from('todo_items' as never)
+        .select('id, title, due_date, status, board_id, party_id')
+        .is('archived_at', null)
+        .not('due_date', 'is', null)
+        .lte('due_date', weekEnd),
+
+      // active deals with next_step_date OR expected_close_date <= weekEnd
+      supabase.schema('app').from('deals' as never)
+        .select('id, deal_name, next_step, next_step_date, expected_close_date, party_id')
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .or(`next_step_date.lte.${weekEnd},expected_close_date.lte.${weekEnd}`),
+    ])
+
+  const doneKeys = new Set<string>()
+  for (const o of (doneOptsRes.data ?? []) as any[]) doneKeys.add(`${o.board_id}|${o.key}`)
+
+  const eventRows = (eventsRes.data   ?? []) as any[]
+  const meetRows  = (meetingsRes.data ?? []) as any[]
+  const taskRows  = (tasksRes.data    ?? []) as any[]
+  const commRows  = (commsRes.data    ?? []) as any[]
+  const todoRows  = (todosRes.data    ?? []) as any[]
+  const dealRows  = (dealsRes.data    ?? []) as any[]
+
+  // batch name lookups for todos (party) and deal tasks (deal)
+  const partyIds = Array.from(new Set(
+    [...todoRows, ...dealRows].map((r) => r.party_id as string | null)
+      .filter((x): x is string => !!x),
+  ))
+  const dealIds = Array.from(new Set(
+    taskRows.map((r) => r.deal_id as string | null).filter((x): x is string => !!x),
+  ))
+  const [partyRes, taskDealRes] = await Promise.all([
+    partyIds.length
+      ? supabase.schema('app').from('parties' as never).select('id, name').in('id', partyIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    dealIds.length
+      ? supabase.schema('app').from('deals' as never).select('id, deal_name').in('id', dealIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ])
+  const partyName = new Map<string, string>()
+  for (const p of (partyRes.data ?? []) as any[]) partyName.set(p.id, p.name)
+  const dealName = new Map<string, string>()
+  for (const d of (taskDealRes.data ?? []) as any[]) dealName.set(d.id, d.deal_name)
+
+  const buckets: Record<BoardSource, BoardItem[]> = {
+    event: [], meeting: [], deal_task: [], communication: [],
+    todo: [], milestone_next_step: [], milestone_close: [],
+  }
+  const embeddedParty = (r: any): string | null => (r.parties as any)?.name ?? null
+
+  // events
+  for (const e of eventRows) {
+    buckets.event.push({
+      id: e.id, source: 'event', title: e.title || '(untitled event)',
+      context: embeddedParty(e),
+      when: e.start_at ? String(e.start_at).slice(0, 10) : null,
+      overdue: false, href: '/calendar',
+    })
+  }
+  // meetings
+  for (const m of meetRows) {
+    buckets.meeting.push({
+      id: m.id, source: 'meeting', title: m.title || '(untitled meeting)',
+      context: embeddedParty(m),
+      when: m.scheduled_at ? String(m.scheduled_at).slice(0, 10) : null,
+      overdue: false, href: '/calendar',
+    })
+  }
+  // deal tasks
+  for (const t of taskRows) {
+    if (t.status && TASK_DONE_STATUSES.has(t.status)) continue
+    const when = t.due_at ? String(t.due_at).slice(0, 10) : null
+    buckets.deal_task.push({
+      id: t.id, source: 'deal_task', title: t.title,
+      context: t.deal_id ? dealName.get(t.deal_id) ?? null : null,
+      when, overdue: !!when && when < today,
+      href: t.deal_id ? `/pipelines?deal=${t.deal_id}` : '/pipelines',
+    })
+  }
+  // communications
+  for (const c of commRows) {
+    buckets.communication.push({
+      id: c.id, source: 'communication', title: c.subject || '(no subject)',
+      context: embeddedParty(c),
+      when: c.occurred_at ? String(c.occurred_at).slice(0, 10) : null,
+      overdue: false, href: '/inbox',
+    })
+  }
+  // todos
+  for (const t of todoRows) {
+    if (doneKeys.has(`${t.board_id}|${t.status}`)) continue
+    const when = t.due_date ?? null
+    buckets.todo.push({
+      id: t.id, source: 'todo', title: t.title,
+      context: t.party_id ? partyName.get(t.party_id) ?? null : null,
+      when, overdue: !!when && when < today,
+      href: '/todo',
+    })
+  }
+  // deal milestones -> next_step and/or close
+  for (const d of dealRows) {
+    const ctx = d.party_id ? partyName.get(d.party_id) ?? null : (d.deal_name ?? null)
+    const ns = d.next_step_date as string | null
+    if (ns && ns <= weekEnd) {
+      buckets.milestone_next_step.push({
+        id: `${d.id}:next_step`, source: 'milestone_next_step',
+        title: d.next_step ? `${d.deal_name} - ${d.next_step}` : `${d.deal_name} - next step`,
+        context: ctx, when: ns, overdue: ns < today,
+        href: `/pipelines?deal=${d.id}`,
+      })
+    }
+    const cl = d.expected_close_date as string | null
+    if (cl && cl <= weekEnd) {
+      buckets.milestone_close.push({
+        id: `${d.id}:close`, source: 'milestone_close',
+        title: `${d.deal_name} - expected close`,
+        context: ctx, when: cl, overdue: cl < today,
+        href: `/pipelines?deal=${d.id}`,
+      })
+    }
+  }
+
+  const whenAsc  = (a: BoardItem, b: BoardItem) => (a.when ?? '9999').localeCompare(b.when ?? '9999')
+  const whenDesc = (a: BoardItem, b: BoardItem) => (b.when ?? '0000').localeCompare(a.when ?? '0000')
+  // deadline columns: newest-first (relevant stays, ancient overdue truncates off bottom)
+  buckets.deal_task.sort(whenDesc)
+  buckets.todo.sort(whenDesc)
+  buckets.milestone_next_step.sort(whenDesc)
+  buckets.milestone_close.sort(whenDesc)
+  // time columns: soonest-first
+  buckets.event.sort(whenAsc)
+  buckets.meeting.sort(whenAsc)
+  buckets.communication.sort(whenAsc)
+
+  const columns: BoardColumn[] = BOARD_ORDER.map((source) => ({
+    source,
+    total: buckets[source].length,
+    items: buckets[source].slice(0, COLUMN_LIMIT),
+  }))
+
+  return { today, weekEnd, columns }
+}
