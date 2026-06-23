@@ -43,7 +43,7 @@ export default async function InboxDetailPage({ params }: PageProps) {
   const timeZone = profile?.timezone ?? DEFAULT_TIMEZONE;
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <MarkThreadRead ids={threadIds} />
       <Button variant="ghost" size="sm" asChild>
         <Link href="/inbox">
