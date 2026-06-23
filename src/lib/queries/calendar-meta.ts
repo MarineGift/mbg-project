@@ -82,6 +82,9 @@ export interface CalendarItem {
   milestone_kind?: 'next_step' | 'close'
   deal_id?:        string | null
   board_id?:       string | null
+  // For a recurring event expanded into per-occurrence items, this points back to
+  // the real app.calendar_events row id (the occurrence `id` is `${baseId}__${ymd}`).
+  source_event_id?: string | null
 }
 
 export interface GetCalendarFeedOptions {

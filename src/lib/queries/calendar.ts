@@ -48,6 +48,163 @@ import type {
   CalendarItem,
   GetCalendarFeedOptions,
 } from './calendar-meta'
+// ─────────────────────────────────────────────
+// Recurrence expansion (3-3) — internal events only
+//
+// Lightweight RRULE expander. The stored rule has no 'RRULE:' prefix, e.g.
+// 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20261231' or 'FREQ=DAILY'.
+// Supported: FREQ DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, BYDAY (weekly multi-day),
+// UNTIL (date), COUNT. NOT supported (v1): nth-weekday-of-month ordinals, EXDATE,
+// BYMONTHDAY lists. Unknown/empty rules degrade to a single base occurrence.
+// All math is done on local-free 'YYYY-MM-DD' strings in UTC so the date walk
+// never drifts; the per-occurrence wall-clock time is the base event's own.
+// ─────────────────────────────────────────────
+
+const RRULE_DOW: Record<string, number> = {
+  SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6,
+}
+const RRULE_ITER_CAP = 4000   // hard stop against pathological / unbounded rules
+const RRULE_OCC_CAP  = 400    // max occurrences emitted per event within a range
+
+interface ParsedRRule {
+  freq?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+  interval: number
+  count?: number
+  until?: string            // 'YYYY-MM-DD'
+  byday?: number[]          // 0=Sun..6=Sat
+}
+
+function parseRRule(raw: string): ParsedRRule {
+  const out: ParsedRRule = { interval: 1 }
+  const body = (raw || '').trim().toUpperCase().replace(/^RRULE:/, '')
+  for (const part of body.split(';')) {
+    const [k, v] = part.split('=')
+    if (!k || !v) continue
+    if (k === 'FREQ' && (v === 'DAILY' || v === 'WEEKLY' || v === 'MONTHLY' || v === 'YEARLY')) {
+      out.freq = v
+    } else if (k === 'INTERVAL') {
+      const n = parseInt(v, 10)
+      if (Number.isFinite(n) && n > 0) out.interval = n
+    } else if (k === 'COUNT') {
+      const n = parseInt(v, 10)
+      if (Number.isFinite(n) && n > 0) out.count = n
+    } else if (k === 'UNTIL') {
+      const digits = v.replace(/[^0-9]/g, '')
+      if (digits.length >= 8) {
+        out.until = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+      }
+    } else if (k === 'BYDAY') {
+      const days = v.split(',')
+        .map((tok) => tok.replace(/^[+-]?\d+/, '').trim())   // drop ordinal prefix (v1)
+        .map((code) => RRULE_DOW[code])
+        .filter((n): n is number => n !== undefined)
+      if (days.length) out.byday = Array.from(new Set(days)).sort((a, b) => a - b)
+    }
+  }
+  return out
+}
+
+function ymdAddDays(ymd: string, n: number): string {
+  const [y, mo, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + n)
+  return dt.toISOString().slice(0, 10)
+}
+
+// same day-of-month n months later; null if that day doesn't exist (e.g. 31st)
+function ymdAddMonths(ymd: string, n: number): string | null {
+  const [y, mo, d] = ymd.split('-').map(Number)
+  const anchor = new Date(Date.UTC(y, mo - 1, 1))
+  anchor.setUTCMonth(anchor.getUTCMonth() + n)
+  const ty = anchor.getUTCFullYear()
+  const tm = anchor.getUTCMonth()
+  const daysInMonth = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()
+  if (d > daysInMonth) return null
+  return `${ty}-${String(tm + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+// same month/day n years later; null for Feb 29 in a non-leap year
+function ymdAddYears(ymd: string, n: number): string | null {
+  const [y, mo, d] = ymd.split('-').map(Number)
+  const ty = y + n
+  const daysInMonth = new Date(Date.UTC(ty, mo, 0)).getUTCDate()
+  if (d > daysInMonth) return null
+  return `${ty}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+function ymdDow(ymd: string): number {
+  const [y, mo, d] = ymd.split('-').map(Number)
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay()
+}
+
+// Return the in-range occurrence dates ('YYYY-MM-DD') for a rule, inclusive.
+function expandOccurrenceDates(
+  baseYmd: string,
+  rule: ParsedRRule,
+  startYmd: string,
+  endYmd: string,
+): string[] {
+  const { freq, interval, count, until, byday } = rule
+  if (!freq) return baseYmd >= startYmd && baseYmd <= endYmd ? [baseYmd] : []
+
+  const out: string[] = []
+  let produced = 0   // counts every real occurrence from the series start (for COUNT)
+
+  // returns false when the whole series should stop
+  const consider = (ymd: string): boolean => {
+    if (ymd < baseYmd) return true          // ignore dates before the series start
+    if (until && ymd > until) return false
+    produced++
+    if (ymd >= startYmd && ymd <= endYmd && out.length < RRULE_OCC_CAP) out.push(ymd)
+    if (count && produced >= count) return false
+    return true
+  }
+
+  if (freq === 'WEEKLY') {
+    const days = byday?.length ? byday : [ymdDow(baseYmd)]
+    let weekStart = ymdAddDays(baseYmd, -ymdDow(baseYmd))   // Sunday of the base week
+    let block = 0
+    for (let i = 0; i < RRULE_ITER_CAP; i++) {
+      if (block % interval === 0) {
+        for (const dow of days) {
+          if (!consider(ymdAddDays(weekStart, dow))) return out
+        }
+      }
+      weekStart = ymdAddDays(weekStart, 7)
+      block++
+      if (weekStart > endYmd) break
+    }
+    return out
+  }
+
+  for (let k = 0; k < RRULE_ITER_CAP; k++) {
+    let occ: string | null = null
+    if (freq === 'DAILY')        occ = ymdAddDays(baseYmd, interval * k)
+    else if (freq === 'MONTHLY') occ = ymdAddMonths(baseYmd, interval * k)
+    else if (freq === 'YEARLY')  occ = ymdAddYears(baseYmd, interval * k)
+    if (occ === null) continue                 // invalid day (31st / Feb 29) -> skip
+    if (occ > endYmd) break                    // dates strictly increase
+    if (!consider(occ)) break
+  }
+  return out
+}
+
+// Rebuild a single occurrence's start/end from the base event, shifting only the
+// date and preserving the base's wall-clock time, zone format and duration.
+function occurrenceTimes(
+  e: { start_at: string; end_at?: string | null },
+  ymd: string,
+): { start_at: string; end_at: string } {
+  const baseStart = String(e.start_at)
+  const baseEnd   = String(e.end_at || e.start_at)
+  const suffix    = baseStart.length > 10 ? baseStart.slice(10) : 'T00:00:00'
+  const startAt   = `${ymd}${suffix}`
+  let durMs = new Date(baseEnd).getTime() - new Date(baseStart).getTime()
+  if (!Number.isFinite(durMs) || durMs < 0) durMs = 0
+  const endAt = new Date(new Date(startAt).getTime() + durMs).toISOString()
+  return { start_at: startAt, end_at: endAt }
+}
+
 export async function getCalendarFeed(
   rangeStart: string,
   rangeEnd:   string,
@@ -79,8 +236,14 @@ export async function getCalendarFeed(
             party_id, engagement_id, meeting_id,
             parties ( name:party_name )
           `)
-          .gte('start_at', rangeStart)
+          // Normal rows must start within the range. Internal recurring MASTERS
+          // whose base start_at is BEFORE rangeStart must also be pulled so we can
+          // expand their occurrences into the range (see expandOccurrenceDates).
           .lte('start_at', rangeEnd)
+          .or(
+            `and(source.eq.internal,recurrence_rule.not.is.null),` +
+            `start_at.gte.${startDate}`,
+          )
           .is('meeting_id', null)
           .neq('status', 'cancelled')
           .order('start_at')
@@ -177,34 +340,59 @@ export async function getCalendarFeed(
 
   const items: CalendarItem[] = []
 
-  // calendar_events
+  // calendar_events (recurring internal events are expanded into occurrences)
+  const buildEventItem = (e: any, over?: Partial<CalendarItem>): CalendarItem => ({
+    id:            e.id,
+    type:          'event',
+    feed_source:   'event',
+    title:         e.title,
+    start_at:      e.start_at,
+    end_at:        e.end_at,
+    is_all_day:    e.is_all_day,
+    source:        e.source as CalendarEventSource,
+    status:        e.status,
+    location:      e.location,
+    meeting_url:   e.meeting_url,
+    description:   e.description ?? null,
+    visibility:    e.visibility ?? null,
+    attendees:     (e.attendees as CalendarAttendee[]) ?? [],
+    external_id:   e.external_id ?? null,
+    connection_id: e.connection_id ?? null,
+    timezone:      e.timezone ?? null,
+    color:           e.color ?? null,  // keep null so chip uses per-source color; only real Google colors override
+    recurrence_rule: e.recurrence_rule ?? null,
+    reminders:       (e.reminders as CalendarReminder[]) ?? [],
+    transparency:    e.transparency ?? null,
+    party_id:      e.party_id    ?? null,
+    party_name:    (e.parties as any)?.name ?? null,
+    engagement_id: e.engagement_id ?? null,
+    source_event_id: null,
+    ...over,
+  })
+
   for (const e of (eventsRes.data ?? []) as any[]) {
-    items.push({
-      id:            e.id,
-      type:          'event',
-      feed_source:   'event',
-      title:         e.title,
-      start_at:      e.start_at,
-      end_at:        e.end_at,
-      is_all_day:    e.is_all_day,
-      source:        e.source as CalendarEventSource,
-      status:        e.status,
-      location:      e.location,
-      meeting_url:   e.meeting_url,
-      description:   e.description ?? null,
-      visibility:    e.visibility ?? null,
-      attendees:     (e.attendees as CalendarAttendee[]) ?? [],
-      external_id:   e.external_id ?? null,
-      connection_id: e.connection_id ?? null,
-      timezone:      e.timezone ?? null,
-      color:           e.color ?? null,  // keep null so chip uses per-source color; only real Google colors override
-      recurrence_rule: e.recurrence_rule ?? null,
-      reminders:       (e.reminders as CalendarReminder[]) ?? [],
-      transparency:    e.transparency ?? null,
-      party_id:      e.party_id    ?? null,
-      party_name:    (e.parties as any)?.name ?? null,
-      engagement_id: e.engagement_id ?? null,
-    })
+    // Only internal events are expanded locally. Google/Microsoft recurring
+    // events arrive already materialised by their own sync, so they pass through.
+    const canExpand = e.source === 'internal' && !!e.recurrence_rule
+    if (!canExpand) {
+      items.push(buildEventItem(e))
+      continue
+    }
+
+    const baseYmd = String(e.start_at).slice(0, 10)
+    const occYmds = expandOccurrenceDates(
+      baseYmd, parseRRule(String(e.recurrence_rule)), startDate, endDate,
+    )
+    // recurring but nothing in range -> emit nothing for this event
+    for (const ymd of occYmds) {
+      const { start_at, end_at } = occurrenceTimes(e, ymd)
+      items.push(buildEventItem(e, {
+        id:              `${e.id}__${ymd}`,   // unique React key per occurrence
+        source_event_id: e.id,                // popup/edit/delete resolve the real row via this
+        start_at,
+        end_at,
+      }))
+    }
   }
 
   // meetings

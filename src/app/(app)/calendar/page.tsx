@@ -27,6 +27,33 @@ import { useRouter } from 'next/navigation'
 // Quick Event Create (non-meeting)
 // --------------------------------------------------
 
+// JS getDay() index (0=Sun..6=Sat) -> RRULE BYDAY code / short label
+const WEEKDAY_CODES  = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+// Assemble an RRULE body (no 'RRULE:' prefix) from the custom builder state.
+function buildCustomRRule(s: {
+  cFreq: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+  cInterval: number
+  cByday: Set<string>
+  cEndMode: 'never' | 'until' | 'count'
+  cUntil: string
+  cCount: number
+}): string {
+  const parts = [`FREQ=${s.cFreq}`]
+  if (s.cInterval > 1) parts.push(`INTERVAL=${s.cInterval}`)
+  if (s.cFreq === 'WEEKLY' && s.cByday.size) {
+    const ordered = WEEKDAY_CODES.filter((d) => s.cByday.has(d))
+    parts.push(`BYDAY=${ordered.join(',')}`)
+  }
+  if (s.cEndMode === 'until' && s.cUntil) {
+    parts.push(`UNTIL=${s.cUntil.replace(/-/g, '')}`)
+  } else if (s.cEndMode === 'count' && s.cCount > 0) {
+    parts.push(`COUNT=${s.cCount}`)
+  }
+  return parts.join(';')
+}
+
 function QuickEventModal({
   open, defaultDate, onClose,
 }: {
@@ -40,6 +67,20 @@ function QuickEventModal({
   const [saving,   setSaving]  = useState(false)
   const [recurrence, setRecurrence] = useState('')
 
+  // 3-1 More options
+  const [showMore,    setShowMore]    = useState(false)
+  const [description, setDescription] = useState('')
+  const [location,    setLocation]    = useState('')
+  const [meetingUrl,  setMeetingUrl]  = useState('')
+
+  // 3-2 Custom recurrence builder (only used when recurrence === 'CUSTOM')
+  const [cFreq,     setCFreq]     = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('WEEKLY')
+  const [cInterval, setCInterval] = useState(1)
+  const [cByday,    setCByday]    = useState<Set<string>>(new Set())
+  const [cEndMode,  setCEndMode]  = useState<'never' | 'until' | 'count'>('never')
+  const [cUntil,    setCUntil]    = useState('')
+  const [cCount,    setCCount]    = useState(10)
+
   useEffect(() => {
     if (open) {
       const d = defaultDate
@@ -49,8 +90,31 @@ function QuickEventModal({
       setRecurrence('')
       setStartAt(`${base}T09:00`)
       setEndAt(`${base}T10:00`)
+      setShowMore(false)
+      setDescription('')
+      setLocation('')
+      setMeetingUrl('')
+      setCFreq('WEEKLY')
+      setCInterval(1)
+      setCByday(new Set([WEEKDAY_CODES[d.getDay()]]))
+      setCEndMode('never')
+      setCUntil('')
+      setCCount(10)
     }
   }, [open, defaultDate])
+
+  const toggleByday = (code: string) =>
+    setCByday((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code); else next.add(code)
+      return next
+    })
+
+  // The rule actually saved: a preset value, or the assembled custom rule.
+  const effectiveRecurrence =
+    recurrence === 'CUSTOM'
+      ? buildCustomRRule({ cFreq, cInterval, cByday, cEndMode, cUntil, cCount })
+      : recurrence
 
   async function handleSave() {
     if (!title.trim()) return
@@ -61,7 +125,10 @@ function QuickEventModal({
         start_at: new Date(allDay ? `${startAt}T00:00:00` : startAt).toISOString(),
         end_at:   new Date(allDay ? `${endAt}T23:59:59`   : endAt).toISOString(),
         is_all_day: allDay,
-        recurrence_rule: recurrence || null,
+        recurrence_rule: effectiveRecurrence || null,
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(location.trim()    ? { location:    location.trim() }    : {}),
+        ...(meetingUrl.trim()  ? { meeting_url: meetingUrl.trim() }  : {}),
       })
       router.refresh()
       onClose()
@@ -114,8 +181,117 @@ function QuickEventModal({
               <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">Every weekday (Mon-Fri)</option>
               <option value="FREQ=MONTHLY">Monthly</option>
               <option value="FREQ=YEARLY">Annually</option>
+              <option value="CUSTOM">Custom...</option>
             </select>
+            {recurrence === 'CUSTOM' && (
+              <div className="mt-2 space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Every</span>
+                  <Input
+                    type="number" min={1}
+                    value={cInterval}
+                    onChange={e => setCInterval(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
+                    className="w-16"
+                  />
+                  <select
+                    value={cFreq}
+                    onChange={e => setCFreq(e.target.value as typeof cFreq)}
+                    className="rounded-md border border-gray-300 px-2 py-2 text-sm"
+                  >
+                    <option value="DAILY">day{cInterval > 1 ? 's' : ''}</option>
+                    <option value="WEEKLY">week{cInterval > 1 ? 's' : ''}</option>
+                    <option value="MONTHLY">month{cInterval > 1 ? 's' : ''}</option>
+                    <option value="YEARLY">year{cInterval > 1 ? 's' : ''}</option>
+                  </select>
+                </div>
+
+                {cFreq === 'WEEKLY' && (
+                  <div className="flex flex-wrap gap-1">
+                    {WEEKDAY_CODES.map((code, i) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => toggleByday(code)}
+                        className={cn(
+                          'h-8 w-8 rounded-full border text-xs font-medium transition-colors',
+                          cByday.has(code)
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-gray-300 text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        {WEEKDAY_LABELS[i]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <span className="text-sm text-muted-foreground">Ends</span>
+                  <div className="flex flex-col gap-1.5 text-sm">
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="cEnd" checked={cEndMode === 'never'} onChange={() => setCEndMode('never')} />
+                      Never
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="cEnd" checked={cEndMode === 'until'} onChange={() => setCEndMode('until')} />
+                      On
+                      <Input
+                        type="date"
+                        value={cUntil}
+                        onChange={e => { setCUntil(e.target.value); setCEndMode('until') }}
+                        className="h-8 w-40"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="cEnd" checked={cEndMode === 'count'} onChange={() => setCEndMode('count')} />
+                      After
+                      <Input
+                        type="number" min={1}
+                        value={cCount}
+                        onChange={e => { setCCount(Math.max(1, parseInt(e.target.value || '1', 10) || 1)); setCEndMode('count') }}
+                        className="h-8 w-20"
+                      />
+                      occurrences
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+            {effectiveRecurrence && (
+              <p className="mt-1 text-xs text-muted-foreground">{rruleSummary(effectiveRecurrence)}</p>
+            )}
           </div>
+
+          {/* 3-1 More options */}
+          <button
+            type="button"
+            onClick={() => setShowMore(v => !v)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showMore ? 'Fewer options' : 'More options'}
+          </button>
+          {showMore && (
+            <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+              <div className="space-y-1">
+                <Label>Location</Label>
+                <Input placeholder="Where" value={location} onChange={e => setLocation(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>Meeting link</Label>
+                <Input placeholder="https://… (Zoom / Teams / Meet)" value={meetingUrl} onChange={e => setMeetingUrl(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>Description</Label>
+                <textarea
+                  rows={3}
+                  placeholder="Notes / agenda"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label>Start</Label>
@@ -152,11 +328,37 @@ function rruleSummary(rr: string | null | undefined): string {
   const v = (rr || '').trim().toUpperCase().replace(/^RRULE:/, '')
   if (!v) return ''
   if (v === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR') return 'Every weekday'
-  if (v === 'FREQ=DAILY')   return 'Daily'
-  if (v === 'FREQ=WEEKLY')  return 'Weekly'
-  if (v === 'FREQ=MONTHLY') return 'Monthly'
-  if (v === 'FREQ=YEARLY')  return 'Annually'
-  return 'Custom'
+
+  const m: Record<string, string> = {}
+  for (const p of v.split(';')) {
+    const [k, val] = p.split('=')
+    if (k && val) m[k] = val
+  }
+  const freq = m.FREQ
+  if (!freq) return 'Custom'
+
+  const interval = parseInt(m.INTERVAL || '1', 10) || 1
+  const unitWord: Record<string, string> = { DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year' }
+  const oneWord:  Record<string, string> = { DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Annually' }
+  let text = interval === 1
+    ? (oneWord[freq] || 'Custom')
+    : `Every ${interval} ${unitWord[freq] || 'time'}s`
+
+  if (freq === 'WEEKLY' && m.BYDAY) {
+    const names: Record<string, string> = { SU: 'Sun', MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat' }
+    const order = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
+    const picked = m.BYDAY.split(',').map((d) => d.replace(/^[+-]?\d+/, ''))
+    const labels = order.filter((d) => picked.includes(d)).map((d) => names[d])
+    if (labels.length) text += ` on ${labels.join(', ')}`
+  }
+
+  if (m.UNTIL) {
+    const u = m.UNTIL.replace(/[^0-9]/g, '')
+    if (u.length >= 8) text += `, until ${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}`
+  } else if (m.COUNT) {
+    text += `, ${m.COUNT} times`
+  }
+  return text
 }
 
 function ItemDetailPopup({
@@ -173,6 +375,9 @@ function ItemDetailPopup({
 
   const isEvent    = item.type === 'event'
   const isExternal = item.source === 'google' || item.source === 'microsoft'
+  // Expanded recurrence occurrences carry a synthetic id (`${baseId}__${ymd}`);
+  // edit/delete must target the real app.calendar_events row.
+  const realId     = item.source_event_id ?? item.id
 
   const typeLabel: Record<string, string> = {
     meeting: 'Meeting', event: 'Event', task: 'Task', communication: 'Communication',
@@ -187,7 +392,7 @@ function ItemDetailPopup({
     if (!window.confirm(msg)) return
     setDeleting(true)
     try {
-      await deleteCalendarEvent(item.id, item.source ?? 'internal')
+      await deleteCalendarEvent(realId, item.source ?? 'internal')
       router.refresh()
       onClose()
     } finally {
@@ -217,7 +422,7 @@ function ItemDetailPopup({
                 type="button"
                 title="Edit"
                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                onClick={() => onEdit(item)}
+                onClick={() => onEdit({ ...item, id: realId })}
               >
                 <Pencil className="w-4 h-4" />
               </button>
