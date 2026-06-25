@@ -72,3 +72,44 @@ export async function loadActiveBlocklist(
   }
   return (data ?? []) as BlocklistRow[];
 }
+
+/**
+ * Auto-register suppression signals (from inbound bounce/unsubscribe parsing)
+ * as active address entries. Duplicate-tolerant (the unique index on
+ * (org, kind, lower(pattern)) makes re-arrivals a no-op). Intended to be called
+ * from the inbound worker with a service-role client. Returns rows added.
+ */
+export async function registerSuppressions(
+  supabase: SupabaseClient,
+  organizationId: string,
+  signals: Array<{ email: string; reason: string; evidence?: string }>,
+  source: string,
+): Promise<number> {
+  let added = 0;
+  for (const s of signals) {
+    const pattern = (s.email ?? '').trim().toLowerCase();
+    if (!pattern.includes('@')) continue;
+    const notes = `auto:${source}${s.evidence ? ` | ${s.evidence}` : ''}`.slice(0, 500);
+    const { error } = await supabase
+      .schema('app')
+      .from('email_blocklist' as never)
+      .insert({
+        organization_id: organizationId,
+        pattern,
+        kind: 'address',
+        reason: s.reason,
+        notes,
+        is_active: true,
+      } as never);
+    if (!error) {
+      added += 1;
+      continue;
+    }
+    // already listed -> fine; anything else -> log but keep going
+    if (!/duplicate|unique|already exists|23505/i.test(error.message)) {
+      // eslint-disable-next-line no-console
+      console.error('[blocklist] auto-register failed:', error.message);
+    }
+  }
+  return added;
+}

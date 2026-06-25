@@ -52,6 +52,8 @@ import {
   matchSenderToContactAndParty,
 } from './header-parser';
 import { isFromAllowedSender } from './whitelist';
+import { detectSuppressions } from './bounce-parser';
+import { registerSuppressions } from './blocklist';
 import type { InboundMessageEvent, SendingAddressKind } from '../../types/email';
 
 /* ============================================================
@@ -810,6 +812,65 @@ export class MailCarrierClient {
   }
 
   /* --------------------------------------------------------
+   * autoSuppress — feed inbound bounces / unsubscribes into the
+   * do-not-send (email_blocklist) list. Best-effort, service-role insert.
+   * Disabled when EMAIL_AUTO_SUPPRESS=false.
+   * -------------------------------------------------------- */
+  private async autoSuppress(
+    parsed: ParsedMail,
+    headers: ReturnType<typeof parseInboundMessage>,
+  ): Promise<void> {
+    if (process.env.EMAIL_AUTO_SUPPRESS === 'false') return;
+
+    // top-level Content-Type (for report-type=delivery-status detection)
+    let contentType = '';
+    try {
+      const ct = parsed.headers?.get('content-type') as
+        | string
+        | { value?: string }
+        | undefined;
+      contentType = typeof ct === 'string' ? ct : ct?.value ?? '';
+    } catch {
+      /* ignore */
+    }
+
+    // our own addresses/domains — never suppress ourselves
+    const own: string[] = [];
+    if (this.account?.address) {
+      const a = this.account.address.toLowerCase();
+      own.push(a);
+      const d = a.split('@')[1];
+      if (d) own.push(d);
+    }
+    if (this.username) own.push(this.username.toLowerCase());
+
+    const signals = detectSuppressions({
+      fromAddress: headers.from.address,
+      fromName: headers.from.name ?? null,
+      subject: headers.subject,
+      text: parsed.text ?? '',
+      html: parsed.html || null,
+      contentType,
+      ownAddresses: own,
+    });
+    if (signals.length === 0) return;
+
+    const added = await registerSuppressions(
+      this.supabase,
+      this.organizationId,
+      signals,
+      headers.messageId,
+    );
+    if (added > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[mailcarrier:${this.logTag}] auto-suppressed ${added} address(es): ` +
+          signals.map((s) => `${s.email}(${s.reason})`).join(', '),
+      );
+    }
+  }
+
+  /* --------------------------------------------------------
    * persistInbound — communications + attachments INSERT
    *
    * Phase 2: whitelist check on entry.
@@ -819,6 +880,16 @@ export class MailCarrierClient {
     parsed: ParsedMail,
   ): Promise<InboundMessageEvent | null> {
     const headers = parseInboundMessage(parsed);
+
+    // -- auto-suppression (bounce / unsubscribe) --
+    // Runs BEFORE the whitelist gate so bounce notices from non-whitelisted
+    // relays are still captured. Best-effort: never break inbound ingestion.
+    try {
+      await this.autoSuppress(parsed, headers);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[mailcarrier:${this.logTag}] auto-suppress error:`, err);
+    }
 
     // -- whitelist check (Phase 2) --
     const fromAddress = headers.from.address;
