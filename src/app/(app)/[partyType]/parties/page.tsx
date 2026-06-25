@@ -119,24 +119,7 @@ async function fetchSupplyLinks(
   }
 }
 
-export default async function PartiesListPage(props: PageProps) {
-  // TEMP DIAGNOSTIC: surface the real server error in-browser (prod hides it
-  // behind a digest). Re-throws Next control-flow (notFound/redirect). REMOVE
-  // once the underlying error is identified and fixed.
-  try {
-    return await PartiesListPageInner(props);
-  } catch (err: unknown) {
-    const e = err as { digest?: string; message?: string; stack?: string };
-    if (typeof e?.digest === 'string' && e.digest.startsWith('NEXT_')) throw err;
-    return (
-      <pre style={{ whiteSpace: 'pre-wrap', padding: 16, fontSize: 12, lineHeight: 1.5 }}>
-        {'PARTIES DEBUG\n\n' + (e?.stack || e?.message || String(err))}
-      </pre>
-    );
-  }
-}
-
-async function PartiesListPageInner({ params, searchParams }: PageProps) {
+export default async function PartiesListPage({ params, searchParams }: PageProps) {
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
   const searchQuery  = (sp.q ?? '').trim();
@@ -751,10 +734,12 @@ async function PartiesListPageInner({ params, searchParams }: PageProps) {
               <tbody>
                 {parties.map((p) => {
                   const location  = p.city ?? '';
-                  const tags      = p.interest_tags ?? [];
+                  // interest_tags can arrive as a non-array (jsonb object/scalar)
+                  // for some rows; coerce so .slice()/.map() can't 500 the page.
+                  const tags      = Array.isArray(p.interest_tags) ? p.interest_tags : [];
                   const level     = p.party_level as PartyLevel | null;
                   const acc       = scores[p.id];
-                  const linked    = supplyLinks[p.id] ?? [];
+                  const linked    = Array.isArray(supplyLinks[p.id]) ? supplyLinks[p.id]! : [];
                   const hasLinks  = linked.length > 0;
                   const LevelIcon = level === 'group_hq' ? Building2
                     : level === 'country_entity' ? Layers3
