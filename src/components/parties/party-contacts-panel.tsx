@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import { useTranslations } from 'next-intl';
 import {
@@ -9,6 +11,8 @@ import {
   Phone,
   Briefcase,
   Plus,
+  Pencil,
+  Trash2,
   Calendar,
   ArrowRight,
   Check,
@@ -21,6 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ContactFormDialog } from '@/components/parties/contact-form-dialog';
+import { deleteContact } from '@/lib/actions/contacts';
 import type { ContactProfile, PartyContact } from '@/types/party-detail';
 import type { ContactActivity } from '@/lib/queries/contact-activities';
 
@@ -137,7 +142,10 @@ function ContactProfileBlock({ profile }: { profile: ContactProfile }) {
 
 export function PartyContactsPanel({ contacts, partyId, activitiesByContact, templates, partyType }: Props) {
   const t = useTranslations('partyDetail.contacts');
+  const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<PartyContact | null>(null);
+  const [isDeleting, startDelete] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(
     contacts[0]?.id ?? null,
   );
@@ -145,6 +153,28 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact, tem
 
   const selected = contacts.find((c) => c.id === selectedId) ?? null;
   const activities = selected ? (activitiesByContact[selected.id] ?? []) : [];
+
+  const openCreate = () => {
+    setEditingContact(null);
+    setDialogOpen(true);
+  };
+  const openEdit = (c: PartyContact) => {
+    setEditingContact(c);
+    setDialogOpen(true);
+  };
+  const handleDelete = (c: PartyContact) => {
+    if (!confirm(`Delete contact "${displayName(c)}"? This cannot be undone.`)) return;
+    startDelete(async () => {
+      const res = await deleteContact({ contactId: c.id });
+      if (res.ok) {
+        toast.success('Contact deleted');
+        if (selectedId === c.id) setSelectedId(null);
+        router.refresh();
+      } else {
+        toast.error(res.errorMessage ?? 'Delete failed');
+      }
+    });
+  };
 
   return (
     <>
@@ -154,7 +184,7 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact, tem
           <Button
             size="sm"
             className="gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={() => setDialogOpen(true)}
+            onClick={openCreate}
             aria-label={t('addContact')}
           >
             <Plus className="h-4 w-4" />
@@ -230,6 +260,28 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact, tem
                         <h3 className="text-base font-semibold truncate">
                           {displayName(selected)}
                         </h3>
+                        <div className="ml-auto flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 px-2"
+                            onClick={() => openEdit(selected)}
+                            aria-label="Edit contact"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="text-xs">Edit</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(selected)}
+                            disabled={isDeleting}
+                            aria-label="Delete contact"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                       {selected.jobTitle && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -356,9 +408,14 @@ export function PartyContactsPanel({ contacts, partyId, activitiesByContact, tem
       </Card>
 
       <ContactFormDialog
+        key={editingContact?.id ?? 'new'}
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(o) => {
+          setDialogOpen(o);
+          if (!o) setEditingContact(null);
+        }}
         partyId={partyId}
+        existing={editingContact}
       />
 
       <ComposeEmailDialog
