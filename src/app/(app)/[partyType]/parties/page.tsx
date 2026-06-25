@@ -456,6 +456,13 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
+    // Null/locale-safe comparison key. localeCompare() on a null value throws,
+    // which only surfaces when the primary key ties often (e.g. sorting
+    // investors by city, where many rows share an empty city) so the party_name
+    // tiebreaker runs constantly and hits any row with a null name. Coerce
+    // everything through String(... ?? '') so the sort can never 500 the page.
+    const nameKey = (p: PartyRow) => String(p.party_name ?? '');
+
     if (sortByScore) {
       working = [...working].sort((a, b) =>
         scoreAsc ? (scores[a.id]?.score ?? 0) - (scores[b.id]?.score ?? 0)
@@ -465,7 +472,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         const ca = investorCatAll[a.id]?.category ?? '';
         const cb = investorCatAll[b.id]?.category ?? '';
         const cmp = ca.localeCompare(cb);
-        return (typeAsc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
+        return (typeAsc ? cmp : -cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     } else if (sortByPriority) {
       const rank: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -473,7 +480,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         const ra = rank[investorPriorityAll[a.id] ?? ''] ?? 0;
         const rb = rank[investorPriorityAll[b.id] ?? ''] ?? 0;
         const cmp = rb - ra; // high first by default
-        return (priorityAsc ? -cmp : cmp) || a.party_name.localeCompare(b.party_name);
+        return (priorityAsc ? -cmp : cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     } else {
       // Honor the column sort (name/country/location/state) in memory too, so
@@ -482,10 +489,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       //   party_name | country_code | city | region  (all present on PartyRow)
       const col = dbSort.col as 'party_name' | 'country_code' | 'city' | 'region';
       working = [...working].sort((a, b) => {
-        const av = ((a[col] ?? '') as string).toLowerCase();
-        const bv = ((b[col] ?? '') as string).toLowerCase();
+        const av = String(a[col] ?? '').toLowerCase();
+        const bv = String(b[col] ?? '').toLowerCase();
         const cmp = av.localeCompare(bv);
-        return (dbSort.asc ? cmp : -cmp) || a.party_name.localeCompare(b.party_name);
+        return (dbSort.asc ? cmp : -cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     }
 
