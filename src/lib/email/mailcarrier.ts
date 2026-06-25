@@ -136,7 +136,6 @@ export type InboundHandler = (event: InboundMessageEvent) => Promise<void>;
  * 3. MailCarrierClient
  * ============================================================ */
 
-const MAX_RECONNECT_ATTEMPTS = 5;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
 export class MailCarrierClient {
@@ -410,7 +409,18 @@ export class MailCarrierClient {
         if (!this.isRunning) break;
         // eslint-disable-next-line no-console
         console.error(`[mailcarrier:${this.logTag}] idle loop error:`, err);
-        await this.handleReconnect();
+        try {
+          await this.handleReconnect();
+        } catch (reconnectErr) {
+          if (!this.isRunning) break;
+          // handleReconnect already applied a capped backoff; keep looping and
+          // retry on the next iteration rather than letting the listener die.
+          // eslint-disable-next-line no-console
+          console.error(
+            `[mailcarrier:${this.logTag}] reconnect attempt failed, will retry:`,
+            reconnectErr,
+          );
+        }
       }
       iterations += 1;
       if (
@@ -493,18 +503,28 @@ export class MailCarrierClient {
           }
         }
 
-        if (consecutiveErrors >= 10) {
+        if (consecutiveErrors >= 10 && consecutiveErrors % 10 === 0) {
+          // Do NOT permanently abort — this is an always-on worker. Surface the
+          // sustained failure in logs but keep retrying with extended backoff so
+          // inbound reception self-heals without a process restart.
           // eslint-disable-next-line no-console
           console.error(
-            `[mailcarrier:${this.logTag}] aborting polling loop after ${consecutiveErrors} consecutive errors`,
+            `[mailcarrier:${this.logTag}] ${consecutiveErrors} consecutive polling errors — still retrying with backoff`,
           );
-          break;
         }
       }
 
-      await new Promise((r) =>
-        setTimeout(r, env.MAILCARRIER_POLL_INTERVAL_SECONDS * 1000),
-      );
+      // Inter-tick wait. On a healthy tick this is the normal poll interval; on
+      // sustained errors it grows (capped at 5 min) so we don't hammer a down
+      // server, while never giving up.
+      const waitSeconds =
+        consecutiveErrors > 0
+          ? Math.min(
+              env.MAILCARRIER_POLL_INTERVAL_SECONDS * Math.pow(2, Math.min(consecutiveErrors, 5)),
+              300,
+            )
+          : env.MAILCARRIER_POLL_INTERVAL_SECONDS;
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000));
     }
 
     // eslint-disable-next-line no-console
@@ -1021,15 +1041,18 @@ export class MailCarrierClient {
    * -------------------------------------------------------- */
 
   private async handleReconnect(): Promise<void> {
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      this.isRunning = false;
-      throw new MailCarrierMaxReconnectError(MAX_RECONNECT_ATTEMPTS);
-    }
+    // Always-on worker: never permanently give up. A transient IMAP outage
+    // (server maintenance, network blip, auth hiccup) must self-heal instead of
+    // killing the listener until the next process restart — that silent death
+    // is what caused inbound mail to stall for hours and then arrive in a burst
+    // on redeploy. The attempt counter now only grows the backoff (capped at
+    // 60s) and is reset on a successful connect(); it no longer stops the loop.
     this.reconnectAttempts += 1;
-    const delayMs = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 60_000);
+    const expo = Math.min(this.reconnectAttempts, 6); // 2^6=64s, clamped to 60s
+    const delayMs = Math.min(Math.pow(2, expo) * 1000, 60_000);
     // eslint-disable-next-line no-console
     console.warn(
-      `[mailcarrier:${this.logTag}] reconnect attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} after ${delayMs}ms`,
+      `[mailcarrier:${this.logTag}] reconnect attempt ${this.reconnectAttempts} after ${delayMs}ms`,
     );
     await new Promise((r) => setTimeout(r, delayMs));
     try {
