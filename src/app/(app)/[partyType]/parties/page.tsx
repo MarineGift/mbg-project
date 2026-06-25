@@ -382,28 +382,26 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (typeFilterIds && typeFilterIds.length === 0) typeFilterIds = ['00000000-0000-0000-0000-000000000000'];
   }
 
-  let query = supabase
-    .schema('app')
-    .from('parties' as never)
-    .select(
-      'id, party_name, status, country_code, city, region, website, interest_tags, created_at, entity_type_id',
-      { count: 'exact' },
-    )
-    .eq('party_type_id' as never, partyTypeId)
-    .is('deleted_at', null)
-    .ilike('party_name' as never, searchQuery ? `%${searchQuery}%` : '%');
-
-  if (countryFilter) {
-    query = query.eq('country_code' as never, countryFilter);
-  }
-
-  if (typeFilterIds) {
-    query = query.in('id' as never, typeFilterIds);
-  }
-
-  if (!showStubs) {
-    query = query.or('notes.is.null,notes.not.ilike.Auto-created%');
-  }
+  // Build the filtered base query fresh on each call so the DB-ordered path can
+  // safely retry with a different .order() (sort fallback) without mutating an
+  // already-spent query builder.
+  const buildBaseQuery = () => {
+    let q = supabase
+      .schema('app')
+      .from('parties' as never)
+      .select(
+        'id, party_name, status, country_code, city, region, website, interest_tags, created_at, entity_type_id',
+        { count: 'exact' },
+      )
+      .eq('party_type_id' as never, partyTypeId)
+      .is('deleted_at', null)
+      .ilike('party_name' as never, searchQuery ? `%${searchQuery}%` : '%');
+    if (countryFilter) q = q.eq('country_code' as never, countryFilter);
+    if (typeFilterIds) q = q.in('id' as never, typeFilterIds);
+    if (!showStubs)    q = q.or('notes.is.null,notes.not.ilike.Auto-created%');
+    return q;
+  };
+  const query = buildBaseQuery();
 
   // We must process in memory (fetch the full candidate set, then slice) when
   // ordering or filtering by something the DB query can't do directly:
@@ -494,12 +492,22 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     totalCount = (isInvestor || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
-    const { data, error, count } = await query
+    // DB-ordered path. A sort column the DB cannot order by must never 500 the
+    // whole directory -- degrade gracefully to name ordering, then to an
+    // unordered fetch, instead of throwing.
+    let res = await buildBaseQuery()
       .order(dbSort.col as never, { ascending: dbSort.asc, nullsFirst: false })
       .range(from, to);
-    if (error) throw error;
-    totalCount = count ?? 0;
-    parties = (data ?? []) as unknown as PartyRow[];
+    if (res.error && dbSort.col !== 'party_name') {
+      res = await buildBaseQuery()
+        .order('party_name' as never, { ascending: true, nullsFirst: false })
+        .range(from, to);
+    }
+    if (res.error) {
+      res = await buildBaseQuery().range(from, to);
+    }
+    totalCount = res.count ?? 0;
+    parties = (res.data ?? []) as unknown as PartyRow[];
   }
 
   const partyIds = parties.map((p) => p.id);
