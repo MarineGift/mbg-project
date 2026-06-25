@@ -119,7 +119,24 @@ async function fetchSupplyLinks(
   }
 }
 
-export default async function PartiesListPage({ params, searchParams }: PageProps) {
+export default async function PartiesListPage(props: PageProps) {
+  // TEMP DIAGNOSTIC: surface the real server error in-browser (prod hides it
+  // behind a digest). Re-throws Next control-flow (notFound/redirect). REMOVE
+  // once the underlying error is identified and fixed.
+  try {
+    return await PartiesListPageInner(props);
+  } catch (err: unknown) {
+    const e = err as { digest?: string; message?: string; stack?: string };
+    if (typeof e?.digest === 'string' && e.digest.startsWith('NEXT_')) throw err;
+    return (
+      <pre style={{ whiteSpace: 'pre-wrap', padding: 16, fontSize: 12, lineHeight: 1.5 }}>
+        {'PARTIES DEBUG\n\n' + (e?.stack || e?.message || String(err))}
+      </pre>
+    );
+  }
+}
+
+async function PartiesListPageInner({ params, searchParams }: PageProps) {
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
   const searchQuery  = (sp.q ?? '').trim();
