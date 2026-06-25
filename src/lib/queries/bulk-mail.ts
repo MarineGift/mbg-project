@@ -17,6 +17,12 @@
  *                          (sending|sent|delivered) -> permanent per-template.
  *   - recently_contacted:  ANY outbound email to the party in the last N days
  *                          (template-agnostic safety guard; opt-in).
+ *
+ * Suppression (per-recipient, by email address):
+ *   - bounced:             the address previously bounced or was rejected for a
+ *                          bad-recipient reason. Permanently dropped so invalid
+ *                          addresses are not retried on every run. Transient
+ *                          failures are NOT suppressed (stay retryable).
  */
 
 import 'server-only';
@@ -35,7 +41,11 @@ export interface BulkDedupOptions {
   recentDays?: number;
 }
 
-export type BulkExcludeReason = 'already_sent' | 'no_contact_email' | 'recently_contacted';
+export type BulkExcludeReason =
+  | 'already_sent'
+  | 'no_contact_email'
+  | 'recently_contacted'
+  | 'bounced';
 
 export interface BulkMailCandidate {
   /** stable per-recipient key: `${partyId}:${contactId}` (or a party-level
@@ -69,6 +79,9 @@ export interface BulkMailPreview {
     recentlyContacted: number;
     /** parties excluded because no contact has an email. */
     noEmail: number;
+    /** recipients excluded because the address previously bounced /
+     *  was rejected for a bad-recipient reason (per-recipient, not per-party). */
+    bounced: number;
     /** subset of toSend whose recipient is NOT whitelisted (blocked unless
      *  the operator chooses bypassWhitelist). */
     notWhitelisted: number;
@@ -85,7 +98,7 @@ const EMPTY_PREVIEW = (templateId: string, recipientMode: RecipientMode): BulkMa
   candidates: [],
   toSend: [],
   excluded: [],
-  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, notWhitelisted: 0 },
+  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, bounced: 0, notWhitelisted: 0 },
 });
 
 export async function resolveBulkCandidates(
@@ -218,11 +231,56 @@ export async function resolveBulkCandidates(
     return wlPatterns.has(e) || (domain.length > 0 && wlPatterns.has(domain));
   };
 
+  // -- 5b) suppressed addresses: previously bounced / rejected recipients ----
+  // The operator was receiving repeated bounce-backs because failed addresses
+  // were retried on every run. We now permanently drop any address that:
+  //   - has a non-null bounced_at, OR
+  //   - was recorded with status='bounced', OR
+  //   - failed with an error_message/bounce_reason matching a bad-recipient
+  //     signature (550/551/553, 5.1.x, 5.4.4, "no such user", "mailbox
+  //     unavailable", "address rejected", etc.).
+  // Transient failures (timeouts, connection errors, quiet-hours, greylisting)
+  // do NOT match, so those recipients stay retryable. Keyed by email address
+  // (lowercased) since a bad address is bad regardless of which contact/party
+  // it is attached to. Org-scoped, outbound email only.
+  const INVALID_RECIPIENT_RE =
+    /(\b55[013]\b|\b5\.1\.[0-9]\b|\b5\.4\.4\b|no such (?:user|recipient|mailbox)|user unknown|unknown user|recipient (?:address )?(?:rejected|not found)|mailbox (?:unavailable|not found|is unavailable)|(?:address|recipient) rejected|does ?n(?:o|')t exist|invalid (?:recipient|mailbox|address)|account (?:does not exist|disabled|unavailable)|domain not found|host (?:or domain )?name not found|no mailbox here)/i;
+
+  const { data: failRaw } = await supabase
+    .schema('app')
+    .from('communications' as never)
+    .select('to_addresses, status, error_message, bounce_reason, bounced_at')
+    .eq('organization_id', orgId)
+    .eq('channel', 'email')
+    .eq('direction', 'outbound')
+    .or('status.in.(failed,bounced),bounced_at.not.is.null');
+
+  const suppressedEmails = new Set<string>();
+  for (const r of (failRaw ?? []) as Array<{
+    to_addresses: string[] | null;
+    status: string | null;
+    error_message: string | null;
+    bounce_reason: string | null;
+    bounced_at: string | null;
+  }>) {
+    const hardBounce =
+      r.status === 'bounced' ||
+      !!r.bounced_at ||
+      (r.status === 'failed' &&
+        INVALID_RECIPIENT_RE.test(`${r.error_message ?? ''} ${r.bounce_reason ?? ''}`));
+    if (!hardBounce) continue;
+    for (const addr of r.to_addresses ?? []) {
+      if (addr) suppressedEmails.add(addr.toLowerCase());
+    }
+  }
+  const isSuppressed = (email: string): boolean => suppressedEmails.has(email.toLowerCase());
+
   // -- 6) assemble per-recipient candidates ---------------------------------
   const candidates: BulkMailCandidate[] = [];
   let alreadySentParties = 0;
   let recentlyContactedParties = 0;
   let noEmailParties = 0;
+  let bouncedRecipients = 0;
 
   for (const pid of partyIds) {
     const partyName = nameById.get(pid) ?? '';
@@ -253,6 +311,8 @@ export async function resolveBulkCandidates(
         : [contacts.find((c) => c.isPrimary) ?? (contacts[0] as Contact)];
 
     for (const c of chosen) {
+      const suppressed = isSuppressed(c.email);
+      if (suppressed) bouncedRecipients += 1;
       candidates.push({
         key: `${pid}:${c.contactId}`,
         partyId: pid,
@@ -261,7 +321,7 @@ export async function resolveBulkCandidates(
         email: c.email,
         dealId,
         whitelisted: isWhitelisted(c.email),
-        excludeReason: null,
+        excludeReason: suppressed ? 'bounced' : null,
       });
     }
   }
@@ -281,6 +341,7 @@ export async function resolveBulkCandidates(
       alreadySent: alreadySentParties,
       recentlyContacted: recentlyContactedParties,
       noEmail: noEmailParties,
+      bounced: bouncedRecipients,
       notWhitelisted: toSend.filter((c) => !c.whitelisted).length,
     },
   };

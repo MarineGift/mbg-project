@@ -420,6 +420,7 @@ export function BulkMailClient({
               {preview.counts.alreadySent > 0 && <Badge variant="outline">Already received {preview.counts.alreadySent}</Badge>}
               {preview.counts.recentlyContacted > 0 && <Badge variant="outline">Recently contacted {preview.counts.recentlyContacted}</Badge>}
               {preview.counts.noEmail > 0 && <Badge variant="outline">No email {preview.counts.noEmail}</Badge>}
+              {preview.counts.bounced > 0 && <Badge className="bg-red-600">Bounced/invalid {preview.counts.bounced}</Badge>}
               {preview.counts.notWhitelisted > 0 && <Badge className="bg-amber-600">Not whitelisted {preview.counts.notWhitelisted}</Badge>}
             </div>
 
@@ -456,9 +457,11 @@ export function BulkMailClient({
                 <summary className="cursor-pointer text-muted-foreground">Excluded ({preview.excluded.length})</summary>
                 <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                   {preview.excluded.map((c) => (
-                    <li key={c.key}>{c.partyName || '(unnamed)'} &mdash;{' '}
+                    <li key={c.key}>{c.partyName || '(unnamed)'}{c.email ? ` <${c.email}>` : ''} &mdash;{' '}
                       {c.excludeReason === 'already_sent' ? 'already received this template'
-                        : c.excludeReason === 'recently_contacted' ? 'contacted recently' : 'no contact email'}</li>
+                        : c.excludeReason === 'recently_contacted' ? 'contacted recently'
+                        : c.excludeReason === 'bounced' ? 'previously bounced / invalid recipient'
+                        : 'no contact email'}</li>
                   ))}
                 </ul>
               </details>
