@@ -26,6 +26,7 @@ import type { SendingAddressKind, AttachmentInput, SmtpAccountConfig } from '@/t
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
 import { createEmailTracking } from '@/lib/actions/email-tracking';
 import { hasUnrestoredTokens, findUnrestoredTokens } from '@/lib/ai/pii-masker';
+import { emailMatchesBlock } from '@/lib/email/blocklist';
 import {
   resolveOutboundMailAccount,
   decryptMailAccountSmtpPassword,
@@ -125,7 +126,7 @@ export interface SendOutboundResult {
   communicationId?: string;
   messageId?: string;
   threadId?: string;
-  errorCode?: 'not_whitelisted' | 'database' | 'send_failed' | 'pii_tokens_present';
+  errorCode?: 'not_whitelisted' | 'blocklisted' | 'database' | 'send_failed' | 'pii_tokens_present';
   errorMessage?: string;
 }
 
@@ -290,6 +291,56 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
   const toRecipients = [input.to, ...(input.toAdditional ?? [])]
     .map((a) => a.trim())
     .filter(Boolean);
+
+  // [0] blocklist (do-not-send) guard. Runs BEFORE the whitelist and is NOT
+  //     bypassable by skipWhitelist — an unsubscribe / suppression must always
+  //     win, on every send path (bulk, sequence, compose, reply, AI auto-send).
+  //     Fail-closed: if the lookup errors we block rather than risk emailing a
+  //     suppressed address. cc is intentionally not checked (mirrors whitelist).
+  {
+    const { data: blRows, error: blErr } = await supabase
+      .schema('app')
+      .from('email_blocklist' as never)
+      .select('pattern, kind')
+      .eq('organization_id', orgId)
+      .eq('is_active', true);
+    if (blErr) {
+      const code = (blErr as { code?: string }).code ?? '';
+      const missingTable =
+        code === '42P01' || // undefined_table
+        code === 'PGRST205' || // PostgREST: table not found in schema cache
+        /does not exist|could not find the table|schema cache/i.test(blErr.message ?? '');
+      if (!missingTable) {
+        // A real lookup error -> fail closed (don't risk emailing a suppressed
+        // address while the DB is in an unknown state).
+        return {
+          ok: false,
+          status: 'blocked',
+          errorCode: 'database',
+          errorMessage: `Blocklist lookup failed: ${blErr.message}`,
+        };
+      }
+      // The table isn't provisioned yet (migration not run). Treat as an empty
+      // blocklist so the feature can deploy code-first without blocking every
+      // send. Once the migration runs, this branch stops firing.
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[sendOutbound] email_blocklist not found; skipping do-not-send check. Run the email-blocklist migration.',
+      );
+    }
+    const blockRows = (blErr ? [] : (blRows ?? [])) as Array<{ pattern: string; kind: 'address' | 'domain' | 'regex' }>;
+    for (const recipient of toRecipients) {
+      if (emailMatchesBlock(recipient, blockRows)) {
+        return {
+          ok: false,
+          status: 'blocked',
+          errorCode: 'blocklisted',
+          errorMessage: `Recipient is on the do-not-send list: ${recipient}`,
+        };
+      }
+    }
+  }
+
   if (!input.skipWhitelist) {
     for (const recipient of toRecipients) {
       const domain = recipient.split('@')[1]?.toLowerCase();

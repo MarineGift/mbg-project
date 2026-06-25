@@ -421,6 +421,7 @@ export function BulkMailClient({
               {preview.counts.recentlyContacted > 0 && <Badge variant="outline">Recently contacted {preview.counts.recentlyContacted}</Badge>}
               {preview.counts.noEmail > 0 && <Badge variant="outline">No email {preview.counts.noEmail}</Badge>}
               {preview.counts.bounced > 0 && <Badge className="bg-red-600">Bounced/invalid {preview.counts.bounced}</Badge>}
+              {preview.counts.blocklisted > 0 && <Badge className="bg-red-700">Do-not-send {preview.counts.blocklisted}</Badge>}
               {preview.counts.notWhitelisted > 0 && <Badge className="bg-amber-600">Not whitelisted {preview.counts.notWhitelisted}</Badge>}
             </div>
 
@@ -461,6 +462,7 @@ export function BulkMailClient({
                       {c.excludeReason === 'already_sent' ? 'already received this template'
                         : c.excludeReason === 'recently_contacted' ? 'contacted recently'
                         : c.excludeReason === 'bounced' ? 'previously bounced / invalid recipient'
+                        : c.excludeReason === 'blocklisted' ? 'on do-not-send list'
                         : 'no contact email'}</li>
                   ))}
                 </ul>

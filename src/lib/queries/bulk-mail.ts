@@ -27,6 +27,7 @@
 
 import 'server-only';
 import type { SbClient } from '@/lib/supabase/server';
+import { loadActiveBlocklist, emailMatchesBlock } from '@/lib/email/blocklist';
 
 export type BulkMailSource =
   | { mode: 'pipeline_stage'; stageId: string }
@@ -45,7 +46,8 @@ export type BulkExcludeReason =
   | 'already_sent'
   | 'no_contact_email'
   | 'recently_contacted'
-  | 'bounced';
+  | 'bounced'
+  | 'blocklisted';
 
 export interface BulkMailCandidate {
   /** stable per-recipient key: `${partyId}:${contactId}` (or a party-level
@@ -82,6 +84,9 @@ export interface BulkMailPreview {
     /** recipients excluded because the address previously bounced /
      *  was rejected for a bad-recipient reason (per-recipient, not per-party). */
     bounced: number;
+    /** recipients excluded because the address is on the do-not-send
+     *  (blocklist / unsubscribe) list. */
+    blocklisted: number;
     /** subset of toSend whose recipient is NOT whitelisted (blocked unless
      *  the operator chooses bypassWhitelist). */
     notWhitelisted: number;
@@ -98,7 +103,7 @@ const EMPTY_PREVIEW = (templateId: string, recipientMode: RecipientMode): BulkMa
   candidates: [],
   toSend: [],
   excluded: [],
-  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, bounced: 0, notWhitelisted: 0 },
+  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, bounced: 0, blocklisted: 0, notWhitelisted: 0 },
 });
 
 export async function resolveBulkCandidates(
@@ -275,12 +280,21 @@ export async function resolveBulkCandidates(
   }
   const isSuppressed = (email: string): boolean => suppressedEmails.has(email.toLowerCase());
 
+  // -- 5c) do-not-send (blocklist / unsubscribe) patterns --------------------
+  // Explicit operator/recipient-driven suppression. Takes priority over the
+  // derived bounce set. Authoritative enforcement is in send-outbound (every
+  // path); this is so the bulk preview reflects who will actually be dropped.
+  const blocklistRows = await loadActiveBlocklist(supabase, orgId);
+  const isBlocklisted = (email: string): boolean =>
+    blocklistRows.length > 0 && emailMatchesBlock(email, blocklistRows);
+
   // -- 6) assemble per-recipient candidates ---------------------------------
   const candidates: BulkMailCandidate[] = [];
   let alreadySentParties = 0;
   let recentlyContactedParties = 0;
   let noEmailParties = 0;
   let bouncedRecipients = 0;
+  let blocklistedRecipients = 0;
 
   for (const pid of partyIds) {
     const partyName = nameById.get(pid) ?? '';
@@ -311,8 +325,10 @@ export async function resolveBulkCandidates(
         : [contacts.find((c) => c.isPrimary) ?? (contacts[0] as Contact)];
 
     for (const c of chosen) {
-      const suppressed = isSuppressed(c.email);
-      if (suppressed) bouncedRecipients += 1;
+      const blocked = isBlocklisted(c.email);
+      const suppressed = !blocked && isSuppressed(c.email);
+      if (blocked) blocklistedRecipients += 1;
+      else if (suppressed) bouncedRecipients += 1;
       candidates.push({
         key: `${pid}:${c.contactId}`,
         partyId: pid,
@@ -321,7 +337,7 @@ export async function resolveBulkCandidates(
         email: c.email,
         dealId,
         whitelisted: isWhitelisted(c.email),
-        excludeReason: suppressed ? 'bounced' : null,
+        excludeReason: blocked ? 'blocklisted' : suppressed ? 'bounced' : null,
       });
     }
   }
@@ -342,6 +358,7 @@ export async function resolveBulkCandidates(
       recentlyContacted: recentlyContactedParties,
       noEmail: noEmailParties,
       bounced: bouncedRecipients,
+      blocklisted: blocklistedRecipients,
       notWhitelisted: toSend.filter((c) => !c.whitelisted).length,
     },
   };
