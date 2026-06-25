@@ -66,6 +66,16 @@ const partySchema = z.object({
   notes: z.string().max(10_000).optional().nullable(),
   introKo: z.string().max(10_000).optional().nullable(),
   introEn: z.string().max(10_000).optional().nullable(),
+  // Org-level contact info (HQ email and single-line street address).
+  // Both are optional and accept '' from the form, normalized to null below.
+  email: z
+    .string()
+    .max(320)
+    .optional()
+    .nullable()
+    .or(z.literal('').transform(() => null))
+    .refine((s) => !s || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s), 'Must be a valid email'),
+  streetAddress: z.string().max(300).optional().nullable(),
 });
 
 /* ============================================================
@@ -187,6 +197,8 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     notes: parsed.data.notes?.trim() || null,
     intro_ko: parsed.data.introKo?.trim() || null,
     intro_en: parsed.data.introEn?.trim() || null,
+    email: parsed.data.email?.trim().toLowerCase() || null,
+    street_address: parsed.data.streetAddress?.trim() || null,
     created_by: auth.userId,
   };
 
@@ -287,6 +299,8 @@ export async function updateParty(
     notes: parsed.data.notes?.trim() || null,
     intro_ko: parsed.data.introKo?.trim() || null,
     intro_en: parsed.data.introEn?.trim() || null,
+    email: parsed.data.email?.trim().toLowerCase() || null,
+    street_address: parsed.data.streetAddress?.trim() || null,
     updated_by: auth.userId,
   };
 

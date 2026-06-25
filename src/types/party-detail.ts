@@ -47,6 +47,9 @@ export interface PartyDetail {
   /** Long free-text introduction (Korean / English) - app.parties.intro_ko / intro_en */
   introKo: string | null;
   introEn: string | null;
+  /** Organization-level contact: HQ email and street address (single line). */
+  email: string | null;
+  streetAddress: string | null;
   createdAt: string;
   updatedAt: string;
 

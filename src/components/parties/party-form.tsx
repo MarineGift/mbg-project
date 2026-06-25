@@ -100,6 +100,14 @@ const schema = z.object({
   interestTags: z.string().max(500).optional().or(z.literal('')),
   source: z.string().max(120).optional().or(z.literal('')),
   notes: z.string().max(10_000).optional().or(z.literal('')),
+  // Org-level contact info: HQ email + single-line street address.
+  email: z
+    .string()
+    .max(320)
+    .optional()
+    .or(z.literal(''))
+    .refine((s) => !s || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s), 'Must be a valid email'),
+  streetAddress: z.string().max(300).optional().or(z.literal('')),
   introKo: z.string().max(10_000).optional().or(z.literal('')),
   introEn: z.string().max(10_000).optional().or(z.literal('')),
   // ---- investor profile (only persisted for investor parties) ----
@@ -228,6 +236,8 @@ export function PartyForm({
           interestTags: existing.interestTags.join(', '),
           source: existing.source ?? '',
           notes: existing.notes ?? '',
+          email: existing.email ?? '',
+          streetAddress: existing.streetAddress ?? '',
           introKo: existing.introKo ?? '',
           introEn: existing.introEn ?? '',
           investorType: existingProfile?.typeCode ?? '',
@@ -258,6 +268,8 @@ export function PartyForm({
           interestTags: '',
           source: '',
           notes: '',
+          email: '',
+          streetAddress: '',
           introKo: '',
           introEn: '',
           investorType: '',
@@ -309,6 +321,8 @@ export function PartyForm({
         notes: values.notes || null,
         introKo: values.introKo || null,
         introEn: values.introEn || null,
+        email: values.email || null,
+        streetAddress: values.streetAddress || null,
       };
 
       // Full investor profile lives on app.investor_profile (its own action).
@@ -502,6 +516,22 @@ export function PartyForm({
                 )}
               </div>
 
+              {/* Email (org-level / HQ) */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="party-email">Email</Label>
+                <Input
+                  id="party-email"
+                  type="email"
+                  {...register('email')}
+                  disabled={isPending}
+                  placeholder="info@example.com"
+                  aria-invalid={errors.email ? 'true' : undefined}
+                />
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email.message}</p>
+                )}
+              </div>
+
               {/* Source */}
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="party-source">{t('source')}</Label>
@@ -520,6 +550,20 @@ export function PartyForm({
           {/* ===================== Location ===================== */}
           <section className="space-y-4">
             <SectionLabel>Location</SectionLabel>
+            {/* Street address (single line, full width) */}
+            <div className="space-y-2">
+              <Label htmlFor="party-street-address">Street address</Label>
+              <Input
+                id="party-street-address"
+                {...register('streetAddress')}
+                disabled={isPending}
+                placeholder="123 Main St, Suite 400"
+                aria-invalid={errors.streetAddress ? 'true' : undefined}
+              />
+              {errors.streetAddress && (
+                <p className="text-xs text-destructive">{errors.streetAddress.message}</p>
+              )}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="party-country">Country</Label>
