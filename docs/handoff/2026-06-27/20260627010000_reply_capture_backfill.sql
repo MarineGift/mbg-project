@@ -139,10 +139,21 @@ WHERE party_id = '5acf0405-9888-460b-a7cd-594c159b2ec4'
   AND deleted_at IS NULL
 ORDER BY occurred_at;
 
--- C2) Stats the Communications tab reads (expect received >= 1, replied >= 1).
+-- C2) Stats RPC the Communications tab reads. In raw SQL the uuid literal must
+--     be cast explicitly (PostgREST does this for the app automatically).
 SELECT * FROM app.get_communications_stats_per_party(
-  '5acf0405-9888-460b-a7cd-594c159b2ec4'
+  '5acf0405-9888-460b-a7cd-594c159b2ec4'::uuid
 );
+
+-- C3) Function-independent verification (use this if C2's signature differs).
+--     Expect received >= 1 and replied >= 1 after the backfill.
+SELECT
+  count(*) FILTER (WHERE direction = 'inbound')                              AS received,
+  count(*) FILTER (WHERE direction = 'outbound')                            AS sent,
+  count(*) FILTER (WHERE direction = 'outbound' AND replied_at IS NOT NULL) AS replied
+FROM app.communications
+WHERE party_id = '5acf0405-9888-460b-a7cd-594c159b2ec4'
+  AND deleted_at IS NULL;
 
 -- =============================================================================
 -- If A1 returns NOTHING, the reply was never stored (dropped before insert).
