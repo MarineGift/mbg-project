@@ -891,20 +891,10 @@ export class MailCarrierClient {
       console.error(`[mailcarrier:${this.logTag}] auto-suppress error:`, err);
     }
 
-    // -- whitelist check (Phase 2) --
+    // -- sender + thread resolution (Phase 2 + 2026-06-27 reply-capture fix) --
     const fromAddress = headers.from.address;
-    const isAllowed = await isFromAllowedSender(
-      this.supabase,
-      this.organizationId,
-      fromAddress,
-    );
-    if (!isAllowed) {
-      // eslint-disable-next-line no-console
-      console.log(`[mailcarrier:${this.logTag}] skip — not in whitelist: ${fromAddress}`);
-      return null;
-    }
 
-    // idempotency - Message-ID UNIQUE
+    // idempotency - Message-ID UNIQUE (cheap dedup first)
     const { data: existing, error: existingError } = await this.supabase
       .schema('app')
       .from('communications')
@@ -924,13 +914,28 @@ export class MailCarrierClient {
       return null;
     }
 
-    // thread matching
+    // thread matching (also lets a reply to our own outbound bypass the whitelist)
     const threadMatch = await findThreadId(
       this.supabase,
       this.organizationId,
       headers,
     );
     const threadId = threadMatch.threadId ?? randomUUID();
+    const isReplyToOurThread = threadMatch.matchedBy !== 'none';
+
+    // whitelist check (Phase 2): always accept a reply to a message we sent,
+    // even when the sender address itself is not whitelisted. Otherwise a
+    // genuine reply from an unlisted address is dropped before it is stored.
+    const isAllowed = await isFromAllowedSender(
+      this.supabase,
+      this.organizationId,
+      fromAddress,
+    );
+    if (!isAllowed && !isReplyToOurThread) {
+      // eslint-disable-next-line no-console
+      console.log(`[mailcarrier:${this.logTag}] skip - not in whitelist and not a reply to our thread: ${fromAddress}`);
+      return null;
+    }
 
     // sender -> contact/party matching
     const senderMatch = await matchSenderToContactAndParty(
@@ -938,6 +943,32 @@ export class MailCarrierClient {
       this.organizationId,
       headers.from.address,
     );
+
+    // Resolve party/contact/engagement. Prefer the sender match, but fall back
+    // to the original outbound message in this thread. Without this fallback a
+    // reply from an address that is not a registered contact lands with
+    // party_id=null and never appears on the party's Communications tab
+    // (received/replied stay 0).
+    let resolvedPartyId: string | null = senderMatch.partyId ?? null;
+    let resolvedContactId: string | null = senderMatch.contactId ?? null;
+    let resolvedEngagementId: string | null =
+      threadMatch.matchedEngagementId ?? null;
+    if ((!resolvedPartyId || !resolvedContactId) && threadMatch.matchedCommId) {
+      const { data: orig } = await this.supabase
+        .schema('app')
+        .from('communications')
+        .select('party_id, contact_id, engagement_id')
+        .eq('id', threadMatch.matchedCommId)
+        .maybeSingle();
+      if (orig) {
+        resolvedPartyId =
+          resolvedPartyId ?? ((orig.party_id as string | null) ?? null);
+        resolvedContactId =
+          resolvedContactId ?? ((orig.contact_id as string | null) ?? null);
+        resolvedEngagementId =
+          resolvedEngagementId ?? ((orig.engagement_id as string | null) ?? null);
+      }
+    }
 
     // PII pre-masking
     const bodyPlainRaw = parsed.text ?? '';
@@ -951,9 +982,9 @@ export class MailCarrierClient {
       .from('communications')
       .insert({
         organization_id: this.organizationId,
-        party_id: senderMatch.partyId ?? null,
-        contact_id: senderMatch.contactId ?? null,
-        engagement_id: threadMatch.matchedEngagementId ?? null,
+        party_id: resolvedPartyId,
+        contact_id: resolvedContactId,
+        engagement_id: resolvedEngagementId,
         channel,
         direction,
         // Step 2 (2026-06-12): record which DB mail account received this message.
@@ -1004,6 +1035,29 @@ export class MailCarrierClient {
     }
 
     const communicationId = inserted.id as string;
+
+    // Mark the original outbound (the message this replies to) as replied, so
+    // the Communications "Replied" stat and the "Got reply" badge populate.
+    // Guarded by direction + replied_at IS NULL so an earlier reply wins and
+    // we never flip a non-outbound row.
+    if (threadMatch.matchedCommId) {
+      try {
+        await this.supabase
+          .schema('app')
+          .from('communications')
+          .update({ replied_at: headers.date.toISOString() })
+          .eq('id', threadMatch.matchedCommId)
+          .eq('direction', 'outbound')
+          .is('replied_at', null);
+      } catch (replyMarkErr) {
+        // best-effort: never break inbound ingestion over a stats update
+        // eslint-disable-next-line no-console
+        console.error(
+          `[mailcarrier:${this.logTag}] replied_at update failed:`,
+          replyMarkErr,
+        );
+      }
+    }
 
     // attachment handling
     for (const att of parsed.attachments ?? []) {
