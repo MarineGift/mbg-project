@@ -278,7 +278,7 @@ export async function findThreadId(
 export interface SenderMatchResult {
   contactId?: string;
   partyId?: string;
-  matchedBy: 'contact_email' | 'party_email_domain' | 'none';
+  matchedBy: 'contact_email' | 'party_email' | 'party_email_domain' | 'none';
 }
 
 export async function matchSenderToContactAndParty(
@@ -308,6 +308,28 @@ export async function matchSenderToContactAndParty(
       contactId: contact.id,
       partyId: contact.party_id ?? undefined,
       matchedBy: 'contact_email',
+    };
+  }
+
+  // [1b] exact match on parties.email
+  // Party-level outreach (e.g. sequence sends to a firm's general inbox) has no
+  // contact row, so a reply from that same address must match the party here or
+  // it lands orphaned (party_id NULL) and never shows on the party tab.
+  const { data: partyByEmail } = await supabase
+    .schema('app')
+    .from('parties')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('email', lowered)
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (partyByEmail) {
+    return {
+      partyId: partyByEmail.id,
+      matchedBy: 'party_email',
     };
   }
 
