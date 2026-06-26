@@ -13,13 +13,18 @@ interface Contact {
 }
 
 interface Props {
-  partyId:   string;
-  orgId:     string;
-  sequences: EmailSequence[];
-  contacts:  Contact[];
+  partyId:    string;
+  orgId:      string;
+  sequences:  EmailSequence[];
+  contacts:   Contact[];
+  /** Organization-level HQ email (app.parties.email). When provided, it shows
+   *  up as a special "Company HQ email" option in the recipient picker. */
+  partyEmail?: string | null;
 }
 
-export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts }: Props) {
+const HQ_OPTION = '__hq';
+
+export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts, partyEmail }: Props) {
   const router = useRouter();
   const [open,        setOpen]        = useState(false);
   const [sequenceId,  setSequenceId]  = useState('');
@@ -31,7 +36,18 @@ export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts }: Pr
 
   function handleOpen() {
     setSequenceId(activeSequences[0]?.id ?? '');
-    setContactId(contacts[0]?.id ?? '');
+    // Pick the first sensible recipient by default:
+    //   1. first contact that has an email
+    //   2. HQ email (if the party has app.parties.email set)
+    //   3. the first contact (even without an email, so dialog is not empty)
+    const firstContactWithEmail = contacts.find((c) => !!c.email);
+    if (firstContactWithEmail) {
+      setContactId(firstContactWithEmail.id);
+    } else if (partyEmail) {
+      setContactId(HQ_OPTION);
+    } else {
+      setContactId(contacts[0]?.id ?? '');
+    }
     setError(null);
     setOpen(true);
   }
@@ -40,12 +56,28 @@ export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts }: Pr
     if (!sequenceId) { setError('Select a sequence.'); return; }
     setError(null);
 
+    // Map the picker value -> (contactId, recipientEmail) for the server action.
+    //   HQ_OPTION      -> contactId=null, recipientEmail=partyEmail
+    //   empty string   -> contactId=null, recipientEmail=null (worker resolves)
+    //   <contact uuid> -> contactId=<that>, recipientEmail=null (worker resolves)
+    let resolvedContactId: string | null = contactId || null;
+    let resolvedRecipientEmail: string | null = null;
+    if (contactId === HQ_OPTION) {
+      resolvedContactId = null;
+      resolvedRecipientEmail = partyEmail ?? null;
+      if (!resolvedRecipientEmail) {
+        setError('No HQ email on file for this party.');
+        return;
+      }
+    }
+
     startTransition(async () => {
       const result = await enrollParty(
         orgId,
         sequenceId,
         partyId,
-        contactId || null,
+        resolvedContactId,
+        resolvedRecipientEmail,
       );
       if ('error' in result) {
         setError(result.error);
@@ -103,10 +135,10 @@ export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts }: Pr
           </div>
 
           {/* Contact picker */}
-          {contacts.length > 0 && (
+          {(contacts.length > 0 || partyEmail) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Recipient Contact
+                Recipient
               </label>
               <select
                 value={contactId}
@@ -120,7 +152,8 @@ export function EnrollSequenceDialog({ partyId, orgId, sequences, contacts }: Pr
                   </option>
                 ))}
               </select>
-              {contactId && !contacts.find(c => c.id === contactId)?.email && (
+              {contactId && contactId !== HQ_OPTION
+                && !contacts.find(c => c.id === contactId)?.email && (
                 <p className="text-xs text-amber-600 mt-1">
                   ⚠ This contact has no email — steps will be skipped.
                 </p>

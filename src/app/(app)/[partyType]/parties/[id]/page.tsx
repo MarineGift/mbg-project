@@ -176,6 +176,7 @@ export default async function PartyDetailPage({ params }: PageProps) {
                     partyId={full.party.id}
                     orgId={orgId}
                     contacts={sequenceContacts}
+                    partyEmail={full.party.email}
                   />
                 )}
               </>

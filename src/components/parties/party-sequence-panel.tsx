@@ -14,9 +14,14 @@ interface Contact {
 }
 
 interface Props {
-  partyId:  string;
-  orgId:    string;
-  contacts: Contact[];
+  partyId:    string;
+  orgId:      string;
+  contacts:   Contact[];
+  /** Organization-level HQ email from app.parties.email, if any.
+   *  When set, the Enroll dialog offers "Company HQ email" as a recipient
+   *  in addition to the contact list -- useful when the party has no
+   *  individual contact emails yet. */
+  partyEmail?: string | null;
 }
 
 const STATUS_CONFIG: Record<EnrollmentStatus, { label: string; color: string }> = {
@@ -51,7 +56,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
   );
 }
 
-export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
+export async function PartySequencePanel({ partyId, orgId, contacts, partyEmail }: Props) {
   const [enrollments, sequences] = await Promise.all([
     fetchPartyEnrollments(partyId),
     fetchSequences(orgId),
@@ -78,6 +83,7 @@ export async function PartySequencePanel({ partyId, orgId, contacts }: Props) {
           orgId={orgId}
           sequences={sequences}
           contacts={contacts}
+          partyEmail={partyEmail ?? null}
         />
       </div>
 

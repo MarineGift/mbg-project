@@ -77,10 +77,11 @@ export async function archiveSequence(
 // ===== Enrollment =====
 
 export async function enrollParty(
-  orgId:      string,
-  sequenceId: string,
-  partyId:    string,
-  contactId:  string | null,
+  orgId:           string,
+  sequenceId:      string,
+  partyId:         string,
+  contactId:       string | null,
+  recipientEmail?: string | null,
 ): Promise<{ enrollment_id: string } | { error: string }> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -90,10 +91,11 @@ export async function enrollParty(
 
   const { data, error } = await rpc(supabase, 'enroll_in_sequence', {
     p_organization_id: orgId,
-    p_sequence_id: sequenceId,
-    p_party_id:    partyId,
-    p_contact_id:  contactId ?? null,
-    p_enrolled_by: user.id,
+    p_sequence_id:     sequenceId,
+    p_party_id:        partyId,
+    p_contact_id:      contactId ?? null,
+    p_enrolled_by:     user.id,
+    p_recipient_email: recipientEmail ?? null,
   });
 
   if (error) {
