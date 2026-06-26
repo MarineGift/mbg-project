@@ -1,6 +1,10 @@
 // src/components/parties/party-communications-timeline.tsx
 // Party Communications Timeline (forum-style threaded view)
 // English-only UI, ASCII-clean source
+//
+// 2026-06-27: clicking an email now opens a read modal (EmailViewModal)
+// instead of expanding inline. Multiple emails per thread are easier to read
+// one at a time in a modal. "View" button + clickable subject both open it.
 "use client";
 
 import { useState } from "react";
@@ -22,6 +26,14 @@ import {
   ChevronRight,
   FileText,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { ComposeEmailDialog } from "@/components/email/compose-email-dialog";
 import type {
   CommunicationTimelineItem,
@@ -56,6 +68,8 @@ export function PartyCommunicationsTimeline(
   } = props;
 
   const [composeOpen, setComposeOpen] = useState(false);
+  // The email currently shown in the read modal (null = closed).
+  const [viewItem, setViewItem] = useState<CommunicationTimelineItem | null>(null);
   const router = useRouter();
   const [replyContext, setReplyContext] = useState<{
     messageId: string;
@@ -91,6 +105,10 @@ export function PartyCommunicationsTimeline(
     setComposeOpen(true);
   };
 
+  const handleView = (item: CommunicationTimelineItem) => {
+    setViewItem(item);
+  };
+
   const handleReply = (item: CommunicationTimelineItem) => {
     if (!item.message_id) return;
     setReplyContext({
@@ -110,6 +128,12 @@ export function PartyCommunicationsTimeline(
     setComposeOpen(true);
   };
 
+  // From the read modal: jump straight into a reply.
+  const handleReplyFromModal = (item: CommunicationTimelineItem) => {
+    setViewItem(null);
+    handleReply(item);
+  };
+
   return (
     <div className="bg-white rounded-lg border shadow-sm">
       {/* Header */}
@@ -121,7 +145,6 @@ export function PartyCommunicationsTimeline(
           </h3>
           <button
             onClick={handleNewCompose}
-            
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
           >
             <MessageSquarePlus className="w-4 h-4" />
@@ -152,10 +175,18 @@ export function PartyCommunicationsTimeline(
               key={threadKey}
               items={threadItems}
               onReply={handleReply}
+              onView={handleView}
             />
           ))
         )}
       </div>
+
+      {/* Read modal */}
+      <EmailViewModal
+        item={viewItem}
+        onClose={() => setViewItem(null)}
+        onReply={handleReplyFromModal}
+      />
 
       {/* Compose Dialog */}
       <ComposeEmailDialog
@@ -177,7 +208,7 @@ export function PartyCommunicationsTimeline(
   );
 }
 
-// ?????????????????? Sub: Stat box ??????????????????
+// ------------------------- Sub: Stat box -------------------------
 function StatBox({
   label,
   value,
@@ -202,13 +233,15 @@ function StatBox({
   );
 }
 
-// ?????????????????? Sub: Thread group (collapsible) ??????????????????
+// ------------------------- Sub: Thread group (collapsible) -------------------------
 function ThreadGroup({
   items,
   onReply,
+  onView,
 }: {
   items: CommunicationTimelineItem[];
   onReply: (item: CommunicationTimelineItem) => void;
+  onView: (item: CommunicationTimelineItem) => void;
 }) {
   const [expanded, setExpanded] = useState(items.length <= 3);
   const latest = items[items.length - 1]!;
@@ -217,7 +250,7 @@ function ThreadGroup({
   if (items.length === 1) {
     return (
       <div className="px-6 py-3">
-        <MessageRow item={items[0]!} onReply={onReply} />
+        <MessageRow item={items[0]!} onReply={onReply} onView={onView} />
       </div>
     );
   }
@@ -254,6 +287,7 @@ function ThreadGroup({
               key={item.id}
               item={item}
               onReply={onReply}
+              onView={onView}
               compact={true}
             />
           ))}
@@ -263,21 +297,25 @@ function ThreadGroup({
   );
 }
 
-// ?????????????????? Sub: Message row ??????????????????
+// ------------------------- Sub: Message row -------------------------
 function MessageRow({
   item,
   onReply,
+  onView,
   compact = false,
 }: {
   item: CommunicationTimelineItem;
   onReply: (item: CommunicationTimelineItem) => void;
+  onView: (item: CommunicationTimelineItem) => void;
   compact?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const isOutbound = item.direction === "outbound";
 
   return (
-    <div className="border rounded-md p-3 hover:bg-gray-50 transition">
+    <div
+      onClick={() => onView(item)}
+      className="border rounded-md p-3 hover:bg-gray-50 transition cursor-pointer"
+    >
       <div className="flex items-start gap-3">
         {/* Direction icon */}
         <div className="flex-shrink-0 mt-1">
@@ -290,7 +328,7 @@ function MessageRow({
           <div className="flex items-start justify-between gap-2 mb-1">
             <div className="flex-1 min-w-0">
               {!compact && (
-                <div className="font-medium text-sm truncate">
+                <div className="font-medium text-sm truncate hover:underline">
                   {item.subject || "(no subject)"}
                 </div>
               )}
@@ -326,25 +364,11 @@ function MessageRow({
             </div>
           </div>
 
-          {/* Body preview / expand */}
-          {item.body_summary && !expanded && (
+          {/* Body preview (full content opens in the modal) */}
+          {item.body_summary && (
             <p className="text-sm text-gray-700 line-clamp-2 mt-1">
               {item.body_summary}
             </p>
-          )}
-          {expanded && (
-            <div className="mt-2 p-3 bg-white border rounded text-sm">
-              {item.body_html ? (
-                <div
-                  className="prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: item.body_html }}
-                />
-              ) : (
-                <pre className="whitespace-pre-wrap font-sans">
-                  {item.body_plain || "(no body)"}
-                </pre>
-              )}
-            </div>
           )}
 
           {/* AI Classification (for inbound) */}
@@ -352,13 +376,17 @@ function MessageRow({
             <AIClassificationBadge classification={item.ai_classification} />
           )}
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-2">
+          {/* Actions (stopPropagation so buttons don't double-trigger the row) */}
+          <div
+            className="flex items-center gap-3 mt-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              onClick={() => onView(item)}
+              className="text-xs text-gray-600 hover:text-gray-900 inline-flex items-center gap-0.5"
             >
-              {expanded ? "Collapse" : "Show body"}
+              <Eye className="w-3 h-3" />
+              View
             </button>
             {item.message_id && (
               <button
@@ -376,7 +404,91 @@ function MessageRow({
   );
 }
 
-// ?????????????????? Direction icon ??????????????????
+// ------------------------- Sub: Email read modal -------------------------
+function EmailViewModal({
+  item,
+  onClose,
+  onReply,
+}: {
+  item: CommunicationTimelineItem | null;
+  onClose: () => void;
+  onReply: (item: CommunicationTimelineItem) => void;
+}) {
+  const open = item !== null;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        {item && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="pr-8 text-base leading-snug">
+                {item.subject || "(no subject)"}
+              </DialogTitle>
+            </DialogHeader>
+
+            {/* Meta row */}
+            <div className="text-xs text-gray-600 flex flex-wrap items-center gap-2 border-b pb-3">
+              <DirectionIcon direction={item.direction} />
+              <span className="font-medium text-gray-800">
+                {item.direction === "outbound" ? "To" : "From"}:{" "}
+                {item.contact_name ||
+                  item.contact_email ||
+                  (item.direction === "outbound"
+                    ? (item.to_addresses || [])[0]
+                    : item.from_address) ||
+                  "Unknown"}
+              </span>
+              <span className="text-gray-400">&middot;</span>
+              <span suppressHydrationWarning>{fmtFullDate(item.occurred_at)}</span>
+              <div className="ml-auto flex items-center gap-1">
+                <StatusBadges item={item} />
+              </div>
+            </div>
+
+            {/* AI classification (inbound) */}
+            {item.direction !== "outbound" && item.ai_classification && (
+              <AIClassificationBadge classification={item.ai_classification} />
+            )}
+
+            {/* Body (scrollable) */}
+            <div className="flex-1 overflow-y-auto py-2">
+              {item.body_html ? (
+                <div
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: item.body_html }}
+                />
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800">
+                  {item.body_plain || item.body_summary || "(no body)"}
+                </pre>
+              )}
+            </div>
+
+            <DialogFooter>
+              {item.message_id && (
+                <Button variant="outline" onClick={() => onReply(item)}>
+                  <CornerDownRight className="w-4 h-4 mr-1" />
+                  Reply
+                </Button>
+              )}
+              <Button variant="ghost" onClick={onClose}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ------------------------- Direction icon -------------------------
 function DirectionIcon({ direction }: { direction: string }) {
   if (direction === "outbound") {
     return (
@@ -394,7 +506,7 @@ function DirectionIcon({ direction }: { direction: string }) {
   );
 }
 
-// ?????????????????? Status badges ??????????????????
+// ------------------------- Status badges -------------------------
 function StatusBadges({ item }: { item: CommunicationTimelineItem }) {
   const badges: Array<{
     icon: typeof Eye;
@@ -481,7 +593,7 @@ function StatusBadges({ item }: { item: CommunicationTimelineItem }) {
   );
 }
 
-// ?????????????????? AI Classification badge ??????????????????
+// ------------------------- AI Classification badge -------------------------
 function AIClassificationBadge({
   classification,
 }: {
@@ -560,7 +672,7 @@ function AIClassificationBadge({
   );
 }
 
-// ?????????????????? Helpers ??????????????????
+// ------------------------- Helpers -------------------------
 function formatDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -579,6 +691,20 @@ function formatDate(iso: string | null): string {
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Absolute timestamp for the read modal header.
+function fmtFullDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
