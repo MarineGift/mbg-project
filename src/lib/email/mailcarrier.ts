@@ -1041,19 +1041,31 @@ export class MailCarrierClient {
     // Guarded by direction + replied_at IS NULL so an earlier reply wins and
     // we never flip a non-outbound row.
     if (threadMatch.matchedCommId) {
+      const replyAt = headers.date.toISOString();
       try {
         await this.supabase
           .schema('app')
           .from('communications')
-          .update({ replied_at: headers.date.toISOString() })
+          .update({ replied_at: replyAt })
           .eq('id', threadMatch.matchedCommId)
           .eq('direction', 'outbound')
           .is('replied_at', null);
+
+        // A reply implies the email was opened. Open-tracking pixels miss when
+        // the recipient blocks images, so backfill opened_at from the reply
+        // time (only when no real open was recorded).
+        await this.supabase
+          .schema('app')
+          .from('communications')
+          .update({ opened_at: replyAt })
+          .eq('id', threadMatch.matchedCommId)
+          .eq('direction', 'outbound')
+          .is('opened_at', null);
       } catch (replyMarkErr) {
         // best-effort: never break inbound ingestion over a stats update
         // eslint-disable-next-line no-console
         console.error(
-          `[mailcarrier:${this.logTag}] replied_at update failed:`,
+          `[mailcarrier:${this.logTag}] replied_at/opened_at update failed:`,
           replyMarkErr,
         );
       }
