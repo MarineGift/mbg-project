@@ -42,14 +42,16 @@
 *$20M pre의 근거가 Y3 $22.4M이므로, 9,000t → 2.24M t 점프의 신뢰성이 밸류 전체를 떠받침.*
 
 **A:**
-> "Fair — let me separate what's contracted from what's modeled. Confirmed today is 9,000 tons, with ~10,000 more in motion, so ~19,000 tons near-term. Year 1 in the model is [DECK 수치: 290,000 t], and the bridge is three layers:
+> "Fair — let me separate what's contracted from what's modeled, because the model itself is simple. We assume a flat $10 per ton royalty, so revenue is just volume times ten: Year 1 is 290,000 tons → $2.9M, Year 2 is 820,000 tons → $8.2M, Year 3 is 2.24M tons → $22.4M. The only real variable to defend is the volume ramp — the rate isn't aggressive; $10 sits in the middle of the $7.5-$17.5 a ton that 3-5% of a $250-350 price implies.
+>
+> On the ramp: confirmed today is 9,000 tons with ~10,000 more in motion, so ~19,000 near-term, against a Year-1 model of 290,000. Three layers bridge that:
 > 1. The first mill expands FCC across more of its own grades and lines once the trial grade is in production.
 > 2. Adoption rides the *licensee's* existing mill customer base — a global filler major already sells to hundreds of mills, so distribution is theirs, not a cold sales build by us.
 > 3. Tissue is net-new: first filler ever validated there, ~2M t/yr addressable that no incumbent can serve today.
 >
-> I'll be direct about the risk: the single biggest assumption is the ramp from ~19,000 contracted tons to the Year-1 number. What de-risks it is that the ramp runs through a giant's existing commercial relationships rather than our own sales force."
+> I'll be direct about the risk: the single biggest assumption is the ramp from ~19,000 contracted tons to that 290,000 Year-1 number. What de-risks it is that the ramp runs through a giant's existing commercial relationships rather than our own sales force."
 
-주의: **Y1 ramp 숫자(290,000t)는 9,000t의 ~32배**. Andrew는 여기를 가장 세게 칠 것. deck의 bottom-up 가정(대형 mill 1곳 연간 filler 소비량 × FCC 침투율 = tons)을 **숫자로** 준비해 둘 것. 모르면 "솔직히 이 ramp가 최대 가정"이라고 인정하는 게 과장보다 점수 높음 (Andrew는 정직성 평가하는 타입).
+주의: **모델을 "volume × $10/ton"으로 단순화**해서 제시하는 게 핵심 무기 — Andrew가 검증할 변수를 ramp 하나로 좁혀줌. $10는 one-pager의 "3-5% of $250-350 = $7.5-17.5/ton" 범위의 **중간값**이므로 "공격적 가정 아님"을 먼저 못박을 것. 그래도 Y1 290,000t는 confirmed 9,000t의 ~32배라 Andrew가 가장 세게 칠 지점 — 가능하면 bottom-up(대형 mill 1곳 연간 filler 소비량 × FCC 침투율 = tons)을 한 줄 숫자로 준비. 모르면 "이 ramp가 최대 가정"이라 솔직히 인정하는 게 과장보다 점수 높음.
 
 ### Q3. "Who are the 'two giants' under NDA — and how real are they?"
 *앵커 고객/파트너 검증. deck에서 blinded 처리한 부분.*
@@ -79,9 +81,9 @@
 *경제성 우선 thesis. Andrew가 가장 편안해하는 영역.*
 
 **A:**
-> "FCC sells at $250-350 a ton. We take a 3-5% royalty, so $7.5-$17.5 per ton to MBG — near-pure margin, because we carry no production cost. The mill's side: pulp runs $600-800 a ton, FCC replaces a portion at $250-350, so the mill saves on the order of $350 a ton. The filler maker gets a differentiated premium product. Everyone in the chain is better off, which is why we say the substitution is economically forced, not just greener. Contracts run 10-15 years, so it's a long-duration annuity once a mill converts."
+> "FCC sells at $250-350 a ton. Our royalty is 3-5% of that, so $7.5-$17.5 a ton — and we model it at a flat $10, the midpoint, so the projections aren't leaning on the top of the range. It's near-pure margin, because we carry no production cost. The mill's side: pulp runs $600-800 a ton, FCC replaces a portion at $250-350, so the mill saves on the order of $350 a ton. The filler maker gets a differentiated premium product. Everyone in the chain is better off, which is why we say the substitution is economically forced, not just greener. Contracts run 10-15 years, so it's a long-duration annuity once a mill converts."
 
-주의: "economically forced, not just greener" — Andrew의 thesis 문장과 정확히 일치. 강조할 것.
+주의: **$10/ton flat = 모델 rate** (Q2의 revenue 표와 정확히 정합). "midpoint, not top of range"를 강조해 보수적임을 어필. "economically forced, not just greener" — Andrew의 thesis 문장과 정확히 일치, 반드시 강조.
 
 ### Q7. "In a licensing model, what's your actual sales motion? How do you get from one mill to many?"
 *licensing 비즈니스의 GTM이 직관에 안 맞아서 자주 묻음.*
@@ -138,7 +140,7 @@
 ## 4. 미리 준비해 둘 자료 (Andrew가 "send me X" 할 가능성)
 
 - One-pager v2 (이미 첨부 발송) — 통화 중 재언급 OK.
-- **Bottom-up ramp model** (Q2 대비): mill당 filler 소비량 × FCC 침투율 → Y1/Y2/Y3 tons. *deck 수치로 채울 것.*
+- **Bottom-up ramp model** (Q2 대비): top-line은 확정 — Y1 290,000t / Y2 820,000t / Y3 2.24M t @ $10/ton = $2.9M / $8.2M / $22.4M. Andrew가 더 파고들면 mill당 filler 소비량 × FCC 침투율로 290,000t를 분해해 보일 수 있게 한 줄 준비.
 - **Patent map** (Q11 대비): 5 granted / 7 pending, 관할권별.
 - **NDA template** (Q3 대비): two giants 공개 + patent/FTO 공유용.
 - Customer reference 가능 여부 (NDA下 first mill과의 통화 주선 가능한지).
@@ -155,4 +157,4 @@
 
 ---
 
-_작성: 2026-06-27 세션. 수치는 IR Deck Ver1_6 / One-pager v2 기준. [DECK 수치] 표시된 곳은 실제 ramp 가정으로 채울 것._
+_작성: 2026-06-27 세션. 수치는 IR Deck Ver1_6 / One-pager v2 기준. Ramp 확정: Y1 290,000t / Y2 820,000t / Y3 2.24M t, royalty $10/ton flat (= revenue 표 정합)._
