@@ -1,66 +1,73 @@
 -- =============================================================================
--- 20260627010000_reply_capture_backfill.sql
+-- 20260627010000_reply_capture_backfill.sql  (v2)
 -- =============================================================================
 -- Fix: replies / received emails not counted on the party Communications tab.
 --
--- Root causes (code side fixed in src/lib/email/mailcarrier.ts):
---   1) A reply from a non-whitelisted address was dropped before storage.
---   2) An inbound reply whose sender is not a registered contact was stored
---      with party_id = NULL, so it never appeared on the party tab.
---   3) The original outbound's replied_at was never set, so "Replied" = 0.
+-- Confirmed root cause (Founder Collective): the sequence was sent to the firm's
+-- general inbox (parties.email = contact@foundercollective.com) with NO contact
+-- row. matchSenderToContactAndParty only matched contacts.email, so the reply
+-- from that same address landed orphaned (party_id = NULL) and never showed on
+-- the party tab. (Code fix: header-parser.ts now matches parties.email too;
+-- mailcarrier.ts bypasses whitelist for thread replies + sets replied_at.)
 --
--- This script is the RETROACTIVE half (code fix is forward-only):
---   Part A  diagnostics (read-only) -- find which case Founder Collective is in.
---   Part B  backfill (idempotent)   -- link orphan inbound replies + set replied_at.
---   Part C  verification.
---
--- Run in Supabase SQL Editor. Safe to re-run (only touches NULL party_id inbound
--- and NULL replied_at outbound rows).
+-- This is the RETROACTIVE half (code fix is forward-only). Idempotent.
+-- Run in Supabase SQL Editor: read Part A, run Part B, confirm Part C.
 --
 -- Founder Collective party_id = 5acf0405-9888-460b-a7cd-594c159b2ec4
 -- =============================================================================
 
 
 -- -----------------------------------------------------------------------------
--- Part A: DIAGNOSTICS (read-only) -- run these first, read the output.
+-- Part A: DIAGNOSTICS (read-only)
 -- -----------------------------------------------------------------------------
 
--- A1) Everything currently linked to Founder Collective.
---     If the reply is missing here, it is either orphaned (A2) or was never
---     stored (whitelist drop -> see handoff note on re-ingesting via UID reset).
-SELECT id, direction, status, from_address, to_addresses, subject,
-       occurred_at, replied_at, party_id, thread_id, in_reply_to
-FROM app.communications
-WHERE party_id = '5acf0405-9888-460b-a7cd-594c159b2ec4'
-  AND deleted_at IS NULL
-ORDER BY occurred_at;
-
--- A2) Orphan inbound (party_id NULL) that looks like a Founder Collective reply.
---     If a row shows up here, Part B will link it.
-SELECT id, direction, from_address, subject, occurred_at,
-       party_id, thread_id, in_reply_to
+-- A1) The orphan inbound reply we can see in the inbox
+--     (from contact@foundercollective.com). Expect party_id = NULL.
+SELECT id, direction, status, from_address, subject,
+       occurred_at, party_id, thread_id, in_reply_to
 FROM app.communications
 WHERE direction = 'inbound'
   AND deleted_at IS NULL
-  AND party_id IS NULL
-  AND (from_address ILIKE '%foundercollective.com'
-       OR subject ILIKE '%Intel Inside%')
-ORDER BY occurred_at DESC
-LIMIT 20;
+  AND from_address ILIKE '%foundercollective.com'
+ORDER BY occurred_at DESC;
+
+-- A2) Every orphan inbound whose sender equals some party's email
+--     (the whole party-level-outreach pattern, not just FC).
+SELECT i.id, i.from_address, i.subject, i.occurred_at, p.party_name
+FROM app.communications i
+JOIN app.parties p
+  ON p.organization_id = i.organization_id
+ AND p.deleted_at IS NULL
+ AND LOWER(p.email) = LOWER(i.from_address)
+WHERE i.direction = 'inbound'
+  AND i.deleted_at IS NULL
+  AND i.party_id IS NULL
+ORDER BY i.occurred_at DESC;
 
 
 -- -----------------------------------------------------------------------------
--- Part B: BACKFILL (idempotent).
+-- Part B: BACKFILL (idempotent)
 -- -----------------------------------------------------------------------------
 
--- B1) Link orphan inbound replies to the party/contact/engagement of the
---     outbound they reply to (exact in_reply_to match, else shared thread_id).
+-- B1) Link orphan inbound to the party whose email matches the sender
+--     (mirrors the new parties.email match in code). Fixes FC and all
+--     party-level-outreach replies at once.
+UPDATE app.communications i
+SET party_id = p.id
+FROM app.parties p
+WHERE i.direction = 'inbound'
+  AND i.deleted_at IS NULL
+  AND i.party_id IS NULL
+  AND p.deleted_at IS NULL
+  AND p.email IS NOT NULL
+  AND LOWER(i.from_address) = LOWER(p.email);
+
+-- B2) Link any remaining orphans via the thread (in_reply_to -> message_id,
+--     else shared thread_id) using the original outbound's party.
 WITH orphan AS (
   SELECT DISTINCT ON (i.id)
-         i.id          AS inbound_id,
-         o.party_id    AS party_id,
-         o.contact_id  AS contact_id,
-         o.engagement_id AS engagement_id
+         i.id AS inbound_id,
+         o.party_id, o.contact_id, o.engagement_id
   FROM app.communications i
   JOIN app.communications o
     ON o.organization_id = i.organization_id
@@ -75,7 +82,7 @@ WITH orphan AS (
   WHERE i.direction = 'inbound'
     AND i.deleted_at IS NULL
     AND i.party_id IS NULL
-  ORDER BY i.id, o.occurred_at DESC   -- nearest preceding outbound wins
+  ORDER BY i.id, o.occurred_at DESC
 )
 UPDATE app.communications c
 SET party_id      = orphan.party_id,
@@ -84,21 +91,33 @@ SET party_id      = orphan.party_id,
 FROM orphan
 WHERE c.id = orphan.inbound_id;
 
--- B2) Set replied_at on outbound messages that have an inbound reply.
+-- B3) Set replied_at on outbound messages that have an inbound reply in the
+--     same party. Matches by thread headers OR by normalized subject, so
+--     auto-responders ("Thanks for your email Re: ...") are covered even when
+--     they carry no In-Reply-To / References headers.
 WITH replied AS (
   SELECT o.id AS outbound_id, MIN(i.occurred_at) AS first_reply_at
   FROM app.communications o
   JOIN app.communications i
     ON i.organization_id = o.organization_id
+   AND i.party_id        = o.party_id
    AND i.direction = 'inbound'
    AND i.deleted_at IS NULL
    AND i.occurred_at >= o.occurred_at
    AND (
         (i.in_reply_to IS NOT NULL AND i.in_reply_to = o.message_id)
-     OR (i.thread_id   IS NOT NULL AND i.thread_id   = o.thread_id)
+     OR (i.thread_id IS NOT NULL AND i.thread_id = o.thread_id)
+     OR (
+          regexp_replace(lower(coalesce(i.subject,'')),
+            '^((re|fwd?|aw|antwort)\s*:\s*|thanks for your email\s+re\s*:\s*)+', '')
+          =
+          regexp_replace(lower(coalesce(o.subject,'')),
+            '^((re|fwd?|aw|antwort)\s*:\s*)+', '')
+        )
        )
   WHERE o.direction = 'outbound'
     AND o.deleted_at IS NULL
+    AND o.party_id IS NOT NULL
     AND o.replied_at IS NULL
   GROUP BY o.id
 )
@@ -109,11 +128,10 @@ WHERE c.id = replied.outbound_id;
 
 
 -- -----------------------------------------------------------------------------
--- Part C: VERIFICATION.
+-- Part C: VERIFICATION
 -- -----------------------------------------------------------------------------
 
--- C1) Founder Collective thread after backfill (expect an inbound row now,
---     and the outbound replied_at populated).
+-- C1) Founder Collective thread (expect an inbound row now + outbound replied_at set).
 SELECT direction, status, from_address, subject,
        occurred_at, replied_at, party_id
 FROM app.communications
@@ -121,20 +139,19 @@ WHERE party_id = '5acf0405-9888-460b-a7cd-594c159b2ec4'
   AND deleted_at IS NULL
 ORDER BY occurred_at;
 
--- C2) Stats RPC the Communications tab reads (expect received >= 1, replied >= 1).
+-- C2) Stats the Communications tab reads (expect received >= 1, replied >= 1).
 SELECT * FROM app.get_communications_stats_per_party(
   '5acf0405-9888-460b-a7cd-594c159b2ec4'
 );
 
 -- =============================================================================
--- If A1 + A2 are BOTH empty for the reply, the message was never stored
--- (whitelist drop). After deploying the mailcarrier.ts fix, re-ingest it by
--- resetting the IMAP checkpoint for the receiving mailbox so the carrier
--- re-reads recent UIDs, e.g. (adjust the kind/account to the receiving box):
+-- If A1 returns NOTHING, the reply was never stored (dropped before insert).
+-- Deploy the mailcarrier.ts fix, then re-ingest by nudging the IMAP checkpoint
+-- back so the carrier re-reads recent UIDs (adjust to the receiving mailbox):
 --
 --   UPDATE app.mailcarrier_state
 --   SET last_processed_uid = GREATEST(last_processed_uid - 20, 0)
---   WHERE kind = 'account';   -- and/or filter by the specific mailbox id
+--   WHERE kind = 'account';
 --
--- Then let the carrier run one cycle and re-check Part C.
+-- Then let one carrier cycle run and re-check Part C.
 -- =============================================================================
