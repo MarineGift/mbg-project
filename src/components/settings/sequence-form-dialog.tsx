@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { listMailAccountOptions, type MailAccountOption } from '@/lib/actions/mail-account-options';
-import { setSequenceFromAccount } from '@/lib/actions/sequence-sender';
+import { setSequenceFromAccount, setSequenceQuietHours, getSequenceQuietHours } from '@/lib/actions/sequence-sender';
 import { createSequence, updateSequence } from '@/lib/actions/email-sequences';
 import { SequenceSenderPreview } from './sequence-sender-preview';
 import type { EmailSequenceWithSteps, StepDraft } from '@/types/phase21b';
@@ -42,6 +42,13 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
   // SequenceSenderPreview below (which saves from_account_id inline).
   const [accounts,    setAccounts]    = useState<MailAccountOption[]>([]);
   const [fromId,      setFromId]      = useState<string>(''); // '' = org default account
+  // Quiet hours / send-window (defers a due step out of off-hours/weekends).
+  const initialQh = (initial as { quiet_hours?: { timezone: string; start: string; end: string; weekends_blocked: boolean } | null } | undefined)?.quiet_hours ?? null;
+  const [qhEnabled,  setQhEnabled]  = useState<boolean>(!!initialQh);
+  const [qhTimezone, setQhTimezone] = useState<string>(initialQh?.timezone ?? 'America/New_York');
+  const [qhStart,    setQhStart]    = useState<string>(initialQh?.start ?? '18:00');
+  const [qhEnd,      setQhEnd]      = useState<string>(initialQh?.end ?? '08:00');
+  const [qhWeekends, setQhWeekends] = useState<boolean>(initialQh?.weekends_blocked ?? true);
 
   useEffect(() => {
     if (initial?.id) return; // edit mode handles the sender via SequenceSenderPreview
@@ -49,6 +56,24 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
     (async () => {
       const opt = await listMailAccountOptions();
       if (alive && opt.ok) setAccounts(opt.accounts);
+    })();
+    return () => { alive = false; };
+  }, [initial?.id]);
+
+  useEffect(() => {
+    if (!initial?.id) return; // load saved quiet-hours when editing
+    let alive = true;
+    (async () => {
+      const r = await getSequenceQuietHours(initial.id);
+      if (!alive || 'error' in r) return;
+      const qh = r.quietHours;
+      setQhEnabled(!!qh);
+      if (qh) {
+        setQhTimezone(qh.timezone);
+        setQhStart(qh.start);
+        setQhEnd(qh.end);
+        setQhWeekends(qh.weekends_blocked);
+      }
     })();
     return () => { alive = false; };
   }, [initial?.id]);
@@ -106,6 +131,14 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
         // New sequence: persist the chosen From account (edit mode saves it inline).
         if (!initial && 'id' in result && result.id) {
           await setSequenceFromAccount(result.id, fromId || null);
+        }
+        // Persist quiet-hours / send-window (both create and edit).
+        const seqId = initial?.id ?? (('id' in result && result.id) ? (result.id as string) : null);
+        if (seqId) {
+          await setSequenceQuietHours(
+            seqId,
+            qhEnabled ? { timezone: qhTimezone, start: qhStart, end: qhEnd, weekends_blocked: qhWeekends } : null,
+          );
         }
         onClose();
       }
@@ -181,6 +214,51 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
               steps={steps}
             />
           )}
+
+          {/* Send window / quiet hours */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" checked={qhEnabled} onChange={e => setQhEnabled(e.target.checked)} />
+              Send window (defer off-hours &amp; weekends)
+            </label>
+            {qhEnabled && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Timezone (IANA)</label>
+                  <select
+                    value={qhTimezone}
+                    onChange={e => setQhTimezone(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="America/New_York">America/New_York (US Eastern)</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles (US Pacific)</option>
+                    <option value="Europe/London">Europe/London</option>
+                    <option value="Europe/Berlin">Europe/Berlin</option>
+                    <option value="Asia/Seoul">Asia/Seoul</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                    <option value="Asia/Singapore">Asia/Singapore</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Quiet start (HH:mm)</label>
+                  <input type="time" value={qhStart} onChange={e => setQhStart(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Quiet end (HH:mm)</label>
+                  <input type="time" value={qhEnd} onChange={e => setQhEnd(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                  <input type="checkbox" checked={qhWeekends} onChange={e => setQhWeekends(e.target.checked)} />
+                  Block weekends (Sat/Sun)
+                </label>
+                <p className="col-span-2 text-xs text-gray-400">
+                  Steps due during the quiet window or a blocked weekend are held until the next allowed time. Default 18:00-08:00 = send only ~8am-6pm on weekdays.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Steps */}
           <div>

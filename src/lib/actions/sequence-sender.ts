@@ -63,6 +63,52 @@ export async function setSequenceFromAccount(
   return { ok: true };
 }
 
+type SequenceQuietHours = { timezone: string; start: string; end: string; weekends_blocked: boolean };
+
+export async function getSequenceQuietHours(
+  sequenceId: string,
+): Promise<{ quietHours: SequenceQuietHours | null } | { error: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await (
+    supabase.schema('app').from('email_sequences') as unknown as {
+      select: (c: string) => {
+        eq: (k: string, v: string) => {
+          maybeSingle: () => Promise<{
+            data: { quiet_hours: SequenceQuietHours | null } | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    }
+  )
+    .select('quiet_hours')
+    .eq('id', sequenceId)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  return { quietHours: data?.quiet_hours ?? null };
+}
+
+export async function setSequenceQuietHours(
+  sequenceId: string,
+  quietHours: SequenceQuietHours | null,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await (
+    supabase.schema('app').from('email_sequences') as unknown as {
+      update: (vals: Record<string, unknown>) => {
+        eq: (k: string, v: string) => Promise<{ error: { message: string } | null }>;
+      };
+    }
+  )
+    .update({ quiet_hours: quietHours })
+    .eq('id', sequenceId);
+
+  if (error) return { error: error.message };
+  revalidatePath('/settings/email-sequences');
+  return { ok: true };
+}
+
 /* ----------------------------------------------------------------
  * Step preview
  * Renders a step with representative sample data so merge tokens fill,

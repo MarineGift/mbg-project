@@ -15,6 +15,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rpc } from "@/lib/rpc/typed-rpc";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { sendOutboundEmail } from "@/lib/email/send-outbound";
+import { evaluateQuietHours } from "@/lib/email/quiet-hours";
+import type { QuietHours } from "@/types/email";
 
 interface DueEnrollment {
   enrollment_id: string;
@@ -64,6 +66,7 @@ export async function processSequence(sequenceId?: string | null): Promise<{
   // distinct sequence so the live get_due_enrollments RPC does not change.
   // null -> sendOutboundEmail routes to the org default account.
   const seqAccountMap = new Map<string, string | null>();
+  const seqQuietMap = new Map<string, QuietHours | null>();
   const distinctSeqIds = [...new Set(enrollments.map((e) => e.sequence_id))];
   if (distinctSeqIds.length > 0) {
     const { data: seqRows, error: seqErr } = await (
@@ -76,13 +79,14 @@ export async function processSequence(sequenceId?: string | null): Promise<{
         };
       }
     )
-      .select("id, from_account_id")
+      .select("id, from_account_id, quiet_hours")
       .in("id", distinctSeqIds);
     if (seqErr) {
       console.error("[processSequence] from_account_id lookup error", seqErr);
     }
-    for (const row of (seqRows ?? []) as Array<{ id: string; from_account_id: string | null }>) {
+    for (const row of (seqRows ?? []) as Array<{ id: string; from_account_id: string | null; quiet_hours: QuietHours | null }>) {
       seqAccountMap.set(row.id, row.from_account_id ?? null);
+      seqQuietMap.set(row.id, row.quiet_hours ?? null);
     }
   }
 
@@ -94,6 +98,25 @@ export async function processSequence(sequenceId?: string | null): Promise<{
 
   for (const e of enrollments) {
     try {
+      // quiet-hours / send-window: defer a due step to the next allowed time
+      const qhPolicy = seqQuietMap.get(e.sequence_id) ?? null;
+      if (qhPolicy) {
+        const verdict = evaluateQuietHours(qhPolicy, new Date());
+        if (verdict.blocked) {
+          const nextAt = verdict.nextAllowedAt ?? new Date(Date.now() + 30 * 60_000).toISOString();
+          await (
+            supabase.schema("app").from("email_sequence_enrollments") as unknown as {
+              update: (vals: Record<string, unknown>) => {
+                eq: (k: string, v: string) => Promise<{ error: { message: string } | null }>;
+              };
+            }
+          )
+            .update({ next_send_at: nextAt })
+            .eq("id", e.enrollment_id);
+          skipped++;
+          continue;
+        }
+      }
       if (!e.contact_email) {
         await (rpc as any)(supabase, "advance_enrollment", {
           p_enrollment_id: e.enrollment_id,
