@@ -74,6 +74,23 @@ export function BulkMailClient({
   const [bypassWhitelist, setBypassWhitelist] = useState(false);
   const [sendMode, setSendMode] = useState<'now' | 'queue'>('now');
   const [ratePerMinute, setRatePerMinute] = useState(30);
+  // scheduled send (mail_runs.scheduled_at); '' = send asap
+  const [scheduledAt, setScheduledAt] = useState<string>('');
+  const toLocalInput = (d: Date): string => {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const nextGoodSendLocal = (): string => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    for (let i = 0; i < 14; i++) {
+      const cand = new Date(base);
+      cand.setDate(base.getDate() + i);
+      const wd = cand.getDay();
+      if ((wd === 2 || wd === 3 || wd === 4) && cand.getTime() > Date.now()) return toLocalInput(cand);
+    }
+    return toLocalInput(base);
+  };
 
   // ---- preview / send ----
   const [preview, setPreview] = useState<BulkMailPreview | null>(null);
@@ -174,7 +191,7 @@ export function BulkMailClient({
     const onlyKeys = Array.from(checked);
     if (onlyKeys.length === 0) { setError('No recipients selected.'); return; }
     startTransition(async () => {
-      const res = await enqueueBulkMail({ templateId, source, mailAccountId: accountId, recipientMode, recentDays: recentDays || undefined, bypassWhitelist, onlyKeys, ratePerMinute });
+      const res = await enqueueBulkMail({ templateId, source, mailAccountId: accountId, recipientMode, recentDays: recentDays || undefined, bypassWhitelist, onlyKeys, ratePerMinute, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined });
       setConfirmOpen(false);
       if (!res.ok) { setError(res.errorMessage ?? 'Queue failed.'); return; }
       setNotice(`Queued ${res.total ?? onlyKeys.length} recipient(s). The worker will send them in the background.`);
@@ -329,13 +346,38 @@ export function BulkMailClient({
               </p>
             </div>
             {sendMode === 'queue' && (
-              <div className="space-y-1.5">
-                <Label>Rate</Label>
-                <Select value={String(ratePerMinute)} onValueChange={(v) => setRatePerMinute(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{RATE_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <Label>Send time</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      min={toLocalInput(new Date())}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    />
+                    <Button type="button" size="sm" variant="outline" onClick={() => setScheduledAt(nextGoodSendLocal())}>
+                      <Clock className="mr-1 h-3.5 w-3.5" />Best time
+                    </Button>
+                    {scheduledAt && (
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setScheduledAt('')}>Send asap</Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {scheduledAt
+                      ? `Held until ${new Date(scheduledAt).toLocaleString()} (your local time).`
+                      : 'Empty = send as soon as the worker picks it up. Tip: Tue\u2013Thu ~9am beats Friday afternoon.'}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Rate</Label>
+                  <Select value={String(ratePerMinute)} onValueChange={(v) => setRatePerMinute(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{RATE_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
           </div>
 
@@ -482,7 +524,7 @@ export function BulkMailClient({
               <span className="font-medium">{selectedTemplate?.name ?? 'template'}</span> to{' '}
               <span className="font-medium">{checkedCount}</span> recipient(s) from{' '}
               <span className="font-medium">{selectedAccount?.address ?? '(no account)'}</span>
-              {sendMode === 'queue' ? ` at ${ratePerMinute}/min.` : '.'}
+              {sendMode === 'queue' ? ` at ${ratePerMinute}/min${scheduledAt ? `, starting ${new Date(scheduledAt).toLocaleString()}` : ''}.` : '.'}
             </p>
             {checkedNotWhitelisted > 0 && (
               <p className={bypassWhitelist ? 'text-amber-700' : 'text-red-600'}>

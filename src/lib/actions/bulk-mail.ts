@@ -288,6 +288,7 @@ export async function enqueueBulkMail(input: {
   onlyKeys?: string[];
   ratePerMinute?: number;
   concurrency?: number;
+  scheduledAt?: string;
 }): Promise<EnqueueResult> {
   let auth;
   try {
@@ -307,12 +308,19 @@ export async function enqueueBulkMail(input: {
       onlyKeys: z.array(z.string()).optional(),
       ratePerMinute: z.number().int().min(1).max(600).optional(),
       concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).optional(),
+      scheduledAt: z.string().datetime({ offset: true }).optional(),
     })
     .safeParse(input);
   if (!parsed.success) {
     return { ok: false, errorCode: 'validation', errorMessage: parsed.error.issues[0]?.message ?? 'Invalid input' };
   }
-  const { templateId, source, mailAccountId, recipientMode, recentDays, bypassWhitelist, onlyKeys } = parsed.data;
+  const { templateId, source, mailAccountId, recipientMode, recentDays, bypassWhitelist, onlyKeys, scheduledAt } = parsed.data;
+  if (scheduledAt) {
+    const whenMs = new Date(scheduledAt).getTime();
+    if (Number.isNaN(whenMs)) return { ok: false, errorCode: 'validation', errorMessage: 'Invalid scheduled time.' };
+    if (whenMs < Date.now() - 60_000) return { ok: false, errorCode: 'validation', errorMessage: 'Scheduled time is in the past.' };
+    if (whenMs > Date.now() + 90 * 24 * 3_600_000) return { ok: false, errorCode: 'validation', errorMessage: 'Scheduled time is too far out (max 90 days).' };
+  }
 
   const supabase = await createSupabaseServerClient();
 
@@ -365,6 +373,7 @@ export async function enqueueBulkMail(input: {
       concurrency: Math.min(parsed.data.concurrency ?? DEFAULT_CONCURRENCY, MAX_CONCURRENCY),
       source_kind: source.mode,
       source_ref: source.mode === 'pipeline_stage' ? source.stageId : null,
+      scheduled_at: scheduledAt ?? null,
       status: 'queued',
       total_count: recipients.length,
       created_by: auth.userId,

@@ -188,6 +188,9 @@ export async function drainTick(sb: SupabaseClient): Promise<number> {
       'id, organization_id, template_id, template_subject, mail_account_id, bypass_whitelist, rate_per_minute, concurrency, status',
     )
     .in('status', ['queued', 'running'])
+    // scheduled send: a queued run is held until its scheduled_at is due (null = asap);
+    // running runs always continue regardless of scheduled_at.
+    .or(`status.eq.running,scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
     .order('created_at', { ascending: true })
     .limit(MAX_RUNS_PER_TICK);
   const runs = (runsRaw ?? []) as unknown as RunRow[];
