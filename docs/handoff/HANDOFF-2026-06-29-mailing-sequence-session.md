@@ -79,3 +79,55 @@ Repo PUBLIC `MarineGift/mbg-project` branch `marinebiogroup` · push -> Railway 
 - next.config ignoreBuildErrors=true라 tsc 에러는 배포 안 막지만, 커밋 전 `npx tsc --noEmit` 0 유지가 관례.
 
 **Finish 블록**: `npx tsc --noEmit` -> `git add -A` -> commit -> `git pull --rebase` -> `git push origin marinebiogroup`.
+
+---
+
+## D. 다음 세션 작업 계획 - Paper Mill 연락처 이메일 보강
+
+**목표**: `party_type='paper_mill'` party들 중 이메일 연락처가 없는 곳에 담당자/이메일을 추가(메일링·시퀀스 발송 대상 확대).
+
+**방법 (3채널 병행)**
+1. **웹서치**: "<회사명> contact / sales / procurement / paper mill" 로 공식 도메인·담당부서 확인.
+2. **홈페이지**: Contact/About/Team 페이지에서 일반 inbox(info@/sales@/procurement@) + 가능하면 담당자.
+3. **LinkedIn**: 구매/조달/R&D 의사결정자 검색 -> 이름/직책/회사. (LinkedIn은 이메일 직접 노출 X -> 도메인 패턴으로 추정 후 검증.)
+
+**이메일 처리 원칙**
+- 추정 시 패턴 명시(firstname.lastname@domain, f.lastname@, info@ 등)하고 검증 단계 표시. 미검증 주소는 바운스/스팸·도메인 평판 위험 -> 가능하면 일반 inbox(info@/sales@) 우선, 담당자 추정은 보조.
+- 잘못된 주소 대량 발송은 SPF/DKIM/도메인 평판 손상. mail-tester/소량 테스트 권장.
+
+**스코핑 SQL (이메일 연락처 없는 paper_mill 수/목록)**
+```sql
+select p.id, p.party_name, p.country_code, p.website
+from app.parties p
+join app.party_types pt on pt.id = p.party_type_id
+where p.organization_id = 'b25de8f2-1020-482f-9012-183f63883169'
+  and pt.code = 'paper_mill'
+  and p.deleted_at is null
+  and not exists (
+    select 1 from app.contacts c
+    where c.party_id = p.id and c.deleted_at is null and c.email is not null)
+order by p.party_name;
+```
+
+**저장 대상**: `app.contacts`. 주요 컬럼:
+- 필수: `organization_id`, `party_id`, `contact_type_id`(FK contact_types - 기존 paper_mill 연락처와 동일 값 사용; 아래 SELECT로 확인)
+- 권장: `email`, `given_name`, `family_name`, `full_name`, `title_text`, `linkedin_url`, `is_primary`(true=발송 기본), `is_decision_maker`, `role_category`, `seniority_level`, `source`('web'/'linkedin'/'homepage'), `phone_e164`
+
+```sql
+-- contact_type_id 확인(기존 연락처에서 가장 흔한 값)
+select contact_type_id, count(*) from app.contacts
+where organization_id='b25de8f2-1020-482f-9012-183f63883169'
+group by 1 order by 2 desc;
+
+-- INSERT 템플릿(값만 채우면 됨)
+insert into app.contacts
+  (organization_id, party_id, contact_type_id, email, given_name, family_name,
+   full_name, title_text, linkedin_url, is_primary, is_decision_maker, source)
+values
+  ('b25de8f2-1020-482f-9012-183f63883169', '<PARTY_ID>', <CONTACT_TYPE_ID>,
+   'info@example.com', null, null, null, null, null, true, false, 'homepage');
+```
+
+**워크플로우(효율)**: 다음 세션에 Claude가 (1) 위 스코핑 SQL 결과(또는 회사 리스트)를 받아 웹서치로 회사별 도메인/담당자/이메일을 리서치 -> (2) party_id에 매핑된 contacts INSERT SQL(또는 CSV+mover) 일괄 생성 -> (3) 사용자가 Supabase 실행. 회사명 ILIKE 매칭이 모호하면 party_id를 함께 받는 게 정확.
+
+**먼저 해둘 것**: 이번 세션 미완료 B-1(`fix-bulk-enroll.sql`)을 먼저 실행해두면, 보강된 연락처로 바로 대량 enroll/발송 테스트 가능.
