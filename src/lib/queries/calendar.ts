@@ -105,7 +105,7 @@ function parseRRule(raw: string): ParsedRRule {
 }
 
 function ymdAddDays(ymd: string, n: number): string {
-  const [y, mo, d] = ymd.split('-').map(Number)
+  const [y, mo, d] = ymd.split('-').map(Number) as [number, number, number]
   const dt = new Date(Date.UTC(y, mo - 1, d))
   dt.setUTCDate(dt.getUTCDate() + n)
   return dt.toISOString().slice(0, 10)
@@ -113,7 +113,7 @@ function ymdAddDays(ymd: string, n: number): string {
 
 // same day-of-month n months later; null if that day doesn't exist (e.g. 31st)
 function ymdAddMonths(ymd: string, n: number): string | null {
-  const [y, mo, d] = ymd.split('-').map(Number)
+  const [y, mo, d] = ymd.split('-').map(Number) as [number, number, number]
   const anchor = new Date(Date.UTC(y, mo - 1, 1))
   anchor.setUTCMonth(anchor.getUTCMonth() + n)
   const ty = anchor.getUTCFullYear()
@@ -125,7 +125,7 @@ function ymdAddMonths(ymd: string, n: number): string | null {
 
 // same month/day n years later; null for Feb 29 in a non-leap year
 function ymdAddYears(ymd: string, n: number): string | null {
-  const [y, mo, d] = ymd.split('-').map(Number)
+  const [y, mo, d] = ymd.split('-').map(Number) as [number, number, number]
   const ty = y + n
   const daysInMonth = new Date(Date.UTC(ty, mo, 0)).getUTCDate()
   if (d > daysInMonth) return null
@@ -133,7 +133,7 @@ function ymdAddYears(ymd: string, n: number): string | null {
 }
 
 function ymdDow(ymd: string): number {
-  const [y, mo, d] = ymd.split('-').map(Number)
+  const [y, mo, d] = ymd.split('-').map(Number) as [number, number, number]
   return new Date(Date.UTC(y, mo - 1, d)).getUTCDay()
 }
 

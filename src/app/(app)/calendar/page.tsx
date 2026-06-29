@@ -96,7 +96,7 @@ function QuickEventModal({
       setMeetingUrl('')
       setCFreq('WEEKLY')
       setCInterval(1)
-      setCByday(new Set([WEEKDAY_CODES[d.getDay()]]))
+      setCByday(new Set([WEEKDAY_CODES[d.getDay()]!]))
       setCEndMode('never')
       setCUntil('')
       setCCount(10)

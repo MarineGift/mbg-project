@@ -188,7 +188,7 @@ export async function processReminders(opts?: { force?: boolean; now?: Date }): 
       })
       if (r.ok) {
         await supabase.schema('app').from('reminder_log' as never).upsert(
-          { organization_id: u.organization_id, user_id: uid, digest_date: today, kind: KIND, item_count: items.length, communication_id: r.communicationId ?? null },
+          { organization_id: u.organization_id, user_id: uid, digest_date: today, kind: KIND, item_count: items.length, communication_id: r.communicationId ?? null } as never,
           { onConflict: 'organization_id,user_id,digest_date,kind', ignoreDuplicates: true } as never,
         )
         result.sent++

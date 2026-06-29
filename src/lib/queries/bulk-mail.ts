@@ -284,7 +284,7 @@ export async function resolveBulkCandidates(
   // Explicit operator/recipient-driven suppression. Takes priority over the
   // derived bounce set. Authoritative enforcement is in send-outbound (every
   // path); this is so the bulk preview reflects who will actually be dropped.
-  const blocklistRows = await loadActiveBlocklist(supabase, orgId);
+  const blocklistRows = await loadActiveBlocklist(supabase as unknown as Parameters<typeof loadActiveBlocklist>[0], orgId);
   const isBlocklisted = (email: string): boolean =>
     blocklistRows.length > 0 && emailMatchesBlock(email, blocklistRows);
 

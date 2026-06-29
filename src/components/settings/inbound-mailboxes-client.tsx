@@ -258,6 +258,11 @@ function MailboxForm({
         use_tls: useTls,
         is_active: existing?.is_active ?? true,
         created_at: existing?.created_at ?? new Date().toISOString(),
+        smtp_host: smtpHost.trim() || null,
+        smtp_port: smtpPort,
+        smtp_use_tls: smtpUseTls,
+        smtp_username: smtpUsername.trim() || null,
+        has_smtp_pw: existing?.has_smtp_pw ?? false,
       });
       setPassword(""); // clear the password immediately
     });
