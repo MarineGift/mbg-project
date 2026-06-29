@@ -28,7 +28,7 @@ export default async function MailingPage() {
 
   // Active stages of those pipelines, grouped client-side by pipelineId.
   const pipelineIds = pipelines.map((p) => p.id);
-  let stages: Array<{ id: string; pipelineId: string; name: string }> = [];
+  let stages: Array<{ id: string; pipelineId: string; code: string | null; name: string }> = [];
   if (pipelineIds.length > 0) {
     const { data: stagesRaw } = await supabase
       .schema('app')
