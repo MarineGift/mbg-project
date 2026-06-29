@@ -96,7 +96,7 @@ export async function enrollParty(
     p_contact_id:      (contactId ?? null) as string,
     p_enrolled_by:     user.id,
     p_recipient_email: recipientEmail ?? null,
-  });
+  } as never);
 
   if (error) {
     // may already exist on unique-constraint violation
