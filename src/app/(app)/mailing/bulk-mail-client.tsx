@@ -30,6 +30,7 @@ import {
 } from '@/lib/actions/bulk-mail';
 import type { BulkMailPreview, BulkMailSource, RecipientMode } from '@/lib/queries/bulk-mail';
 import { searchPartiesForCampaign } from '@/lib/actions/campaigns';
+import { PARTY_TYPE_CODE_BY_ID } from '@/types/party-type';
 
 type Pipeline = { id: string; code: string; name: string };
 type Stage = { id: string; pipelineId: string; code: string | null; name: string };
@@ -118,7 +119,9 @@ export function BulkMailClient({
   // Templates offered in the picker: narrow to the audience pipeline's module,
   // then to the selected stage when stage-specific templates exist (otherwise
   // keep the module list so the dropdown is never empty).
+  const selectedPartiesModule = useMemo(() => { const codes = new Set<string>(); for (const p of selectedParties.values()) { const c = p.party_type_id != null ? PARTY_TYPE_CODE_BY_ID[p.party_type_id] : undefined; if (c) codes.add(c); } return codes.size === 1 ? (Array.from(codes)[0] ?? '') : ''; }, [selectedParties]);
   const templateOptions = useMemo(() => {
+    if (mode === 'parties') { const m = selectedPartiesModule; const byType = m ? templates.filter((t) => t.module === m) : []; return byType.length > 0 ? byType : templates; }
     if (mode !== 'pipeline_stage' || !pipelineId) return templates;
     const byModule = pipelineModule ? templates.filter((t) => t.module === pipelineModule) : templates;
     const base = byModule.length > 0 ? byModule : templates;
@@ -127,7 +130,7 @@ export function BulkMailClient({
       if (byStage.length > 0) return byStage;
     }
     return base;
-  }, [templates, mode, pipelineId, pipelineModule, selectedStageCode]);
+  }, [templates, mode, pipelineId, pipelineModule, selectedStageCode, selectedPartiesModule]);
   // Clear the chosen template if an audience change removes it from the list.
   useEffect(() => {
     if (templateId && !templateOptions.some((t) => t.id === templateId)) setTemplateId('');
