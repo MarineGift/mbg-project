@@ -32,8 +32,8 @@ import type { BulkMailPreview, BulkMailSource, RecipientMode } from '@/lib/queri
 import { searchPartiesForCampaign } from '@/lib/actions/campaigns';
 
 type Pipeline = { id: string; code: string; name: string };
-type Stage = { id: string; pipelineId: string; name: string };
-type Template = { id: string; name: string; subject: string; category: string | null; module: string | null };
+type Stage = { id: string; pipelineId: string; code: string | null; name: string };
+type Template = { id: string; name: string; subject: string; category: string | null; module: string | null; stageCode: string | null };
 type Account = { id: string; address: string; displayName: string | null; isDefault: boolean };
 type PartyHit = { id: string; party_name: string; country_code: string | null; party_type_id: number | null };
 
@@ -103,6 +103,35 @@ export function BulkMailClient({
   // ---- background runs ----
   const [runs, setRuns] = useState<MailRunStatus[]>([]);
 
+  // Map plural pipeline codes (investors, filler_suppliers) to the singular
+  // template module/party_type tags (investor, filler_supplier).
+  const pipelineModule = useMemo(() => {
+    const code = pipelines.find((p) => p.id === pipelineId)?.code ?? '';
+    if (code === 'investors') return 'investor';
+    if (code === 'filler_suppliers') return 'filler_supplier';
+    return code;
+  }, [pipelines, pipelineId]);
+  const selectedStageCode = useMemo(
+    () => stages.find((s) => s.id === stageId)?.code ?? '',
+    [stages, stageId],
+  );
+  // Templates offered in the picker: narrow to the audience pipeline's module,
+  // then to the selected stage when stage-specific templates exist (otherwise
+  // keep the module list so the dropdown is never empty).
+  const templateOptions = useMemo(() => {
+    if (mode !== 'pipeline_stage' || !pipelineId) return templates;
+    const byModule = pipelineModule ? templates.filter((t) => t.module === pipelineModule) : templates;
+    const base = byModule.length > 0 ? byModule : templates;
+    if (selectedStageCode) {
+      const byStage = base.filter((t) => t.stageCode === selectedStageCode);
+      if (byStage.length > 0) return byStage;
+    }
+    return base;
+  }, [templates, mode, pipelineId, pipelineModule, selectedStageCode]);
+  // Clear the chosen template if an audience change removes it from the list.
+  useEffect(() => {
+    if (templateId && !templateOptions.some((t) => t.id === templateId)) setTemplateId('');
+  }, [templateId, templateOptions]);
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
   const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
@@ -289,7 +318,7 @@ export function BulkMailClient({
               <Label>Template</Label>
               <Select value={templateId} onValueChange={(v) => { setTemplateId(v); resetPreview(); }}>
                 <SelectTrigger><SelectValue placeholder="Select template" /></SelectTrigger>
-                <SelectContent>{templates.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}{t.module ? ` (${t.module})` : ''}</SelectItem>))}</SelectContent>
+                <SelectContent>{templateOptions.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}{t.module ? ` (${t.module})` : ''}</SelectItem>))}</SelectContent>
               </Select>
               {selectedTemplate && (<p className="text-xs text-muted-foreground truncate">Subject: {selectedTemplate.subject || '(none)'}</p>)}
             </div>

@@ -33,20 +33,20 @@ export default async function MailingPage() {
     const { data: stagesRaw } = await supabase
       .schema('app')
       .from('stages' as never)
-      .select('id, pipeline_id, name, sort_order')
+      .select('id, pipeline_id, code, name, sort_order')
       .in('pipeline_id', pipelineIds)
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
     stages = (
-      (stagesRaw ?? []) as Array<{ id: string; pipeline_id: string; name: string; sort_order: number }>
-    ).map((s) => ({ id: s.id, pipelineId: s.pipeline_id, name: s.name }));
+      (stagesRaw ?? []) as Array<{ id: string; pipeline_id: string; code: string | null; name: string; sort_order: number }>
+    ).map((s) => ({ id: s.id, pipelineId: s.pipeline_id, code: s.code, name: s.name }));
   }
 
   // Active templates (party_type is the module tag, not a stage mapping).
   const { data: tmplRaw } = await supabase
     .schema('app')
     .from('email_templates' as never)
-    .select('id, name, subject, category, party_type')
+    .select('id, name, subject, category, party_type, stage_code')
     .eq('is_active', true)
     .order('name', { ascending: true });
   const templates = (
@@ -56,6 +56,7 @@ export default async function MailingPage() {
       subject: string | null;
       category: string | null;
       party_type: string | null;
+      stage_code: string | null;
     }>
   ).map((t) => ({
     id: t.id,
@@ -63,6 +64,7 @@ export default async function MailingPage() {
     subject: t.subject ?? '',
     category: t.category,
     module: t.party_type,
+    stageCode: t.stage_code,
   }));
 
   // From accounts (active SMTP-ready inbound_mailboxes).
