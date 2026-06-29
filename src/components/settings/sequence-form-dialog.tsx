@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { listMailAccountOptions, type MailAccountOption } from '@/lib/actions/mail-account-options';
-import { setSequenceFromAccount, setSequenceQuietHours, getSequenceQuietHours } from '@/lib/actions/sequence-sender';
+import { setSequenceFromAccount, setSequenceQuietHours, getSequenceQuietHours, getSequenceStartAt, setSequenceStartAt } from '@/lib/actions/sequence-sender';
 import { createSequence, updateSequence } from '@/lib/actions/email-sequences';
 import { SequenceSenderPreview } from './sequence-sender-preview';
 import type { EmailSequenceWithSteps, StepDraft } from '@/types/phase21b';
@@ -49,6 +49,7 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
   const [qhStart,    setQhStart]    = useState<string>(initialQh?.start ?? '18:00');
   const [qhEnd,      setQhEnd]      = useState<string>(initialQh?.end ?? '08:00');
   const [qhWeekends, setQhWeekends] = useState<boolean>(initialQh?.weekends_blocked ?? true);
+  const [startAt, setStartAt] = useState<string>('');
 
   useEffect(() => {
     if (initial?.id) return; // edit mode handles the sender via SequenceSenderPreview
@@ -74,6 +75,8 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
         setQhEnd(qh.end);
         setQhWeekends(qh.weekends_blocked);
       }
+      const sr = await getSequenceStartAt(initial.id);
+      if (alive && !('error' in sr) && sr.startAt) { const d = new Date(sr.startAt); if (!isNaN(d.getTime())) { const p = (n: number) => String(n).padStart(2, '0'); setStartAt(d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes())); } }
     })();
     return () => { alive = false; };
   }, [initial?.id]);
@@ -139,6 +142,7 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
             seqId,
             qhEnabled ? { timezone: qhTimezone, start: qhStart, end: qhEnd, weekends_blocked: qhWeekends } : null,
           );
+          await setSequenceStartAt(seqId, startAt ? new Date(startAt).toISOString() : null);
         }
         onClose();
       }
@@ -214,6 +218,13 @@ export function SequenceFormDialog({ open, onClose, orgId, initial }: Props) {
               steps={steps}
             />
           )}
+
+          {/* Scheduled start */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled start (your local time)</label>
+            <input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <p className="mt-1 text-xs text-gray-500">First email goes out at this time for everyone enrolled. Leave empty to start immediately on enroll.</p>
+          </div>
 
           {/* Send window / quiet hours */}
           <div className="border border-gray-200 rounded-lg p-4">

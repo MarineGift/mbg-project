@@ -130,6 +130,23 @@ const PREVIEW_SAMPLE: Record<string, string> = {
   'my.email': 'yunyoung.heo@marinebiogroup.com',
 };
 
+export async function getSequenceStartAt(sequenceId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await (supabase.schema('app').from('email_sequences') as any)
+    .select('start_at').eq('id', sequenceId).maybeSingle();
+  if (error) return { error: error.message as string };
+  return { startAt: (data?.start_at ?? null) as string | null };
+}
+
+export async function setSequenceStartAt(sequenceId: string, startAt: string | null) {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await (supabase.schema('app').from('email_sequences') as any)
+    .update({ start_at: startAt }).eq('id', sequenceId);
+  if (error) return { error: error.message as string };
+  revalidatePath('/settings/email-sequences');
+  return { ok: true as const };
+}
+
 export async function previewSequenceStep(input: {
   orgId: string;
   subject: string;
