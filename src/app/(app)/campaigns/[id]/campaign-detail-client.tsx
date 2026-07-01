@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Pencil, Plus, Trash2, Search, X } from 'lucide-react';
+import { ChevronLeft, Pencil, Plus, Trash2, Search, X, FolderOpen } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -158,9 +158,17 @@ export function CampaignDetailClient({
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{campaign.description}</p>
             ) : null}
           </div>
-          <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-            <Pencil className="mr-1 h-4 w-4" /> Edit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={'/campaigns/' + campaign.id + '/dataroom'}
+              className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            >
+              <FolderOpen className="h-4 w-4" /> Data Room
+            </Link>
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1 h-4 w-4" /> Edit
+            </Button>
+          </div>
         </div>
       </div>
 
