@@ -37,6 +37,7 @@ import {
   Megaphone,
   Mail,
   BarChart3,
+  Landmark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -105,6 +106,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
   { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
+  { href: '/ir',       labelKey: 'ir',        icon: Landmark, label: 'IR' },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [
