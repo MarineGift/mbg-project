@@ -165,6 +165,17 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
 
   const [roundFilter, setRoundFilter] = useState<string>('all');
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const campaignById = useMemo(
+    () => new Map(campaigns.map((c) => [c.id, c])),
+    [campaigns]
+  );
+  // Board filter shows only campaigns that actually have deals in THIS pipeline.
+  const pipelineCampaigns = useMemo(() => {
+    const used = new Set(
+      optimisticDeals.map((d) => d.campaign_id).filter(Boolean)
+    );
+    return campaigns.filter((c) => used.has(c.id));
+  }, [campaigns, optimisticDeals]);
   const [view, setView] = useState<'kanban' | 'calendar' | 'gantt'>('kanban');
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -274,7 +285,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                   </span>
                 ))}
               </div>
-              {campaigns.length > 0 && (
+              {pipelineCampaigns.length > 0 && (
                 <div className="flex items-center gap-2">
                   <select
                     value={campaignFilter}
@@ -282,7 +293,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                     className="rounded-md border bg-background px-2 py-1.5 text-sm text-muted-foreground focus:text-foreground focus:outline-none"
                   >
                     <option value="all">All campaigns</option>
-                    {campaigns.map((c) => (
+                    {pipelineCampaigns.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -369,6 +380,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                         <DraggableCard
                           key={d.id}
                           deal={d}
+                          campaign={d.campaign_id ? campaignById.get(d.campaign_id) ?? null : null}
                           onOpen={() =>
                             router.push('/pipelines/' + pipeline.code + '/deals/' + d.id)
                           }
@@ -396,7 +408,13 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
         </div>
 
         <DragOverlay dropAnimation={null}>
-          {activeDeal ? <CardContent deal={activeDeal} isOverlay /> : null}
+          {activeDeal ? (
+            <CardContent
+              deal={activeDeal}
+              campaign={activeDeal.campaign_id ? campaignById.get(activeDeal.campaign_id) ?? null : null}
+              isOverlay
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
 
@@ -513,7 +531,7 @@ function DroppableColumn({
 // Card (draggable)
 // ============================================================
 
-function DraggableCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
+function DraggableCard({ deal, campaign = null, onOpen }: { deal: Deal; campaign?: CampaignOption | null; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
   });
@@ -536,12 +554,12 @@ function DraggableCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
       onClick={onOpen}
       className="block rounded-md border bg-background p-3 text-sm shadow-sm transition hover:border-foreground/20 hover:shadow"
     >
-      <CardContent deal={deal} />
+      <CardContent deal={deal} campaign={campaign} />
     </div>
   );
 }
 
-function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: boolean }) {
+function CardContent({ deal, campaign = null, isOverlay = false }: { deal: Deal; campaign?: CampaignOption | null; isOverlay?: boolean }) {
   const parties = sortedParties(deal);
   const lead = parties[0];
   const extra = parties.length - 1;
@@ -571,6 +589,18 @@ function CardContent({ deal, isOverlay = false }: { deal: Deal; isOverlay?: bool
       ) : (
         <div className="mt-1.5 text-xs text-muted-foreground/70">No companies</div>
       )}
+
+      {campaign ? (
+        <div className="mt-1.5">
+          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: campaign.color ?? '#94a3b8' }}
+            />
+            <span className="max-w-[10rem] truncate">{campaign.name}</span>
+          </span>
+        </div>
+      ) : null}
 
       {deal.round ? (
         <div className="mt-1.5">
