@@ -412,6 +412,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     "professional",
   );
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [aiLanguage, setAiLanguage] = useState<"auto" | "en" | "ko">("auto");
 
   // Reply scope: reply to the sender only, or reply all. Reply mode only.
   // Default is "all" (per product decision). Original recipients are fetched
@@ -511,6 +512,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         partyId: props.partyId ?? "",
         contactId: props.contactId,
         tone: aiTone,
+        language: aiLanguage,
       });
       if (result.success && result.draft) {
         setBody(result.draft);
@@ -949,6 +951,23 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                       <option value="professional">Professional</option>
                       <option value="friendly">Friendly</option>
                       <option value="concise">Concise</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="ai-language" className="text-xs">
+                      Language
+                    </Label>
+                    <select
+                      id="ai-language"
+                      value={aiLanguage}
+                      onChange={(e) =>
+                        setAiLanguage(e.target.value as "auto" | "en" | "ko")
+                      }
+                      className="h-7 px-2 text-xs rounded border border-input bg-background"
+                    >
+                      <option value="auto">Auto (match original)</option>
+                      <option value="en">English</option>
+                      <option value="ko">Korean</option>
                     </select>
                   </div>
                   <Button

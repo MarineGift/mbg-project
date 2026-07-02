@@ -48,6 +48,8 @@ export interface AIReplyPayload {
   partyId: string;
   contactId?: string | null;
   tone?: "professional" | "friendly" | "concise";
+  /** Reply language: "auto" mirrors the language of the original email. */
+  language?: "auto" | "en" | "ko";
 }
 
 // ─────────────────────────────────────────────
@@ -223,6 +225,13 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
 
   const originalBody = comm.body_plain ?? comm.body_html?.replace(/<[^>]+>/g, "") ?? "";
   const tone = payload.tone ?? "professional";
+  const language = payload.language ?? "auto";
+  const languageInstruction =
+    language === "en"
+      ? "Write the entire reply in English."
+      : language === "ko"
+        ? "Write the entire reply in Korean."
+        : "LANGUAGE: Detect the language of the original email below and write the ENTIRE reply in that same language. If the original email is in English, the reply MUST be in English. Do not default to Korean and do not translate.";
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -232,7 +241,7 @@ Write a ${tone === "professional" ? "professional and courteous" : tone === "fri
 - Write in PLAIN TEXT only. Do NOT use HTML tags (<p>, <br>, <div>, etc.).
 - Separate paragraphs with empty lines (double newline).
 - Do NOT include a signature block (will be auto-appended).
-- Respond in Korean, or in the original message language if not Korean.`;
+- ${languageInstruction}`;
 
   const userPrompt = `Original email:
 From: ${comm.from_address}
