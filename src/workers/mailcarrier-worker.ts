@@ -37,6 +37,7 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../lib/env';
 import { MailCarrierClient } from '../lib/email/mailcarrier';
 import { processInbound } from '../lib/email/processor';
+import { notifySlack } from '../lib/slack/notify';
 import type { InboundMessageEvent, SendingAddressKind } from '../types/email';
 import { createShutdownController, isMainEntry } from './runtime';
 
@@ -269,6 +270,11 @@ export async function runMailCarrierWorker(): Promise<void> {
       try {
         await ctl.track(
           (async () => {
+            // Slack outbound notify - fire-and-forget, never blocks AI processing
+            void notifySlack(
+              event.organizationId,
+              `New inbound email\nFrom: ${event.fromName ? `${event.fromName} <${event.fromAddress}>` : event.fromAddress}\nSubject: ${event.subject || '(no subject)'}\n${env.NEXT_PUBLIC_APP_URL}/inbox/${event.communicationId}`,
+            );
             const result = await processInbound(supabase, ORG_ID, event.communicationId);
             // eslint-disable-next-line no-console
             console.log(

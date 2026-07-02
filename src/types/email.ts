@@ -191,6 +191,10 @@ export interface InboundMessageEvent {
   piiCategories: string[];
   /** Excerpt of ParsedHeaders (for party matching). */
   fromAddress: string;
+  /** Display name of the sender, when present. */
+  fromName: string | null;
+  /** Original subject line (unmasked). */
+  subject: string;
 }
 
 /* ============================================================

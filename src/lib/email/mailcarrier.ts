@@ -1092,6 +1092,8 @@ export class MailCarrierClient {
       bodyText: bodyPlainRaw,
       piiCategories: categories,
       fromAddress: headers.from.address,
+      fromName: headers.from.name ?? null,
+      subject: headers.subject,
     };
   }
 

@@ -49,6 +49,11 @@
     "partner": "Partners",
     "customer": "Customers",
     "crowdfunding": "Crowdfunding",
+    "buyer": "Buyers",
+    "government_grant": "Government Grants",
+    "consultant": "Consultants",
+    "crowdfunding_platform": "Crowdfunding",
+    "self": "Our Company",
     "filler_supplier": "Filler Suppliers"
   },
   "draftStatus": {

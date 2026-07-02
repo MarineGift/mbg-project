@@ -48,6 +48,11 @@
   "paper_mill": "구매자",
   "partner": "파트너",
   "customer": "고객",
+  "buyer": "\uAD6C\uB9E4\uCC98",
+  "government_grant": "\uC815\uBD80\uC9C0\uC6D0",
+  "consultant": "\uCEE8\uC124\uD134\uD2B8",
+  "crowdfunding_platform": "\uD06C\uB77C\uC6B0\uB4DC\uD380\uB529",
+  "self": "\uC790\uC0AC",
   "crowdfunding": "크라우드펀딩",
   "filler_supplier": "충전제 공급사"
 },

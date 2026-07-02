@@ -48,6 +48,11 @@
     "paper_mill": "バイヤー",
     "partner": "パートナー",
     "customer": "顧客",
+    "buyer": "\u8CFC\u8CB7\u5148",
+    "government_grant": "\u653F\u5E9C\u652F\u63F4",
+    "consultant": "\u30B3\u30F3\u30B5\u30EB\u30BF\u30F3\u30C8",
+    "crowdfunding_platform": "\u30AF\u30E9\u30A6\u30C9\u30D5\u30A1\u30F3\u30C7\u30A3\u30F3\u30B0",
+    "self": "\u81EA\u793E",
     "crowdfunding": "クラウドファンディング",
     "filler_supplier": "充填剤サプライヤー"
   },
