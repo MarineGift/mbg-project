@@ -240,7 +240,7 @@ Write a ${tone === "professional" ? "professional and courteous" : tone === "fri
 - If the recipient name is provided, use proper salutation.
 - Write in PLAIN TEXT only. Do NOT use HTML tags (<p>, <br>, <div>, etc.).
 - Separate paragraphs with empty lines (double newline).
-- Do NOT include a signature block (will be auto-appended).
+- Do NOT include any closing salutation or sign-off (e.g., "Best,", "Best regards,", "Sincerely,") and do NOT write the sender's name, title, or company at the end. End the draft immediately after the last body paragraph; the signature is appended automatically.
 - ${languageInstruction}`;
 
   const userPrompt = `Original email:
@@ -268,7 +268,13 @@ Write a plain text reply draft for this email. Do not use any HTML tags.`;
       .map((b) => (b as { type: "text"; text: string }).text)
       .join("");
 
-    return { success: true, draft };
+    // Safety net: strip a trailing sign-off / signature block the model may add
+    // despite instructions; the user's signature is appended automatically at send.
+    const signOffPattern =
+      /\n[ \t]*(?:best regards|best wishes|best|kind regards|warm regards|regards|sincerely|respectfully|cheers)[,.!]?[ \t]*(?:\n[^\n]{0,80}){0,4}\s*$/i;
+    const cleanedDraft = draft.replace(signOffPattern, "").trimEnd();
+
+    return { success: true, draft: cleanedDraft };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
