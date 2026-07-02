@@ -30,6 +30,9 @@ const envSchema = z
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+
+    // -- Slack (URM <-> Slack integration) --
+    SLACK_SIGNING_SECRET: z.string().min(1).optional(),
     SUPABASE_DB_URL: z.string().url(),
     SUPABASE_STORAGE_BUCKET_ATTACHMENTS: z
       .string()
