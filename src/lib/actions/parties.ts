@@ -225,6 +225,10 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     const { error: syncErr } = await supabase
       .schema('app')
       .rpc('sync_party_interest_tags' as never, { p_party_id: partyId } as never);
+    await supabase
+      .schema('app')
+      .rpc('sync_party_sector_focus' as never,
+           { p_party_id: partyId, p_codes: parsed.data.sectorFocus } as never);
     if (syncErr) console.error('[parties.createParty] tag sync error:', syncErr);
   }
 
@@ -343,6 +347,15 @@ export async function updateParty(
       .schema('app')
       .rpc('sync_party_interest_tags' as never, { p_party_id: parsed.data.partyId } as never);
     if (syncErr) console.error('[parties.updateParty] tag sync error:', syncErr);
+  }
+
+  // Real-time SECTOR focus sync (REPLACE; app.sync_party_sector_focus).
+  {
+    const { error: secErr } = await supabase
+      .schema('app')
+      .rpc('sync_party_sector_focus' as never,
+           { p_party_id: parsed.data.partyId, p_codes: parsed.data.sectorFocus } as never);
+    if (secErr) console.error('[parties.updateParty] sector sync error:', secErr);
   }
 
   // 2026-06-12: keep the whitelist in sync when a website is added/changed later.

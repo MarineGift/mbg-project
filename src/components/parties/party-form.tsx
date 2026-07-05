@@ -68,6 +68,8 @@ interface Props {
   industryTagSuggestions?: TagOption[];
   /** canonical tag options for the Interest Tags multi-select */
   interestTagSuggestions?: TagOption[];
+  /** canonical sector options for the Sector focus multi-select */
+  sectorSuggestions?: TagOption[];
 }
 
 const PARTY_STATUSES = [
@@ -208,6 +210,7 @@ export function PartyForm({
   investorTypeOptions = [],
   industryTagSuggestions = [],
   interestTagSuggestions = [],
+  sectorSuggestions = [],
 }: Props) {
   const router = useRouter();
   const t = useTranslations('partyForm');
@@ -697,13 +700,17 @@ export function PartyForm({
               {isInvestor && (
                 <div className="space-y-2">
                   <Label htmlFor="party-sector-focus">Sector focus</Label>
-                  <Input
-                    id="party-sector-focus"
-                    {...register('sectorFocus')}
+                  <TagMultiSelect
+                    inputId="party-sector-focus"
+                    value={watch('sectorFocus') ?? ''}
+                    onChange={(v) => setValue('sectorFocus', v, { shouldDirty: true })}
+                    suggestions={sectorSuggestions}
                     disabled={isPending}
-                    placeholder="materials, industrial, healthcare, sustainability"
+                    placeholder="Select or add sectors..."
                   />
-                  <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Normalized sectors only. Pick from the list, or type to add a new one.
+                  </p>
                 </div>
               )}
             </div>

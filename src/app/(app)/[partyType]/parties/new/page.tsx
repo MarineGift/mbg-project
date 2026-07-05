@@ -11,6 +11,7 @@ import { notFound } from 'next/navigation';
 import { PartyForm } from '@/components/parties/party-form';
 import { fetchInvestorTypeOptions } from '@/lib/queries/investor-types';
 import { fetchInterestTagOptions } from '@/lib/queries/interest-tags';
+import { fetchSectorOptions } from '@/lib/queries/sector-focus';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import type { PartyTypeCode } from '@/types/ai';
 
@@ -42,6 +43,7 @@ export default async function NewPartyPage({ params }: PageProps) {
   const investorTypeOptions =
     module === 'investor' ? await fetchInvestorTypeOptions() : [];
   const interestTagSuggestions = await fetchInterestTagOptions();
+  const sectorSuggestions = await fetchSectorOptions();
 
   return (
     <div className="mx-auto max-w-app p-6">
@@ -51,6 +53,7 @@ export default async function NewPartyPage({ params }: PageProps) {
         investorTypeOptions={investorTypeOptions}
         industryTagSuggestions={interestTagSuggestions}
         interestTagSuggestions={interestTagSuggestions}
+        sectorSuggestions={sectorSuggestions}
       />
     </div>
   );
