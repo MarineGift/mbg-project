@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { TagMultiSelect, type TagOption } from '@/components/parties/tag-multi-select';
 import {
   Select,
   SelectContent,
@@ -63,6 +64,10 @@ interface Props {
   existingProfile?: InvestorProfile | null;
   /** app.investor_types options for the "Investor type" select */
   investorTypeOptions?: InvestorTypeOption[];
+  /** canonical tag options for the Industry Tags multi-select */
+  industryTagSuggestions?: TagOption[];
+  /** canonical tag options for the Interest Tags multi-select */
+  interestTagSuggestions?: TagOption[];
 }
 
 const PARTY_STATUSES = [
@@ -201,6 +206,8 @@ export function PartyForm({
   existing,
   existingProfile,
   investorTypeOptions = [],
+  industryTagSuggestions = [],
+  interestTagSuggestions = [],
 }: Props) {
   const router = useRouter();
   const t = useTranslations('partyForm');
@@ -636,9 +643,11 @@ export function PartyForm({
             <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="party-industry-tags">{t('industryTags')}</Label>
-                <Input
-                  id="party-industry-tags"
-                  {...register('industryTags')}
+                <TagMultiSelect
+                  inputId="party-industry-tags"
+                  value={watch('industryTags') ?? ''}
+                  onChange={(v) => setValue('industryTags', v, { shouldDirty: true })}
+                  suggestions={industryTagSuggestions}
                   disabled={isPending}
                   placeholder={t('industryTagsPlaceholder')}
                 />
@@ -646,9 +655,11 @@ export function PartyForm({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="party-interest-tags">{t('interestTags')}</Label>
-                <Input
-                  id="party-interest-tags"
-                  {...register('interestTags')}
+                <TagMultiSelect
+                  inputId="party-interest-tags"
+                  value={watch('interestTags') ?? ''}
+                  onChange={(v) => setValue('interestTags', v, { shouldDirty: true })}
+                  suggestions={interestTagSuggestions}
                   disabled={isPending}
                   placeholder={t('interestTagsPlaceholder')}
                 />
