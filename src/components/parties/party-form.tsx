@@ -681,7 +681,7 @@ export function PartyForm({
             <SectionLabel>Tags</SectionLabel>
             {/* Industry Tags removed (2026-07-04): duplicated Sector focus and
                 was not persisted since D6-5e. */}
-            <div className="grid grid-cols-1 gap-y-4">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="party-interest-tags">{t('interestTags')}</Label>
                 <TagMultiSelect
@@ -694,6 +694,18 @@ export function PartyForm({
                 />
                 <p className="text-xs text-muted-foreground">{t('interestTagsHint')}</p>
               </div>
+              {isInvestor && (
+                <div className="space-y-2">
+                  <Label htmlFor="party-sector-focus">Sector focus</Label>
+                  <Input
+                    id="party-sector-focus"
+                    {...register('sectorFocus')}
+                    disabled={isPending}
+                    placeholder="materials, industrial, healthcare, sustainability"
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -814,17 +826,6 @@ export function PartyForm({
                     />
                   </div>
 
-                  {/* Sector focus */}
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="party-sector-focus">Sector focus</Label>
-                    <Input
-                      id="party-sector-focus"
-                      {...register('sectorFocus')}
-                      disabled={isPending}
-                      placeholder="materials, industrial, healthcare, sustainability"
-                    />
-                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
-                  </div>
 
                   {/* Lead / Strategic toggles */}
                   <div className="flex items-center justify-between rounded-md border px-3 py-2">
