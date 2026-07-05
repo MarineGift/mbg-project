@@ -152,6 +152,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const typeAsc     = sortParam === 'type_asc';
   const sortByPriority = isInvestor && (sortParam === 'priority' || sortParam === 'priority_asc');
   const priorityAsc    = sortParam === 'priority_asc';
+  // TAGS column sort (asc/desc by each row's first tag, ascending-normalized).
+  const sortByTags = sortParam === 'tags_asc' || sortParam === 'tags_desc';
+  const tagsAsc    = sortParam === 'tags_asc';
   // DB-orderable sorts (everything except score, which is computed in JS).
   const DB_SORT: Record<string, { col: string; asc: boolean }> = {
     name_asc:      { col: 'party_name',   asc: true  },
@@ -410,7 +413,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority;
+  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -481,6 +484,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         const rb = rank[investorPriorityAll[b.id] ?? ''] ?? 0;
         const cmp = rb - ra; // high first by default
         return (priorityAsc ? -cmp : cmp) || nameKey(a).localeCompare(nameKey(b));
+      });
+    } else if (sortByTags) {
+      // TAGS sort: key each row by its alphabetically-first tag (rows display
+      // their tags ascending, so the key matches what the user sees). Untagged
+      // rows always sink to the bottom regardless of direction.
+      const tagKey = (p: PartyRow) => {
+        const arr = Array.isArray(p.interest_tags) ? p.interest_tags : [];
+        const norm = arr
+          .map((t) => String(t ?? '').trim().toLowerCase())
+          .filter(Boolean)
+          .sort();
+        return norm[0] ?? '';
+      };
+      working = [...working].sort((a, b) => {
+        const ka = tagKey(a);
+        const kb = tagKey(b);
+        if (!ka && !kb) return nameKey(a).localeCompare(nameKey(b));
+        if (!ka) return 1;
+        if (!kb) return -1;
+        const cmp = ka.localeCompare(kb);
+        return (tagsAsc ? cmp : -cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     } else {
       // Honor the column sort (name/country/location/state) in memory too, so
@@ -593,6 +617,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const hType     = sortHeader('type_asc', 'type_desc');
   const hEntityType = sortHeader('etype_asc', 'etype_desc');
   const hPriority = sortHeader('priority', 'priority_asc');
+  const hTags     = sortHeader('tags_asc', 'tags_desc');
 
   return (
     <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 h-full flex flex-col">
@@ -683,7 +708,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       {linkLabel}
                     </th>
                   ) : (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Tags</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
+                      <Link href={hTags.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hTags.active ? 'text-foreground' : ''}`}>
+                        Tags <span className={`text-[10px] ${hTags.active ? '' : 'opacity-40'}`}>{hTags.arrow}</span>
+                      </Link>
+                    </th>
                   )}
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -736,7 +765,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   const location  = p.city ?? '';
                   // interest_tags can arrive as a non-array (jsonb object/scalar)
                   // for some rows; coerce so .slice()/.map() can't 500 the page.
-                  const tags      = Array.isArray(p.interest_tags) ? p.interest_tags : [];
+                  const tags      = (Array.isArray(p.interest_tags) ? p.interest_tags : [])
+                    .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+                    .slice()
+                    .sort((a, b) => a.localeCompare(b)); // display ascending
                   const level     = p.party_level as PartyLevel | null;
                   const acc       = scores[p.id];
                   const linked    = Array.isArray(supplyLinks[p.id]) ? supplyLinks[p.id]! : [];
@@ -830,18 +862,38 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       )}
                       {!showLinks && (
                         <td className="px-4 py-3 hidden md:table-cell">
-                          <div className="flex flex-wrap gap-1 max-w-[280px]">
-                            {tags.slice(0, 2).map((tag) => (
-                              <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
-                                {tag}
-                              </span>
-                            ))}
-                            {tags.length > 2 && (
-                              <span className="inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
-                                +{tags.length - 2}
-                              </span>
-                            )}
-                          </div>
+                          {tags.length <= 2 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[280px]">
+                              {tags.map((tag) => (
+                                <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <details className="group max-w-[280px]">
+                              <summary className="flex flex-wrap gap-1 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                                {tags.slice(0, 2).map((tag) => (
+                                  <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                    {tag}
+                                  </span>
+                                ))}
+                                <span className="inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap group-open:hidden">
+                                  +{tags.length - 2} {'\u25BE'}
+                                </span>
+                                <span className="hidden group-open:inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
+                                  {'\u25B4'}
+                                </span>
+                              </summary>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {tags.slice(2).map((tag) => (
+                                  <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </details>
+                          )}
                         </td>
                       )}
                       {isInvestor && (
