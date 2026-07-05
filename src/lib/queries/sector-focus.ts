@@ -3,8 +3,7 @@
  *
  * Canonical sector options (app.sectors) for the Party form Sector focus
  * TagMultiSelect. Global lookup, catalogue sort_order. Mirrors
- * lib/queries/interest-tags.ts so the Sector focus picker behaves exactly like
- * the Interest Tags picker (checkbox multi-select + Add-new).
+ * lib/queries/interest-tags.ts.
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
