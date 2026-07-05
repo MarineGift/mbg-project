@@ -855,43 +855,7 @@ export function PartyForm({
             </>
           )}
 
-          <Separator />
 
-          {/* ===================== Introduction ===================== */}
-          <section className="space-y-4">
-            <SectionLabel>Introduction</SectionLabel>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="party-intro-ko">{t('introKo')}</Label>
-                <Textarea
-                  id="party-intro-ko"
-                  {...register('introKo')}
-                  disabled={isPending}
-                  rows={6}
-                  placeholder={t('introKoPlaceholder')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="party-intro-en">{t('introEn')}</Label>
-                <Textarea
-                  id="party-intro-en"
-                  {...register('introEn')}
-                  disabled={isPending}
-                  rows={6}
-                  placeholder={t('introEnPlaceholder')}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground md:col-span-2">{t('introHint')}</p>
-            </div>
-          </section>
-
-          <Separator />
-
-          {/* ===================== Notes ===================== */}
-          <section className="space-y-2">
-            <SectionLabel>{t('notes')}</SectionLabel>
-            <Textarea id="party-notes" {...register('notes')} disabled={isPending} rows={5} />
-          </section>
         </CardContent>
 
         <CardFooter className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t bg-card px-6 py-4">
