@@ -219,6 +219,15 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
   }
   const partyId = (data as { id: string }).id;
 
+  // Real-time normalized tag sync (app.investor_interest_tags) so the
+  // directory TAGS column reflects the saved form immediately. Non-fatal.
+  {
+    const { error: syncErr } = await supabase
+      .schema('app')
+      .rpc('sync_party_interest_tags' as never, { p_party_id: partyId } as never);
+    if (syncErr) console.error('[parties.createParty] tag sync error:', syncErr);
+  }
+
   // 2026-06-12: auto-register the party's email domain in the whitelist.
   await autoWhitelistPartyDomain(
     supabase, auth.organizationId, parsed.data.website, parsed.data.name.trim(),
@@ -325,6 +334,15 @@ export async function updateParty(
   }
   if (!data) {
     return { ok: false, errorCode: 'not_found' };
+  }
+
+  // Real-time normalized tag sync (REPLACE semantics; see
+  // app.sync_party_interest_tags). Non-fatal on failure.
+  {
+    const { error: syncErr } = await supabase
+      .schema('app')
+      .rpc('sync_party_interest_tags' as never, { p_party_id: parsed.data.partyId } as never);
+    if (syncErr) console.error('[parties.updateParty] tag sync error:', syncErr);
   }
 
   // 2026-06-12: keep the whitelist in sync when a website is added/changed later.

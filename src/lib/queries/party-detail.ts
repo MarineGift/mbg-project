@@ -162,6 +162,42 @@ export async function fetchPartyDetail(
   }
   const p = partyRaw as unknown as RawPartyRow;
 
+  // Normalized canonical tags are the source of truth for interestTags so the
+  // edit form round-trips the same set the directory shows (legacy jsonb is
+  // the fallback for parties not yet backfilled / non-investors).
+  let normalizedInterestTags: string[] = [];
+  {
+    const { data: prof } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .select('id')
+      .eq('party_id', partyId)
+      .maybeSingle();
+    const profileId = (prof as { id: string } | null)?.id;
+    if (profileId) {
+      const [{ data: linkRows }, { data: tagRows }] = await Promise.all([
+        supabase
+          .schema('app')
+          .from('investor_interest_tags' as never)
+          .select('interest_tag_id')
+          .eq('investor_profile_id', profileId),
+        supabase
+          .schema('app')
+          .from('interest_tags' as never)
+          .select('id, code, sort_order'),
+      ]);
+      const byId = new Map<number, { code: string; sort: number }>();
+      for (const t of ((tagRows ?? []) as any[])) {
+        byId.set(t.id, { code: t.code, sort: t.sort_order ?? 9999 });
+      }
+      normalizedInterestTags = ((linkRows ?? []) as any[])
+        .map((l) => byId.get(l.interest_tag_id))
+        .filter((x): x is { code: string; sort: number } => !!x)
+        .sort((a, b) => a.sort - b.sort || a.code.localeCompare(b.code))
+        .map((x) => x.code);
+    }
+  }
+
   // fetch statistics + sidebar lists + timeline in parallel
   const [
     contactsRes,
@@ -339,7 +375,7 @@ export async function fetchPartyDetail(
     region: p.region,
     website: p.website,
     industryTags: [],
-    interestTags: p.interest_tags,
+    interestTags: normalizedInterestTags.length > 0 ? normalizedInterestTags : p.interest_tags,
     notes: p.notes,
     source: p.source,
     introKo: p.intro_ko,
