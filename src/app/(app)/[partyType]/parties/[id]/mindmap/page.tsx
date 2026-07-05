@@ -138,7 +138,6 @@ export default async function PartyMindmapPage({ params, searchParams }: PagePro
     const ip = full.investorProfile;
     if (ip.typeName || ip.investorCategory) investorFocus.push({ label: 'Type', sub: ip.typeName || ip.investorCategory });
     for (const s of (ip.sectorFocus ?? []).slice(0, 6)) investorFocus.push({ label: s });
-    if ((ip.geographicFocus ?? []).length) investorFocus.push({ label: 'Geography', sub: ip.geographicFocus.join(', ') });
     const ticket = ip.ticketMinUsd != null || ip.ticketMaxUsd != null
       ? `${money(ip.ticketMinUsd, 'USD') ?? '?'} - ${money(ip.ticketMaxUsd, 'USD') ?? '?'}` : null;
     if (ticket) investorFocus.push({ label: 'Ticket', sub: ticket });

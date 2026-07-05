@@ -403,8 +403,9 @@ export function PartyForm({
             <SectionLabel>Basic information</SectionLabel>
 
             <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-              {/* Name */}
-              <div className="space-y-2 md:col-span-2">
+              {/* Name / Legal name / Status -- one responsive row */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="party-name">{t('name')} *</Label>
                 <Input
                   id="party-name"
@@ -413,6 +414,35 @@ export function PartyForm({
                   aria-invalid={errors.name ? 'true' : undefined}
                 />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-legal">{t('legalName')}</Label>
+                <Input
+                  id="party-legal"
+                  {...register('legalName')}
+                  disabled={isPending}
+                  placeholder={t('legalNamePlaceholder')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-status">Status</Label>
+                <Select
+                  value={selectedStatus}
+                  onValueChange={(v) => setValue('status', v as PartyStatus, { shouldDirty: true })}
+                  disabled={isPending}
+                >
+                  <SelectTrigger id="party-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PARTY_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {STATUS_LABELS[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               </div>
 
               {/* Type / Entity type / Tier */}
@@ -476,40 +506,10 @@ export function PartyForm({
                 </div>
               </div>
 
-              {/* Legal name */}
-              <div className="space-y-2">
-                <Label htmlFor="party-legal">{t('legalName')}</Label>
-                <Input
-                  id="party-legal"
-                  {...register('legalName')}
-                  disabled={isPending}
-                  placeholder={t('legalNamePlaceholder')}
-                />
-              </div>
-
-              {/* Status */}
-              <div className="space-y-2">
-                <Label htmlFor="party-status">Status</Label>
-                <Select
-                  value={selectedStatus}
-                  onValueChange={(v) => setValue('status', v as PartyStatus, { shouldDirty: true })}
-                  disabled={isPending}
-                >
-                  <SelectTrigger id="party-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PARTY_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
+              {/* Website / Email / Source -- one responsive row */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 md:col-span-2">
               {/* Website */}
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="party-website">{t('website')}</Label>
                 <Input
                   id="party-website"
@@ -524,7 +524,7 @@ export function PartyForm({
               </div>
 
               {/* Email (org-level / HQ) */}
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="party-email">Email</Label>
                 <Input
                   id="party-email"
@@ -540,7 +540,7 @@ export function PartyForm({
               </div>
 
               {/* Source */}
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="party-source">{t('source')}</Label>
                 <Input
                   id="party-source"
@@ -549,7 +549,46 @@ export function PartyForm({
                   placeholder={t('sourcePlaceholder')}
                 />
               </div>
+              </div>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* ===================== Introduction ===================== */}
+          <section className="space-y-4">
+            <SectionLabel>Introduction</SectionLabel>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="party-intro-ko">{t('introKo')}</Label>
+                <Textarea
+                  id="party-intro-ko"
+                  {...register('introKo')}
+                  disabled={isPending}
+                  rows={6}
+                  placeholder={t('introKoPlaceholder')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="party-intro-en">{t('introEn')}</Label>
+                <Textarea
+                  id="party-intro-en"
+                  {...register('introEn')}
+                  disabled={isPending}
+                  rows={6}
+                  placeholder={t('introEnPlaceholder')}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground md:col-span-2">{t('introHint')}</p>
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* ===================== Notes ===================== */}
+          <section className="space-y-2">
+            <SectionLabel>{t('notes')}</SectionLabel>
+            <Textarea id="party-notes" {...register('notes')} disabled={isPending} rows={5} />
           </section>
 
           <Separator />
@@ -640,19 +679,9 @@ export function PartyForm({
           {/* ===================== Tags ===================== */}
           <section className="space-y-4">
             <SectionLabel>Tags</SectionLabel>
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="party-industry-tags">{t('industryTags')}</Label>
-                <TagMultiSelect
-                  inputId="party-industry-tags"
-                  value={watch('industryTags') ?? ''}
-                  onChange={(v) => setValue('industryTags', v, { shouldDirty: true })}
-                  suggestions={industryTagSuggestions}
-                  disabled={isPending}
-                  placeholder={t('industryTagsPlaceholder')}
-                />
-                <p className="text-xs text-muted-foreground">{t('industryTagsHint')}</p>
-              </div>
+            {/* Industry Tags removed (2026-07-04): duplicated Sector focus and
+                was not persisted since D6-5e. */}
+            <div className="grid grid-cols-1 gap-y-4">
               <div className="space-y-2">
                 <Label htmlFor="party-interest-tags">{t('interestTags')}</Label>
                 <TagMultiSelect
@@ -793,18 +822,6 @@ export function PartyForm({
                       {...register('sectorFocus')}
                       disabled={isPending}
                       placeholder="materials, industrial, healthcare, sustainability"
-                    />
-                    <p className="text-xs text-muted-foreground">Comma-separated.</p>
-                  </div>
-
-                  {/* Geographic focus */}
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="party-geo-focus">Geographic focus</Label>
-                    <Input
-                      id="party-geo-focus"
-                      {...register('geographicFocus')}
-                      disabled={isPending}
-                      placeholder="US, Global"
                     />
                     <p className="text-xs text-muted-foreground">Comma-separated.</p>
                   </div>

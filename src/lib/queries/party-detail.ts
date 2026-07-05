@@ -415,7 +415,7 @@ export async function fetchPartyDetail(
       .from('investor_profile' as never)
       .select(
         'priority, fund_name, investor_type_id, fund_size_usd, aum_usd, fund_vintage_year, ' +
-        'ticket_min_usd, ticket_max_usd, sector_focus, geographic_focus, ' +
+        'ticket_min_usd, ticket_max_usd, sector_focus, ' +
         'is_lead_investor, is_strategic, ' +
         'type:investor_type_id(code, display_name, category)',
       )
@@ -739,7 +739,7 @@ function mapInvestorProfile(raw: unknown): InvestorProfile {
     ticketMinUsd: num(r.ticket_min_usd),
     ticketMaxUsd: num(r.ticket_max_usd),
     sectorFocus: arr(r.sector_focus),
-    geographicFocus: arr(r.geographic_focus),
+    geographicFocus: [],  // column dropped 2026-07-04
     isLeadInvestor: (r.is_lead_investor as boolean) ?? false,
     isStrategic: (r.is_strategic as boolean) ?? false,
   };
