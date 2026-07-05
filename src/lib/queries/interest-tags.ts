@@ -25,9 +25,7 @@ export async function fetchInterestTagOptions(): Promise<TagOption[]> {
     .filter((r) => !!r.code)
     .map((r) => ({
       code: r.code,
-      label:
-        r.label_ko && r.label_ko !== r.code
-          ? r.label_ko
-          : (r.label_en ?? r.code),
+      // English-only label (user request: no Korean in the picker)
+      label: r.label_en ?? r.code,
     }));
 }

@@ -13,7 +13,7 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Check } from 'lucide-react';
 
 export interface TagOption {
   code: string;
@@ -60,16 +60,17 @@ export function TagMultiSelect({
   );
 
   const q = query.trim().toLowerCase();
+  // checkbox mode: selected tags STAY in the list (checked) so multiple
+  // selections toggle in place.
   const matches = useMemo(() => {
-    const pool = suggestions.filter((s) => !selectedSet.has(s.code.toLowerCase()));
-    if (!q) return pool.slice(0, 8);
-    return pool
+    if (!q) return suggestions.slice(0, 12);
+    return suggestions
       .filter(
         (s) =>
           s.code.toLowerCase().includes(q) || s.label.toLowerCase().includes(q),
       )
-      .slice(0, 8);
-  }, [suggestions, selectedSet, q]);
+      .slice(0, 12);
+  }, [suggestions, q]);
 
   const slug = slugify(q);
   const exactExists =
@@ -85,6 +86,11 @@ export function TagMultiSelect({
   };
   const remove = (code: string) => {
     onChange(selected.filter((s) => s !== code).join(', '));
+  };
+  const toggle = (code: string) => {
+    const found = selected.find((s) => s.toLowerCase() === code.toLowerCase());
+    if (found) remove(found);
+    else add(code);
   };
 
   return (
@@ -135,23 +141,31 @@ export function TagMultiSelect({
         />
       </div>
       {open && !disabled && (q !== '' || matches.length > 0) && (
-        <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-1 shadow-md">
-          {matches.map((s) => (
-            <button
-              key={s.code}
-              type="button"
-              className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => add(s.code)}
-            >
-              <span>{s.code}</span>
-              {s.label !== s.code && (
-                <span className="ml-2 truncate text-xs text-muted-foreground">
-                  {s.label}
+        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+          {matches.map((s) => {
+            const checked = selectedSet.has(s.code.toLowerCase());
+            return (
+              <button
+                key={s.code}
+                type="button"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => toggle(s.code)}
+              >
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input'}`}
+                >
+                  {checked && <Check className="h-3 w-3" />}
                 </span>
-              )}
-            </button>
-          ))}
+                <span className="flex-1 truncate">{s.code}</span>
+                {s.label !== s.code && (
+                  <span className="ml-2 truncate text-xs text-muted-foreground">
+                    {s.label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
           {q !== '' && slug !== '' && !exactExists && (
             <button
               type="button"
