@@ -20,7 +20,8 @@ export type AgentRole =
   | 'reply_drafter' // reply-draft writer (Opus)
   | 'strategy_advisor' // strategy advisor (Opus)
   | 'summarizer' // body summarizer (Haiku)
-  | 'content_extractor' // scraping-result normalizer (Haiku)
+  | 'extractor' // scraping-result normalizer (Haiku)
+  | 'translator' // translator (Haiku)
   | 'task_decomposer'; // goal -> subtasks (Haiku, JSON)
 
 /** Allowed Claude model IDs. Any other value throws ClaudeInvalidModelError. */
