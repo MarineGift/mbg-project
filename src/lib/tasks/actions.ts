@@ -212,3 +212,37 @@ export async function addUpdate(
   if (error) throw new Error(`addUpdate: ${error.message}`);
   return data as unknown as TaskUpdate;
 }
+
+// ---------------------------------------------------------------------------
+// Quick-add helpers (Phase 1: natural-language capture)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve an @mention captured by the quick-add parser to a party.
+ * Match order: exact name (case-insensitive) -> prefix -> first substring hit.
+ * RLS scopes the lookup to the caller's org. Returns null when nothing matches.
+ */
+export async function resolvePartyIdByName(
+  q: string,
+): Promise<{ id: string; name: string } | null> {
+  const query = q.trim();
+  if (!query) return null;
+  const supabase = await createClient();
+  const esc = query.replace(/[%_]/g, (c) => `\\${c}`);
+  const { data, error } = await supabase
+    .schema('app')
+    .from('parties' as never)
+    .select('id,name')
+    .ilike('name', `%${esc}%`)
+    .limit(10);
+  if (error) throw new Error(`resolvePartyIdByName: ${error.message}`);
+  const rows = (data ?? []) as unknown as Array<{ id: string; name: string }>;
+  if (!rows.length) return null;
+  const lower = query.toLowerCase();
+  return (
+    rows.find((r) => r.name.toLowerCase() === lower) ??
+    rows.find((r) => r.name.toLowerCase().startsWith(lower)) ??
+    rows[0] ??
+    null
+  );
+}

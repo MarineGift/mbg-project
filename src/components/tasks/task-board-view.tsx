@@ -27,7 +27,9 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  resolvePartyIdByName,
 } from '@/lib/tasks/actions';
+import { parseQuickAdd } from '@/lib/tasks/quick-add-parser';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // ---------------------------------------------------------------------------
@@ -189,13 +191,31 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
     });
   }
 
-  // Quick add from a kanban column header (title only).
+  // Quick add from a kanban column header, with natural-language parsing.
+  // "Pangaea follow-up next thu p1 @pangaea" -> due_date / priority / party_id
+  // are extracted; unrecognized text stays in the title. Parsing runs on the
+  // CLIENT so relative dates resolve in the user's local timezone; only the
+  // @party lookup goes to the server (RLS-scoped).
   async function quickCreate(title: string, status: string) {
     try {
+      const parsed = parseQuickAdd(title);
+      let partyId: string | null = null;
+      if (parsed.partyQuery) {
+        try {
+          const p = await resolvePartyIdByName(parsed.partyQuery);
+          partyId = p?.id ?? null;
+        } catch (e) {
+          console.error('resolvePartyIdByName failed', e);
+        }
+      }
       const created = await createItem({
         boardId: board.id,
-        title,
+        title: parsed.title,
         status,
+        priority: parsed.priority,
+        startDate: parsed.startDate,
+        dueDate: parsed.dueDate,
+        partyId,
         position: nextPos(status),
       });
       setItems((prev) => [...prev, created]);
@@ -482,7 +502,7 @@ function KanbanView(props: {
                 <input
                   autoFocus
                   value={draft}
-                  placeholder="Task title (Enter)"
+                  placeholder="Task (e.g. follow up thu p1 @party)"
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') commitAdd(col.key);
