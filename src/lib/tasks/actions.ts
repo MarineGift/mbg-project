@@ -98,6 +98,7 @@ export interface CreateItemInput {
   status: string;                 // a status_options.key for this board
   description?: string | null;
   groupId?: string | null;
+  parentItemId?: string | null;   // for AI-decomposed subtasks
   priority?: string | null;
   assigneeUserId?: string | null;
   startDate?: string | null;      // 'YYYY-MM-DD'
@@ -115,6 +116,7 @@ export async function createItem(input: CreateItemInput): Promise<TaskItem> {
   const row = {
     board_id: input.boardId,
     group_id: input.groupId ?? null,
+    parent_item_id: input.parentItemId ?? null,
     title: input.title,
     description: input.description ?? null,
     status: input.status,

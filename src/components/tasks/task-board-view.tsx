@@ -30,6 +30,7 @@ import {
   resolvePartyIdByName,
 } from '@/lib/tasks/actions';
 import { parseQuickAdd } from '@/lib/tasks/quick-add-parser';
+import { decomposeTask } from '@/lib/tasks/decompose-actions';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // ---------------------------------------------------------------------------
@@ -871,6 +872,26 @@ function TaskModal(props: {
   const [recurEnds, setRecurEnds] = useState(item?.recurrence_ends ?? '');
   const [busy, setBusy] = useState(false);
   const recurRule = RECUR_OPTIONS.find((o) => o.key === recurKey)?.rule ?? null;
+  const [decomposing, setDecomposing] = useState(false);
+  const [decomposeMsg, setDecomposeMsg] = useState<string | null>(null);
+
+  async function aiDecompose() {
+    if (!item) return;
+    setDecomposeMsg(null);
+    setDecomposing(true);
+    try {
+      const res = await decomposeTask(item.id);
+      if (res.ok) {
+        onClose();      // close so the refreshed board shows the new subtasks
+      } else {
+        setDecomposeMsg(res.errorMessage ?? 'Decompose failed');
+      }
+    } catch (e) {
+      setDecomposeMsg(e instanceof Error ? e.message : 'Decompose failed');
+    } finally {
+      setDecomposing(false);
+    }
+  }
 
   const dateWarn = !!startDate && !!dueDate && toDays(dueDate) < toDays(startDate);
   const canSave = title.trim().length > 0 && !dateWarn && !busy;
@@ -1009,11 +1030,22 @@ function TaskModal(props: {
           </p>
         )}
 
+        {decomposeMsg && (
+          <p className="mb-2 text-[11px] text-red-500">{decomposeMsg}</p>
+        )}
+
         <div className="mt-2 flex items-center gap-2">
           {mode === 'edit' && (
             <button type="button" onClick={remove} disabled={busy}
               className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
               Delete
+            </button>
+          )}
+          {mode === 'edit' && (
+            <button type="button" onClick={aiDecompose} disabled={busy || decomposing}
+              title="Break this task into subtasks with AI"
+              className="rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-600 hover:bg-violet-50 disabled:opacity-50">
+              {decomposing ? 'AI...' : 'AI decompose'}
             </button>
           )}
           <div className="ml-auto flex gap-2">
