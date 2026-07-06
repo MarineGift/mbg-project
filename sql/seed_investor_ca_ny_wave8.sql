@@ -56,10 +56,10 @@ from (values
    'Backs biotech startups with a software/data component - invests seed through post-IPO. Fit for data-driven life-science plays.'),
   ('SR One','srone.com','US','Redwood City','California',
    '레드우드시티+런던 트랜스애틀랜틱 바이오텍 VC. back-and-build 방식으로 혁신 과학을 신약으로 전환.',
-   'Redwood City + London transatlantic biotech VC - a back-and-build approach turning innovative science toward new medicines.'),
+   'Redwood City + London transatlantic biotech VC - a back-and-build approach translating innovative science into medicines.'),
   ('Novo Holdings','novoholdings.dk','US','San Francisco','California',
    'Novo Nordisk Foundation 투자부문(덴마크 본사, SF·보스턴·싱가포르 거점). 전 단계 바이오텍·헬스케어. 장기 자본.',
-   'Investment arm of the Novo Nordisk Foundation (Denmark HQ, SF, Boston, Singapore presence) - all-stage biotech/healthcare with long-term capital.')
+   'Investment arm of the Novo Nordisk Foundation (Denmark HQ - SF, Boston, Singapore presence) - all-stage biotech/healthcare with long-term capital.')
 ) as c(party_name, domain, country_code, city, region, intro_ko, intro_en)
 where not exists (
   select 1 from app.parties p
