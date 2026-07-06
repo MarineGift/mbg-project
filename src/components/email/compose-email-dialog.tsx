@@ -34,6 +34,7 @@ import {
 import {
   sendEmail,
   generateAIReply,
+  generateAIEmail,
   type ComposePayload,
   type ComposeMode,
 } from "@/lib/actions/email-compose";
@@ -414,6 +415,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     "professional",
   );
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState("");
   const [aiLanguage, setAiLanguage] = useState<"auto" | "en" | "ko">("auto");
 
   // Reply scope: reply to the sender only, or reply all. Reply mode only.
@@ -515,9 +517,39 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
         contactId: props.contactId,
         tone: aiTone,
         language: aiLanguage,
+        instructions: aiInstruction,
       });
       if (result.success && result.draft) {
         setBody(result.draft);
+        toast.success("AI draft generated.");
+      } else {
+        toast.error(result.error ?? "AI generation failed.");
+      }
+    } finally {
+      setGeneratingAI(false);
+    }
+  }
+
+  // AI generate for a brand-new email (instructions-driven, no original).
+  async function handleGenerateAIEmail() {
+    if (!aiInstruction.trim()) {
+      toast.error("Describe what the email should say first.");
+      return;
+    }
+    setGeneratingAI(true);
+    try {
+      const result = await generateAIEmail({
+        partyId: props.partyId ?? null,
+        contactId: selectedContactId ?? props.contactId ?? null,
+        toAddress: to || effectiveTo || null,
+        subject: subject || null,
+        tone: aiTone,
+        language: aiLanguage,
+        instructions: aiInstruction,
+      });
+      if (result.success && result.draft) {
+        setBody(result.draft);
+        if (result.subject && !subject.trim()) setSubject(result.subject);
         toast.success("AI draft generated.");
       } else {
         toast.error(result.error ?? "AI generation failed.");
@@ -945,73 +977,83 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
 
           {activeTab === "ai" && (
             <div className="space-y-2 rounded-md border bg-violet-50/50 p-3">
-              {isReplyMode ? (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label htmlFor="ai-tone" className="text-xs">
-                      Tone
-                    </Label>
-                    <select
-                      id="ai-tone"
-                      value={aiTone}
-                      onChange={(e) =>
-                        setAiTone(
-                          e.target.value as "professional" | "friendly" | "concise",
-                        )
-                      }
-                      className="h-7 px-2 text-xs rounded border border-input bg-background"
-                    >
-                      <option value="professional">Professional</option>
-                      <option value="friendly">Friendly</option>
-                      <option value="concise">Concise</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label htmlFor="ai-language" className="text-xs">
-                      Language
-                    </Label>
-                    <select
-                      id="ai-language"
-                      value={aiLanguage}
-                      onChange={(e) =>
-                        setAiLanguage(e.target.value as "auto" | "en" | "ko")
-                      }
-                      className="h-7 px-2 text-xs rounded border border-input bg-background"
-                    >
-                      <option value="auto">Auto (match original)</option>
-                      <option value="en">English</option>
-                      <option value="ko">Korean</option>
-                    </select>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleGenerateAI}
-                    disabled={generatingAI}
-                    className="w-full bg-violet-600 hover:bg-violet-700 text-white"
-                  >
-                    {generatingAI ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                        Generate AI reply
-                      </>
-                    )}
-                  </Button>
-                </>
-              ) : (
-                <div className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span>
-                    AI Draft is available when replying to an inbound message.
-                    Open the inbox or party timeline and click <strong>Reply</strong> on an existing email.
-                  </span>
-                </div>
-              )}
+              <div className="space-y-1">
+                <Label htmlFor="ai-instruction" className="text-xs">
+                  {isReplyMode ? "What should this reply say? (optional)" : "What should this email say?"}
+                </Label>
+                <textarea
+                  id="ai-instruction"
+                  value={aiInstruction}
+                  onChange={(e) => setAiInstruction(e.target.value)}
+                  rows={4}
+                  placeholder={
+                    isReplyMode
+                      ? "e.g. Thank them, confirm Wednesday 9:30 works, ask them to send the deck template."
+                      : "e.g. Intro to Pangaea: FCC paper filler, 9,000 t confirmed demand, raising a $1M SAFE bridge, ask for a 30-min call next week."
+                  }
+                  className="w-full rounded border border-input bg-background px-2 py-1.5 text-sm resize-y"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {isReplyMode
+                    ? "Leave blank to auto-draft from the original message, or add specifics to steer the reply."
+                    : "Describe the goal, key facts, and the ask. The AI writes the draft; your signature is added at send."}
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="ai-tone" className="text-xs">
+                  Tone
+                </Label>
+                <select
+                  id="ai-tone"
+                  value={aiTone}
+                  onChange={(e) =>
+                    setAiTone(
+                      e.target.value as "professional" | "friendly" | "concise",
+                    )
+                  }
+                  className="h-7 px-2 text-xs rounded border border-input bg-background"
+                >
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="concise">Concise</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="ai-language" className="text-xs">
+                  Language
+                </Label>
+                <select
+                  id="ai-language"
+                  value={aiLanguage}
+                  onChange={(e) =>
+                    setAiLanguage(e.target.value as "auto" | "en" | "ko")
+                  }
+                  className="h-7 px-2 text-xs rounded border border-input bg-background"
+                >
+                  <option value="auto">{isReplyMode ? "Auto (match original)" : "Auto (match instructions)"}</option>
+                  <option value="en">English</option>
+                  <option value="ko">Korean</option>
+                </select>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={isReplyMode ? handleGenerateAI : handleGenerateAIEmail}
+                disabled={generatingAI || (!isReplyMode && !aiInstruction.trim())}
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {generatingAI ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    {isReplyMode ? "Generate AI reply" : "Generate AI email"}
+                  </>
+                )}
+              </Button>
             </div>
           )}
 

@@ -52,6 +52,22 @@ export interface AIReplyPayload {
   tone?: "professional" | "friendly" | "concise";
   /** Reply language: "auto" mirrors the language of the original email. */
   language?: "auto" | "en" | "ko";
+  /** Optional free-text guidance from the user: what the reply should say/do. */
+  instructions?: string;
+}
+
+/** New-email (no original message) AI draft request. */
+export interface AIComposePayload {
+  partyId?: string | null;
+  contactId?: string | null;
+  /** Recipient email, used as a hint when no contact record is linked. */
+  toAddress?: string | null;
+  subject?: string | null;
+  tone?: "professional" | "friendly" | "concise";
+  /** "auto" writes in the language of the instructions; else forces en/ko. */
+  language?: "auto" | "en" | "ko";
+  /** Required: what the email should say / accomplish. */
+  instructions: string;
 }
 
 // ─────────────────────────────────────────────
@@ -250,13 +266,17 @@ Write a ${tone === "professional" ? "professional and courteous" : tone === "fri
 - Do NOT include any closing salutation or sign-off (e.g., "Best,", "Best regards,", "Sincerely,") and do NOT write the sender's name, title, or company at the end. End the draft immediately after the last body paragraph; the signature is appended automatically.
 - ${languageInstruction}`;
 
+  const instructionBlock = payload.instructions?.trim()
+    ? `\n\nWhat this reply must accomplish (follow these instructions closely):\n${payload.instructions.trim()}`
+    : "";
+
   const userPrompt = `Original email:
 From: ${comm.from_address}
 Subject: ${comm.subject}
 Body:
 ${originalBody}
 
-${contactName ? `Recipient name: ${contactName}` : ""}
+${contactName ? `Recipient name: ${contactName}` : ""}${instructionBlock}
 
 Write a plain text reply draft for this email. Do not use any HTML tags.`;
 
@@ -370,4 +390,99 @@ export async function listEmailSignatures(): Promise<{
 
   if (error) return { success: false, error: error.message };
   return { success: true, data: data ?? [] };
+}
+
+// ?????????????????????????????????????????????
+// AI compose for a BRAND-NEW email (no original message to reply to).
+// ?????????????????????????????????????????????
+export async function generateAIEmail(payload: AIComposePayload): Promise<{
+  success: boolean;
+  draft?: string;
+  subject?: string;
+  error?: string;
+}> {
+  const instructions = payload.instructions?.trim();
+  if (!instructions) {
+    return { success: false, error: "Please describe what the email should say." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  let contactName = "";
+  if (payload.contactId) {
+    const { data: c } = await supabase
+      .schema("app").from("contacts" as never)
+      .select("given_name, family_name")
+      .eq("id", payload.contactId)
+      .single();
+    if (c) contactName = [c.given_name, c.family_name].filter(Boolean).join(" ");
+  }
+
+  let partyName = "";
+  if (payload.partyId) {
+    const { data: pr } = await supabase
+      .schema("app").from("parties" as never)
+      .select("party_name")
+      .eq("id", payload.partyId)
+      .single();
+    if (pr) partyName = pr.party_name ?? "";
+  }
+
+  const tone = payload.tone ?? "professional";
+  const language = payload.language ?? "auto";
+  const languageInstruction =
+    language === "en"
+      ? "Write the entire email in English."
+      : language === "ko"
+        ? "Write the entire email in Korean."
+        : "LANGUAGE: Write the email in the same language as the instructions above. If the instructions are in English, write in English; if in Korean, write in Korean. Do not translate.";
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const systemPrompt = `You are a B2B sales email professional drafting a NEW outbound email.
+Write a ${tone === "professional" ? "professional and courteous" : tone === "friendly" ? "warm and friendly" : "concise and clear"} email based on the user's instructions.
+- If a recipient name is provided, open with a proper salutation; otherwise use a neutral greeting.
+- Write in PLAIN TEXT only. Do NOT use HTML tags.
+- Separate paragraphs with empty lines (double newline).
+- Do NOT include any closing salutation or sign-off and do NOT write the sender's name, title, or company at the end. End immediately after the last body paragraph; the signature is appended automatically.
+- On the VERY FIRST line, output a subject line prefixed exactly with "SUBJECT: " and nothing else, then a blank line, then the body. Keep the subject under 78 characters.
+- ${languageInstruction}`;
+
+  const contextLines = [
+    contactName ? `Recipient name: ${contactName}` : "",
+    partyName ? `Recipient organization: ${partyName}` : "",
+    payload.toAddress ? `Recipient email: ${payload.toAddress}` : "",
+    payload.subject?.trim() ? `Draft subject the user already typed (improve or keep): ${payload.subject.trim()}` : "",
+  ].filter(Boolean).join("\n");
+
+  const userPrompt = `${contextLines ? contextLines + "\n\n" : ""}Instructions for the email:\n${instructions}\n\nWrite the email now. Remember: first line "SUBJECT: ...", blank line, then plain-text body, no sign-off.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL_SONNET ?? "claude-sonnet-4-6",
+      max_tokens: 1200,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    let text = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("");
+
+    let subject: string | undefined;
+    const m = text.match(/^\s*SUBJECT:\s*(.+?)\s*(?:\n|$)/i);
+    if (m) {
+      subject = m[1].trim();
+      text = text.slice(m[0].length);
+    }
+
+    const signOffPattern =
+      /\n[ \t]*(?:best regards|best wishes|best|kind regards|warm regards|regards|sincerely|respectfully|cheers)[,.!]?[ \t]*(?:\n[^\n]{0,80}){0,4}\s*$/i;
+    const cleanedDraft = text.replace(signOffPattern, "").trim();
+
+    return { success: true, draft: cleanedDraft, subject };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
