@@ -80,6 +80,22 @@ interface TaskFormValues {
   startDate: string | null;
   dueDate: string | null;
   description: string | null;
+  recurrence: string | null;
+  recurrenceEnds: string | null;
+}
+
+// Repeat dropdown options (maps label -> RRULE subset understood by the DB trigger).
+const RECUR_OPTIONS: Array<{ key: string; label: string; rule: string | null }> = [
+  { key: 'none',    label: 'Does not repeat', rule: null },
+  { key: 'daily',   label: 'Daily',           rule: 'FREQ=DAILY' },
+  { key: 'weekly',  label: 'Weekly',          rule: 'FREQ=WEEKLY' },
+  { key: 'biweekly',label: 'Every 2 weeks',   rule: 'FREQ=WEEKLY;INTERVAL=2' },
+  { key: 'monthly', label: 'Monthly',         rule: 'FREQ=MONTHLY' },
+  { key: 'yearly',  label: 'Yearly',          rule: 'FREQ=YEARLY' },
+];
+function ruleToKey(rule: string | null): string {
+  if (!rule) return 'none';
+  return RECUR_OPTIONS.find((o) => o.rule === rule)?.key ?? 'none';
 }
 
 type ModalState =
@@ -215,6 +231,7 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
         priority: parsed.priority,
         startDate: parsed.startDate,
         dueDate: parsed.dueDate,
+        recurrence: parsed.recurrence,
         partyId,
         position: nextPos(status),
       });
@@ -235,6 +252,8 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
         startDate: v.startDate,
         dueDate: v.dueDate,
         description: v.description,
+        recurrence: v.recurrence,
+        recurrenceEnds: v.recurrenceEnds,
         position: nextPos(v.status),
       });
       setItems((prev) => [...prev, created]);
@@ -255,6 +274,8 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
               start_date: v.startDate,
               due_date: v.dueDate,
               description: v.description,
+              recurrence: v.recurrence,
+              recurrence_ends: v.recurrenceEnds,
             }
           : i,
       ),
@@ -268,6 +289,8 @@ export function TaskBoardView({ initial }: { initial: BoardData }) {
           startDate: v.startDate,
           dueDate: v.dueDate,
           description: v.description,
+          recurrence: v.recurrence,
+          recurrenceEnds: v.recurrenceEnds,
         });
       } catch (e) {
         console.error('updateItem failed', e);
@@ -485,8 +508,13 @@ function KanbanView(props: {
                       >
                         {p.label}
                       </span>
+                      {it.recurrence && (
+                        <span className={it.due_date ? 'ml-auto text-[11px] text-muted-foreground' : 'ml-auto'} title={it.recurrence} aria-label="repeats">
+                          &#8635;
+                        </span>
+                      )}
                       {it.due_date && (
-                        <span className="ml-auto text-[10.5px] text-muted-foreground">
+                        <span className={(it.recurrence ? 'ml-1' : 'ml-auto') + ' text-[10.5px] text-muted-foreground'}>
                           {it.due_date}
                         </span>
                       )}
@@ -839,7 +867,10 @@ function TaskModal(props: {
   const [startDate, setStartDate] = useState(item?.start_date ?? presetStart ?? '');
   const [dueDate, setDueDate] = useState(item?.due_date ?? presetDue ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
+  const [recurKey, setRecurKey] = useState<string>(ruleToKey(item?.recurrence ?? null));
+  const [recurEnds, setRecurEnds] = useState(item?.recurrence_ends ?? '');
   const [busy, setBusy] = useState(false);
+  const recurRule = RECUR_OPTIONS.find((o) => o.key === recurKey)?.rule ?? null;
 
   const dateWarn = !!startDate && !!dueDate && toDays(dueDate) < toDays(startDate);
   const canSave = title.trim().length > 0 && !dateWarn && !busy;
@@ -853,6 +884,8 @@ function TaskModal(props: {
       startDate: startDate || null,
       dueDate: dueDate || null,
       description: description.trim() ? description.trim() : null,
+      recurrence: recurRule,
+      recurrenceEnds: recurRule ? (recurEnds || null) : null,
     };
     setBusy(true);
     try {
@@ -938,6 +971,28 @@ function TaskModal(props: {
         </div>
         {dateWarn && <p className="mb-1 text-[11px] text-red-500">The due date is earlier than the start date.</p>}
         <p className="mb-3 text-[10.5px] text-slate-400">Both a start and a due date are required to appear on the Gantt.</p>
+
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Repeat</label>
+            <select value={recurKey} onChange={(e) => setRecurKey(e.target.value)} className={fieldCls}>
+              {RECUR_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Repeat until</label>
+            <input
+              type="date"
+              value={recurEnds}
+              onChange={(e) => setRecurEnds(e.target.value)}
+              disabled={recurKey === 'none'}
+              className={fieldCls + (recurKey === 'none' ? ' opacity-40' : '')}
+            />
+          </div>
+        </div>
+        {recurKey !== 'none' && !dueDate && (
+          <p className="mb-3 text-[11px] text-amber-600">A due date is required for a repeating task to schedule its next occurrence.</p>
+        )}
 
         <div className="mb-3">
           <label className={labelCls}>Description</label>

@@ -41,6 +41,8 @@ export interface QuickAddParse {
   priority: TaskPriority | null;
   /** Raw @mention text; resolve to party_id via resolvePartyIdByName(). */
   partyQuery: string | null;
+  /** RRULE subset ('FREQ=WEEKLY;INTERVAL=1') or null. Matches app.todo_items.recurrence. */
+  recurrence: string | null;
   /** Human-readable list of what was recognized (for UI feedback/toast). */
   matched: string[];
 }
@@ -105,6 +107,7 @@ interface MutableParse {
   startDate: string | null;
   priority: TaskPriority | null;
   partyQuery: string | null;
+  recurrence: string | null;
   matched: string[];
 }
 
@@ -120,7 +123,8 @@ const E = '(?=\\s|$)';
 export function parseQuickAdd(raw: string, now: Date = new Date()): QuickAddParse {
   const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const out: MutableParse = {
-    dueDate: null, startDate: null, priority: null, partyQuery: null, matched: [],
+    dueDate: null, startDate: null, priority: null, partyQuery: null,
+    recurrence: null, matched: [],
   };
   let text = ` ${raw.trim()} `; // pad so B/E boundaries behave uniformly
 
@@ -164,6 +168,62 @@ export function parseQuickAdd(raw: string, now: Date = new Date()): QuickAddPars
       out.matched.push(`priority:${pri}`);
       consume(m);
       break;
+    }
+  }
+
+  // ---- 2.5) Recurrence -----------------------------------------------------
+  // EN: !daily !weekly !monthly !yearly / every day|week|month|year
+  //     every N days|weeks|months|years
+  // KO: 매일 매주 매월(매달) 매년 / N일마다 N주마다 N개월마다 N년마다
+  const RECUR_SIMPLE: Array<[RegExp, string]> = [
+    [new RegExp(`${B}!daily${E}`, 'i'), 'FREQ=DAILY'],
+    [new RegExp(`${B}!weekly${E}`, 'i'), 'FREQ=WEEKLY'],
+    [new RegExp(`${B}!monthly${E}`, 'i'), 'FREQ=MONTHLY'],
+    [new RegExp(`${B}!yearly${E}`, 'i'), 'FREQ=YEARLY'],
+    [new RegExp(`${B}every\\s+day${E}`, 'i'), 'FREQ=DAILY'],
+    [new RegExp(`${B}every\\s+week${E}`, 'i'), 'FREQ=WEEKLY'],
+    [new RegExp(`${B}every\\s+month${E}`, 'i'), 'FREQ=MONTHLY'],
+    [new RegExp(`${B}every\\s+year${E}`, 'i'), 'FREQ=YEARLY'],
+    [new RegExp(`${B}매일${E}`), 'FREQ=DAILY'],
+    [new RegExp(`${B}매주${E}`), 'FREQ=WEEKLY'],
+    [new RegExp(`${B}매월${E}`), 'FREQ=MONTHLY'],
+    [new RegExp(`${B}매달${E}`), 'FREQ=MONTHLY'],
+    [new RegExp(`${B}매년${E}`), 'FREQ=YEARLY'],
+  ];
+  // "every N days" / "N일마다" -> FREQ + INTERVAL
+  const RECUR_INTERVAL: Array<[RegExp, string]> = [
+    [new RegExp(`${B}every\\s+(\\d{1,3})\\s+days?${E}`, 'i'), 'DAILY'],
+    [new RegExp(`${B}every\\s+(\\d{1,3})\\s+weeks?${E}`, 'i'), 'WEEKLY'],
+    [new RegExp(`${B}every\\s+(\\d{1,3})\\s+months?${E}`, 'i'), 'MONTHLY'],
+    [new RegExp(`${B}every\\s+(\\d{1,3})\\s+years?${E}`, 'i'), 'YEARLY'],
+    [new RegExp(`${B}(\\d{1,3})일\\s*마다${E}`), 'DAILY'],
+    [new RegExp(`${B}(\\d{1,3})주\\s*마다${E}`), 'WEEKLY'],
+    [new RegExp(`${B}(\\d{1,3})(?:개월|달)\\s*마다${E}`), 'MONTHLY'],
+    [new RegExp(`${B}(\\d{1,3})년\\s*마다${E}`), 'YEARLY'],
+  ];
+  {
+    let done = false;
+    for (const [re, freq] of RECUR_INTERVAL) {
+      const m = text.match(re);
+      if (m) {
+        const n = Math.max(1, parseInt(m[1]!, 10));
+        out.recurrence = `FREQ=${freq};INTERVAL=${n}`;
+        out.matched.push(`recur:${out.recurrence}`);
+        consume(m);
+        done = true;
+        break;
+      }
+    }
+    if (!done) {
+      for (const [re, rule] of RECUR_SIMPLE) {
+        const m = text.match(re);
+        if (m) {
+          out.recurrence = rule;
+          out.matched.push(`recur:${rule}`);
+          consume(m);
+          break;
+        }
+      }
     }
   }
 
@@ -347,6 +407,7 @@ export function parseQuickAdd(raw: string, now: Date = new Date()): QuickAddPars
     startDate: out.startDate,
     priority: out.priority,
     partyQuery: out.partyQuery,
+    recurrence: out.recurrence,
     matched: out.matched,
   };
 }

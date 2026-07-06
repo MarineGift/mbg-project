@@ -54,6 +54,9 @@ export interface TaskItem {
   party_id: string | null;
   contact_id: string | null;
   communication_id: string | null;
+  recurrence: string | null;         // 'FREQ=WEEKLY;INTERVAL=1' | null
+  recurrence_ends: string | null;    // 'YYYY-MM-DD' | null
+  recurrence_parent_id: string | null;
   custom: Record<string, unknown>;
   archived_at: string | null;
   created_by: string | null;

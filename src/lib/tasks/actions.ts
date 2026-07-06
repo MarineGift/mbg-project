@@ -106,6 +106,8 @@ export interface CreateItemInput {
   partyId?: string | null;
   contactId?: string | null;
   communicationId?: string | null;
+  recurrence?: string | null;
+  recurrenceEnds?: string | null;
 }
 
 export async function createItem(input: CreateItemInput): Promise<TaskItem> {
@@ -124,6 +126,8 @@ export async function createItem(input: CreateItemInput): Promise<TaskItem> {
     party_id: input.partyId ?? null,
     contact_id: input.contactId ?? null,
     communication_id: input.communicationId ?? null,
+    recurrence: input.recurrence ?? null,
+    recurrence_ends: input.recurrenceEnds ?? null,
     // organization_id + created_by come from column defaults (SaaS: un-spoofable)
   };
   const { data, error } = await supabase
@@ -160,6 +164,8 @@ export interface UpdateItemPatch {
   dueDate?: string | null;
   position?: number;
   archived?: boolean;
+  recurrence?: string | null;
+  recurrenceEnds?: string | null;
 }
 
 export async function updateItem(itemId: string, patch: UpdateItemPatch): Promise<void> {
@@ -173,6 +179,8 @@ export async function updateItem(itemId: string, patch: UpdateItemPatch): Promis
   if (patch.assigneeUserId !== undefined) row.assignee_user_id = patch.assigneeUserId;
   if (patch.startDate !== undefined) row.start_date = patch.startDate;
   if (patch.dueDate !== undefined) row.due_date = patch.dueDate;
+  if (patch.recurrence !== undefined) row.recurrence = patch.recurrence;
+  if (patch.recurrenceEnds !== undefined) row.recurrence_ends = patch.recurrenceEnds;
   if (patch.position !== undefined) row.position = patch.position;
   if (patch.archived !== undefined) {
     row.archived_at = patch.archived ? new Date().toISOString() : null;
