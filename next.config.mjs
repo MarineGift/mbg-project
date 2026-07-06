@@ -18,6 +18,9 @@ const nextConfig = {
   // (Next 14??experimental.serverComponentsExternalPackages, Next 15??serverExternalPackages.
   //  ?꾩옱 踰꾩쟾? experimental ?덉뿉 ?먯뼱????
   experimental: {
+    // Server Actions default body limit is 1 MB, which silently capped email
+    // attachment uploads at ~1 MB per file. Raise to cover the 25 MB/file cap.
+    serverActions: { bodySizeLimit: '30mb' },
     serverComponentsExternalPackages: [
       'imapflow',
       'mailparser',

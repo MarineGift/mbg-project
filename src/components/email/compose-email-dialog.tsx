@@ -161,6 +161,8 @@ interface ComposeEmailDialogProps {
   templateId?: string;
 
   replyToMessageId?: string;
+  /** RFC 5322 References chain of the message being replied to (threading). */
+  replyToReferences?: string[];
   threadId?: string;
   originalCommunicationId?: string;
   replyToCommunicationId?: string;
@@ -530,6 +532,16 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
+    // Total-size guard: most SMTP relays reject messages over ~25 MB combined.
+    const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
+    const currentTotal = attachments.reduce((s, a) => s + a.file.size, 0);
+    const incomingTotal = files.reduce((s, f) => s + f.size, 0);
+    if (currentTotal + incomingTotal > MAX_TOTAL_BYTES) {
+      toast.error("Attachments exceed the 25 MB total limit per email.");
+      e.target.value = "";
+      return;
+    }
+
     const newItems: AttachmentItem[] = files.map((f) => ({
       file: f,
       storagePath: null,
@@ -695,6 +707,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             ? selectedTemplateId
             : props.templateId,
         replyToMessageId: props.replyToMessageId,
+        replyToReferences: props.replyToReferences,
         threadId: props.threadId,
         attachmentPaths: args.attachmentPaths,
         attachments: args.attachmentsMeta,

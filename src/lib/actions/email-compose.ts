@@ -28,6 +28,8 @@ export interface ComposePayload {
   body: string;                    // HTML or plain (the raw template in template mode)
   templateId?: string;
   replyToMessageId?: string;       // reply mode
+  /** References chain of the replied-to message; the send core appends replyToMessageId. */
+  replyToReferences?: string[];
   threadId?: string;
   attachmentPaths?: string[];      // Supabase Storage paths (legacy / fallback)
   attachments?: Array<{ path: string; filename: string; size: number; mimeType: string }>; // preferred: rich metadata
@@ -159,7 +161,12 @@ export async function sendEmail(payload: ComposePayload): Promise<{
       payload.mode === "reply" ? (payload.replyToMessageId ?? undefined) : undefined,
     references:
       payload.mode === "reply" && payload.replyToMessageId
-        ? [payload.replyToMessageId]
+        ? [
+            ...(payload.replyToReferences ?? []).filter(
+              (r) => r && r !== payload.replyToMessageId,
+            ),
+            payload.replyToMessageId,
+          ]
         : undefined,
     partyId: payload.partyId,
     contactId: payload.contactId ?? null,

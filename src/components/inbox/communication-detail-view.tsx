@@ -84,7 +84,9 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
   const [dialogOpen, setDialogOpen] = useState(false);
   const router = useRouter();
   const [initialTab, setInitialTab] = useState<'direct' | 'template' | 'ai'>('direct');
-  function openReply(tab: 'direct' | 'template' | 'ai') {
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  function openReply(tab: 'direct' | 'template' | 'ai', msgId?: string) {
+    setReplyTargetId(msgId ?? null);
     setInitialTab(tab);
     setDialogOpen(true);
   }
@@ -92,7 +94,10 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
   // Thread-level context
   const partyContext = root?.party ?? latest?.party ?? null;
   const threadSubject = root?.subject ?? latest?.subject ?? '';
-  const replyTarget = [...thread].reverse().find((m) => m.direction === 'inbound') ?? null;
+  const latestInbound = [...thread].reverse().find((m) => m.direction === 'inbound') ?? null;
+  const selectedTarget = replyTargetId ? (thread.find((m) => m.id === replyTargetId) ?? null) : null;
+  // Per-message reply: an explicitly chosen message wins; default stays the latest inbound.
+  const replyTarget = selectedTarget ?? latestInbound;
   const isReplyable = replyTarget != null;
 
   return (
@@ -136,6 +141,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           onToggle={() => toggle(msg.id)}
           openStatus={openStatuses?.[msg.id]}
           timeZone={timeZone}
+          onReply={msg.messageId ? () => openReply('direct', msg.id) : undefined}
         />
       ))}
 
@@ -162,8 +168,9 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
       {/* Reply dialog mount (always; partyId optional) */}
       {isReplyable && (
         <ComposeEmailDialog
+          key={replyTarget.id}
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={(o) => { setDialogOpen(o); if (!o) setReplyTargetId(null); }}
           mode="reply"
           initialTab={initialTab}
           partyId={replyTarget.party?.id ?? null}
@@ -178,6 +185,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
               : ''
           }
           replyToMessageId={replyTarget.messageId ?? undefined}
+          replyToReferences={replyTarget.references ?? undefined}
           threadId={replyTarget.threadId ?? undefined}
           originalCommunicationId={replyTarget.id}
           templates={templates ?? []}
@@ -198,9 +206,11 @@ interface ThreadMessageCardProps {
   onToggle: () => void;
   openStatus?: { firstOpenedAt: string | null; openCount: number };
   timeZone?: string;
+  /** Present when this specific message can be replied to (has a Message-ID). */
+  onReply?: () => void;
 }
 
-function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone }: ThreadMessageCardProps) {
+function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onReply }: ThreadMessageCardProps) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
   const hasDrafts = msg.generatedDrafts && msg.generatedDrafts.length > 0;
@@ -272,6 +282,20 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone }: Th
       {/* Expanded content */}
       {expanded && (
         <CardContent className="space-y-3 pt-0">
+          {onReply && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={(e) => { e.stopPropagation(); onReply(); }}
+              >
+                <Send className="h-3 w-3 mr-1" />
+                Reply to this message
+              </Button>
+            </div>
+          )}
           {/* Metadata grid */}
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
             {msg.toAddresses.length > 0 && (
