@@ -1,6 +1,7 @@
 // src/app/(app)/applications/[formId]/page.tsx
 // Server component: loads one form's fields from the status view plus the
 // answer library (for the dropdown), hands both to the editor client.
+// 2026-07-09: canonical_key + answer_variant mapping, library variant columns.
 
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import ApplicationEditorClient, {
@@ -32,6 +33,8 @@ type ViewRow = {
   submission_method: string | null
   submit_email: string | null
   login_required: boolean | null
+  canonical_key: string | null
+  answer_variant: string | null
 }
 
 export default async function ApplicationEditorPage({
@@ -53,8 +56,11 @@ export default async function ApplicationEditorPage({
       supabase
         .schema('app')
         .from('answer_library' as never)
-        .select('id, answer_key, title, body_en, body_ko, disclosure_level, tags')
-        .order('answer_key', { ascending: true }),
+        .select(
+          'id, answer_key, title, body_en, body_ko, disclosure_level, variant, target_length, tags',
+        )
+        .order('answer_key', { ascending: true })
+        .order('variant', { ascending: true }),
     ])
 
   if (viewErr) console.error('[application editor] view fetch failed:', viewErr.message)
@@ -72,6 +78,13 @@ export default async function ApplicationEditorPage({
   }
 
   const head = rows[0]
+  if (!head) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <p className="text-sm text-muted-foreground">Form not found.</p>
+      </div>
+    )
+  }
   const fields: EditorField[] = rows
     .filter((r) => r.field_id != null)
     .map((r) => ({
@@ -81,8 +94,10 @@ export default async function ApplicationEditorPage({
       fieldType: r.field_type ?? 'textarea',
       maxLength: r.max_length,
       isRequired: r.is_required ?? false,
+      canonicalKey: r.canonical_key,
       answerId: r.answer_id,
       answerKey: r.answer_key,
+      answerVariant: r.answer_variant,
       disclosureLevel: r.disclosure_level,
       finalText: r.final_text ?? '',
       isCopied: r.is_copied ?? false,
