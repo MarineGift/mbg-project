@@ -14,6 +14,7 @@ import { requireAuthOrRedirect } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AccountScoreBadge } from '@/components/common/account-score-badge';
+import { ContactMethodBadge } from '@/components/common/contact-method-badge';
 import { PaginationBar } from '@/components/common/pagination-bar';
 import { SavedViewsDropdown } from '@/components/common/saved-views-dropdown';
 import { fetchAccountScoresMany, type AccountScore, type AccountTier } from '@/lib/queries/account-score';
@@ -74,6 +75,7 @@ interface PartyRow {
   party_level: PartyLevel | null; parent_party_id: string | null;
   country_code: string | null; city: string | null; region: string | null;
   interest_tags: string[] | null; website: string | null; created_at: string;
+  preferred_contact_method: string | null; contact_form_url: string | null;
   entity_type_id: number | null;
 }
 
@@ -425,7 +427,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .schema('app')
       .from('parties' as never)
       .select(
-        'id, party_name, status, country_code, city, region, website, interest_tags, created_at, entity_type_id',
+        'id, party_name, status, country_code, city, region, website, interest_tags, created_at, entity_type_id, preferred_contact_method, contact_form_url',
         { count: 'exact' },
       )
       .eq('party_type_id' as never, partyTypeId)
@@ -824,6 +826,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
                           {p.party_name}
                         </Link>
+                        {p.preferred_contact_method && (
+                          <ContactMethodBadge
+                            method={p.preferred_contact_method}
+                            formUrl={p.contact_form_url}
+                            size="sm"
+                            className="mt-1"
+                          />
+                        )}
                         {showEntityType && (
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
                             {entityTypeAll[p.id] && (

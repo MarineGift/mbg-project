@@ -33,6 +33,7 @@ import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
 import { PartyDetailTabs } from '@/components/parties/party-detail-tabs';
 import { PartyInfoCard } from '@/components/parties/party-info-card';
+import { PartyApplicationPanel } from '@/components/parties/party-application-panel';
 import { PartyIntroCard } from '@/components/parties/party-intro-card';
 import { InvestorProfileCard } from '@/components/parties/investor-profile-card';
 
@@ -130,6 +131,12 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 <PartyStatsGrid party={full.party} />
                 <PartyIntroCard introKo={full.party.introKo} introEn={full.party.introEn} />
                 <PartyInfoCard party={full.party} contacts={full.contacts} />
+                <PartyApplicationPanel
+                  partyId={full.party.id}
+                  partyType={full.party.partyType}
+                  contactMethod={full.party.preferredContactMethod}
+                  contactFormUrl={full.party.contactFormUrl}
+                />
                 {(full.party.partyType === 'paper_mill' ||
                   full.party.partyType === 'filler_supplier') && (
                   <PartySupplyLinksPanel
