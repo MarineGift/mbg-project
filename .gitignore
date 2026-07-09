@@ -12,30 +12,25 @@
 /.next/
 /out/
 /build
-
 # ===== Debug =====
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-
 # ===== Env / secrets (never commit) =====
 .env*.local
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
 # ===== Test =====
 /coverage
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
-
 # ===== Deploy =====
 .vercel
-
 # ===== IDE / OS =====
 .vscode/
 .idea/
@@ -43,18 +38,14 @@ yarn-error.log*
 *.swo
 .DS_Store
 Thumbs.db
-
 # ===== TypeScript =====
 *.tsbuildinfo
 next-env.d.ts
-
 # ===== Supabase CLI local =====
 /supabase/.branches
 /supabase/.temp
-
 # ===== Claude build artifacts (optional) =====
 /.claude_cache/
-
 # Phase 2 temp debug files (auto-generated)
 *.bak
 tsc_errors.txt
@@ -67,17 +58,12 @@ env.local.mjs
 worker-*.log
 data/
 backups-*/
-
 # Backups created during fix sessions
-*.bak
-
 patch-*.ps1
-
 # Stage 24 local artifacts
 *.bak.s24
 stage*_step*.ps1
 meetings.ts.new
-
 # Stage 25 local artifacts
 *.bak.s25
 stage25_*.ps1
@@ -86,7 +72,6 @@ stage25_*.sql
 /pipelines_v2.ts
 /engagements_queries.ts
 /engagements_actions.ts
-
 # Stage 26 local artifacts
 *.bak.s26
 stage26_*.ps1
@@ -94,7 +79,6 @@ stage26_*.txt
 stage26_*.sql
 /meeting_form_actions.ts
 /meeting_create_modal_v2.tsx
-
 # === Session 11 exit cleanup (Stage 28-a / 29 V2 redesign carry-over) ===
 # Stage backups - keep on disk for V2 cutover reference, but ignore in git
 *.bak.s27
@@ -102,7 +86,6 @@ stage26_*.sql
 *.bak.s28a
 *.bak.s28b
 *.bak.s29*
-
 # Per-stage PowerShell scripts and their output dumps (Session 10/11 debris)
 stage27_*.ps1
 stage27_*.txt
@@ -111,14 +94,11 @@ stage28a*.zip
 session11_*.ps1
 session11_*.txt
 session11_*.md
-
 # One-off snapshots
 src-current.zip
 src_snapshot.zip
-
 # Manual rollback artifacts (Session 10.5)
 typed-rpc-v1-old.ts
-
 # Misc session docs (kept in docs/handoffs/ instead)
 /handoff.md
 stage27u_*.txt
@@ -129,7 +109,6 @@ inspect_output.txt
 gen_stderr.log
 src/types/database.v1-backup.ts
 stage29c_audit_report.md
-
 # Launch prep temp files (Stage 29-c 2026-05-24)
 *.broken_backup
 .env.local.regen_bypass
@@ -139,28 +118,19 @@ tsc_*.txt
 rpc_check.sql
 regen*_stderr.log
 src/types/database.before_*.ts.bak
-
 # dev server log (temporary debugging)
 dev.log
-
 # D6 cutover work artifacts
 D6-*-post-tsc.txt
 diag-d6-*.ps1
 diag-d6-*.txt
 patch-d6-*.ps1
 *.D6-*.bak
-
 # patch script backups
 *.bak-*
-
-.env.local
-*.bak
 *.bak2
 *.bak3
-
 # Env setup notes (contains secrets - never commit)
 env.download
-*.bak
 *.bak_*
-form-scan-*.json
 form-scan-*.json
