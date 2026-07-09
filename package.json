@@ -21,7 +21,9 @@
     "worker:mailrun": "tsx --env-file=.env.local src/workers/mailrun-worker.ts",
     "worker:all": "tsx --env-file=.env.local src/workers/all-workers.ts",
     "sim:inbound": "tsx --env-file=.env.local src/scripts/simulate-inbound.ts",
-    "verify:smtp": "tsx --env-file=.env.local src/scripts/verify-smtp.ts"
+    "verify:smtp": "tsx --env-file=.env.local src/scripts/verify-smtp.ts",
+    "apply:inspect": "tsx --env-file=.env.local src/scripts/inspect-form.ts",
+    "apply:fill": "tsx --env-file=.env.local src/scripts/fill-application.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
