@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Globe, MapPin, Building2, Pencil, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
+import { ContactMethodBadge } from '@/components/common/contact-method-badge';
 import type { PartyDetail } from '@/types/party-detail';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +67,11 @@ export function PartyHeader({ party }: Props) {
         >
           {party.status}
         </span>
+        <ContactMethodBadge
+          method={party.preferredContactMethod}
+          formUrl={party.contactFormUrl}
+          size="sm"
+        />
         <Button asChild variant="outline" size="sm" className="ml-auto">
           <Link href={`/${party.partyType}/parties/${party.id}/mindmap`}>
             <Network className="h-3.5 w-3.5" />

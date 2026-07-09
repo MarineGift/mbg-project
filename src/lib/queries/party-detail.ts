@@ -63,6 +63,8 @@ interface RawPartyRow {
   intro_en: string | null;
   email: string | null;
   street_address: string | null;
+  preferred_contact_method: string | null;
+  contact_form_url: string | null;
   created_at: string;
   updated_at: string;
   // Phase 6 (2026-05-14)
@@ -147,7 +149,7 @@ export async function fetchPartyDetail(
     .schema('app')
     .from('parties' as never)
     .select(
-      'id, organization_id, party_name, party_type_id, status, country_code, city, region, website, email, street_address, interest_tags, notes, source, intro_ko, intro_en, created_at, updated_at',
+      'id, organization_id, party_name, party_type_id, status, country_code, city, region, website, email, street_address, interest_tags, notes, source, intro_ko, intro_en, preferred_contact_method, contact_form_url, created_at, updated_at',
     )
     .eq('id', partyId)
     .is('deleted_at', null)
@@ -382,6 +384,8 @@ export async function fetchPartyDetail(
     introEn: p.intro_en,
     email: p.email,
     streetAddress: p.street_address,
+    preferredContactMethod: p.preferred_contact_method,
+    contactFormUrl: p.contact_form_url,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     // Phase 6 (2026-05-14)

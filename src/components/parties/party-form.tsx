@@ -106,6 +106,16 @@ const schema = z.object({
   industryTags: z.string().max(500).optional().or(z.literal('')),
   interestTags: z.string().max(500).optional().or(z.literal('')),
   source: z.string().max(120).optional().or(z.literal('')),
+  preferredContactMethod: z
+    .enum(['email', 'web_form', 'portal', 'phone', 'other'])
+    .optional()
+    .or(z.literal('')),
+  contactFormUrl: z
+    .string()
+    .max(500)
+    .optional()
+    .or(z.literal(''))
+    .refine((s) => !s || /^https?:\/\/.+/.test(s), 'Must start with http:// or https://'),
   notes: z.string().max(10_000).optional().or(z.literal('')),
   // Org-level contact info: HQ email + single-line street address.
   email: z
@@ -245,6 +255,9 @@ export function PartyForm({
           industryTags: existing.industryTags.join(', '),
           interestTags: existing.interestTags.join(', '),
           source: existing.source ?? '',
+          preferredContactMethod: (existing.preferredContactMethod ??
+            '') as FormValues['preferredContactMethod'],
+          contactFormUrl: existing.contactFormUrl ?? '',
           notes: existing.notes ?? '',
           email: existing.email ?? '',
           streetAddress: existing.streetAddress ?? '',
@@ -277,6 +290,8 @@ export function PartyForm({
           industryTags: '',
           interestTags: '',
           source: '',
+          preferredContactMethod: '',
+          contactFormUrl: '',
           notes: '',
           email: '',
           streetAddress: '',
@@ -328,6 +343,8 @@ export function PartyForm({
         industryTags,
         interestTags,
         source: values.source || null,
+        preferredContactMethod: values.preferredContactMethod || null,
+        contactFormUrl: values.contactFormUrl || null,
         notes: values.notes || null,
         introKo: values.introKo || null,
         introEn: values.introEn || null,
@@ -551,6 +568,40 @@ export function PartyForm({
                   disabled={isPending}
                   placeholder={t('sourcePlaceholder')}
                 />
+              </div>
+
+              {/* Contact method (migration_027) */}
+              <div className="space-y-2">
+                <Label htmlFor="party-contact-method">Contact method</Label>
+                <select
+                  id="party-contact-method"
+                  {...register('preferredContactMethod')}
+                  disabled={isPending}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">- unknown -</option>
+                  <option value="email">Email</option>
+                  <option value="web_form">Web form</option>
+                  <option value="portal">Portal (login required)</option>
+                  <option value="phone">Phone</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Application / contact form URL (required for web_form and portal) */}
+              <div className="space-y-2">
+                <Label htmlFor="party-contact-form-url">Form URL</Label>
+                <Input
+                  id="party-contact-form-url"
+                  {...register('contactFormUrl')}
+                  disabled={isPending}
+                  placeholder="https://..."
+                />
+                {errors.contactFormUrl && (
+                  <p className="text-xs text-destructive">
+                    {errors.contactFormUrl.message}
+                  </p>
+                )}
               </div>
               </div>
             </div>

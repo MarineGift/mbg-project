@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
+import { ContactMethodBadge } from '@/components/common/contact-method-badge';
 import { cn } from '@/lib/utils';
 import type { PartyContact, PartyDetail } from '@/types/party-detail';
 
@@ -152,6 +153,30 @@ export function PartyInfoCard({ party, contacts }: Props) {
               ) : (
                 <span className="break-words">{party.website}</span>
               )
+            ) : (
+              DASH
+            )}
+          </Field>
+          <Field label="Contact method">
+            {party.preferredContactMethod ? (
+              <ContactMethodBadge
+                method={party.preferredContactMethod}
+                formUrl={party.contactFormUrl}
+              />
+            ) : (
+              DASH
+            )}
+          </Field>
+          <Field label="Form URL">
+            {party.contactFormUrl ? (
+              <a
+                href={party.contactFormUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline break-all"
+              >
+                {party.contactFormUrl}
+              </a>
             ) : (
               DASH
             )}

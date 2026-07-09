@@ -50,6 +50,9 @@ export interface PartyDetail {
   /** Organization-level contact: HQ email and street address (single line). */
   email: string | null;
   streetAddress: string | null;
+  /** How this party prefers to be contacted (migration_027). */
+  preferredContactMethod: string | null;
+  contactFormUrl: string | null;
   createdAt: string;
   updatedAt: string;
 

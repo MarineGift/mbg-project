@@ -63,6 +63,11 @@ const partySchema = z.object({
   industryTags: z.array(z.string().max(40)).max(20).optional().default([]),
   interestTags: z.array(z.string().max(40)).max(20).optional().default([]),
   source: z.string().max(120).optional().nullable(),
+  preferredContactMethod: z
+    .enum(['email', 'web_form', 'portal', 'phone', 'other'])
+    .optional()
+    .nullable(),
+  contactFormUrl: z.string().url().max(500).optional().nullable(),
   notes: z.string().max(10_000).optional().nullable(),
   introKo: z.string().max(10_000).optional().nullable(),
   introEn: z.string().max(10_000).optional().nullable(),
@@ -194,6 +199,8 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     website: parsed.data.website || null,
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
+    preferred_contact_method: parsed.data.preferredContactMethod || null,
+    contact_form_url: parsed.data.contactFormUrl || null,
     notes: parsed.data.notes?.trim() || null,
     intro_ko: parsed.data.introKo?.trim() || null,
     intro_en: parsed.data.introEn?.trim() || null,
@@ -309,6 +316,8 @@ export async function updateParty(
     website: parsed.data.website || null,
     interest_tags: parsed.data.interestTags ?? [],
     source: parsed.data.source?.trim() || null,
+    preferred_contact_method: parsed.data.preferredContactMethod || null,
+    contact_form_url: parsed.data.contactFormUrl || null,
     notes: parsed.data.notes?.trim() || null,
     intro_ko: parsed.data.introKo?.trim() || null,
     intro_en: parsed.data.introEn?.trim() || null,
