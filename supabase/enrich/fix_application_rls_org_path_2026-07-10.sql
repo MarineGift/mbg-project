@@ -23,3 +23,19 @@ CREATE POLICY answer_library_org_isolation ON app.answer_library
   FOR ALL
   USING (organization_id = app.current_organization_id())
   WITH CHECK (organization_id = app.current_organization_id());
+-- Second scan found 3 more tables with the same broken jwt path:
+DROP POLICY IF EXISTS email_signatures_org_isolation ON app.email_signatures;
+CREATE POLICY email_signatures_org_isolation ON app.email_signatures
+  FOR ALL
+  USING (organization_id = app.current_organization_id())
+  WITH CHECK (organization_id = app.current_organization_id());
+DROP POLICY IF EXISTS investor_interest_tags_org_all ON app.investor_interest_tags;
+CREATE POLICY investor_interest_tags_org_all ON app.investor_interest_tags
+  FOR ALL
+  USING (organization_id = app.current_organization_id())
+  WITH CHECK (organization_id = app.current_organization_id());
+DROP POLICY IF EXISTS close_reasons_org_isolation ON app.deal_close_reasons;
+CREATE POLICY close_reasons_org_isolation ON app.deal_close_reasons
+  FOR ALL
+  USING (organization_id = app.current_organization_id())
+  WITH CHECK (organization_id = app.current_organization_id());
