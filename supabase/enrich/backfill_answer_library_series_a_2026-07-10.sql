@@ -1,0 +1,10 @@
+-- backfill_answer_library_series_a_2026-07-10.sql
+-- Round restructure: 100K SAFE (10M cap) -> 5M USD Series A at 30M pre / 35M post.
+-- Rewrote round-related answer_library keys (applied via Supabase editor 2026-07-10):
+--   capital_seeking, deal_terms, use_of_funds, valuation_rationale, already_raised,
+--   discount_rate, company_one_liner (196 chars), ask_use_of_funds, cost_structure
+-- Also synced final_text on all DRAFTING application forms bound to those answers
+-- (submitted forms preserved as-of-submission), fixed stale titles, and seeded
+-- deck_url (Google Drive link). Verification: no body_en contains 100,000 / SAFE
+-- in round keys - confirmed via stale-check query, all false.
+-- Full statement set lives in the chat log 2026-07-10; DB is the source of truth.
