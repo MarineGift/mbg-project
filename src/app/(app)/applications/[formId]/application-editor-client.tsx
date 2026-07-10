@@ -255,7 +255,7 @@ export default function ApplicationEditorClient({
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-3 sm:p-6">
+    <div className="mx-auto w-full max-w-6xl p-3 sm:p-6">
       <div className="mb-1 text-sm">
         <Link href="/applications" className="text-muted-foreground hover:underline">
           &larr; Applications
@@ -365,9 +365,9 @@ export default function ApplicationEditorClient({
         ))}
       </div>
 
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {visibleFields.length === 0 && (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             No fields in this section.
           </div>
         )}
@@ -384,7 +384,7 @@ export default function ApplicationEditorClient({
                 if (el) cardRefs.current.set(f.fieldId, el)
                 else cardRefs.current.delete(f.fieldId)
               }}
-              className={`rounded-lg border p-4 ${
+              className={`h-fit rounded-lg border p-4 ${
                 isNext ? 'border-blue-400 ring-1 ring-blue-300/50' : ''
               } ${f.isCopied ? 'opacity-70' : ''}`}
             >
