@@ -70,6 +70,9 @@ export default function ApplicationEditorClient({
   const [savingId, setSavingId] = useState<string | null>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
+  type TabKey = 'all' | 'issues' | 'todo' | 'copied'
+  const [tab, setTab] = useState<TabKey>('all')
+
   const patchField = (fieldId: string, patch: Partial<EditorField>) => {
     setFields((prev) =>
       prev.map((f) => (f.fieldId === fieldId ? { ...f, ...patch } : f)),
@@ -142,6 +145,27 @@ export default function ApplicationEditorClient({
   const copyTargets = fields.filter((_, i) => copyableStates[i] === 'ok')
   const copiedCount = copyTargets.filter((f) => f.isCopied).length
   const nextTarget = copyTargets.find((f) => !f.isCopied) ?? null
+
+  // ── status tabs: quickly isolate problem fields ─────────────
+  const issueFields = fields.filter((f) =>
+    ['over_limit', 'nda_blocked', 'empty'].includes(stateOf(f)),
+  )
+  const todoFields = copyTargets.filter((f) => !f.isCopied)
+  const copiedFields = copyTargets.filter((f) => f.isCopied)
+  const visibleFields =
+    tab === 'all'
+      ? fields
+      : tab === 'issues'
+        ? issueFields
+        : tab === 'todo'
+          ? todoFields
+          : copiedFields
+  const tabs: { key: TabKey; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: fields.length },
+    { key: 'issues', label: 'Needs fix', count: issueFields.length },
+    { key: 'todo', label: 'To copy', count: todoFields.length },
+    { key: 'copied', label: 'Copied', count: copiedFields.length },
+  ]
 
   const copyNext = async () => {
     if (!nextTarget) return
@@ -254,8 +278,39 @@ export default function ApplicationEditorClient({
         </div>
       )}
 
+      {/* status tabs */}
+      <div className="mb-4 flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ${
+              tab === t.key
+                ? 'bg-background font-medium shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t.label}{' '}
+            <span
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+                t.key === 'issues' && t.count > 0
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-6">
-        {fields.map((f) => {
+        {visibleFields.length === 0 && (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Nothing in this tab.
+          </div>
+        )}
+        {visibleFields.map((f) => {
           const st = stateOf(f)
           const over = st === 'over_limit'
           const nda = st === 'nda_blocked'
