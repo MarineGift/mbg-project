@@ -45,7 +45,7 @@ export default async function ApplicationEditorPage({
 }) {
   const supabase = await createSupabaseServerClient()
 
-  const [{ data: viewData, error: viewErr }, { data: libData, error: libErr }] =
+  const [{ data: viewData, error: viewErr }, { data: libData, error: libErr }, { data: formHead }] =
     await Promise.all([
       supabase
         .schema('app')
@@ -61,6 +61,12 @@ export default async function ApplicationEditorPage({
         )
         .order('answer_key', { ascending: true })
         .order('variant', { ascending: true }),
+      supabase
+        .schema('app')
+        .from('application_forms' as never)
+        .select('form_type')
+        .eq('id', params.formId)
+        .maybeSingle(),
     ])
 
   if (viewErr) console.error('[application editor] view fetch failed:', viewErr.message)
@@ -107,6 +113,7 @@ export default async function ApplicationEditorPage({
   return (
     <ApplicationEditorClient
       formId={params.formId}
+      formType={((formHead as { form_type?: string } | null)?.form_type) ?? 'application'}
       partyName={head.party_name}
       formUrl={head.form_url}
       formStatus={head.form_status}

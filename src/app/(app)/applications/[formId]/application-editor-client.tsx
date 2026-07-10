@@ -37,6 +37,7 @@ export type EditorField = {
 
 type Props = {
   formId: string
+  formType: string
   partyName: string
   formUrl: string
   formStatus: string
@@ -56,6 +57,7 @@ function stateOf(f: EditorField): EditorField['fieldState'] {
 
 export default function ApplicationEditorClient({
   formId,
+  formType,
   partyName,
   formUrl,
   formStatus,
@@ -70,8 +72,62 @@ export default function ApplicationEditorClient({
   const [savingId, setSavingId] = useState<string | null>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  type TabKey = 'all' | 'issues' | 'todo' | 'copied'
-  const [tab, setTab] = useState<TabKey>('all')
+  // ?? section tabs ????????????????????????????????????????????
+  // Angel Form (investor applications): CTAN/Dealum-style 9 sections.
+  // Company Form (mill / supplier contact_inquiry): 3 simple sections.
+  const isCompanyForm = formType === 'contact_inquiry'
+  const SECTION_OF: Record<string, string> = isCompanyForm
+    ? {
+        company_one_liner: 'company',
+        uvp: 'company',
+        solution: 'product',
+        traction: 'commercial',
+        business_model: 'commercial',
+      }
+    : {
+        company_one_liner: 'company',
+        uvp: 'company',
+        problem: 'problem',
+        solution: 'solution',
+        ip_portfolio: 'solution',
+        market_customers: 'market',
+        market_size_musd: 'market',
+        go_to_market: 'market',
+        business_model: 'business_model',
+        competitors: 'competition',
+        traction: 'traction',
+        milestones: 'traction',
+        team_management: 'team',
+        capital_seeking: 'ask',
+        deal_terms: 'ask',
+        use_of_funds: 'ask',
+        valuation_rationale: 'ask',
+        cap_table_summary: 'ask',
+        burn_rate: 'ask',
+        runway_months: 'ask',
+        risks_mitigations: 'ask',
+        ghg_reduction_estimate: 'ask',
+      }
+  const SECTION_ORDER: string[] = isCompanyForm
+    ? ['company', 'product', 'commercial', 'other']
+    : ['company', 'problem', 'solution', 'market', 'business_model', 'competition', 'traction', 'team', 'ask', 'other']
+  const SECTION_LABELS: Record<string, string> = {
+    company: 'Company',
+    problem: 'Problem',
+    solution: 'Solution',
+    market: 'Market',
+    business_model: 'Business Model',
+    competition: 'Competition',
+    traction: 'Traction',
+    team: 'Team',
+    ask: 'The Ask',
+    product: 'Product',
+    commercial: 'Commercial',
+    other: 'Other',
+  }
+  const sectionOf = (f: EditorField): string =>
+    (f.canonicalKey && SECTION_OF[f.canonicalKey]) || 'other'
+  const [tab, setTab] = useState<string>('all')
 
   const patchField = (fieldId: string, patch: Partial<EditorField>) => {
     setFields((prev) =>
@@ -137,7 +193,7 @@ export default function ApplicationEditorClient({
     return true
   }
 
-  // ── Copy next: sequential copy mode ────────────────────────
+  // ?? Copy next: sequential copy mode ????????????????????????
   // Sit this screen next to the actual form and walk the fields in
   // order: each click copies the next uncopied ok field, marks
   // is_copied, and scrolls it into view.
@@ -146,26 +202,19 @@ export default function ApplicationEditorClient({
   const copiedCount = copyTargets.filter((f) => f.isCopied).length
   const nextTarget = copyTargets.find((f) => !f.isCopied) ?? null
 
-  // ── status tabs: quickly isolate problem fields ─────────────
-  const issueFields = fields.filter((f) =>
-    ['over_limit', 'nda_blocked', 'empty'].includes(stateOf(f)),
-  )
-  const todoFields = copyTargets.filter((f) => !f.isCopied)
-  const copiedFields = copyTargets.filter((f) => f.isCopied)
-  const visibleFields =
-    tab === 'all'
-      ? fields
-      : tab === 'issues'
-        ? issueFields
-        : tab === 'todo'
-          ? todoFields
-          : copiedFields
-  const tabs: { key: TabKey; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: fields.length },
-    { key: 'issues', label: 'Needs fix', count: issueFields.length },
-    { key: 'todo', label: 'To copy', count: todoFields.length },
-    { key: 'copied', label: 'Copied', count: copiedFields.length },
+  const tabs = [
+    { key: 'all', label: 'All', count: fields.length, issues: fields.filter((f) => stateOf(f) !== 'ok').length },
+    ...SECTION_ORDER.map((s) => {
+      const inSection = fields.filter((f) => sectionOf(f) === s)
+      return {
+        key: s,
+        label: SECTION_LABELS[s] ?? s,
+        count: inSection.length,
+        issues: inSection.filter((f) => stateOf(f) !== 'ok').length,
+      }
+    }).filter((t) => t.count > 0),
   ]
+  const visibleFields = tab === 'all' ? fields : fields.filter((f) => sectionOf(f) === tab)
 
   const copyNext = async () => {
     if (!nextTarget) return
@@ -176,8 +225,13 @@ export default function ApplicationEditorClient({
     const after = copyTargets.find(
       (f) => !f.isCopied && f.fieldId !== nextTarget.fieldId,
     )
-    const el = cardRefs.current.get((after ?? nextTarget).fieldId)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const focus = after ?? nextTarget
+    const focusTab = sectionOf(focus)
+    if (tab !== 'all' && tab !== focusTab) setTab(focusTab)
+    window.setTimeout(() => {
+      const el = cardRefs.current.get(focus.fieldId)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
   }
 
   const resetCopied = () => {
@@ -201,15 +255,20 @@ export default function ApplicationEditorClient({
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl p-3 sm:p-6">
       <div className="mb-1 text-sm">
         <Link href="/applications" className="text-muted-foreground hover:underline">
           &larr; Applications
         </Link>
       </div>
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{partyName}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">
+            {partyName}{' '}
+            <span className="ml-1 align-middle rounded-full border px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
+              {isCompanyForm ? 'Company Form' : 'Angel Form'}
+            </span>
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {submissionMethod}
             {submitEmail ? ` \u2192 ${submitEmail}` : ''}
@@ -236,7 +295,7 @@ export default function ApplicationEditorClient({
 
       {/* Copy next toolbar (sticky so it stays visible while scrolling) */}
       {copyTargets.length > 0 && (
-        <div className="sticky top-2 z-10 mb-6 flex items-center gap-3 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+        <div className="sticky top-2 z-10 mb-6 flex flex-col gap-2 rounded-lg border bg-background/95 px-3 py-2.5 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:gap-3 sm:px-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
@@ -278,28 +337,30 @@ export default function ApplicationEditorClient({
         </div>
       )}
 
-      {/* status tabs */}
-      <div className="mb-4 flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+      {/* section tabs */}
+      <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 sm:flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm transition-colors ${
+            className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs transition-colors sm:text-sm ${
               tab === t.key
                 ? 'bg-background font-medium shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t.label}{' '}
-            <span
-              className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
-                t.key === 'issues' && t.count > 0
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-muted text-muted-foreground'
-              }`}
-            >
+            {t.label}
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {t.count}
             </span>
+            {t.issues > 0 && (
+              <span
+                className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700"
+                title="Fields needing attention (over limit / empty / NDA)"
+              >
+                {t.issues}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -307,7 +368,7 @@ export default function ApplicationEditorClient({
       <div className="space-y-6">
         {visibleFields.length === 0 && (
           <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Nothing in this tab.
+            No fields in this section.
           </div>
         )}
         {visibleFields.map((f) => {
@@ -360,11 +421,11 @@ export default function ApplicationEditorClient({
                 }`}
               />
 
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <select
                   value={f.answerId ?? ''}
                   onChange={(e) => e.target.value && applyLibrary(f, e.target.value)}
-                  className="max-w-[50%] rounded-md border px-2 py-1 text-sm"
+                  className="w-full rounded-md border px-2 py-1 text-sm sm:max-w-[50%]"
                 >
                   <option value="">Library {'\u25BE'}</option>
                   {library.map((a) => (
@@ -376,7 +437,7 @@ export default function ApplicationEditorClient({
                   ))}
                 </select>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-end gap-3">
                   <span
                     className={`text-xs ${
                       over ? 'font-semibold text-red-600' : 'text-muted-foreground'
