@@ -255,7 +255,7 @@ export default function ApplicationEditorClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl p-3 sm:p-6">
+    <div className="mx-auto w-full max-w-[1700px] p-3 sm:px-8 sm:py-6">
       <div className="mb-1 text-sm">
         <Link href="/applications" className="text-muted-foreground hover:underline">
           &larr; Applications
@@ -415,7 +415,18 @@ export default function ApplicationEditorClient({
                 value={f.finalText}
                 onChange={(e) => patchField(f.fieldId, { finalText: e.target.value })}
                 onBlur={() => void saveField({ ...f })}
-                rows={f.fieldType === 'textarea' ? 5 : 2}
+                rows={
+                  f.fieldType === 'textarea'
+                    ? Math.min(
+                        28,
+                        Math.max(
+                          4,
+                          Math.ceil(f.finalText.length / 80),
+                          f.finalText.split('\n').length + 1,
+                        ),
+                      )
+                    : 2
+                }
                 className={`w-full rounded-md border p-2 text-sm ${
                   over ? 'border-red-500' : ''
                 }`}
