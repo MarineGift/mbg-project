@@ -52,7 +52,7 @@ from (values
 
   ('deck_url',
    'IR deck (V3.0, Series A): https://drive.google.com/file/d/1alGPNW-LafjgszrRkj0ATkQ86bFy7GNN/view?usp=drive_link',
-   'IR 덱(V3.0, Series A): https://drive.google.com/file/d/1alGPNW-LafjgszzRkj0ATkQ86bFy7GNN/view?usp=drive_link')
+   'IR 덱(V3.0, Series A): https://drive.google.com/file/d/1alGPNW-LafjgszrRkj0ATkQ86bFy7GNN/view?usp=drive_link')
 ) as v(answer_key, body_en, body_ko)
 where al.organization_id = 'b25de8f2-1020-482f-9012-183f63883169'::uuid
   and al.answer_key = v.answer_key
