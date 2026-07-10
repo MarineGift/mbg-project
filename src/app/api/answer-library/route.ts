@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,14 +23,13 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-
-  const orgId =
-    (user.app_metadata?.organization_id as string | undefined) ?? null
-  if (!orgId) return NextResponse.json({ error: 'no org in session' }, { status: 403 })
+  let orgId: string
+  try {
+    const auth = await requireAuth()
+    orgId = auth.organizationId
+  } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
 
   const body = (await req.json()) as {
     answer_key: string
