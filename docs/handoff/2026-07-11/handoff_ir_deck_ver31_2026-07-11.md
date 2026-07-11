@@ -79,6 +79,15 @@
 7. **Pangaea 재접근 메일 발송** (2버전 작성됨) + 딜 스테이지 이동.
 8. variant 재분류 (라이브러리 위생): valuation_rationale가 variant=short만 존재. competitors/uvp/team_management도 short인데 실제 long.
 
+## 4-1. 라운드 전략 결정: Series A 단독 (2026-07-11 확정)
+- **결정: Series A $3M 단독 진행. Seed 투자사 대상 브릿지($100-200K) 병행 안 함.**
+- 근거:
+  1. **Seed 경제학 불성립**: $27M pre에서 $150K = 지분 약 0.5%. Seed 투자자는 초기 리스크 대가로 5-15% 기대 -> 0.5%는 펀드 모델 자체가 성립 안 됨. "위험은 Seed급, 밸류는 Series A급"이라 리스크-리워드 역전. 설득이 아닌 산수의 문제.
+  2. **시그널 리스크**: $3M Series A 자료와 $100-200K 브릿지 자료 동시 발송 시 "$3M 못 채워 연명" 신호. "리드 불필요, 다수 소액으로 채운다"는 $3M 전략과 브릿지가 겹쳐 혼란.
+  3. **밸류 정합성**: 낮은 캡 브릿지 -> Series A 투자자가 "왜 나만 비싸게" 반발. 같은 캡 -> Seed가 "브릿지인데 왜 같은 가격" 반발.
+- **타겟팅 함의**: Seed 투자사는 처음부터 고객군 아님. $27M pre(검증 로열티 트랙 1.2x + GCC 확장)를 인정하는 Series A/성장 단계 투자자만 접촉.
+- **미래 재검토 조건**: 런웨이 방어로 소액이 급해질 경우에만, 기존 Seed사에 낮은 캡/디스카운트 SAFE로 소액($200K 이하)만, Series A와 시간 분리해 접근. 단 SAFE 확정이 선결(To-do #4). 현시점은 급전 불필요로 판단 -> 보류.
+
 ## 5. 컨벤션 (유지)
 - 폼 status 변경 = form_id/form_url로 조준(party+status만이면 중복 오폭).
 - 딜 스테이지 이동 = UPDATE만(deal_stage_history는 라이브 트리거 기록).
@@ -91,6 +100,7 @@ URM IR 덱 + 폼 블리츠 계속. repo MarineGift/mbg-project(marinebiogroup), 
 확정: 라운드 v2 = $3M @ $27M pre/$30M post, $30M cap SAFE 방향, 리드 없음. IR 덱 = Marinebio_IR_Ver3_1_SeriesA_3M.pptx (37슬라이드, 본편18/Backup12/Appendix6+1).
 로열티 단위 정정 완료(덱): 로열티 = 가격 $250-350/t의 3-5% = ~$10/t. FCC 가치풀 $10.5-16.8B/yr vs 로열티풀 $0.3-0.8B/yr 구분. "$350 로열티"는 오류(그건 가격).
 GCC 배수 = "약 5-10배 + 소스페어(GCC $51.1B vs PCC $5.4B by 2030 GVR)". 특허 = 정규출원 2023-07-12 + 7개국. 마진 = 로열티 gross margin 80%+.
+라운드 전략 = Series A $3M 단독 확정(2026-07-11). Seed 브릿지 병행 안 함(Seed는 $27M에 지분 0.5%라 경제학 불성립).
 오늘 과제:
 1. fix_royalty_unit_economics SQL Supabase 실행(VERIFY 1 = 0행) + 커밋
 2. git push 완료 확인(전 세션 curl56 실패 이력)
