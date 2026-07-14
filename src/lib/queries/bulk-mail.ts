@@ -47,7 +47,8 @@ export type BulkExcludeReason =
   | 'no_contact_email'
   | 'recently_contacted'
   | 'bounced'
-  | 'blocklisted';
+  | 'blocklisted'
+  | 'do_not_send';
 
 export interface BulkMailCandidate {
   /** stable per-recipient key: `${partyId}:${contactId}` (or a party-level
@@ -87,6 +88,10 @@ export interface BulkMailPreview {
     /** recipients excluded because the address is on the do-not-send
      *  (blocklist / unsubscribe) list. */
     blocklisted: number;
+    /** recipients/parties excluded by app.v_email_do_not_send: the address
+     *  or party already submitted an application form, replied, rejected,
+     *  or unsubscribed. */
+    doNotSend: number;
     /** subset of toSend whose recipient is NOT whitelisted (blocked unless
      *  the operator chooses bypassWhitelist). */
     notWhitelisted: number;
@@ -103,7 +108,7 @@ const EMPTY_PREVIEW = (templateId: string, recipientMode: RecipientMode): BulkMa
   candidates: [],
   toSend: [],
   excluded: [],
-  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, bounced: 0, blocklisted: 0, notWhitelisted: 0 },
+  counts: { parties: 0, toSend: 0, alreadySent: 0, recentlyContacted: 0, noEmail: 0, bounced: 0, blocklisted: 0, doNotSend: 0, notWhitelisted: 0 },
 });
 
 export async function resolveBulkCandidates(
@@ -288,6 +293,29 @@ export async function resolveBulkCandidates(
   const isBlocklisted = (email: string): boolean =>
     blocklistRows.length > 0 && emailMatchesBlock(email, blocklistRows);
 
+  // -- 5d) do-not-send view: form submissions + replies/rejections ----------
+  // app.v_email_do_not_send aggregates outcome events (reply_*, rejected_*,
+  // unsubscribe, bounce) AND application_forms rows in status
+  // submitted/decided. The sequence worker guards on this view already; the
+  // bulk path did not, so a party that submitted a web form or already
+  // replied could still be cold-mailed from /mailing.
+  // The view has NO organization_id column. It is keyed by email_lower and
+  // party_id, and we only ever intersect it against this org's own candidate
+  // set (partyIds / contact emails already org-filtered above), so there is
+  // no cross-org leakage. party_id matters because a form submission may
+  // carry no email address at all -- that party must still be excluded.
+  const { data: dnsRaw } = await supabase
+    .schema('app')
+    .from('v_email_do_not_send' as never)
+    .select('email_lower, party_id');
+  const dnsEmails = new Set<string>();
+  const dnsParties = new Set<string>();
+  for (const r of (dnsRaw ?? []) as Array<{ email_lower: string | null; party_id: string | null }>) {
+    if (r.email_lower) dnsEmails.add(r.email_lower.toLowerCase());
+    if (r.party_id) dnsParties.add(r.party_id);
+  }
+  const isDoNotSend = (email: string): boolean => dnsEmails.has(email.toLowerCase());
+
   // -- 6) assemble per-recipient candidates ---------------------------------
   const candidates: BulkMailCandidate[] = [];
   let alreadySentParties = 0;
@@ -295,6 +323,7 @@ export async function resolveBulkCandidates(
   let noEmailParties = 0;
   let bouncedRecipients = 0;
   let blocklistedRecipients = 0;
+  let doNotSendCount = 0;
 
   for (const pid of partyIds) {
     const partyName = nameById.get(pid) ?? '';
@@ -311,6 +340,12 @@ export async function resolveBulkCandidates(
       candidates.push({ key: `${pid}:excluded`, partyId: pid, partyName, contactId: null, email: null, dealId, whitelisted: false, excludeReason: 'recently_contacted' });
       continue;
     }
+    // party-level: form submitted / replied / rejected with no usable email.
+    if (dnsParties.has(pid)) {
+      doNotSendCount += 1;
+      candidates.push({ key: `${pid}:excluded`, partyId: pid, partyName, contactId: null, email: null, dealId, whitelisted: false, excludeReason: 'do_not_send' });
+      continue;
+    }
 
     const contacts = contactsByParty.get(pid) ?? [];
     if (contacts.length === 0) {
@@ -325,9 +360,12 @@ export async function resolveBulkCandidates(
         : [contacts.find((c) => c.isPrimary) ?? (contacts[0] as Contact)];
 
     for (const c of chosen) {
+      // precedence: explicit blocklist > do-not-send view > derived bounce.
       const blocked = isBlocklisted(c.email);
-      const suppressed = !blocked && isSuppressed(c.email);
+      const doNotSend = !blocked && isDoNotSend(c.email);
+      const suppressed = !blocked && !doNotSend && isSuppressed(c.email);
       if (blocked) blocklistedRecipients += 1;
+      else if (doNotSend) doNotSendCount += 1;
       else if (suppressed) bouncedRecipients += 1;
       candidates.push({
         key: `${pid}:${c.contactId}`,
@@ -337,7 +375,7 @@ export async function resolveBulkCandidates(
         email: c.email,
         dealId,
         whitelisted: isWhitelisted(c.email),
-        excludeReason: blocked ? 'blocklisted' : suppressed ? 'bounced' : null,
+        excludeReason: blocked ? 'blocklisted' : doNotSend ? 'do_not_send' : suppressed ? 'bounced' : null,
       });
     }
   }
@@ -359,6 +397,7 @@ export async function resolveBulkCandidates(
       noEmail: noEmailParties,
       bounced: bouncedRecipients,
       blocklisted: blocklistedRecipients,
+      doNotSend: doNotSendCount,
       notWhitelisted: toSend.filter((c) => !c.whitelisted).length,
     },
   };
