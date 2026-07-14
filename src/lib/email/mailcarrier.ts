@@ -54,6 +54,8 @@ import {
 import { isFromAllowedSender } from './whitelist';
 import { detectSuppressions } from './bounce-parser';
 import { registerSuppressions } from './blocklist';
+import { detectNdrOutcome } from './ndr-outcome';
+import { recordNdrOutcomes } from './outcome-recorder';
 import type { InboundMessageEvent, SendingAddressKind } from '../../types/email';
 
 /* ============================================================
@@ -844,6 +846,41 @@ export class MailCarrierClient {
     }
     if (this.username) own.push(this.username.toLowerCase());
 
+    // -- NDR outcome logging into app.email_send_outcomes (hard AND soft) --
+    // Independent of the blocklist suppression below: soft (4xx) bounces are
+    // recorded for /mailing/outcomes but never blocklisted. Best-effort;
+    // hard bounces also fail the address's active enrollments (recorder).
+    try {
+      const ndr = detectNdrOutcome({
+        fromAddress: headers.from.address,
+        fromName: headers.from.name ?? null,
+        subject: headers.subject,
+        text: parsed.text ?? '',
+        html: parsed.html || null,
+        contentType,
+        ownAddresses: own,
+      });
+      if (ndr) {
+        const evidenceRef = (
+          headers.messageId || `${headers.from.address}|${headers.subject}`
+        ).slice(0, 200);
+        const recorded = await recordNdrOutcomes(
+          this.supabase,
+          this.organizationId,
+          ndr,
+          evidenceRef,
+        );
+        if (recorded > 0) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[mailcarrier:${this.logTag}] outcome recorded: ${recorded} ${ndr.severity} bounce(s)`,
+          );
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[mailcarrier:${this.logTag}] ndr-outcome error:`, err);
+    }
     const signals = detectSuppressions({
       fromAddress: headers.from.address,
       fromName: headers.from.name ?? null,
