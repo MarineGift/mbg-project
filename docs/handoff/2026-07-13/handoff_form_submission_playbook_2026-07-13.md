@@ -27,8 +27,8 @@ Priority 3의 제지사 supplier portal 15곳(Domtar, IP, K-C, UPM 등)은 투�
 | HQ / Location | Austin, Texas, USA |
 | Founder / CEO | Yun-Young Heo (CEO) |
 | Contact email | yunyoung.heo@marinebiogroup.com |
-| Phone | [YOUR PHONE] |
-| LinkedIn | [COMPANY LINKEDIN URL] |
+| Phone | 512-996-7083 |
+| LinkedIn (founder) | https://www.linkedin.com/in/yunyoung-heo-a2640a195/ |
 | Team size | 3 (founding team) |
 | Founded | 2026 |
 | Sector tags | Advanced Materials / Climate Tech / Industrial / Deep Tech |
@@ -202,18 +202,64 @@ Priority 3의 제지사 supplier portal 15곳(Domtar, IP, K-C, UPM 등)은 투�
 ## 4. PRIORITY 3 — 투자자/프로그램형만 (제지사 제외)
 
 ### 4.1 ✅ NSF SBIR "America's Seed Fund" — https://seedfund.nsf.gov/project-pitch/
-**판단: 강력 추천 — 비희석 자금.** Project Pitch는 3페이지 분량 온라인 폼 (기술 혁신 / 기술적 리스크 / 시장 기회 / 회사·팀).
-- **자격 요건 확인 필수**: 미국 소재 스몰비즈니스, 지분 과반 미국인/영주권자 소유 + PI 고용 조건. Austin 법인 구조로 충족되는지 먼저 확인.
-- Phase I ~$305K. 국립 제지 랩 검증 예산과 정확히 맞물림.
+**판단: 강력 추천 — 비희석 최대 $305K.** 2026-06-02 재개 (solicitation **NSF 26-510**, 딥테크 포커스). Full proposal 마감: **2026-11-04 / 2027-03-04** — Project Pitch는 상시 접수이므로 지금 제출.
+- **자격 요건 먼저 확인 (제출 전 필수)**: ① 미국 소재 스몰비즈니스로 **지분 50% 이상을 미국 시민/영주권자가 보유**, ② PI(책임연구자)의 주 소속이 해당 기업이어야 함 (award 기간 중). 캡테이블/PI 구조로 충족 여부 확인 후 진행.
+- 폼 구조: **4개 섹션 × 각 3,500자.** 아래 4.1.1 초안 복붙 (각 섹션 3,500자 이내로 작성됨).
+
+### 4.1.1 NSF Project Pitch 초안 (4 sections, 복붙용)
+
+**Section 1 — The Technology Innovation**
+> Paper is held together by fiber-to-fiber hydrogen bonds. Mineral fillers (ground or precipitated calcium carbonate, GCC/PCC) are 2–8x cheaper than wood pulp, but conventional filler particles are unbonded solids: as loading increases, they wedge between fibers and break those hydrogen bonds, collapsing sheet strength and bulk. This trade-off has capped filler loading across the industry for decades and forces mills to consume more wood pulp than the sheet functionally requires.
+>
+> Marinebio Group's innovation is FCC (Flexible Calcium Carbonate): calcium carbonate grown in-situ on a cellulose-fibril core, producing a flexible, fiber-bondable composite filler rather than a rigid particle. Because the mineral phase is anchored to a fibril scaffold that itself hydrogen-bonds with the paper web, FCC simultaneously improves the four properties that normally trade off against one another — bulk, tensile strength, stiffness, and smoothness — while increasing total filler loading and displacing wood pulp ton-for-ton.
+>
+> The innovation is unprecedented in three respects. First, it is the only filler technology demonstrated to improve strength and bulk together; incumbent approaches (physical fiber-mineral mixing, engineered PCC morphologies) preserve at most one. Second, FCC is produced on standard industrial grinding equipment at roughly 80% lower capital cost than a PCC satellite plant, so it is deployable inside the existing filler supply chain rather than requiring new infrastructure. Third, it opens tissue — a paper grade that today uses no filler at all because conventional minerals fail on retention and dusting — as an entirely new filler market: the fiber-bonded structure retains in the web and does not dust.
+>
+> The underlying science is peer-reviewed (3 SCI publications) and protected by 5 granted patents with 7 applications pending across a 7-country family. Two global filler producers evaluated the technology under NDA after attempting and failing to design around it.
+
+**Section 2 — The Technical Objectives and Challenges**
+> The core chemistry and mill-scale performance of FCC have been validated overseas: commercial production runs on a global filler producer's existing equipment, performance confirmed on a commercial paper machine, and an independent tissue trial completed by a tissue manufacturer using its own furnish and protocols. The objective of this project is to establish independent, US-based technical validation and to resolve the technical risks of transferring the process to US furnishes and mill conditions.
+>
+> Objective 1 — US furnish adaptation. In-situ crystallization behavior depends on fiber source, refining level, and process water chemistry. US mills run furnishes (southern softwood/hardwood kraft, high recycled content) and water loops that differ materially from the conditions under which FCC was developed. We will characterize crystallization kinetics, particle-fibril bonding, and filler morphology across representative US furnishes and water chemistries, and define the process windows that reproduce target performance.
+>
+> Objective 2 — Tissue-grade performance envelope. Tissue imposes the hardest technical constraints in papermaking: very low basis weight, high-speed creping, and zero tolerance for dusting or linting. We will quantify first-pass retention, dust generation, softness, and strength across FCC loading levels in tissue furnishes, benchmarked against unfilled controls, at an independent US national paper laboratory, producing the first US third-party dataset on filler use in tissue.
+>
+> Objective 3 — Process reproducibility at standard-equipment scale. We will validate that the in-situ process transfers reproducibly to standard US grinding equipment, establishing quality-control specifications (particle size distribution, bonding fraction, brightness) that a licensee's plant can implement without proprietary hardware.
+>
+> The principal technical risk is that crystallization and bonding behavior may not transfer directly across furnish and water systems; resolving this is precisely what independent US validation is designed to answer, and successful completion de-risks adoption for every downstream US licensee.
+
+**Section 3 — The Market Opportunity**
+> The paper industry consumes 25–30 million tons of calcium carbonate filler per year. Conservatively, at least 25% of that volume (6.2–7.5M tons/yr) is pulp-replaceable by FCC with today's validated performance, and the addressable base grows with each grade FCC unlocks — tissue alone is a 45M ton/yr paper market that currently uses no filler.
+>
+> The economic driver is structural, not regulatory: wood pulp costs $600–800/ton while FCC delivers at $250–350/ton, so every substituted ton saves a mill roughly $350. Adoption is therefore self-propelled — a negative-abatement-cost technology that also removes 400–510 kg of cradle-to-gate CO2 and ~30 m3 of water per ton of pulp displaced (peer-reviewed LCA basis).
+>
+> Marinebio Group licenses the process to filler manufacturers, who produce FCC in their existing plants and pay a 5–10% royalty (~$15/ton representative). This capital-light model means US commercialization strengthens, rather than competes with, the domestic filler and paper supply chain: US mills gain a cost and quality lever against low-cost import paper, and US filler plants convert low-value limestone into a higher-margin engineered product on equipment they already own.
+>
+> Commercial traction to date: a confirmed 9,000-ton order at $350/ton with ~10,000 tons of expected re-order, produced by a global top-3 filler maker; pricing validated by a major commercial mill; two global filler leaders engaged under NDA, one with an executive-level commitment to global roll-out following validation. Independent US validation funded by this project is the gating step that converts this engagement into US licensed production.
+
+**Section 4 — The Company and Team**
+> Marinebio Group Inc. is an advanced-materials company headquartered in Austin, Texas (US entity incorporated 2026), commercializing FCC through a technology-licensing model. The founding team combines the original science, the production know-how, and the commercial execution behind FCC.
+>
+> Yung-Bum Seo (CTO, Key Researcher) developed FCC. He holds a PhD and completed postdoctoral work at the State University of New York, is a professor of paper engineering at Chungnam National University, and is the world-first developer of marine nanofiber utilization with more than 50 patents in fiber and mineral materials. He leads the technical program.
+>
+> Yun-Woo Lee (CPO, Production) holds an MS in paper engineering, served at Korea's government Pulp Research Center, and co-developed FCC with 30+ patents. He owns process scale-up and quality-control specification — the transfer of FCC onto licensees' standard equipment.
+>
+> Yun-Young Heo (CEO) brings engineering training and management experience from Samsung Group. He built, solo, the company's proprietary market-intelligence platform mapping 885 paper mills to 239 filler suppliers worldwide — the go-to-market engine that identifies exactly which mills and suppliers follow once a licensee adopts FCC.
+>
+> The company's IP estate (5 granted patents, 7 pending, 3 SCI papers) is wholly owned. The team has already carried FCC from laboratory science to a confirmed commercial order produced on a global filler maker's equipment; NSF support funds the independent US validation that opens the domestic market.
+>
+> [제출 전 확인: PI 지정(주 소속 요건) 및 지분 50%+ 미국 시민/영주권자 보유 요건.]
 
 ### 4.2 ✅ Third Derivative — https://www.third-derivative.org/startup-application
-**판단: 제출.** RMI 계열 기후 액셀러레이터, 기업 파트너 네트워크 (제지·패키징 대기업 접점 가능). 1.13 임팩트 답변 사용.
+**판단: 제출 — 요건 충족 확인됨.** RMI 계열 글로벌 기후 액셀러레이터 (포트폴리오 286개, 수료 후 $3.7B+ 조달). 18개월 버추얼, **선택형 $100K 컨버터블 노트, 배타조항 없음.**
+- 요건: TRL 4+ 프로토타입 (우리는 상업 생산 = TRL 8–9 ✓), 상근 2명 이상 (3명 ✓)
+- **2026 코호트 강조 분야가 정확히 우리**: hard tech, low-carbon materials, heavy industry decarbonization → 1.13 임팩트 답변 + CO2 슬라이드 강조.
 
 ### 4.3 ✅ Venture For ClimateTech — https://forclimatetech.org/apply/
-**판단: 제출 (NY 기반, 비희석 지원 포함).** 코호트 일정 확인.
+**판단: 제출 (Tier 2 브릿지 타겟, 노트 기준).** NextCorps+SecondMuse 운영, NYSERDA 지원. **최대 $50K 비희석, 지분 0%** + NYC Climate Week 쇼케이스. 수료 78개사가 $200M+ 후속 조달. 다음 코호트 마감 확인 후 제출.
 
 ### 4.4 텍사스 엔젤 네트워크 4곳 — 브릿지/신디케이트용
-- **SWAN Impact Network** (Austin, 임팩트) — https://swanimpact.org/entrepreneurs — 제출 추천 (Austin 로컬 + 임팩트 스토리)
+- **SWAN Impact Network** (Austin, 임팩트) — https://swanimpact.org/entrepreneurs — 제출 추천 (Austin 로컬 + 임팩트 스토리). Dealum 포털, **C-Corp 선호, 분기별 펀딩 사이클** — entrepreneurs 페이지의 funding criteria 문서 먼저 확인. '마이크로플라스틱 대체 + 저탄소 필러' 프레임이 이들 심사기준에 정확히 맞음 (DB intro 그대로 사용 가능).
 - **Houston Angel Network** — https://www.houstonangelnetwork.org/entrepreneurs
 - **North Texas Angel Network** — https://www.northtexasangels.org/entrepreneurs
 - **Cowtown Angels** (Fort Worth, SparkXYZ 플랫폼) — 표준 필드
