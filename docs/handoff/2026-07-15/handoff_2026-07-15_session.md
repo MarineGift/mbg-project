@@ -5,9 +5,10 @@
 > ## 사업 피해 (이번 세션에 확인)
 > 시퀀스가 같은 회사에 **19시간 간격 2통** → 투자자 클레임 + "관심 없음" 회신.
 >
-> ## 7/20 발송: **97통** — 리스크 전부 닫힘
-> Climate 40 + Seed 57 (7/27 Climate 22). 가드·중복차단·거절차단·바운스차단 모두 적용·검증 완료.
-> 헬스 뷰 실측: **ok 119 / do_not_send_party 8 / do_not_send_email 7**.
+> ## 7/20 발송: **40통** (Climate step 2만) — 리스크 전부 닫힘
+> **Seed 시퀀스는 중지됨** (Series A가 seed 프레이밍을 대체 — PART A-7). 7/27 Climate 22.
+> 가드·중복차단·거절차단·바운스차단 모두 적용·검증 완료.
+> 바운스 차단 직후 헬스 실측: ok 119 / party 8 / email 7 → **Seed 중지 후 Climate 62만 active**.
 
 ---
 
@@ -134,6 +135,49 @@ next_send_at = GREATEST(enrolled_at + next_offset, now() + gap)
 기존: Extantia(**두 번** 거절), ETV, First Bight, Azolla(form), World Fund(쿨다운). **총 8곳 차단.**
 
 **거절이 아닌 것 — 절대 기록 금지**: Playground Global / Lux Capital / Breakout Ventures / Founder Collective (전부 `info+noreply@`·`contact@` 오토리스폰더), CTAN(지원 안내), Azolla(Interest Form 요청 = 관심), **Pangaea Ventures(사람. Andrew Haughian, 7/8 미팅)**.
+
+### A-7. Seed 시퀀스 중지 — `fix_20260715004000_stop_seed_sequence.sql` (✅ 적용됨)
+
+Series A 라운드가 seed 프레이밍을 대체하므로 `Investor Cold Outreach - FCC Seed`의 잔여 발송을 전부 중지. 7/20 예정분 57통이 취소됨.
+
+```
+Investor Cold Outreach - FCC Seed   cancelled  67  (7/20 예정분)
+Investor Cold Outreach - FCC Seed   cancelled  10  (next_send_at null)
+Investor Cold Outreach - FCC Seed   failed      1
+→ active 0
+```
+
+**⚠️ 시퀀스 status는 발송을 못 막는다 — enrollment를 취소해야 한다.** 2026-07-15에 양쪽에서 확인:
+
+```sql
+-- public.get_due_enrollments(): app.email_sequences 에 조인 자체가 없다
+WHERE e.status = 'active'::app.enrollment_status   -- enrollment status, 시퀀스 아님
+  AND e.next_send_at <= now()
+```
+```ts
+// src/lib/utils/sequence-processor.ts
+.select("id, from_account_id, quiet_hours")   // status를 읽지 않는다
+.in("id", distinctSeqIds);
+```
+
+**발송 경로 어디에서도 `email_sequences.status`를 읽지 않는다. archived 시퀀스도 계속 메일을 보낸다.** 파일의 2번 문장(`status = 'archived'`)은 사람용 라벨일 뿐 가드가 아니다. PART E-2 참조.
+
+되돌리려면 `status`를 `active`로, `cancelled_at`을 NULL로. `next_step_order`/`next_send_at`이 보존돼 있어 이어서 진행된다. 그때 `next_send_at`은 과거일 테니 **G1(2일 min-gap)이 최근 Climate 접촉 위에 쌓이는 걸 막는다.**
+
+### A-8. Climate 본문 검증 — 라운드 프레이밍 이상 없음
+
+Seed를 중지한 논리(구버전 프레이밍 폐기)를 Climate에도 적용해 4개 스텝 본문을 전수 스캔:
+
+| step | 내용 | `$5M` | `$3M`/`$27M`/`$30M` | `seed` |
+|---|---|---|---|---|
+| 1 | negative abatement cost, 9,000t 확정 | ✗ | **✓ (현행)** | ✗ |
+| 2 | 시장 수학 (필러 25-30M t, 로열티 풀 $93-112M/yr) | ✗ | ✗ | ✗ |
+| 3 | 방어력 (in-situ, 특허 5건 granted) | ✗ | ✗ | ✗ |
+| 4 | "덱을 보내드릴까요" | ✗ | ✗ | ✗ |
+
+- step 1은 **현행 $3M Series A / $27M pre / $30M post**를 담고 있고 구버전 `$5M`은 없다. 이미 7/13~14에 발송 완료
+- **앞으로 나갈 두 회차는 라운드 금액을 아예 언급하지 않는다** — 7/20은 step 2(40건), 7/27은 step 3(22건)
+- 구버전 `$5M`이 박혀 있던 건 Seed 계열이다. First Bight 회신이 `a $5M round`를 인용했다
 
 ---
 
@@ -264,12 +308,14 @@ GROUP BY send_status;
 
 ## PART E — 미결 (우선순위)
 
-1. **[D-1] 하드 바운스 적용** — 프리뷰 → INSERT → 검증
-2. **[C-1] Climate 27건 원인** — `email_sequence_steps.updated_at` 한 줄
-3. **[7/20 전] `FCC Climate Tech` day_offset 0,0 수정** — 휴면이지만 등록되면 사고. floor에 의존 금지
-4. **배포 후 스모크** — 컴포즈에서 Azolla(폼 제출) 앞 수동 발송이 **나가야** 정상(direct). 워커 실행 후 헬스 뷰 유지 확인
-5. **IP delisting + SPF/DKIM/DMARC** (D-2)
-6. **`unsubscribe_request` → `email_blocklist` 동기화** — `blocks_direct`는 임시 방어막. 전역 억제의 정본은 blocklist여야 함
+1. **7/20 발송 관찰 (Climate 40통)** — 워커 자동 실행. 발송 후 헬스 뷰로 실측
+2. **시퀀스 status가 발송을 못 막는다** — `get_due_enrollments`에 `JOIN app.email_sequences s ON s.id = e.sequence_id AND s.status = 'active'::app.email_sequence_status` 추가 필요. **UI에서 시퀀스를 일시정지해도 메일이 나간다.** 오늘 잡은 것들과 같은 부류 — 가드가 초크포인트에 없음. A-7에서 발견
+3. **quiet-hours 분기의 무방비 쓰기** (미수정) — `sequence-processor.ts`가 `.update({next_send_at: nextAt})`를 비교 없이 실행. `defer_enrollment(p_enrollment_id, p_not_before)` RPC로 `SET next_send_at = GREATEST(next_send_at, p_not_before), updated_at = now()`. `get_due_enrollments`가 `next_send_at`을 반환하지 않아 TS에서는 비교 불가 → **DB에서 해야 함.** G1이 막고 있어 급하지 않음
+4. **`FCC Climate Tech` day_offset 0,0 수정** — 휴면이지만 등록되면 사고. floor에 의존 금지
+5. **배포 후 스모크** — 컴포즈에서 Azolla(폼 제출) 앞 수동 발송이 **나가야** 정상(direct)
+6. **IP delisting + SPF/DKIM/DMARC** (D-2)
+7. **타임존** — Climate의 `09:00 America/Los_Angeles`가 유럽엔 18:00, 도쿄엔 01:00. 명단에 Extantia/World Fund/HV Capital/Speedinvest/Climentum(유럽), Asahi Kasei(도쿄)가 섞여 있어 **quiet_hours가 오히려 야간 발송을 보장**한다. `app.parties`에 `country` 컬럼 없음(42703 확인) → 백필 선행. **사용자 지시로 백로그**
+8. **`unsubscribe_request` → `email_blocklist` 동기화** — `blocks_direct`는 임시 방어막. 전역 억제의 정본은 blocklist여야 함
 7. **시퀀스 이름 중복 정리** — `15 min on a filler tech...` 동명 2개, `(copy)` 동명 2개, `삭제 - ` 잔재 1개. `step_order` 기준 혼재(0-based: Seed/Climate Tech/High Priority, 1-based: Climate FCC/Intel Inside)
 8. **`reminder` 9건 `party_id` null** — party 단위 가드가 이 경로를 못 잡음(주소 매치만)
 9. **World Fund 8/4 재개 감시** — `next_send_at = 7/27`이 과거라 8/4에 즉시 step 3 발송
@@ -349,7 +395,8 @@ git push origin marinebiogroup
 ```
 mbg-project 이어가자. docs/handoff/2026-07-15/handoff_2026-07-15_session.md 기준.
 
-상태: 7/20 발송 97통 (Climate 40 + Seed 57), 7/27 Climate 22. 헬스 ok 119 / party 8 / email 7.
+상태: 7/20 발송 40통 (Climate step 2만), 7/27 Climate 22. Seed 시퀀스는 중지됨(active 0).
+Climate 본문 검증 완료 - 앞으로 나갈 step 2/3는 라운드 금액 언급 자체가 없음.
 - get_due_enrollments 가드 적용 (has_dns_guard=true)
 - sendOutboundEmail에 sendClass 'cold'|'direct' 구조적 가드, default cold (커밋 320457a 배포됨)
 - advance_enrollment 앵커 수정 + G1(2일 min-gap)/G2(DISTINCT ON party_id) 적용
@@ -362,7 +409,9 @@ mbg-project 이어가자. docs/handoff/2026-07-15/handoff_2026-07-15_session.md 
   quiet_hours {10:00,09:00}은 의도된 화요일 9시 창이지 오타가 아님.
 
 최우선:
-1. 7/20 발송 관찰 (97통). 워커가 자동 실행. 발송 후 헬스 뷰로 실측 확인
+1. 7/20 발송 관찰 (Climate 40통). 워커가 자동 실행. 발송 후 헬스 뷰로 실측 확인
+1b. 시퀀스 status가 발송을 못 막는다 - get_due_enrollments에 email_sequences 조인 자체가 없고
+    워커도 status를 안 읽는다. archived 시퀀스도 계속 보낸다. 멈추려면 enrollment를 cancel해야 함
 2. sequence-processor.ts quiet-hours 분기의 무방비 쓰기 (미수정).
    defer_enrollment RPC로 GREATEST 적용 필요. G1이 막고 있어 급하지 않음
 3. FCC Climate Tech day_offset 0,0 수정 (휴면이지만 지뢰)
