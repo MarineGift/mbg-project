@@ -154,7 +154,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
 
   // Delegate to the shared outbound core (Stage B). The dialog exposes template
   // merge + default signature, so pass `merge` and `useSignature` through.
-  const result = await sendOutboundEmail({
+  const result = await sendOutboundEmail({ sendClass: 'direct',
     supabase,
     organizationId: orgId,
     to: toList[0],

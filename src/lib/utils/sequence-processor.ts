@@ -167,7 +167,7 @@ export async function processSequence(sequenceId?: string | null): Promise<{
       // Delegate to the shared outbound path. mailAccountId picks the From
       // account (same accounts as the compose dropdown); skipWhitelist because
       // a sequence is intentional outbound, not a reply-guarded send.
-      const result = await sendOutboundEmail({
+      const result = await sendOutboundEmail({ sendClass: 'cold',
         supabase,
         organizationId: e.organization_id,
         to: e.contact_email,

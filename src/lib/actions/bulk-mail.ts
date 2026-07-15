@@ -227,7 +227,7 @@ export async function sendBulkMail(input: {
     const email = r.email as string;
     summary.attempted += 1;
 
-    const res = await sendOutboundEmail({
+    const res = await sendOutboundEmail({ sendClass: 'cold',
       supabase,
       organizationId: auth.organizationId,
       sentByUserId: auth.userId,

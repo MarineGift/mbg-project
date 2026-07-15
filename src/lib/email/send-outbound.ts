@@ -53,6 +53,23 @@ export interface MergeContext {
   templateId?: string;
 }
 
+/** What kind of send this is. Decides how app.v_email_do_not_send applies.
+ *
+ *  cold   -- automated/campaign outbound (sequence worker, bulk mail). EVERY
+ *            do-not-send row blocks: form submitted, replied, declined,
+ *            unsubscribed, hard bounced, or inside a resend_later cooldown.
+ *  direct -- a human (or an approved AI reply) writing to a specific person.
+ *            Only rows with blocks_direct = true block, i.e. unsubscribe
+ *            requests and explicit suppression. Replying to a firm that
+ *            submitted our form or answered us must never be blocked.
+ *
+ *  DEFAULT IS 'cold'. A new send path that forgets to declare itself gets
+ *  guarded rather than silently bypassing the list. This is the whole point:
+ *  on 2026-07-14 the sequence path was found sending unguarded for exactly
+ *  that reason -- the guard lived in the callers, not here.
+ */
+export type SendClass = 'cold' | 'direct';
+
 export interface SendOutboundInput {
   /** caller passes its own server client so RLS/auth context is preserved */
   supabase: SbClient;
@@ -114,6 +131,10 @@ export interface SendOutboundInput {
   // safety (decision a) - core enforces whitelist unless explicitly skipped
   skipWhitelist?: boolean;
 
+  /** cold (default) | direct -- see SendClass. NOT bypassable by skipWhitelist:
+   *  the do-not-send list is a separate concern from the whitelist. */
+  sendClass?: SendClass;
+
   /** Free-form metadata merged into communications.external_data.
    *  Used by the bulk-mail sender to tag a run (source:'bulk', mail_run_id). */
   externalData?: Record<string, unknown>;
@@ -126,7 +147,7 @@ export interface SendOutboundResult {
   communicationId?: string;
   messageId?: string;
   threadId?: string;
-  errorCode?: 'not_whitelisted' | 'blocklisted' | 'database' | 'send_failed' | 'pii_tokens_present';
+  errorCode?: 'not_whitelisted' | 'blocklisted' | 'do_not_send' | 'database' | 'send_failed' | 'pii_tokens_present';
   errorMessage?: string;
 }
 
@@ -338,6 +359,104 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
           errorMessage: `Recipient is on the do-not-send list: ${recipient}`,
         };
       }
+    }
+  }
+
+  // [0a] do-not-send guard (app.v_email_do_not_send). Structural fix for the
+  //      2026-07-14 finding: public.get_due_enrollments() had no guard and the
+  //      worker sent whatever it returned, because the guard lived per-caller.
+  //      Putting it here means a new send path is covered on day one.
+  //
+  //      Matching mirrors the SQL guard so the two cannot drift:
+  //        - by resolved recipient address (email_lower), AND
+  //        - by party_id -- deliberately broad. Verified 2026-07-14: 3 of 5
+  //          blocks would have been missed by address alone, because the human
+  //          who declined wrote from a personal address while the sequence
+  //          sends to the intake address (craig@ vs info@, jo@ vs inbound@,
+  //          collin@ vs info@).
+  //
+  //      Not bypassable by skipWhitelist -- different concern.
+  //      The view has NO organization_id (see docs/schema/app_schema_reference.md).
+  {
+    const sendClass: SendClass = input.sendClass ?? 'cold';
+
+    type DnsRow = {
+      email_lower: string | null;
+      party_id: string | null;
+      outcomes: string | null;
+      blocks_direct?: boolean | null;
+    };
+
+    const isMissingRelation = (e: { code?: string; message?: string }): boolean => {
+      const code = e.code ?? '';
+      return (
+        code === '42P01' ||
+        code === 'PGRST205' ||
+        /does not exist|could not find the table|schema cache/i.test(e.message ?? '')
+      );
+    };
+    const isMissingColumn = (e: { code?: string; message?: string }): boolean =>
+      (e.code ?? '') === '42703' || /column .* does not exist/i.test(e.message ?? '');
+
+    const loadDns = async (withBlocksDirect: boolean) =>
+      supabase
+        .schema('app')
+        .from('v_email_do_not_send' as never)
+        .select(
+          withBlocksDirect
+            ? 'email_lower, party_id, outcomes, blocks_direct'
+            : 'email_lower, party_id, outcomes',
+        );
+
+    let dnsRows: DnsRow[] = [];
+    let dnsUnavailable = false;
+
+    let { data: dnsRaw, error: dnsErr } = await loadDns(true);
+    if (dnsErr && isMissingColumn(dnsErr as { code?: string; message?: string })) {
+      // The blocks_direct migration has not been applied yet. Fall back: the
+      // cold guard still works; direct sends keep today behaviour (unguarded).
+      console.warn(
+        '[sendOutbound] v_email_do_not_send.blocks_direct missing; run migration_20260715000100. Direct sends are unguarded until then.',
+      );
+      ({ data: dnsRaw, error: dnsErr } = await loadDns(false));
+    }
+    if (dnsErr) {
+      if (!isMissingRelation(dnsErr as { code?: string; message?: string })) {
+        // Real lookup error -> fail closed.
+        return {
+          ok: false,
+          status: 'blocked',
+          errorCode: 'database',
+          errorMessage: `Do-not-send lookup failed: ${dnsErr.message}`,
+        };
+      }
+      console.warn(
+        '[sendOutbound] v_email_do_not_send not found; skipping do-not-send check. Run the email-send-outcomes migration.',
+      );
+      dnsUnavailable = true;
+    }
+    if (!dnsUnavailable) dnsRows = (dnsRaw ?? []) as DnsRow[];
+
+    const recipientsLower = toRecipients.map((a) => a.toLowerCase());
+    const matched = dnsRows.filter((r) => {
+      const emailHit = r.email_lower ? recipientsLower.includes(r.email_lower.toLowerCase()) : false;
+      const partyHit = input.partyId ? r.party_id === input.partyId : false;
+      return emailHit || partyHit;
+    });
+
+    const blocking =
+      sendClass === 'cold' ? matched : matched.filter((r) => r.blocks_direct === true);
+
+    if (blocking.length > 0) {
+      const reasons = Array.from(
+        new Set(blocking.map((r) => r.outcomes ?? '').filter((s) => s !== '')),
+      ).join(', ');
+      return {
+        ok: false,
+        status: 'blocked',
+        errorCode: 'do_not_send',
+        errorMessage: `Recipient is on the do-not-send list (${sendClass}): ${reasons}`,
+      };
     }
   }
 

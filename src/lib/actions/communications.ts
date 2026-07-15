@@ -210,7 +210,7 @@ export async function sendOutboundManual(
   // Delegate to the shared outbound core (Stage B). Whitelist, tracking,
   // insert(sending), sendOne, sent/failed update and attachment records all
   // live in the core now. Manual compose exposes no template/signature.
-  const result = await sendOutboundEmail({
+  const result = await sendOutboundEmail({ sendClass: 'direct',
     supabase,
     organizationId: auth.organizationId,
     sentByUserId: auth.userId,

@@ -643,7 +643,7 @@ async function sendApprovedDraft(
   //    gaps vs the verified contract: recipient whitelist, app-level tracking,
   //    default signature, real In-Reply-To/References wire headers, failure
   //    persisted to error_message, and urmHeaders.autoSend=true.
-  const result = await sendOutboundEmail({
+  const result = await sendOutboundEmail({ sendClass: 'direct',
     supabase,
     organizationId: auth.organizationId,
     sentByUserId: auth.userId,
