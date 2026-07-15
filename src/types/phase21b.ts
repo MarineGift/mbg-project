@@ -3,7 +3,7 @@
 
 export type SequenceStatus    = 'draft' | 'active' | 'paused' | 'archived';
 export type EnrollmentStatus  = 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
-export type SequenceSendStatus = 'sent' | 'failed' | 'skipped';
+export type SequenceSendStatus = 'pending' | 'sent' | 'skipped' | 'bounced' | 'failed';
 
 // ===== DB rows =====
 
