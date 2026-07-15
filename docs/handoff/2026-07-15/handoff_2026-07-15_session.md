@@ -5,8 +5,9 @@
 > ## 사업 피해 (이번 세션에 확인)
 > 시퀀스가 같은 회사에 **19시간 간격 2통** → 투자자 클레임 + "관심 없음" 회신.
 >
-> ## 7/20 발송: **104통** — 리스크 전부 닫힘
-> Climate 40 + Seed 64. 가드·중복차단·거절차단 모두 적용·검증 완료.
+> ## 7/20 발송: **97통** — 리스크 전부 닫힘
+> Climate 40 + Seed 57 (7/27 Climate 22). 가드·중복차단·거절차단·바운스차단 모두 적용·검증 완료.
+> 헬스 뷰 실측: **ok 119 / do_not_send_party 8 / do_not_send_email 7**.
 
 ---
 
@@ -61,14 +62,46 @@ export type SendClass = 'cold' | 'direct';   // SendOutboundInput.sendClass, def
 
 > **왜 무조건 가드로 박으면 안 됐나**: `v_email_do_not_send`는 **콜드 억제 리스트**지 전역 억제가 아니다(전역은 `email_blocklist`). 무조건 박았으면 `drafts.ts:646 sendApprovedDraft`(답장한 사람에게 AI 답장)가 `reply_positive`에 막혔다. `is_follow_up`은 판별자가 아니다 — `reply_positive OR next_action='follow_up'` = UI 힌트.
 
-### A-4. 중복 발송 근본 원인 — `advance_enrollment` 앵커
+### A-4. 중복 발송 근본 원인 — **벌크 리스케줄의 무조건 덮어쓰기**
+
+> **정정 이력**: 이 문서의 최초판(커밋 `d64ea33`)은 원인을 `advance_enrollment` 앵커라고 적었다. **틀렸다.** 진짜 원인은 아래다. 앵커 수정(`migration_20260715001000`)은 그 자체로 옳은 견고성 개선이고 적용 상태를 유지하지만 **이번 사고의 원인이 아니다.**
+
+`sql/20260713150000_climate_sequence_tuesday_9am_pt.sql` **Part 2**:
+
+```sql
+-- Part 2: Move all pending sends to the next Tuesday 09:00 PT.
+UPDATE app.email_sequence_enrollments e
+   SET next_send_at = v_next_send,
+       updated_at   = now()
+ WHERE e.sequence_id = v_seq_id
+   AND e.status = 'active'
+   AND e.next_send_at IS NOT NULL;
+```
+
+**`GREATEST`가 없다. 무조건 덮어쓴다.** 이미 step 2로 넘어가 7/20을 기다리던 enrollment까지 **6일 앞으로 끌어당겼다.**
+
+타임라인 (모든 관측치와 일치):
+
+| 시각 | 사건 |
+|---|---|
+| 7/13 21:06:34 (월 14:06 PT) | 시퀀스·스텝·68건 등록 생성. 한 트랜잭션 — `enrolled_at`이 마이크로초까지 동일. 전부 즉시 due |
+| 7/13 21:07:12~21:08:08 | 워커 실행 — **이 시점엔 `quiet_hours`가 아직 없음.** step 1을 28건 발송 → advance → `next_send_at = enrolled+7 = **7/20**` |
+| 7/13 21:08 이후 | **마이그레이션 적용.** Part 1이 `quiet_hours` 설정. **Part 2가 전 active enrollment의 `next_send_at`을 `7/14 09:00 PT = 16:00 UTC`로 덮어씀** — 7/20을 기다리던 28건 포함 |
+| 7/14 16:00:19 (화 09:00 PT) | 27건 step 2 발송 ← **step 1로부터 19시간. 여기서 투자자를 잃었다** |
+| 7/14 16:01:19~16:02:41 | 나머지 40건 step 1 발송 |
+
+이후 값도 전부 맞는다: step 2 그룹 → `enrolled+14 = 7/27` ✓, step 1 그룹 → `enrolled+7 = 7/20` ✓.
+
+**잔여 1건 미해명**: Planet A Ventures는 7/13 21:07:44에 step 1을 받았는데(28건 중 하나) 7/14에 step 2를 안 받았다. 68 = 27(step2) + 41(step1)로 딱 맞지 않는다. 사고 결론은 안 바뀌지만 기록해 둔다.
+
+### A-4b. 참고 — `advance_enrollment` 앵커 수정 (사고 원인 아님, 견고성 개선)
 
 ```sql
 -- 이전
 next_send_at = v_enrolled_at + (v_next_day_offset || ' days')::INTERVAL
 ```
 
-**`enrolled_at` 기준. 직전 발송이 아니라.** `day_offset`이 "메일 간 간격"이 아니라 **등록 시점에 고정된 절대 캘린더**. step N이 늦으면 step N+1은 이미 due → 다음 실행에서 즉시 발송.
+`day_offset`이 "메일 간 간격"이 아니라 **등록 시점에 고정된 절대 캘린더**. step N이 늦으면 step N+1이 그 지연을 안 기다린다.
 
 ```sql
 -- 수정 후
@@ -86,7 +119,7 @@ next_send_at = GREATEST(enrolled_at + next_offset, now() + gap)
 - **[G1]** 같은 party가 **2일** 내 `external_data->>'source'='sequence'` outbound를 받았으면 제외. DB의 실제 cadence는 전부 3일 이상(High Priority 0/3/7, Intel Inside 0/5, Seed·Climate 0/7/14/21) → **48h floor는 의도된 발송을 건드릴 수 없다**
 - **[G2]** `DISTINCT ON (e.party_id)` — 같은 배치 내 동일 party 중복 방지. 탈락분은 다음 실행에서 G1이 2일 잡아둠. 현재 no-op
 
-**왜 2겹**: A-4는 *알려진* 원인을 없애고, A-5는 원인이 무엇이든 결과를 불가능하게 만든다.
+**왜 2겹**: A-4b는 *한* 경로를 고치고, A-5는 원인이 무엇이든 결과를 불가능하게 만든다. **A-4의 진짜 원인은 A-4b가 아니라 벌크 리스케줄이었고, 그걸 막은 건 G1이다.** 이번 세션의 판단 중 유일하게 처음부터 옳았던 것 — 원인을 모르는 채로도 초크포인트에서 결과를 막는다.
 
 ### A-6. 거절 투자자 차단 (party 단위)
 
@@ -129,6 +162,9 @@ next_send_at = GREATEST(enrolled_at + next_offset, now() + gap)
 | "cross-sequence 이중 등록이 원인" | 이번 세션 | 활성 중복 0건 |
 | "`FCC Climate Tech` day_offset 0,0이 원인" | 이번 세션 | 휴면. sends 0 / enrollments 0 |
 | "원본 `15 min`과 `(copy)`가 명단 중복" | 이번 세션 | **겹치지 않음.** climate/deeptech vs life science 섹터 분리 |
+| "`advance_enrollment` 앵커가 근본 원인" | 이번 세션 | 벌크 리스케줄 Part 2였음. `enrolled_at` 양쪽 동일 |
+| "`day_offset`을 나중에 편집했다" | 이번 세션 | 스텝 `created_at = updated_at`, 수정 이력 없음 |
+| "`quiet_hours` {10:00, 09:00}가 뒤집혔다" | 이번 세션 | **의도된 화요일 9시 창.** 규칙은 6/29 핸드오프 L70에 이미 문서화돼 있었음 |
 
 **성과가 난 건 전부 먼저 측정한 쪽이었다.**
 
@@ -136,26 +172,9 @@ next_send_at = GREATEST(enrolled_at + next_offset, now() + gap)
 
 ## PART C — 미해명 (원인 살아있음, 결과는 G1이 막는 중)
 
-### C-1. ⚠️ Climate 27건이 step 2를 **6일 일찍** 받았다
+### C-1. ✅ Climate 27건 step 2 조기 발송 — **해결됨. PART A-4 참조.**
 
-```
-next_step_order 2 | enrolled 7/13 | due 7/20 | 40건   <- 정상 (enrolled + 7)
-next_step_order 3 | enrolled 7/13 | due 7/27 | 27건   <- step 2를 7/14에 받음
-```
-
-`enrolled_at`이 **양쪽 동일(7/13)**. 27건의 step 2는 `7/13 + 7 = 7/20`이 due였어야 하는데 **7/14에 나갔다.** 앵커 버그는 *지연*을 붕괴시키지 예정을 **앞당기지 못한다.** A-4로 설명 안 됨.
-
-유력 가설: **`day_offset`을 나중에 편집했다** (초기 배치는 옛 offset으로 advance → 즉시 due → 발송, 이후 7로 수정 → 나머지 41건은 7/20).
-
-```sql
-SELECT st.step_order, st.day_offset, st.created_at, st.updated_at
-FROM app.email_sequence_steps st
-JOIN app.email_sequences s ON s.id = st.sequence_id
-WHERE s.name = 'Climate Investor Cold Outreach -- FCC'
-ORDER BY st.step_order;
-```
-
-step 2의 `updated_at`이 7/14 16:0x 근처면 확정. **G1이 결과를 막고 있어 급하진 않지만 미해명으로 두면 안 된다.**
+`sql/20260713150000_climate_sequence_tuesday_9am_pt.sql` Part 2의 무조건 `UPDATE ... SET next_send_at = v_next_send`가 원인. 잔여 미해명은 Planet A 1건뿐.
 
 ### C-2. `15 min...` step 0 = **59 sends / 30 parties** — party당 약 2회
 
@@ -165,7 +184,9 @@ step 2의 `updated_at`이 7/14 16:0x 근처면 확정. **G1이 결과를 막고 
 
 ## PART D — 실행 대기
 
-### D-1. 하드 바운스 기록 — `fix_20260715003000_record_hard_bounces.sql` (**미적용**)
+### D-1. 하드 바운스 기록 — `fix_20260715003000_record_hard_bounces.sql` (**✅ 적용됨**)
+
+> 결과: 죽은 주소 **11개** 기록 (13건 중 Chevron / `test@test.com` 제외). 헬스 뷰 `ok 126 → 119`, `do_not_send_email 0 → 7` — **활성 enrollment 7건이 죽은 주소를 향하고 있었다.** Seed 7/20 배치가 64 → 57로 감소.
 
 **적용 전 프리뷰 필수** (단독 실행). NDR 본문을 350자 발췌로만 봤다:
 
@@ -272,6 +293,10 @@ GROUP BY send_status;
 - **스케줄 오프셋의 앵커를 명시할 것** — `day_offset`이 "등록 이후"인지 "직전 발송 이후"인지가 스키마 어디에도 없었고 이름은 후자로 읽힌다. 실제는 전자였다
 - **`CREATE OR REPLACE VIEW`는 트레일링 컬럼 추가만 가능** — 중간 삽입/타입 변경 불가. 소비자가 부분집합만 select하면 안전
 - **PostgREST 42703은 뷰 버전 스큐 신호** — 새 컬럼 의존 코드는 42703 폴백 경로를 가질 것
+- **`next_send_at`은 앞으로만 밀 수 있다.** 이 컬럼을 쓰는 모든 코드는 `GREATEST(next_send_at, new_value)`여야 한다. 무조건 덮어쓰는 곳이 둘 있었다 — `20260713150000` Part 2(**사고 원인**)와 `sequence-processor.ts`의 quiet-hours 분기(`.update({next_send_at: nextAt})`, 비교 없음, `updated_at`도 안 찍어 원장에 흔적이 없음). 후자는 **미수정**
+- **벌크 리스케줄은 재앙 반경이 크다.** 한 문장이 68건의 일정을 6일 당겼다. `WHERE`에 "아직 안 나간 것만" 조건이 있어야 했다
+- **핸드오프에 틀린 근본 원인을 남기지 말 것 — 공백보다 나쁘다.** 다음 세션이 믿는다. 확정 못 했으면 미해명으로 적을 것
+- **`.ps1`은 ASCII-only. 한국어 페이로드를 PowerShell 문자열에 넣지 말 것.** 넣으면 PS 5.x가 CP949로 파싱해 히어스트링 따옴표가 깨진다(2026-07-15에 실제 발생). 한국어 문서는 **패치하지 말고 UTF-8 BOM .md로 통째 교체**할 것
 - **차단 범위를 사유에 맞출 것** — 사람의 거절 = party 단위, 주소 바운스 = 주소 단위(`party_id NULL`). 기계 실패(오토리스폰더, 우리 IP 차단)로 리드를 은퇴시키지 말 것
 - **mover가 `docs/handoff/<today>`로 라우팅** — UTC 날짜라 한국 시간 밤에는 다음 날로 간다. 핸드오프 내부 경로 참조와 어긋날 수 있음
 - **Downloads를 비울 것** — 옛 파일이 남아 있으면 mover가 커밋된 리포 파일을 덮어쓴다. 이번에 `M` 3건 발생(내용은 동일, CRLF 경고뿐이었음). `git diff`로 확인 후 `git checkout --`
@@ -324,20 +349,26 @@ git push origin marinebiogroup
 ```
 mbg-project 이어가자. docs/handoff/2026-07-15/handoff_2026-07-15_session.md 기준.
 
-상태: 7/20 발송 104통 (Climate 40 + Seed 64). 리스크 전부 닫힘.
+상태: 7/20 발송 97통 (Climate 40 + Seed 57), 7/27 Climate 22. 헬스 ok 119 / party 8 / email 7.
 - get_due_enrollments 가드 적용 (has_dns_guard=true)
 - sendOutboundEmail에 sendClass 'cold'|'direct' 구조적 가드, default cold (커밋 320457a 배포됨)
 - advance_enrollment 앵커 수정 + G1(2일 min-gap)/G2(DISTINCT ON party_id) 적용
-- 거절 8곳 party 단위 차단 (NFX/Aristos/Circulate 신규)
+- 거절 8곳 party 단위 차단 (NFX/Aristos/Circulate 신규) + 죽은 주소 11개 email 단위 차단
+
+중복 발송 근본 원인 = sql/20260713150000_climate_sequence_tuesday_9am_pt.sql Part 2.
+  UPDATE ... SET next_send_at = v_next_send WHERE status='active' -- GREATEST 없음
+  step 2로 넘어가 7/20을 기다리던 28건을 7/14로 당김 -> 19시간 만에 2통 -> 투자자 클레임.
+  advance_enrollment 앵커는 원인이 아니었음(문서 최초판의 오류, 정정됨).
+  quiet_hours {10:00,09:00}은 의도된 화요일 9시 창이지 오타가 아님.
 
 최우선:
-1. fix_20260715003000_record_hard_bounces.sql 적용 (미적용). 프리뷰 SELECT 먼저 - 핸드오프 PART D-1
-   죽은 주소 11개로 계속 발송 중. bounce는 party_id=NULL로 주소 단위만 차단 (거절과 다름)
-   Chevron 554는 우리 IP가 Trend Micro에 등재된 것 -> 절대 bounce_hard로 찍지 말 것
-2. C-1 미해명: Climate 27건이 step2를 6일 일찍 받음. enrolled_at은 40건과 동일(7/13).
-   앵커 버그로 설명 안 됨. email_sequence_steps.updated_at 확인 (PART C-1에 쿼리)
+1. 7/20 발송 관찰 (97통). 워커가 자동 실행. 발송 후 헬스 뷰로 실측 확인
+2. sequence-processor.ts quiet-hours 분기의 무방비 쓰기 (미수정).
+   defer_enrollment RPC로 GREATEST 적용 필요. G1이 막고 있어 급하지 않음
 3. FCC Climate Tech day_offset 0,0 수정 (휴면이지만 지뢰)
 4. IP 49.254.118.167 Trend Micro delisting + SPF/DKIM/DMARC
+5. 타임존: Climate의 09:00 PT가 유럽엔 18:00, 도쿄엔 01:00. app.parties에 country 컬럼
+   없음(42703) -> 백필 선행. 사용자 지시로 백로그
 
 핵심 교훈: 코드 읽고 원인 추론한 가설은 이번 세션에 6개 전부 데이터에 반박당했다.
 성과는 전부 먼저 측정한 쪽에서 나왔다. 가드는 초크포인트에.
