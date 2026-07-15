@@ -45,7 +45,9 @@ type ScannedField = {
 
 function parseArg(flag: string): string | null {
   const i = process.argv.indexOf(flag);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+  // noUncheckedIndexedAccess: bind the indexed value once so it narrows.
+  const v = i >= 0 ? process.argv[i + 1] : undefined;
+  return v ?? null;
 }
 
 async function scanFrame(frame: Frame): Promise<ScannedField[]> {

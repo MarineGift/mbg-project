@@ -55,7 +55,10 @@ export default function ApplicationsListClient({ forms }: { forms: FormSummary[]
 
       <ul className="space-y-3">
         {forms.map((f) => {
-          const badge = METHOD_BADGE[f.submissionMethod] ?? METHOD_BADGE.web_form
+          // noUncheckedIndexedAccess: Record lookup is `| undefined` even for
+          // the literal fallback key, so fall back to an inline default.
+          const badge =
+            METHOD_BADGE[f.submissionMethod] ?? { icon: '\u{1F310}', label: 'form' }
           const dd = dday(f.deadline)
           const notSubmitted = f.status !== 'submitted' && f.status !== 'decided'
           const late = dd?.overdue && notSubmitted

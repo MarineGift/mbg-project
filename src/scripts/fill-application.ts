@@ -52,7 +52,9 @@ type FieldRow = {
 
 function parseArg(flag: string): string | null {
   const i = process.argv.indexOf(flag);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+  // noUncheckedIndexedAccess: bind the indexed value once so it narrows.
+  const v = i >= 0 ? process.argv[i + 1] : undefined;
+  return v ?? null;
 }
 
 function requireEnv(key: string): string {
@@ -134,12 +136,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const rows = (data ?? []) as FieldRow[];
-  if (rows.length === 0) {
+  // noUncheckedIndexedAccess: guard on rows[0] directly (process.exit is
+  // typed `never`, so `head` narrows to FieldRow for the rest of main()).
+  const head = rows[0];
+  if (!head) {
     console.error('No form found for that id in this org.');
     process.exit(1);
   }
-
-  const head = rows[0];
   console.log('');
   console.log(`Program : ${head.party_name}`);
   console.log(`Method  : ${head.submission_method}  login_required=${head.login_required}`);

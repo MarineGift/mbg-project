@@ -232,12 +232,11 @@ export async function createParty(input: z.input<typeof partySchema>): Promise<P
     const { error: syncErr } = await supabase
       .schema('app')
       .rpc('sync_party_interest_tags' as never, { p_party_id: partyId } as never);
-    await supabase
-      .schema('app')
-      .rpc('sync_party_sector_focus' as never,
-           { p_party_id: partyId, p_codes: parsed.data.sectorFocus } as never);
     if (syncErr) console.error('[parties.createParty] tag sync error:', syncErr);
   }
+  // NOTE: sector focus sync moved to updateInvestorProfile (2026-07-15).
+  // partySchema has no sectorFocus field; the old call here sent p_codes as
+  // undefined, which JSON-drops the key and 404s at PostgREST (PGRST202).
 
   // 2026-06-12: auto-register the party's email domain in the whitelist.
   await autoWhitelistPartyDomain(
@@ -358,14 +357,9 @@ export async function updateParty(
     if (syncErr) console.error('[parties.updateParty] tag sync error:', syncErr);
   }
 
-  // Real-time SECTOR focus sync (REPLACE; app.sync_party_sector_focus).
-  {
-    const { error: secErr } = await supabase
-      .schema('app')
-      .rpc('sync_party_sector_focus' as never,
-           { p_party_id: parsed.data.partyId, p_codes: parsed.data.sectorFocus } as never);
-    if (secErr) console.error('[parties.updateParty] sector sync error:', secErr);
-  }
+  // NOTE: sector focus sync moved to updateInvestorProfile (2026-07-15).
+  // partySchema/updateSchema carry no sectorFocus; the old call here always
+  // failed silently (p_codes undefined -> key dropped -> PGRST202).
 
   // 2026-06-12: keep the whitelist in sync when a website is added/changed later.
   await autoWhitelistPartyDomain(
@@ -559,6 +553,17 @@ export async function updateInvestorProfile(
       console.error('[parties.updateInvestorProfile] insert error:', insErr);
       return { ok: false, errorCode: 'database', errorMessage: insErr.message };
     }
+  }
+
+  // Real-time normalized SECTOR sync (app.investor_sector_focus REPLACE).
+  // Lives here because sectorFocus exists on investorProfileSchema only --
+  // the previous calls in create/updateParty never fired (PGRST202). Non-fatal.
+  {
+    const { error: secErr } = await supabase
+      .schema('app')
+      .rpc('sync_party_sector_focus' as never,
+           { p_party_id: parsed.data.partyId, p_codes: parsed.data.sectorFocus } as never);
+    if (secErr) console.error('[parties.updateInvestorProfile] sector sync error:', secErr);
   }
 
   revalidatePath(`/${parsed.data.partyType}/parties/${parsed.data.partyId}`);

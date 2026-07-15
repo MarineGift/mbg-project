@@ -130,7 +130,9 @@ export async function decomposeTask(goalItemId: string): Promise<DecomposeResult
 
   let parsed: unknown;
   try {
-    const client = new ClaudeClient(supabase, auth.organizationId);
+    // SbClient is pinned to the 'app' schema; ClaudeClient's ctor takes the
+    // default-generic SupabaseClient. Same-runtime object -- cast (repo pattern).
+    const client = new ClaudeClient(supabase as never, auth.organizationId);
     const out = await client.complete({
       agentRole: 'task_decomposer',
       inboundMessage: goalText,
