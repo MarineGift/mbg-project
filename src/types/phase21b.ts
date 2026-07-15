@@ -1,8 +1,8 @@
 // src/types/phase21b.ts
 // Phase 21b ??Email Sequence Types
 
-export type SequenceStatus    = 'active' | 'paused' | 'archived';
-export type EnrollmentStatus  = 'active' | 'paused' | 'completed' | 'cancelled';
+export type SequenceStatus    = 'draft' | 'active' | 'paused' | 'archived';
+export type EnrollmentStatus  = 'active' | 'paused' | 'completed' | 'cancelled' | 'failed';
 export type SequenceSendStatus = 'sent' | 'failed' | 'skipped';
 
 // ===== DB rows =====
