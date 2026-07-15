@@ -29,6 +29,7 @@ const STATUS_CONFIG: Record<EnrollmentStatus, { label: string; color: string }> 
   paused:    { label: 'Paused',    color: 'bg-amber-100 text-amber-700' },
   completed: { label: 'Completed', color: 'bg-blue-100 text-blue-700' },
   cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
+  failed:    { label: 'Failed',    color: 'bg-red-100 text-red-700' },
 };
 
 function formatDate(iso: string | null) {
