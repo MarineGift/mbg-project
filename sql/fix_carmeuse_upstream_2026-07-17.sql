@@ -1,0 +1,133 @@
+-- ============================================================
+-- fix_carmeuse_upstream_2026-07-17.sql
+--
+-- CARMEUSE - NOT A LICENSEE. They sell lime TO PCC producers.
+-- And a second finding that does not fit the filler frame at all - see part 2.
+--
+-- ------------------------------------------------------------
+-- PART 1: WHY NOT A LICENSEE. Their own pages, quoted:
+--
+--   carmeuse.com/.../precipitated-calcium-carbonate
+--     "Carmeuse offers products and technical support to achieve the optimal PCC
+--      PRODUCTION." and "the high CaO content and low impurities in THE LIME
+--      enable the production of high quality white and pure PCC."
+--   br.carmeuse.com
+--     "PCC production is complex and requires A SPECIAL TYPE OF QUICKLIME of
+--      differentiated quality. Variations in lime quality can result in
+--      production difficulties and changes in PCC particle size and geometry."
+--   systems.carmeuse.com
+--     "Carmeuse Systems SUPPORTS PRECIPITATED CALCIUM CARBONATE (PCC) PRODUCERS
+--      by providing unmatched lime handling expertise, SLAKING EQUIPMENT, and
+--      comprehensive bulk reagent handling solutions."
+--
+-- The site structure settles it: their PCC page lives under /applications/. PCC
+-- is an APPLICATION OF THEIR LIME, not a product of theirs. They are the supplier
+-- to the people we want to license, exactly where Nittetsu Mining sits.
+--
+-- Their other paper business is the pulp mill lime cycle - quicklime regenerates
+-- caustic soda in the Kraft causticization loop, bleaches, and treats effluent.
+-- Large, real, and a different industry from filler.
+--
+-- Scale: 6,300 employees globally. Carmeuse Lime and Stone, the North American
+-- arm out of Pittsburgh, is the continent's largest lime and limestone producer -
+-- roughly 7 million tons of finished products and 25 million tons of chemical
+-- limestone and aggregates a year, 28 facilities across the USA and Canada, over
+-- 150 years old.
+--
+-- ------------------------------------------------------------
+-- PART 2: THE THING THAT IS NOT A FILLER FINDING AT ALL
+--
+--   carmeuse.com/eu-en states:
+--     "CARMEUSE VENTURES is established to accelerate the most promising ideas
+--      through CAPITAL, collaboration and Carmeuse's DECARBONIZATION EXPERTISE.
+--      EMPOWERING START-UPS IN LIME SOLUTIONS."
+--
+--   And their own PCC page already tells the CO2 story:
+--     "PCC has a sustainability advantage too in that a proportion of the CO2
+--      emitted during paper manufacture can be captured and used to carbonate the
+--      lime slurry."
+--
+-- A corporate venture arm. Deploying capital. At lime-adjacent start-ups. With
+-- decarbonisation as the stated thesis. Which is a description of a strategic
+-- investor for a lime-adjacent, decarbonisation-framed start-up.
+--
+-- I am not asserting this is a fit. I have not read the Ventures mandate, ticket
+-- size, stage or portfolio - one homepage sentence is a LEAD, not a thesis. But
+-- it is the kind of lead that gets lost, because it arrived while looking at the
+-- wrong list.
+--
+-- ------------------------------------------------------------
+-- AND IT EXPOSES A STRUCTURAL PROBLEM. THIS IS THE POINT.
+--
+-- Carmeuse is WRONG as a filler licensee and POSSIBLY RIGHT as an investor. This
+-- schema cannot hold that. party_type_id is ONE value per party - 1 investor,
+-- 2 paper_mill, 3 filler_supplier. Carmeuse is a 3. To pursue the Ventures lead
+-- someone would have to either change the type, losing the filler intelligence,
+-- or create a second party, which is exactly the duplication that produced the
+-- Omya Korea and Taekyung double-rows this week.
+--
+-- That is the SIXTH thing today's sweep has found that this schema has no place
+-- for:
+--   wrong mineral   - Thiele (kaolin), IMI Fabi (talc)
+--   wrong market    - Maruo, Takehara (CaCO3, no paper)
+--   wrong position  - Nittetsu, Carmeuse (upstream of the filler industry)
+--   conflict        - Taekyung (adverse party in a live patent dispute)
+--   entanglement    - Fimatec (runs on our own partner's technology)
+--   dual role       - Carmeuse (wrong as licensee, maybe right as investor)
+--
+-- Every one was found by reading a company's own website. Not one by a column.
+-- I am not proposing a migration for any of them - the fix is a schema decision
+-- and it is yours, and I have written enough speculative structure today.
+--
+-- ------------------------------------------------------------
+-- No contact route recorded for the filler track. Fifth time today - Maruo,
+-- Nittetsu, Takehara, IMI Fabi, Carmeuse. A contact route on a non-target is how
+-- a wrong target becomes a sent message.
+-- The Ventures lead is recorded as a lead, not as a contact. Nobody should write
+-- to Carmeuse Ventures on the strength of one homepage sentence found while
+-- checking whether they make paper filler.
+--
+-- IDEMPOTENT. Name-targeted. Nothing inserted.
+-- No BEGIN / no DO blocks / no semicolons or bare 'into' in strings.
+-- ============================================================
+
+update app.filler_supplier_profile f
+set extra_data = coalesce(f.extra_data, '{}'::jsonb) || '{"fcc_fit": {"verdict": "no", "reason": "UPSTREAM OF PCC, NOT A PCC PRODUCER. Their own pages say it - Carmeuse offers products and technical support to achieve the optimal PCC PRODUCTION, the high CaO content and low impurities in THE LIME enable production of high quality white PCC, and PCC production requires a special type of quicklime of differentiated quality. Carmeuse Systems SUPPORTS PCC PRODUCERS with lime handling expertise and slaking equipment. Their site structure settles it - the PCC page lives under /applications/, so PCC is an application of their lime rather than a product of theirs. They supply the companies we want to license. Same position as Nittetsu Mining. Their other paper business is the pulp mill lime cycle - quicklime for Kraft causticization, bleaching and effluent - a different industry from filler.", "checked_at": "2026-07-17", "source": "carmeuse.com, br.carmeuse.com, systems.carmeuse.com", "source_type": "marketing"}, "scale_for_the_record": {"global_employees": 6300, "north_america": "Carmeuse Lime and Stone, Pittsburgh - the continent largest lime and limestone producer, about 7 million tons of finished products and 25 million tons of chemical limestone and aggregates a year, 28 facilities across the USA and Canada, over 150 years old"}, "investor_lead": {"what": "CARMEUSE VENTURES. Their homepage states it was established to accelerate the most promising ideas through CAPITAL, collaboration and Carmeuse decarbonization expertise, EMPOWERING START-UPS IN LIME SOLUTIONS.", "why_it_might_matter": "A corporate venture arm deploying capital at lime-adjacent start-ups with decarbonisation as the stated thesis. FCC is lime-adjacent, decarbonisation-framed, and a start-up. Their own PCC page already tells the CO2 story - a proportion of the CO2 emitted during paper manufacture can be captured and used to carbonate the lime slurry.", "status": "A LEAD, NOT A THESIS. The Ventures mandate, ticket size, stage and portfolio are all unread. One homepage sentence. Recorded because it arrived while looking at the wrong list and would otherwise be lost.", "do_not": "Nobody should write to Carmeuse Ventures on the strength of one homepage sentence found while checking whether they make paper filler.", "raised_at": "2026-07-17"}, "structural_problem": {"the_issue": "Carmeuse is WRONG as a filler licensee and POSSIBLY RIGHT as an investor, and this schema cannot hold both. party_type_id is one value per party - 1 investor, 2 paper_mill, 3 filler_supplier. Carmeuse is a 3. Pursuing the Ventures lead would mean either changing the type and losing the filler intelligence, or creating a second party - which is the duplication that produced the Omya Korea and Taekyung double-rows this week.", "the_wider_pattern": "Sixth thing this sweep found that the schema has no place for. Wrong mineral (Thiele kaolin, IMI Fabi talc). Wrong market (Maruo, Takehara - CaCO3 with no paper). Wrong position (Nittetsu, Carmeuse - upstream). Conflict (Taekyung - adverse party in a live dispute). Entanglement (Fimatec - runs on our own partner technology). Dual role (Carmeuse). Every one found by reading a company website. Not one by a column.", "no_migration_proposed": "The fix is a schema decision and it is not mine to make.", "raised_at": "2026-07-17"}, "contactability": {"not_recorded": "Fifth non-target today whose published contact route stays out of this database - after Maruo, Nittetsu, Takehara and IMI Fabi."}}'::jsonb,
+    notes = coalesce(f.notes, '') || E'\n[homepage-check 2026-07-17] NOT AN FCC LICENSEE. Carmeuse sells lime TO PCC producers and sells slaking equipment to them through Carmeuse Systems. Their PCC page sits under /applications/ - PCC is a use of their lime, not their product. Same position as Nittetsu Mining: upstream of the filler industry, not in it. SEPARATE LEAD, NOT A FILLER LEAD - Carmeuse Ventures deploys capital at lime-adjacent start-ups with a decarbonisation thesis, which is a possible strategic INVESTOR angle. One homepage sentence, unread mandate. Do not act on it without checking. Note that party_type_id cannot express wrong-as-licensee-and-maybe-right-as-investor.',
+    updated_at = now()
+from app.parties p
+where f.party_id = p.id and p.party_name ~* 'carmeuse'
+  and f.deleted_at is null and p.deleted_at is null
+  and coalesce(f.notes, '') not like '%[homepage-check 2026-07-17]%';
+
+
+-- ---------- VERIFY ----------
+-- select p.party_name, p.party_type_id, p.country_code,
+--        f.extra_data #>> '{fcc_fit,verdict}'          as fcc_fit,
+--        f.extra_data #>> '{investor_lead,status}'     as ventures_lead,
+--        (select count(*) from app.contacts c where c.party_id = p.id and c.deleted_at is null) as contacts
+-- from app.parties p
+-- join app.filler_supplier_profile f on f.party_id = p.id and f.deleted_at is null
+-- where p.party_name ~* 'carmeuse' and p.deleted_at is null;
+
+
+-- ---------- FIFTEEN OPENED ----------
+--   Artemyn            TOP      - 17 carbonate plants, Chris Nutbeem at Par Moor
+--   Okutama Kogyo      STRONG   - over 90% of Japanese paper PCC
+--   Gulshan Polyols    STRONG   - satellite operator, on-site PCC pioneer in India
+--   Bihoku Funka       STRONG   - neutral papermaking filler, cost-down, own mine
+--   Shiraishi Group    STRONG   - UFPCC+PCC+GCC, open testing lab
+--   20 Microns         STRONG   - PCC+GCC, sells TiO2 replacement already
+--   Zantat             STRONG   - names its own partnership inbox
+--   Q-min              moderate - GCC only, plastics-first, banknotes since 1999
+--   Fimatec            HOLD     - runs on Specialty Minerals technology
+--   F.M.T. (Thailand)  HOLD     - Fimatec subsidiary
+--   Maruo Calcium      no       - CaCO3, no paper
+--   Takehara Chemical  no       - CaCO3, no paper
+--   Nittetsu Mining    no       - limestone, upstream
+--   IMI Fabi           no       - talc, no CaCO3
+--   Carmeuse           no       - lime, upstream (+ a Ventures lead)
+--
+-- FIFTEEN OPENED. SEVEN WORTH CONTACTING. EIGHT NOT.
+-- The database ranked all fifteen as plausible filler suppliers. It was right
+-- about seven, and it had no way of being right about the other eight.
