@@ -127,7 +127,6 @@ export function NewDealModal({
       setRoundId('');
       setNewRoundMode(false);
       setNewRoundName('');
-      setDealMode('standalone');
       setCampaignId('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
