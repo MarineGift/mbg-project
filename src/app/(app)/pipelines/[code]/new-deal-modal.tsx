@@ -116,8 +116,7 @@ export function NewDealModal({
   const [newRoundName, setNewRoundName] = useState('');
   const [creatingRound, startRoundTransition] = useTransition();
 
-  // Campaign vs standalone (all pipelines)
-  const [dealMode, setDealMode] = useState<'standalone' | 'campaign'>('standalone');
+  // Campaign (required - every deal is created under a campaign)
   const [campaignId, setCampaignId] = useState('');
 
   useEffect(() => {
@@ -199,8 +198,8 @@ export function NewDealModal({
       });
     }
 
-    if (dealMode === 'campaign' && !campaignId) {
-      setError('Select a campaign, or choose Standalone deal');
+    if (!campaignId) {
+      setError('Campaign is required - every deal is created under a campaign');
       return;
     }
 
@@ -211,7 +210,7 @@ export function NewDealModal({
         current_stage_id: firstStage.id,
         parties,
         round_id: isInvestor ? (roundId || null) : null,
-        campaign_id: dealMode === 'campaign' ? (campaignId || null) : null,
+        campaign_id: campaignId,
       });
       if (!result.ok) {
         setError(result.error);
@@ -331,31 +330,15 @@ export function NewDealModal({
             </div>
           </div>
 
-          {/* Standalone vs Campaign (all pipelines) */}
+          {/* Campaign (required - every deal is created under a campaign) */}
           <div>
             <label className="mb-1 block text-sm font-medium text-foreground">
-              Deal type
+              Campaign
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                required
+              </span>
             </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setDealMode('standalone')}
-                disabled={isPending}
-                className={'flex-1 rounded-md border px-3 py-2 text-sm ' + (dealMode === 'standalone' ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
-              >
-                Standalone deal
-              </button>
-              <button
-                type="button"
-                onClick={() => setDealMode('campaign')}
-                disabled={isPending}
-                className={'flex-1 rounded-md border px-3 py-2 text-sm ' + (dealMode === 'campaign' ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
-              >
-                Part of a campaign
-              </button>
-            </div>
-
-            {dealMode === 'campaign' && (
+            {(
               <select
                 value={campaignId}
                 onChange={(e) => setCampaignId(e.target.value)}

@@ -86,6 +86,7 @@ export async function createDeal(
   const name = (input.deal_name ?? '').trim();
   if (!name) return { ok: false, error: 'Deal name is required' };
   if (!input.current_stage_id) return { ok: false, error: 'Stage is required' };
+  if (!input.campaign_id) return { ok: false, error: 'Campaign is required' };
   if (!input.pipelineCode) return { ok: false, error: 'Pipeline is required' };
 
   const parties = (input.parties ?? []).filter((p) => p.partyId);
