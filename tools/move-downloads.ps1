@@ -19,12 +19,15 @@ param(
 
 $Repo      = 'C:\dev\mbg-project'
 $Downloads = Join-Path $env:USERPROFILE 'Downloads'
+$PersonalRoot = 'C:\dev\mbg-personal'
 
 function Get-CanonicalName([string]$name) {
   return ($name -replace ' \(\d+\)(\.[^.]+)$', '$1')
 }
 
 function Get-DestSubdir([string]$canon) {
+  if ($canon -match '^personal_') { return ('PERSONAL:handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
+  if ($canon -match '(I-?485|I-?140|I-?765|I-?131|EAD|AOS|greencard|visa_|passport|tax_)') { return ('PERSONAL:handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
   if ($canon -match '^(seed|migration|repair|enrich|backfill|fix)_.*\.sql$') { return 'sql' }
   if ($canon -match '^handoff_.*\.md$') { return ('docs\handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
   if ($canon -match '^patch_.*\.ps1$') { return 'tools\patches' }
@@ -52,7 +55,7 @@ function Invoke-MoveScan {
     $ordered = $g.Group | Sort-Object LastWriteTime -Descending
     $src = $ordered[0]
     if (-not (Test-FileStable $src)) { Write-Output ('WAIT  ' + $src.Name + ' (still downloading)'); continue }
-    $destDir = Join-Path $Repo $sub
+    if ($sub.StartsWith('PERSONAL:')) { $destDir = Join-Path $PersonalRoot $sub.Substring(9) } else { $destDir = Join-Path $Repo $sub }
     [System.IO.Directory]::CreateDirectory($destDir) | Out-Null
     $dest = Join-Path $destDir $canon
     Unblock-File -Path $src.FullName -ErrorAction SilentlyContinue
