@@ -134,3 +134,7 @@ patch-d6-*.ps1
 env.download
 *.bak_*
 form-scan-*.json
+
+# personal / immigration documents - never commit
+docs/handoff/**/handoff_I485_*
+docs/handoff/**/personal_*
