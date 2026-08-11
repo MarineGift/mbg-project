@@ -27,7 +27,7 @@ function Get-CanonicalName([string]$name) {
 
 function Get-DestSubdir([string]$canon) {
   if ($canon -match '^personal_') { return ('PERSONAL:handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
-  if ($canon -match '(I-?485|I-?140|I-?765|I-?131|EAD|AOS|greencard|visa_|passport|tax_)') { return ('PERSONAL:handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
+  if ($canon -match '(^|[_\-\. ])(I-?485|I-?140|I-?765|I-?131|I-?693|G-?1145|EAD|AOS|greencard|green-card|visa|passport|uscis|tax)([_\-\. ]|$)') { return ('PERSONAL:handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
   if ($canon -match '^(seed|migration|repair|enrich|backfill|fix)_.*\.sql$') { return 'sql' }
   if ($canon -match '^handoff_.*\.md$') { return ('docs\handoff\' + (Get-Date -Format 'yyyy-MM-dd')) }
   if ($canon -match '^patch_.*\.ps1$') { return 'tools\patches' }
