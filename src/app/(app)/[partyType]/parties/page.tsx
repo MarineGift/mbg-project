@@ -31,22 +31,9 @@ const PartiesFilterBar = dynamic(
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
-const PHASE_1_MODULES: readonly PartyTypeCode[] = [
-  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier', 'buyer', 'government_grant', 'self',
-] as const;
-
-const MODULE_LABELS: Record<PartyTypeCode, string> = {
-  investor:       'Investors',
-  paper_mill:     'Paper Mills',
-  partner:        'Partners',
-  customer:       'Customers',
-  filler_supplier:         'Filler Suppliers',
-  buyer:                   'Buyers',
-  government_grant:        'Government Grants',
-  consultant:              'Consultants',
-  crowdfunding_platform:   'Crowdfunding Platforms',
-  self:                    'MarineBio Group',
-};
+// Party-type directories are DB-driven: both validation and the heading label
+// come from app.party_types (resolved in PartiesListPage below). Adding a new
+// party_type in the database needs no change here.
 
 const TIER_LABELS: Record<PartyTier, string> = {
   tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', cold: 'Cold',
@@ -180,23 +167,29 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const from = (page - 1) * pageSize;
   const to   = from + pageSize - 1;
 
-  // Allow every party-type code that has a directory label (incl. self,
-  // consultant, crowdfunding_platform) -- not just the Phase-1 modules.
-  if (!Object.keys(MODULE_LABELS).includes(moduleParam)) notFound();
   const module = moduleParam as PartyTypeCode;
 
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
-  // D6-5e: resolve party_type code -> party_type_id (app.party_types lookup)
+  // Resolve the party_type from the DB (app.party_types) — the single source of
+  // truth for BOTH validation and the directory label. Any code present in the
+  // table renders a directory; unknown codes 404. No hardcoded module list.
   const { data: ptRow } = await supabase
     .schema('app')
     .from('party_types' as never)
-    .select('id')
+    .select('id, code, display_name_en, display_name_ko, display_name_ja')
     .eq('code' as never, module)
     .maybeSingle();
   if (!ptRow) notFound();
-  const partyTypeId = (ptRow as { id: string }).id;
+  const ptMeta = ptRow as {
+    id: string; code: string;
+    display_name_en: string | null; display_name_ko: string | null; display_name_ja: string | null;
+  };
+  const partyTypeId = ptMeta.id;
+  // Directory heading from the DB display name, pluralized ('self' kept as-is).
+  const rawLabel    = (ptMeta.display_name_en ?? ptMeta.code ?? module).trim();
+  const moduleLabel = module === 'self' || rawLabel.endsWith('s') ? rawLabel : `${rawLabel}s`;
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -677,7 +670,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       {/* Header */}
       <div className="flex flex-col gap-2 sm:gap-0 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl sm:text-2xl font-bold">{MODULE_LABELS[module]}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{moduleLabel}</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-3">
             <span>{totalCount} parties</span>
             {showLinks && unlinkedCount > 0 && (
