@@ -55,6 +55,7 @@ const PIPELINE_DOT: Record<string, string> = {
   crowdfunding:     'bg-rose-500',
   government_grant: 'bg-violet-500',
   partner:          'bg-orange-500',
+  mentor:           'bg-emerald-500',
   self:             'bg-teal-600',
 };
 const FALLBACK_DOT = 'bg-zinc-400';
@@ -77,6 +78,7 @@ const DIRECTORY_ITEMS: readonly DirectoryItem[] = [
   { code: 'paper_mill',      name: 'Paper Mills' },
   { code: 'filler_supplier', name: 'Filler Suppliers' },
   { code: 'partner',         name: 'Partners' },
+  { code: 'mentor',          name: 'Mentors' },
   { code: 'self',            name: 'MarineBio Group' },
 ] as const;
 
@@ -447,21 +449,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                 />
               );
             })}
-            {/* Mentors: separate app.mentors table (not a party_type), custom href. */}
-            <NavLink
-              key="mentors"
-              href="/mentors"
-              icon={
-                <span
-                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', 'bg-emerald-500')}
-                  aria-hidden
-                />
-              }
-              label="Mentors"
-              active={isActive(pathname, '/mentors')}
-              collapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
           </ul>
 
           <Separator className="my-3" />
