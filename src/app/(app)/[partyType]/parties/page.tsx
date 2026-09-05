@@ -83,7 +83,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
-    country?: string; type?: string; grade?: string; priority?: string;
+    country?: string; type?: string; grade?: string; priority?: string; tag?: string;
   }>;
 }
 
@@ -140,6 +140,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Investment-stage (round) filter for the investor list: ?stage=<code>
   // (e.g. 'series_a'), matched against the investor's investor_stage_focus set.
   const stageFilter = (((sp as any).stage ?? '') as string).trim();
+  // Interest-tag filter (?tag=<label>): show only parties carrying that tag.
+  // e.g. /mentor/parties?tag=Greentown Labs Houston -> only Greentown mentors.
+  const tagFilter = (((sp as any).tag ?? '') as string).trim();
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
@@ -447,7 +450,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags;
+  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '';
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -490,6 +493,19 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         const secs = investorSectorAll[p.id] ?? [];
         if (secs.length === 0) return true;
         return !secs.every(isFintechOrSaas);
+      });
+    }
+
+    // Interest-tag filter: keep only rows carrying the requested tag (matches
+    // both normalized canonical tags and the legacy jsonb interest_tags column,
+    // case-insensitively). Powers the "Greentown Labs Houston mentors only" view.
+    if (tagFilter) {
+      const tf = tagFilter.toLowerCase();
+      working = working.filter((p) => {
+        const norm = investorTagsAll[p.id] ?? [];
+        const legacy = (Array.isArray(p.interest_tags) ? p.interest_tags : [])
+          .filter((t): t is string => typeof t === 'string');
+        return [...norm, ...legacy].some((t) => t.toLowerCase() === tf);
       });
     }
 
@@ -913,9 +929,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           {tags.length <= 2 ? (
                             <div className="flex flex-wrap gap-1 max-w-[280px]">
                               {tags.map((tag) => (
-                                <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                <Link
+                                  key={tag}
+                                  href={`/${module}/parties?tag=${encodeURIComponent(tag)}`}
+                                  className="inline-flex px-1.5 py-0.5 text-xs bg-muted hover:bg-muted/70 rounded whitespace-nowrap"
+                                  title={`Filter by ${tag}`}
+                                >
                                   {tag}
-                                </span>
+                                </Link>
                               ))}
                             </div>
                           ) : (
