@@ -33,6 +33,7 @@ export type PartyType =
   | 'government_grant'
   | 'consultant'
   | 'crowdfunding_platform'
+  | 'mentor'
   | 'self';
 
 /** Legacy alias. New code uses PartyType directly. */
@@ -49,6 +50,7 @@ export const PARTY_TYPES: readonly PartyType[] = [
   'government_grant',
   'consultant',
   'crowdfunding_platform',
+  'mentor',
   'self',
 ] as const;
 
@@ -69,6 +71,9 @@ export const PARTY_TYPE_ID_BY_CODE: Record<PartyType, number> = {
   consultant: 8,
   crowdfunding_platform: 9,
   self: 10,
+  // NOTE: DB-assigned id for 'mentor' (party_types.max(id)+1). Verify with
+  // `select id from app.party_types where code='mentor';` and correct if != 11.
+  mentor: 11,
 };
 
 export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
@@ -82,6 +87,7 @@ export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
   8: 'consultant',
   9: 'crowdfunding_platform',
   10: 'self',
+  11: 'mentor', // verify real id: select id from app.party_types where code='mentor';
 };
 
 /** Localized display names. */
@@ -111,6 +117,7 @@ export const PARTY_TYPE_DISPLAY: Record<
     ja: 'クラウドファンディング運営会社',
   },
   self: { en: 'MarineBio Group', ko: '자사', ja: '自社' },
+  mentor: { en: 'Mentor', ko: '멘토', ja: 'メンター' },
 };
 
 /** Type guard. */
