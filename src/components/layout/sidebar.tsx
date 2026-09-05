@@ -447,6 +447,21 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                 />
               );
             })}
+            {/* Mentors: separate app.mentors table (not a party_type), custom href. */}
+            <NavLink
+              key="mentors"
+              href="/mentors"
+              icon={
+                <span
+                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', 'bg-emerald-500')}
+                  aria-hidden
+                />
+              }
+              label="Mentors"
+              active={isActive(pathname, '/mentors')}
+              collapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
           </ul>
 
           <Separator className="my-3" />
