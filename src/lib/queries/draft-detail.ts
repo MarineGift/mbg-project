@@ -13,7 +13,7 @@
  */
 
 import 'server-only';
-import { PARTY_TYPE_CODE_BY_ID } from '@/types/party-type';
+import { fetchPartyTypeMaps } from '@/lib/party-type-maps';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   ClassificationCategory,
@@ -160,9 +160,10 @@ export async function fetchDraftDetail(
       : Promise.resolve({ data: null, error: null }),
   ]);
 
+  const { idToCode } = await fetchPartyTypeMaps(supabase);
   const inbound = mapInbound(inboundData?.data as unknown);
   const party = mapParty(partyData?.data as unknown);
-  const engagement = mapEngagement(engagementData?.data as unknown);
+  const engagement = mapEngagement(engagementData?.data as unknown, idToCode);
   const classifierRun = mapRun(classifierRunData?.data as unknown);
   const drafterRun = mapRun(drafterRunData?.data as unknown);
 
@@ -249,7 +250,7 @@ function mapParty(raw: unknown): DraftPartySummary | null {
   };
 }
 
-function mapEngagement(raw: unknown): DraftEngagementSummary | null {
+function mapEngagement(raw: unknown, idToCode: Record<number, string>): DraftEngagementSummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   // urm.deals has no module - derive party_type_id via the parties join.
@@ -260,7 +261,7 @@ function mapEngagement(raw: unknown): DraftEngagementSummary | null {
     | undefined;
   const party = Array.isArray(partyJoin) ? partyJoin[0] : partyJoin;
   const partyTypeId = party?.party_type_id ?? null;
-  const code = partyTypeId != null ? PARTY_TYPE_CODE_BY_ID[partyTypeId] : null;
+  const code = partyTypeId != null ? idToCode[partyTypeId] : null;
   const moduleValue: PartyTypeCode =
     (code ?? 'investor') as PartyTypeCode;
   return {
