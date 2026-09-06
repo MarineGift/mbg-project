@@ -30,7 +30,8 @@ import {
 } from '@/lib/actions/bulk-mail';
 import type { BulkMailPreview, BulkMailSource, RecipientMode } from '@/lib/queries/bulk-mail';
 import { searchPartiesForCampaign } from '@/lib/actions/campaigns';
-import { PARTY_TYPE_CODE_BY_ID } from '@/types/party-type';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { fetchPartyTypeMaps } from '@/lib/party-type-maps';
 
 type Pipeline = { id: string; code: string; name: string };
 type Stage = { id: string; pipelineId: string; code: string | null; name: string };
@@ -57,6 +58,19 @@ export function BulkMailClient({
   const [pending, startTransition] = useTransition();
 
   // ---- audience ----
+  // party_type id -> code, loaded once from app.party_types (no hardcoded map).
+  const [idToCode, setIdToCode] = useState<Record<number, string>>({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { idToCode: m } = await fetchPartyTypeMaps(createSupabaseBrowserClient());
+        if (alive) setIdToCode(m);
+      } catch { /* keep empty map; selectedPartiesModule just resolves to '' */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const [mode, setMode] = useState<'pipeline_stage' | 'parties'>('pipeline_stage');
   const [pipelineId, setPipelineId] = useState('');
   const [stageId, setStageId] = useState('');
@@ -119,7 +133,7 @@ export function BulkMailClient({
   // Templates offered in the picker: narrow to the audience pipeline's module,
   // then to the selected stage when stage-specific templates exist (otherwise
   // keep the module list so the dropdown is never empty).
-  const selectedPartiesModule = useMemo(() => { const codes = new Set<string>(); for (const p of selectedParties.values()) { const c = p.party_type_id != null ? PARTY_TYPE_CODE_BY_ID[p.party_type_id] : undefined; if (c) codes.add(c); } return codes.size === 1 ? (Array.from(codes)[0] ?? '') : ''; }, [selectedParties]);
+  const selectedPartiesModule = useMemo(() => { const codes = new Set<string>(); for (const p of selectedParties.values()) { const c = p.party_type_id != null ? idToCode[p.party_type_id] : undefined; if (c) codes.add(c); } return codes.size === 1 ? (Array.from(codes)[0] ?? '') : ''; }, [selectedParties, idToCode]);
   const templateOptions = useMemo(() => {
     if (mode === 'parties') { const m = selectedPartiesModule; const byType = m ? templates.filter((t) => t.module === m) : []; return byType.length > 0 ? byType : templates; }
     if (mode !== 'pipeline_stage' || !pipelineId) return templates;
