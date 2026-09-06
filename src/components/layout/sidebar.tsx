@@ -72,15 +72,19 @@ const STATIC_PIPELINES: Pipeline[] = [
 
 // Directory section -- party-list (info) pages, distinct from pipelines (workflow).
 // Links to /[partyType]/parties where partyType is the enum code.
+// This is only the STATIC FALLBACK shown until the live app.party_types fetch
+// resolves (and if it ever fails). The live list loads only is_active=true
+// types from the DB (see `directoryItems` below), so enabling a party_type
+// surfaces it here automatically -- no code change needed.
 type DirectoryItem = { code: string; name: string };
-const DIRECTORY_ITEMS: readonly DirectoryItem[] = [
+const STATIC_DIRECTORY: DirectoryItem[] = [
   { code: 'investor',        name: 'Investors' },
   { code: 'paper_mill',      name: 'Paper Mills' },
   { code: 'filler_supplier', name: 'Filler Suppliers' },
   { code: 'partner',         name: 'Partners' },
   { code: 'mentor',          name: 'Mentors' },
   { code: 'self',            name: 'MarineBio Group' },
-] as const;
+];
 
 interface NavItem {
   href: string;
@@ -190,6 +194,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   };
 
   const [pipelines, setPipelines] = useState<Pipeline[]>(STATIC_PIPELINES);
+  // Live Directory items, loaded from app.party_types (is_active=true) below.
+  const [directoryItems, setDirectoryItems] = useState<DirectoryItem[]>(STATIC_DIRECTORY);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -257,7 +263,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound').is('deleted_at' as never, null),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }),
-          supabase.schema('app').from('party_types' as never).select('id, code'),
+          supabase.schema('app').from('party_types' as never)
+            .select('id, code, display_name_en, sort_order')
+            .eq('is_active' as never, true)
+            .order('sort_order' as never, { ascending: true }),
           // Open To-Do items: todo_items.status is plain text (todo/backlog/
           // in_progress/review/done); open = not 'done' and not archived. The old
           // status_option_id column does not exist (42703 broke this badge).
@@ -273,7 +282,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
 
         // Parties per type code — head counts per type (a plain select() caps at
         // 1000 rows and would undercount, e.g. paper_mill 1067).
-        const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string }>;
+        const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string; display_name_en: string | null; sort_order: number | null }>;
         const partyCountResults = await Promise.all(
           typeRows.map((t) =>
             supabase
@@ -293,6 +302,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         typeRows.forEach((t, i) => {
           parties[t.code] = (partyCountResults[i] as any).count ?? 0;
         });
+
+        // Live Directory list from active party_types (DB is the source of truth).
+        // Label = display_name_en, pluralized; 'self' kept as-is.
+        setDirectoryItems(
+          typeRows.map((t) => {
+            const raw = (t.display_name_en ?? t.code).trim();
+            const name = t.code === 'self' || raw.endsWith('s') ? raw : `${raw}s`;
+            return { code: t.code, name };
+          }),
+        );
 
         // Open todos = items not in the 'done' status (computed by the head
         // count query above).
@@ -427,7 +446,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
             </p>
           )}
           <ul className="space-y-0.5">
-            {DIRECTORY_ITEMS.map((d) => {
+            {directoryItems.map((d) => {
               const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
               const href = `/${d.code}/parties`;
               const partyCount = counts.parties[d.code] ?? 0;
