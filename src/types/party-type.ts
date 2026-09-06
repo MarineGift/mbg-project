@@ -58,37 +58,12 @@ export const PARTY_TYPES: readonly PartyType[] = [
 export const PARTY_TYPE_CODES: readonly PartyType[] = PARTY_TYPES;
 
 /**
- * urm.party_types.id (smallint) <-> code mapping.
+ * party_type id <-> code mapping is NO LONGER hardcoded here. It is read from
+ * app.party_types at runtime (and cached) via `fetchPartyTypeMaps()` in
+ * lib/party-type-maps.ts, so adding a party_type in the database needs no code
+ * change. The old PARTY_TYPE_ID_BY_CODE / PARTY_TYPE_CODE_BY_ID constants were
+ * removed to prevent the id drift that broke new types (e.g. 'mentor').
  */
-export const PARTY_TYPE_ID_BY_CODE: Record<PartyType, number> = {
-  investor: 1,
-  paper_mill: 2,
-  filler_supplier: 3,
-  buyer: 4,
-  customer: 5,
-  partner: 6,
-  government_grant: 7,
-  consultant: 8,
-  crowdfunding_platform: 9,
-  self: 10,
-  // NOTE: DB-assigned id for 'mentor' (party_types.max(id)+1). Verify with
-  // `select id from app.party_types where code='mentor';` and correct if != 11.
-  mentor: 11,
-};
-
-export const PARTY_TYPE_CODE_BY_ID: Record<number, PartyType> = {
-  1: 'investor',
-  2: 'paper_mill',
-  3: 'filler_supplier',
-  4: 'buyer',
-  5: 'customer',
-  6: 'partner',
-  7: 'government_grant',
-  8: 'consultant',
-  9: 'crowdfunding_platform',
-  10: 'self',
-  11: 'mentor', // verify real id: select id from app.party_types where code='mentor';
-};
 
 /** Localized display names. */
 export const PARTY_TYPE_DISPLAY: Record<
