@@ -1,7 +1,7 @@
 'use client';
 
 // src/components/schedule/schedule-reports.tsx
-// 리포트 렌더링 — 탭(매일/주간/월간/연간) + 카테고리별 달성률.
+// Report rendering — tabs (daily/weekly/monthly/yearly) + adherence by category.
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -10,10 +10,10 @@ import type { Bucket } from './aggregate';
 
 type Tab = 'daily' | 'weekly' | 'monthly' | 'yearly';
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'daily', label: '매일' },
-  { key: 'weekly', label: '주간' },
-  { key: 'monthly', label: '월간' },
-  { key: 'yearly', label: '연간' },
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekly', label: 'Weekly' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'yearly', label: 'Yearly' },
 ];
 
 export function ScheduleReports({
@@ -26,7 +26,7 @@ export function ScheduleReports({
 
   return (
     <div className="space-y-6">
-      {/* 탭 */}
+      {/* Tabs */}
       <div className="inline-flex rounded-lg border p-0.5">
         {TABS.map((t) => (
           <button
@@ -42,14 +42,14 @@ export function ScheduleReports({
         ))}
       </div>
 
-      {/* 기간별 달성률 */}
+      {/* Adherence by period */}
       <div className="rounded-lg border">
         <div className="border-b px-4 py-2 text-xs font-medium text-muted-foreground">
-          기간별 달성률 (부분수행 0.5 가중, 분모 = 도래한 계획 수)
+          Adherence by period (partial = 0.5 weight, denominator = planned count)
         </div>
         <ul className="divide-y">
           {data.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-muted-foreground">데이터 없음</li>
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">No data</li>
           )}
           {data.map((b) => (
             <li key={b.key} className="flex items-center gap-3 px-4 py-2.5">
@@ -69,14 +69,14 @@ export function ScheduleReports({
         </ul>
       </div>
 
-      {/* 카테고리별 */}
+      {/* By category */}
       <div className="rounded-lg border">
         <div className="border-b px-4 py-2 text-xs font-medium text-muted-foreground">
-          카테고리별 달성률 (최근 {'\u2264'}400일)
+          Adherence by category
         </div>
         <ul className="divide-y">
           {category.length === 0 && (
-            <li className="px-4 py-6 text-center text-sm text-muted-foreground">데이터 없음</li>
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">No data</li>
           )}
           {category.map((c) => {
             const meta = catMeta(c.key);
@@ -109,8 +109,8 @@ function barColor(pct: number): string {
 }
 
 function fmtKey(tab: Tab, key: string): string {
-  if (tab === 'daily') return key.slice(5);        // MM-DD
-  if (tab === 'weekly') return `${key.slice(5)} 주`; // MM-DD 주
-  if (tab === 'monthly') return key;               // YYYY-MM
-  return `${key}년`;                                // YYYY년
+  if (tab === 'daily') return key.slice(5);          // MM-DD
+  if (tab === 'weekly') return `Week of ${key.slice(5)}`; // Week of MM-DD
+  if (tab === 'monthly') return key;                 // YYYY-MM
+  return key;                                        // YYYY
 }

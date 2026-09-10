@@ -1,7 +1,8 @@
 // src/app/(app)/schedule/edit/page.tsx
-// 일과표 편집.
-//   ?date=YYYY-MM-DD  → 그 날짜만 편집(진입 시 템플릿을 그날로 복사=materialize).
-//   date 없음         → 기본 템플릿(routine_blocks) 편집 → 이후 모든 "안 연 날"의 기본이 바뀜.
+// Schedule editing.
+//   ?date=YYYY-MM-DD  → edit that date only (materialize the template into it on entry).
+//   no date           → edit the default template (routine_blocks) → changes the default
+//                       for every day not yet customized.
 
 import Link from 'next/link';
 import { requireAuthOrRedirect } from '@/lib/auth';
@@ -20,7 +21,7 @@ function validDate(s: string | undefined): string | null {
 
 type SB = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
-// 편집 진입 시: 그날 인스턴스가 없으면 템플릿을 복사(revalidate 없이 조용히).
+// On edit entry: if the date has no instances, copy the template (silently, no revalidate).
 async function materializeInline(supabase: SB, org: string, user: string, date: string) {
   const { count } = await supabase
     .schema('app')
@@ -81,7 +82,7 @@ export default async function ScheduleEditPage({
   let blocks: EditorBlock[];
 
   if (date) {
-    // 날짜 편집 모드 — 진입 시 materialize 후 인스턴스 로드
+    // date edit mode — materialize on entry, then load instances
     await materializeInline(supabase, auth.organizationId, auth.userId, date);
     const res = await supabase
       .schema('app')
@@ -96,7 +97,7 @@ export default async function ScheduleEditPage({
       }))
       .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   } else {
-    // 템플릿 편집 모드
+    // template edit mode
     const res = await supabase
       .schema('app')
       .from('routine_blocks' as never)
@@ -118,16 +119,16 @@ export default async function ScheduleEditPage({
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            {date ? '일정 편집' : '기본 템플릿 편집'}
+            {date ? 'Edit Schedule' : 'Edit Default Template'}
           </h1>
           <p className="text-sm text-muted-foreground">
             {date
-              ? `${humanDate(date)} — 이 날짜만 수정됩니다.`
-              : '매일의 기본값을 수정합니다. 이미 수정한 날짜에는 영향 없음.'}
+              ? `${humanDate(date)} - changes apply to this day only.`
+              : 'Edit the daily default. Days you already customized are unaffected.'}
           </p>
         </div>
         <Link href={backHref} className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent">
-          {date && date !== todayISO() ? '날짜로' : '돌아가기'}
+          {date && date !== todayISO() ? 'Back to day' : 'Back'}
         </Link>
       </div>
 

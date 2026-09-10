@@ -1,8 +1,8 @@
 'use client';
 
 // src/components/schedule/schedule-today.tsx
-// 특정 날짜 일과 체크 UI — 날짜 이동 + 각 블록을 완료/부분/건너뜀 으로 표시.
-// materialize 전/후로 블록 id가 바뀌어도 체크가 유지되도록 (시작시각|제목) 안정키로 상태 관리.
+// Per-date check UI — date navigation + mark each block done/partial/skipped.
+// Uses a stable key (start_time|title) so checks survive the id change on materialize.
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
@@ -34,7 +34,7 @@ export function ScheduleToday({
   const [isPending, startTransition] = useTransition();
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  // 안정키 → status
+  // stable key → status
   const [statusMap, setStatusMap] = useState<Record<string, RoutineStatus | undefined>>(() => {
     const m: Record<string, RoutineStatus> = {};
     for (const b of blocks) if (b.status) m[keyOf(b)] = b.status;
@@ -54,7 +54,7 @@ export function ScheduleToday({
   function apply(b: DayBlockView, next: RoutineStatus) {
     const k = keyOf(b);
     const current = statusMap[k];
-    const target: RoutineStatus | null = current === next ? null : next; // 같은 걸 다시 누르면 해제
+    const target: RoutineStatus | null = current === next ? null : next; // click same = clear
     setStatusMap((m) => ({ ...m, [k]: target ?? undefined }));
     setBusyKey(k);
     startTransition(async () => {
@@ -65,8 +65,8 @@ export function ScheduleToday({
       );
       setBusyKey(null);
       if (!res.success) {
-        setStatusMap((m) => ({ ...m, [k]: current })); // 롤백
-        alert(`저장 실패: ${res.error}`);
+        setStatusMap((m) => ({ ...m, [k]: current })); // rollback
+        alert(`Save failed: ${res.error}`);
         return;
       }
       router.refresh();
@@ -81,28 +81,28 @@ export function ScheduleToday({
     });
     startTransition(async () => {
       const res = await completeDay(date);
-      if (!res.success) alert(`저장 실패: ${res.error}`);
+      if (!res.success) alert(`Save failed: ${res.error}`);
       router.refresh();
     });
   }
 
   function resetDay() {
-    if (!confirm('이 날짜의 수정 내용을 지우고 기본 일정으로 되돌릴까요?')) return;
+    if (!confirm('Reset this day to the default schedule? Your changes for this day will be discarded.')) return;
     startTransition(async () => {
       const res = await resetDayToTemplate(date);
-      if (!res.success) { alert(`초기화 실패: ${res.error}`); return; }
+      if (!res.success) { alert(`Reset failed: ${res.error}`); return; }
       router.refresh();
     });
   }
 
   return (
     <div>
-      {/* 날짜 이동 바 */}
+      {/* Date navigation */}
       <div className="mb-3 flex items-center justify-between gap-2">
         <Link
           href={`/schedule?date=${prevDate}`}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-accent"
-          aria-label="이전 날"
+          aria-label="Previous day"
         >
           <ChevronLeft className="h-4 w-4" />
         </Link>
@@ -117,14 +117,14 @@ export function ScheduleToday({
                 : 'bg-zinc-100 text-zinc-600 ring-zinc-500/20',
             )}
           >
-            {materialized ? '수정됨' : '기본'}
+            {materialized ? 'Edited' : 'Default'}
           </span>
           {date !== today && (
             <Link
               href={`/schedule?date=${today}`}
               className="rounded-md border px-2 py-0.5 text-xs font-medium hover:bg-accent"
             >
-              오늘
+              Today
             </Link>
           )}
         </div>
@@ -132,20 +132,20 @@ export function ScheduleToday({
         <Link
           href={`/schedule?date=${nextDate}`}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-accent"
-          aria-label="다음 날"
+          aria-label="Next day"
         >
           <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
 
-      {/* 진행률 헤더 */}
+      {/* Progress header */}
       <div className="mb-4 rounded-lg border p-4">
         <div className="mb-2 flex items-center justify-between gap-2 text-sm">
           <span className="whitespace-nowrap font-medium">
-            달성률 <span className="tabular-nums">{pct}%</span>
+            Progress <span className="tabular-nums">{pct}%</span>
           </span>
           <span className="text-right text-xs tabular-nums text-muted-foreground sm:text-sm">
-            완료 {doneCount} · 부분 {partialCount} · 기록 {recorded}/{total}
+            Done {doneCount} · Partial {partialCount} · Logged {recorded}/{total}
           </span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -161,7 +161,7 @@ export function ScheduleToday({
               disabled={isPending}
               className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> 기본으로 되돌리기
+              <RotateCcw className="h-3.5 w-3.5" /> Reset to default
             </button>
           )}
           <button
@@ -169,12 +169,12 @@ export function ScheduleToday({
             disabled={isPending}
             className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
           >
-            <CheckCheck className="h-3.5 w-3.5" /> 전체 완료
+            <CheckCheck className="h-3.5 w-3.5" /> Complete all
           </button>
         </div>
       </div>
 
-      {/* 블록 목록 */}
+      {/* Block list */}
       <ul className="space-y-2">
         {blocks.map((b) => {
           const meta = catMeta(b.category);
@@ -191,7 +191,7 @@ export function ScheduleToday({
                 st === 'skipped' && 'border-zinc-200 bg-zinc-50/60 opacity-70',
               )}
             >
-              {/* 시간: 세로로 쌓아 좁게 (시작 위 / 종료 아래) */}
+              {/* time stacked to stay narrow (start over end) */}
               <div className="w-10 shrink-0 text-center text-[11px] leading-tight tabular-nums text-muted-foreground sm:w-11 sm:text-xs">
                 <div>{hhmm(b.start_time)}</div>
                 <div className="opacity-60">{hhmm(b.end_time)}</div>
@@ -223,15 +223,15 @@ export function ScheduleToday({
               ) : (
                 <div className="flex shrink-0 items-center gap-0.5">
                   <StatusBtn active={st === 'done'} onClick={() => apply(b, 'done')}
-                    title="완료" activeClass="bg-emerald-500 text-white border-emerald-500">
+                    title="Done" activeClass="bg-emerald-500 text-white border-emerald-500">
                     <Check className="h-3.5 w-3.5" />
                   </StatusBtn>
                   <StatusBtn active={st === 'partial'} onClick={() => apply(b, 'partial')}
-                    title="부분" activeClass="bg-amber-500 text-white border-amber-500">
+                    title="Partial" activeClass="bg-amber-500 text-white border-amber-500">
                     <Minus className="h-3.5 w-3.5" />
                   </StatusBtn>
                   <StatusBtn active={st === 'skipped'} onClick={() => apply(b, 'skipped')}
-                    title="건너뜀" activeClass="bg-zinc-500 text-white border-zinc-500">
+                    title="Skipped" activeClass="bg-zinc-500 text-white border-zinc-500">
                     <X className="h-3.5 w-3.5" />
                   </StatusBtn>
                 </div>

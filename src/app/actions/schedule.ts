@@ -2,14 +2,14 @@
 
 /**
  * src/app/actions/schedule.ts
- * 일과표(Routine) 서버 액션 — RLS 클라이언트(본인 org+user)만 사용.
+ * Routine schedule server actions — RLS client only (own org + user).
  *
- *  모델:
- *   - routine_blocks      = 기본 일정(템플릿)
- *   - routine_day_blocks  = 특정 날짜의 실제 일정 + 상태 (이 파일이 주로 다룸)
+ *  Model:
+ *   - routine_blocks      = default schedule (template)
+ *   - routine_day_blocks  = a specific date's actual schedule + status (main here)
  *
- *  "materialize" = 어떤 날짜를 처음 체크/수정할 때, 그날 템플릿을
- *   routine_day_blocks 로 복사해 그 날짜를 독립 편집 가능하게 만드는 것.
+ *  "materialize" = when a date is first checked/edited, copy the template into
+ *   routine_day_blocks so that date can be edited independently.
  */
 
 import { revalidatePath } from 'next/cache';
@@ -31,14 +31,14 @@ function revalidateSchedule() {
   revalidatePath('/calendar');
 }
 
-// "YYYY-MM-DD" → 요일(0=일..6=토). 정오+UTC로 경계 흔들림 방지.
+// "YYYY-MM-DD" → weekday (0=Sun..6=Sat). Noon+UTC to avoid boundary drift.
 function dowOfDate(iso: string): number {
   return new Date(`${iso}T12:00:00Z`).getUTCDay();
 }
 
 // ---------------------------------------------------------------------------
-// materialize: 해당 날짜에 인스턴스가 없으면 템플릿을 복사해 넣는다.
-// 이미 있으면 아무 것도 하지 않음(멱등).
+// materialize: if the date has no instances, copy the template into it.
+// No-op if it already exists (idempotent).
 // ---------------------------------------------------------------------------
 async function ensureDayMaterialized(
   supabase: SB,
@@ -53,9 +53,9 @@ async function ensureDayMaterialized(
     .eq('user_id' as never, userId)
     .eq('block_date' as never, date);
   if (cErr) return { ok: false, error: cErr.message };
-  if ((count ?? 0) > 0) return { ok: true }; // 이미 materialize됨
+  if ((count ?? 0) > 0) return { ok: true }; // already materialized
 
-  // 템플릿(활성)에서 이 요일에 해당하는 블록만 복사
+  // copy template (active) blocks that fall on this weekday
   const { data: tpl, error: tErr } = await supabase
     .schema('app')
     .from('routine_blocks' as never)
@@ -83,7 +83,7 @@ async function ensureDayMaterialized(
       status: null as RoutineStatus | null,
     }));
 
-  if (rows.length === 0) return { ok: true }; // 이 요일엔 템플릿 블록이 없음 → 빈 날
+  if (rows.length === 0) return { ok: true }; // no template blocks on this weekday
 
   const { error: iErr } = await supabase
     .schema('app')
@@ -96,7 +96,7 @@ async function ensureDayMaterialized(
   return { ok: true };
 }
 
-/** 특정 날짜의 블록을 materialize (편집/체크 진입 시 버튼 없이도 호출 가능) */
+/** Materialize a specific date (can be called on edit/check entry) */
 export async function materializeDay(date: string): Promise<ScheduleActionResult> {
   try {
     const { userId, organizationId } = await requireAuth();
@@ -110,16 +110,16 @@ export async function materializeDay(date: string): Promise<ScheduleActionResult
   }
 }
 
-// 체크할 블록을 식별하기 위한 정보 (materialize 전이면 dayBlockId가 없을 수 있음)
+// Info to identify a block to check (dayBlockId may be absent before materialize)
 export type DayStatusTarget = {
   dayBlockId?: string;
-  start_time: string; // "HH:MM:SS" 또는 "HH:MM"
+  start_time: string; // "HH:MM:SS" or "HH:MM"
   title: string;
 };
 
 /**
- * 특정 날짜·블록의 실행 상태 저장/변경/해제.
- * 아직 materialize 안 된 날이면 먼저 materialize한 뒤, 해당 인스턴스를 찾아 상태 지정.
+ * Set/change/clear a block's status on a date.
+ * If the date isn't materialized yet, materialize first, then find the instance.
  */
 export async function setDayStatus(
   date: string,
@@ -133,7 +133,7 @@ export async function setDayStatus(
     const m = await ensureDayMaterialized(supabase, organizationId, userId, date);
     if (!m.ok) return { success: false, error: m.error };
 
-    // 대상 인스턴스 id 확정
+    // resolve the target instance id
     let dayBlockId = target.dayBlockId;
     if (!dayBlockId) {
       const startHm = target.start_time.slice(0, 5);
@@ -146,7 +146,7 @@ export async function setDayStatus(
       if (error) return { success: false, error: error.message };
       const found = ((data ?? []) as unknown as Array<{ id: string; start_time: string; title: string }>)
         .find((r) => r.start_time.slice(0, 5) === startHm && r.title === target.title);
-      if (!found) return { success: false, error: '해당 블록을 찾지 못했습니다.' };
+      if (!found) return { success: false, error: 'Could not find the block.' };
       dayBlockId = found.id;
     }
 
@@ -164,7 +164,7 @@ export async function setDayStatus(
   }
 }
 
-/** 그날 전체를 "완료"로 (빠른 마감) */
+/** Mark the whole day as "done" (quick close) */
 export async function completeDay(date: string): Promise<ScheduleActionResult> {
   try {
     const { userId, organizationId } = await requireAuth();
@@ -188,7 +188,7 @@ export async function completeDay(date: string): Promise<ScheduleActionResult> {
   }
 }
 
-/** 그날 수정 취소 → 인스턴스 삭제 → 다시 템플릿(기본)으로 표시 */
+/** Discard this day's edits → delete instances → show the template again */
 export async function resetDayToTemplate(date: string): Promise<ScheduleActionResult> {
   try {
     const { userId } = await requireAuth();
@@ -208,17 +208,17 @@ export async function resetDayToTemplate(date: string): Promise<ScheduleActionRe
 }
 
 // ---------------------------------------------------------------------------
-// 날짜별 블록 편집 (에디터에서 사용)
+// Per-day block editing (used by the editor)
 // ---------------------------------------------------------------------------
 export type DayBlockInput = {
-  id?: string;         // 있으면 수정, 없으면 추가
+  id?: string;         // present = update, absent = add
   title: string;
   category: string;
   start_time: string;  // "HH:MM"
   end_time: string;    // "HH:MM"
 };
 
-/** 특정 날짜의 블록 추가/수정 (수정 진입 시 그날을 먼저 materialize) */
+/** Add/update a block on a specific date (materialize the day first) */
 export async function upsertDayBlock(
   date: string,
   input: DayBlockInput,
@@ -227,9 +227,9 @@ export async function upsertDayBlock(
     const { userId, organizationId } = await requireAuth();
     const supabase = await createSupabaseServerClient();
 
-    if (!input.title.trim()) return { success: false, error: '제목을 입력하세요.' };
+    if (!input.title.trim()) return { success: false, error: 'Please enter a title.' };
     if (input.end_time <= input.start_time)
-      return { success: false, error: '종료 시각은 시작 시각보다 뒤여야 합니다.' };
+      return { success: false, error: 'End time must be after start time.' };
 
     const m = await ensureDayMaterialized(supabase, organizationId, userId, date);
     if (!m.ok) return { success: false, error: m.error };
@@ -273,7 +273,7 @@ export async function upsertDayBlock(
   }
 }
 
-/** 특정 날짜의 블록 1개 삭제 */
+/** Delete a single block on a date */
 export async function deleteDayBlock(id: string): Promise<ScheduleActionResult> {
   try {
     await requireAuth();
@@ -292,33 +292,33 @@ export async function deleteDayBlock(id: string): Promise<ScheduleActionResult> 
 }
 
 // ===========================================================================
-// 아래는 "기본 템플릿" 편집용 액션 (routine_blocks). /schedule/edit (날짜 없음)에서 사용.
+// Below: default template editing (routine_blocks). Used by /schedule/edit (no date).
 // ===========================================================================
 
 const DEFAULT_TEMPLATE: Array<{
   title: string; category: string; start_time: string; end_time: string; sort_order: number;
 }> = [
-  { title: '기상 및 식사, 샤워, 출근준비',       category: 'personal', start_time: '06:00', end_time: '06:30', sort_order: 1 },
-  { title: '출근 – 영어 스피킹 (들으면서 말하기)', category: 'english',  start_time: '06:30', end_time: '07:00', sort_order: 2 },
-  { title: '명상 · 오늘의 할일 · 감사기도',        category: 'personal', start_time: '07:00', end_time: '07:30', sort_order: 3 },
-  { title: '업무 준비 · 이메일 정리',              category: 'work',     start_time: '07:30', end_time: '08:00', sort_order: 4 },
-  { title: '업무 1 (집중 딥워크)',                 category: 'work',     start_time: '08:00', end_time: '09:00', sort_order: 5 },
-  { title: '업무 2',                               category: 'work',     start_time: '09:00', end_time: '10:00', sort_order: 6 },
-  { title: '휴식',                                 category: 'rest',     start_time: '10:00', end_time: '10:15', sort_order: 7 },
-  { title: '업무 3',                               category: 'work',     start_time: '10:15', end_time: '11:30', sort_order: 8 },
-  { title: '영어 공부 (리딩 · 어휘)',              category: 'english',  start_time: '11:30', end_time: '12:00', sort_order: 9 },
-  { title: '점심 및 휴식',                         category: 'meal',     start_time: '12:00', end_time: '13:00', sort_order: 10 },
-  { title: '업무 4',                               category: 'work',     start_time: '13:00', end_time: '14:30', sort_order: 11 },
-  { title: '휴식',                                 category: 'rest',     start_time: '14:30', end_time: '14:45', sort_order: 12 },
-  { title: '업무 5',                               category: 'work',     start_time: '14:45', end_time: '16:00', sort_order: 13 },
-  { title: '업무 6 · 미팅',                        category: 'work',     start_time: '16:00', end_time: '17:00', sort_order: 14 },
-  { title: '업무 마무리 · 정리',                   category: 'work',     start_time: '17:00', end_time: '18:00', sort_order: 15 },
-  { title: '저녁 식사',                            category: 'meal',     start_time: '18:00', end_time: '19:00', sort_order: 16 },
-  { title: '운동',                                 category: 'exercise', start_time: '19:00', end_time: '20:00', sort_order: 17 },
-  { title: '샤워 · 휴식',                          category: 'rest',     start_time: '20:00', end_time: '20:30', sort_order: 18 },
-  { title: '영어 공부 (스피킹 · 섀도잉)',          category: 'english',  start_time: '20:30', end_time: '21:30', sort_order: 19 },
-  { title: '자기계발 · 독서',                      category: 'growth',   start_time: '21:30', end_time: '22:30', sort_order: 20 },
-  { title: '하루 리뷰 · 감사일기 · 내일 계획',     category: 'personal', start_time: '22:30', end_time: '23:00', sort_order: 21 },
+  { title: 'Wake up, meal, shower, prep',            category: 'personal', start_time: '06:00', end_time: '06:30', sort_order: 1 },
+  { title: 'Commute - English speaking (listen & repeat)', category: 'english', start_time: '06:30', end_time: '07:00', sort_order: 2 },
+  { title: 'Meditation, to-do, gratitude',           category: 'personal', start_time: '07:00', end_time: '07:30', sort_order: 3 },
+  { title: 'Work prep, email triage',                category: 'work',     start_time: '07:30', end_time: '08:00', sort_order: 4 },
+  { title: 'Work 1 (deep work)',                     category: 'work',     start_time: '08:00', end_time: '09:00', sort_order: 5 },
+  { title: 'Work 2',                                 category: 'work',     start_time: '09:00', end_time: '10:00', sort_order: 6 },
+  { title: 'Break',                                  category: 'rest',     start_time: '10:00', end_time: '10:15', sort_order: 7 },
+  { title: 'Work 3',                                 category: 'work',     start_time: '10:15', end_time: '11:30', sort_order: 8 },
+  { title: 'English study (reading, vocab)',         category: 'english',  start_time: '11:30', end_time: '12:00', sort_order: 9 },
+  { title: 'Lunch & break',                          category: 'meal',     start_time: '12:00', end_time: '13:00', sort_order: 10 },
+  { title: 'Work 4',                                 category: 'work',     start_time: '13:00', end_time: '14:30', sort_order: 11 },
+  { title: 'Break',                                  category: 'rest',     start_time: '14:30', end_time: '14:45', sort_order: 12 },
+  { title: 'Work 5',                                 category: 'work',     start_time: '14:45', end_time: '16:00', sort_order: 13 },
+  { title: 'Work 6, meeting',                        category: 'work',     start_time: '16:00', end_time: '17:00', sort_order: 14 },
+  { title: 'Wrap-up, organize',                      category: 'work',     start_time: '17:00', end_time: '18:00', sort_order: 15 },
+  { title: 'Dinner',                                 category: 'meal',     start_time: '18:00', end_time: '19:00', sort_order: 16 },
+  { title: 'Exercise',                               category: 'exercise', start_time: '19:00', end_time: '20:00', sort_order: 17 },
+  { title: 'Shower, rest',                           category: 'rest',     start_time: '20:00', end_time: '20:30', sort_order: 18 },
+  { title: 'English study (speaking, shadowing)',    category: 'english',  start_time: '20:30', end_time: '21:30', sort_order: 19 },
+  { title: 'Self-development, reading',              category: 'growth',   start_time: '21:30', end_time: '22:30', sort_order: 20 },
+  { title: 'Daily review, gratitude journal, plan tomorrow', category: 'personal', start_time: '22:30', end_time: '23:00', sort_order: 21 },
 ];
 
 export async function loadDefaultTemplate(): Promise<ScheduleActionResult> {
@@ -361,15 +361,15 @@ export type BlockInput = {
   active?: boolean;
 };
 
-/** 템플릿 블록 추가/수정 */
+/** Add/update a template block */
 export async function upsertBlock(input: BlockInput): Promise<ScheduleActionResult> {
   try {
     const { userId, organizationId } = await requireAuth();
     const supabase = await createSupabaseServerClient();
 
-    if (!input.title.trim()) return { success: false, error: '제목을 입력하세요.' };
+    if (!input.title.trim()) return { success: false, error: 'Please enter a title.' };
     if (input.end_time <= input.start_time)
-      return { success: false, error: '종료 시각은 시작 시각보다 뒤여야 합니다.' };
+      return { success: false, error: 'End time must be after start time.' };
 
     const payload = {
       organization_id: organizationId,
@@ -404,7 +404,7 @@ export async function upsertBlock(input: BlockInput): Promise<ScheduleActionResu
   }
 }
 
-/** 템플릿 블록 삭제 */
+/** Delete a template block */
 export async function deleteBlock(id: string): Promise<ScheduleActionResult> {
   try {
     await requireAuth();

@@ -1,17 +1,18 @@
 // src/components/schedule/aggregate.ts
-// routine_day_blocks(연 날의 인스턴스)로 일/주/월/년/카테고리 달성률을 계산하는 순수 모듈.
-// "연 날"만 집계 → 각 인스턴스 행이 곧 그날의 계획 1건. partial=0.5 가중.
-//   done/partial/skipped = 체크값,  missed = 미체크(pending)로 표기(컴포넌트 호환).
+// Pure module computing daily/weekly/monthly/yearly/category adherence from
+// routine_day_blocks (opened days only). Each instance row = one planned item
+// for that day; partial = 0.5 weight.
+//   done/partial/skipped = checked values, missed = not checked (pending).
 
 import { dowOf, type RoutineDayBlock } from './constants';
 
 export type Bucket = {
-  key: string;         // 표시용 라벨 (날짜/주/월/년/카테고리)
-  planned_due: number; // 그 버킷의 계획 수(= 인스턴스 수)
+  key: string;         // display label (date/week/month/year/category)
+  planned_due: number; // planned count for the bucket (= number of instances)
   done: number;
   partial: number;
   skipped: number;
-  missed: number;      // 미체크(pending)
+  missed: number;      // not checked (pending)
   adherence_pct: number;
 };
 
@@ -23,9 +24,9 @@ function isoAddDays(iso: string, delta: number): string {
   }).format(d);
 }
 
-// 월요일 시작 주(週)의 시작 날짜
+// Start date of the (Monday-first) week
 function weekStart(iso: string): string {
-  const dow = dowOf(iso);            // 0=일..6=토
+  const dow = dowOf(iso);            // 0=Sun..6=Sat
   const back = dow === 0 ? 6 : dow - 1;
   return isoAddDays(iso, -back);
 }
@@ -53,7 +54,7 @@ function groupBy(rows: RoutineDayBlock[], keyFn: KeyFn): Bucket[] {
     if (r.status === 'done') bk.done += 1;
     else if (r.status === 'partial') bk.partial += 1;
     else if (r.status === 'skipped') bk.skipped += 1;
-    else bk.missed += 1; // null = 미체크
+    else bk.missed += 1; // null = not checked
   }
   return Array.from(map.values()).map(finalize).sort((a, b) => (a.key < b.key ? 1 : -1));
 }
