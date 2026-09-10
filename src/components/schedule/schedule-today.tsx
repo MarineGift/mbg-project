@@ -74,11 +74,11 @@ export function ScheduleToday({
     <div>
       {/* 진행률 헤더 */}
       <div className="mb-4 rounded-lg border p-4">
-        <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="font-medium">
+        <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+          <span className="font-medium whitespace-nowrap">
             달성률 <span className="tabular-nums">{pct}%</span>
           </span>
-          <span className="text-muted-foreground tabular-nums">
+          <span className="text-muted-foreground tabular-nums text-right text-xs sm:text-sm">
             완료 {doneCount} · 부분 {partialCount} · 기록 {recorded}/{total}
           </span>
         </div>
@@ -109,14 +109,16 @@ export function ScheduleToday({
             <li
               key={b.id}
               className={cn(
-                'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                'flex items-center gap-2 rounded-lg border p-2.5 transition-colors sm:gap-3 sm:p-3',
                 st === 'done' && 'border-emerald-200 bg-emerald-50/40',
                 st === 'partial' && 'border-amber-200 bg-amber-50/40',
                 st === 'skipped' && 'border-zinc-200 bg-zinc-50/60 opacity-70',
               )}
             >
-              <div className="w-[92px] shrink-0 text-sm tabular-nums text-muted-foreground">
-                {hhmm(b.start_time)}–{hhmm(b.end_time)}
+              {/* 시간: 세로로 쌓아 좁게 (시작 위 / 종료 아래) */}
+              <div className="w-10 shrink-0 text-center text-[11px] leading-tight tabular-nums text-muted-foreground sm:w-11 sm:text-xs">
+                <div>{hhmm(b.start_time)}</div>
+                <div className="opacity-60">{hhmm(b.end_time)}</div>
               </div>
 
               <span className={cn('h-2 w-2 shrink-0 rounded-full', meta.dot)} aria-hidden />
@@ -141,20 +143,20 @@ export function ScheduleToday({
               </div>
 
               {rowBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
               ) : (
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-0.5">
                   <StatusBtn active={st === 'done'} onClick={() => apply(b.id, 'done')}
                     title="완료" activeClass="bg-emerald-500 text-white border-emerald-500">
-                    <Check className="h-4 w-4" />
+                    <Check className="h-3.5 w-3.5" />
                   </StatusBtn>
                   <StatusBtn active={st === 'partial'} onClick={() => apply(b.id, 'partial')}
                     title="부분" activeClass="bg-amber-500 text-white border-amber-500">
-                    <Minus className="h-4 w-4" />
+                    <Minus className="h-3.5 w-3.5" />
                   </StatusBtn>
                   <StatusBtn active={st === 'skipped'} onClick={() => apply(b.id, 'skipped')}
                     title="건너뜀" activeClass="bg-zinc-500 text-white border-zinc-500">
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </StatusBtn>
                 </div>
               )}
@@ -182,7 +184,7 @@ function StatusBtn({
       title={title}
       aria-pressed={active}
       className={cn(
-        'inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent',
+        'inline-flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent',
         active && activeClass,
       )}
     >
