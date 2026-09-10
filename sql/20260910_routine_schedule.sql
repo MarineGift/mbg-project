@@ -275,24 +275,23 @@ group by user_id, category;
 
 -- ----------------------------------------------------------------------------
 -- 6. 시드: 06:00~23:00 기본 일과표
---    대상 사용자 = 조직 소유자(owner)  [리포지토리 표준 시드 패턴]
---    실제 user_id를 코드에 박지 않고 app.users(owner)에서 해석하고,
---    조직 id도 같은 행에서 가져와 FK 정합성을 보장한다.
+--    대상 사용자 = 조직 소유자(owner) → 없으면 조직 최초 가입자
+--    (실제 user_id를 코드에 박지 않고 org_members에서 안전하게 해석)
 -- ----------------------------------------------------------------------------
 do $seed$
 declare
-    v_org  uuid;
+    v_org  uuid := 'b25de8f2-1020-482f-9012-183f63883169';  -- MBG organization_id
     v_user uuid;
 begin
-    select id, organization_id
-      into v_user, v_org
-      from app.users
-     where is_owner = true and is_active = true
-     order by created_at
+    select m.user_id
+      into v_user
+      from app.org_members m
+     where m.organization_id = v_org
+     order by (m.role = 'owner') desc, m.created_at asc
      limit 1;
 
     if v_user is null then
-        raise notice '시드 건너뜀: 활성 owner 사용자가 없습니다. 프론트엔드 "기본 일정표 불러오기" 버튼을 사용하세요.';
+        raise notice '시드 건너뜀: org % 에 사용자가 없습니다. 프론트엔드 "기본 일정표 불러오기" 버튼을 사용하세요.', v_org;
         return;
     end if;
 
