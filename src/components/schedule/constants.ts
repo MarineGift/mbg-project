@@ -3,6 +3,7 @@
 
 export type RoutineStatus = 'done' | 'partial' | 'skipped';
 
+// 기본 일정(템플릿)
 export type RoutineBlock = {
   id: string;
   title: string;
@@ -22,6 +23,33 @@ export type RoutineLog = {
   status: RoutineStatus;
   actual_minutes: number | null;
   note: string | null;
+};
+
+// 특정 날짜의 실제 일정 인스턴스 (materialize된 날에만 존재)
+export type RoutineDayBlock = {
+  id: string;
+  block_date: string;                 // "YYYY-MM-DD"
+  template_block_id: string | null;
+  title: string;
+  category: string;
+  start_time: string;                 // "HH:MM:SS"
+  end_time: string;                   // "HH:MM:SS"
+  sort_order: number;
+  status: RoutineStatus | null;       // null = 미체크
+  note: string | null;
+};
+
+// 오늘 화면/에디터가 공통으로 다루는 "그날의 한 블록" 뷰 모델.
+// materialize된 날이면 id=day_block id, 아니면 템플릿에서 투영(id=템플릿 id).
+export type DayBlockView = {
+  id: string;
+  template_block_id: string | null;
+  title: string;
+  category: string;
+  start_time: string;                 // "HH:MM:SS"
+  end_time: string;                   // "HH:MM:SS"
+  sort_order: number;
+  status: RoutineStatus | null;
 };
 
 // 카테고리 코드 → 라벨/색 (DB에는 코드만 저장, 색은 프론트에서 매핑)
@@ -67,6 +95,22 @@ export function todayISO(tz: string = APP_TIMEZONE): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+// ISO 날짜에 delta일 더하기 (정오 기준으로 tz 경계 흔들림 방지)
+export function isoAddDays(iso: string, delta: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + delta);
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
+
+// "YYYY-MM-DD" → "9월 11일 (목)" 같은 한국어 라벨
+const DOW_KO = ['일', '월', '화', '수', '목', '금', '토'];
+export function humanDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${m}월 ${d}일 (${DOW_KO[dowOf(iso)]})`;
 }
 
 // JS Date/ISO → 요일 인덱스(0=일 .. 6=토)
