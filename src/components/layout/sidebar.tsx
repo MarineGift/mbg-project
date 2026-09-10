@@ -108,6 +108,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   // touching the next-intl messages files.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays, badgeKey: 'calendarUpcomingCount' },
+  { href: '/schedule', labelKey: 'schedule',  icon: CalendarCheck, label: 'Schedule' },
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
   { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
@@ -280,7 +281,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         ]);
         if (!alive) return;
 
-        // Parties per type code — head counts per type (a plain select() caps at
+        // Parties per type code ??head counts per type (a plain select() caps at
         // 1000 rows and would undercount, e.g. paper_mill 1067).
         const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string; display_name_en: string | null; sort_order: number | null }>;
         const partyCountResults = await Promise.all(
