@@ -576,19 +576,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         return (priorityAsc ? -cmp : cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     } else if (sortByTags) {
-      // TAGS sort: key each row by its alphabetically-first tag (rows display
-      // their tags ascending, so the key matches what the user sees). Untagged
-      // rows always sink to the bottom regardless of direction.
-      const tagKey = (p: PartyRow) => {
-        const canonical = investorTagsAll[p.id];
-        if (canonical && canonical.length > 0) return canonical[0]!.toLowerCase();
-        const arr = Array.isArray(p.interest_tags) ? p.interest_tags : [];
-        const norm = arr
-          .map((t) => String(t ?? '').trim().toLowerCase())
-          .filter(Boolean)
-          .sort();
-        return norm[0] ?? '';
-      };
+      // TAGS sort: the column now shows only the "Greentown Labs" curation
+      // indicator, so sort by that (curated rows float up in asc; others sink).
+      const tagKey = (p: PartyRow) => (greentownPartyIds.has(p.id) ? 'greentown labs' : '');
       working = [...working].sort((a, b) => {
         const ka = tagKey(a);
         const kb = tagKey(b);
@@ -880,12 +870,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   // for some rows; coerce so .slice()/.map() can't 500 the page.
                   // Prefer normalized canonical tags (catalogue order);
                   // fall back to legacy jsonb for parties not yet backfilled.
-                  const legacyTags = (Array.isArray(p.interest_tags) ? p.interest_tags : [])
-                    .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
-                    .slice()
-                    .sort((a, b) => a.localeCompare(b));
-                  const normTags  = investorTagsAll[p.id] ?? [];
-                  const tags      = normTags.length > 0 ? normTags : legacyTags;
+                  // TAGS column intentionally shows ONLY the "Greentown Labs"
+                  // curation indicator (relationship-based). The old interest_tags
+                  // duplicated the Type/Sector columns, so they are not shown here.
+                  const tags = greentownPartyIds.has(p.id) ? ['Greentown Labs'] : [];
                   const level     = p.party_level as PartyLevel | null;
                   const acc       = scores[p.id];
                   const linked    = Array.isArray(supplyLinks[p.id]) ? supplyLinks[p.id]! : [];
@@ -992,10 +980,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                               {tags.map((tag) => (
                                 <Link
                                   key={tag}
-                                  href={`/${module}/parties?tag=${encodeURIComponent(tag)}`}
-                                  className="inline-flex px-1.5 py-0.5 text-xs bg-muted hover:bg-muted/70 rounded whitespace-nowrap"
-                                  title={`Filter by ${tag}`}
+                                  href={`/${module}/parties?greentown=1`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded whitespace-nowrap bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  title="Curated by Greentown Labs — click to filter"
                                 >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
                                   {tag}
                                 </Link>
                               ))}
