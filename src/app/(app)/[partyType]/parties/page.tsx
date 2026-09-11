@@ -70,7 +70,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
-    country?: string; type?: string; grade?: string; priority?: string; tag?: string;
+    country?: string; type?: string; grade?: string; priority?: string; tag?: string; greentown?: string;
   }>;
 }
 
@@ -130,6 +130,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Interest-tag filter (?tag=<label>): show only parties carrying that tag.
   // e.g. /mentor/parties?tag=Greentown Labs Houston -> only Greentown mentors.
   const tagFilter = (((sp as any).tag ?? '') as string).trim();
+  // "Curated by Greentown Labs" toggle (?greentown=1) — filters to parties linked
+  // to the Greentown Labs Houston party (see greentownPartyIds below).
+  const greentownFilter = ((((sp as any).greentown ?? '') as string).trim() === '1');
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
@@ -190,6 +193,44 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Directory heading from the DB display name, pluralized ('self' kept as-is).
   const rawLabel    = (ptMeta.display_name_en ?? ptMeta.code ?? module).trim();
   const moduleLabel = module === 'self' || rawLabel.endsWith('s') ? rawLabel : `${rawLabel}s`;
+
+  // "Curated by Greentown Labs" filter chip. Unified across EVERY directory via
+  // party_relationships FROM the Greentown Labs Houston party (investors linked
+  // as 'sources_investor', partners as 'has_partner', mentors as 'has_mentor').
+  // Tag storage differs by module (investors use the normalized 'greentown_labs'
+  // tag, partners/mentors use the legacy jsonb tag), so the relationship — not a
+  // tag — is the reliable, consistent discriminator.
+  let greentownPartyIds = new Set<string>();
+  {
+    const { data: gtRow } = await supabase
+      .schema('app')
+      .from('parties' as never)
+      .select('id')
+      .eq('party_name' as never, 'Greentown Labs Houston')
+      .is('deleted_at' as never, null)
+      .limit(1)
+      .maybeSingle();
+    const gtId = (gtRow as { id: string } | null)?.id ?? null;
+    if (gtId) {
+      const { data: relRows } = await supabase
+        .schema('app')
+        .from('party_relationships' as never)
+        .select('to_party_id')
+        .eq('from_party_id' as never, gtId);
+      const linkedIds = [...new Set(((relRows ?? []) as any[]).map((r) => r.to_party_id).filter(Boolean))];
+      if (linkedIds.length > 0) {
+        const { data: modRows } = await supabase
+          .schema('app')
+          .from('parties' as never)
+          .select('id')
+          .eq('party_type_id' as never, partyTypeId)
+          .is('deleted_at' as never, null)
+          .in('id' as never, linkedIds);
+        greentownPartyIds = new Set(((modRows ?? []) as any[]).map((p) => p.id as string));
+      }
+    }
+  }
+  const greentownCount = greentownPartyIds.size;
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -336,9 +377,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         .map((x) => x.code);
     }
   }
-  // Investors curated/managed by Greentown Labs (interest tag 'greentown_labs').
-  const greentownInvestorCount = Object.values(investorTagsAll)
-    .filter((codes) => codes.includes('greentown_labs')).length;
 
   // Paper-mill paper-type facets.
   // The active facet SET + display order + parent come from app.paper_types
@@ -446,7 +484,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '';
+  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -503,6 +541,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
           .filter((t): t is string => typeof t === 'string');
         return [...norm, ...legacy].some((t) => t.toLowerCase() === tf);
       });
+    }
+
+    // "Curated by Greentown Labs" — keep only parties linked to Greentown Labs
+    // Houston (relationship-based, works for investors/partners/mentors alike).
+    if (greentownFilter) {
+      working = working.filter((p) => greentownPartyIds.has(p.id));
     }
 
     // Null/locale-safe comparison key. localeCompare() on a null value throws,
@@ -706,24 +750,24 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             sectors={isInvestor ? sectorFacets : undefined}
             sector={sectorFilter}
           />
-          {isInvestor && greentownInvestorCount > 0 && (
+          {greentownCount != null && greentownCount > 0 && (
             <div className="flex items-center gap-2 flex-wrap pt-1">
-              <span className="text-xs text-muted-foreground">Managed by</span>
+              <span className="text-xs text-muted-foreground">Curated by</span>
               <Link
-                href={tagFilter === 'greentown_labs' ? `/${module}/parties` : `/${module}/parties?tag=greentown_labs`}
+                href={greentownFilter ? `/${module}/parties` : `/${module}/parties?greentown=1`}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  tagFilter === 'greentown_labs'
+                  greentownFilter
                     ? 'bg-emerald-600 text-white border-emerald-600'
                     : 'bg-background hover:bg-muted border-input text-foreground'
                 }`}
-                title="Show only investors curated by Greentown Labs"
+                title="Show only parties curated by Greentown Labs"
               >
                 <span
-                  className={`h-2 w-2 rounded-full ${tagFilter === 'greentown_labs' ? 'bg-white' : 'bg-emerald-500'}`}
+                  className={`h-2 w-2 rounded-full ${greentownFilter ? 'bg-white' : 'bg-emerald-500'}`}
                   aria-hidden
                 />
                 Greentown Labs
-                <span className="tabular-nums opacity-80">{greentownInvestorCount}</span>
+                <span className="tabular-nums opacity-80">{greentownCount}</span>
               </Link>
             </div>
           )}
