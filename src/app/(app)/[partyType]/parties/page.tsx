@@ -336,6 +336,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         .map((x) => x.code);
     }
   }
+  // Investors curated/managed by Greentown Labs (interest tag 'greentown_labs').
+  const greentownInvestorCount = Object.values(investorTagsAll)
+    .filter((codes) => codes.includes('greentown_labs')).length;
 
   // Paper-mill paper-type facets.
   // The active facet SET + display order + parent come from app.paper_types
@@ -703,6 +706,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             sectors={isInvestor ? sectorFacets : undefined}
             sector={sectorFilter}
           />
+          {isInvestor && greentownInvestorCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs text-muted-foreground">Managed by</span>
+              <Link
+                href={tagFilter === 'greentown_labs' ? `/${module}/parties` : `/${module}/parties?tag=greentown_labs`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  tagFilter === 'greentown_labs'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-background hover:bg-muted border-input text-foreground'
+                }`}
+                title="Show only investors curated by Greentown Labs"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${tagFilter === 'greentown_labs' ? 'bg-white' : 'bg-emerald-500'}`}
+                  aria-hidden
+                />
+                Greentown Labs
+                <span className="tabular-nums opacity-80">{greentownInvestorCount}</span>
+              </Link>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
