@@ -194,41 +194,20 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const rawLabel    = (ptMeta.display_name_en ?? ptMeta.code ?? module).trim();
   const moduleLabel = module === 'self' || rawLabel.endsWith('s') ? rawLabel : `${rawLabel}s`;
 
-  // "Curated by Greentown Labs" filter chip. Unified across EVERY directory via
-  // party_relationships FROM the Greentown Labs Houston party (investors linked
-  // as 'sources_investor', partners as 'has_partner', mentors as 'has_mentor').
-  // Tag storage differs by module (investors use the normalized 'greentown_labs'
-  // tag, partners/mentors use the legacy jsonb tag), so the relationship — not a
-  // tag — is the reliable, consistent discriminator.
+  // "Curated by Greentown Labs" filter chip + TAGS indicator. Unified across
+  // EVERY directory via party_relationships FROM the Greentown Labs Houston party
+  // (investors 'sources_investor', partners 'has_partner', mentors 'has_mentor').
+  // Read through app.v_greentown_parties (a definer view that joins the
+  // relationship to parties in SQL): one indexed query per type, no giant .in()
+  // list, and it isn't blocked by party_relationships RLS resolution.
   let greentownPartyIds = new Set<string>();
   {
-    const { data: gtRow } = await supabase
+    const { data: gtRows } = await supabase
       .schema('app')
-      .from('parties' as never)
-      .select('id')
-      .eq('party_name' as never, 'Greentown Labs Houston')
-      .is('deleted_at' as never, null)
-      .limit(1)
-      .maybeSingle();
-    const gtId = (gtRow as { id: string } | null)?.id ?? null;
-    if (gtId) {
-      const { data: relRows } = await supabase
-        .schema('app')
-        .from('party_relationships' as never)
-        .select('to_party_id')
-        .eq('from_party_id' as never, gtId);
-      const linkedIds = [...new Set(((relRows ?? []) as any[]).map((r) => r.to_party_id).filter(Boolean))];
-      if (linkedIds.length > 0) {
-        const { data: modRows } = await supabase
-          .schema('app')
-          .from('parties' as never)
-          .select('id')
-          .eq('party_type_id' as never, partyTypeId)
-          .is('deleted_at' as never, null)
-          .in('id' as never, linkedIds);
-        greentownPartyIds = new Set(((modRows ?? []) as any[]).map((p) => p.id as string));
-      }
-    }
+      .from('v_greentown_parties' as never)
+      .select('party_id')
+      .eq('party_type_id' as never, partyTypeId);
+    greentownPartyIds = new Set(((gtRows ?? []) as any[]).map((r) => r.party_id as string));
   }
   const greentownCount = greentownPartyIds.size;
 
