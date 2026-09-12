@@ -108,6 +108,22 @@ async function fetchSupplyLinks(
   }
 }
 
+// Fetch ALL rows from a Supabase/PostgREST query, paging past the default
+// 1000-row cap. `makeQuery(from, to)` must return a query with .range(from, to).
+async function fetchAllRows<T = any>(
+  makeQuery: (from: number, to: number) => Promise<{ data: T[] | null }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  const page = 1000;
+  for (let from = 0; from < 200000; from += page) {
+    const { data } = await makeQuery(from, from + page - 1);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < page) break;
+  }
+  return out;
+}
+
 export default async function PartiesListPage({ params, searchParams }: PageProps) {
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
@@ -174,6 +190,25 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
 
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
+
+  // Load ALL rows of a table/columns, paging past Supabase's 1000-row default so
+  // large link tables (investor_stage_focus / investor_sector_focus) are complete
+  // — otherwise Stage/Sector go missing for investors beyond the first 1000 links.
+  const loadAllRows = async <T = any>(table: string, columns: string): Promise<T[]> => {
+    const out: T[] = [];
+    const pageSize = 1000;
+    for (let from = 0; from <= 200000; from += pageSize) {
+      const { data } = await supabase
+        .schema('app')
+        .from(table as never)
+        .select(columns)
+        .range(from, from + pageSize - 1);
+      const rows = (data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    return out;
+  };
 
   // Resolve the party_type from the DB (app.party_types) — the single source of
   // truth for BOTH validation and the directory label. Any code present in the
@@ -244,10 +279,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const investorStageAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
   let stageFacets: { code: string; label: string; count: number }[] = [];
   if (isInvestor) {
-    const [{ data: profRows }, { data: stageRows }, { data: focusRows }] = await Promise.all([
+    const [{ data: profRows }, { data: stageRows }, focusRows] = await Promise.all([
       supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
       supabase.schema('app').from('investment_stages' as never).select('id, code, label_en, sort_order'),
-      supabase.schema('app').from('investor_stage_focus' as never).select('investor_profile_id, stage_id'),
+      fetchAllRows((from, to) =>
+        supabase.schema('app').from('investor_stage_focus' as never).select('investor_profile_id, stage_id').range(from, to)
+      ),
     ]);
     const profileToParty = new Map<string, string>();
     for (const r of ((profRows ?? []) as any[])) if (r.party_id) profileToParty.set(r.id, r.party_id);
@@ -280,10 +317,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const investorSectorAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
   let sectorFacets: { code: string; label: string; count: number }[] = [];
   if (isInvestor) {
-    const [{ data: profRows2 }, { data: sectorRows }, { data: secFocusRows }] = await Promise.all([
+    const [{ data: profRows2 }, { data: sectorRows }, secFocusRows] = await Promise.all([
       supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
       supabase.schema('app').from('sectors' as never).select('id, code, label_en, sort_order'),
-      supabase.schema('app').from('investor_sector_focus' as never).select('investor_profile_id, sector_id'),
+      fetchAllRows((from, to) =>
+        supabase.schema('app').from('investor_sector_focus' as never).select('investor_profile_id, sector_id').range(from, to)
+      ),
     ]);
     const profileToParty2 = new Map<string, string>();
     for (const r of ((profRows2 ?? []) as any[])) if (r.party_id) profileToParty2.set(r.id, r.party_id);
