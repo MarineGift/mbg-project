@@ -828,6 +828,15 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
+                  )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
+                  )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
+                  )}
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
                       Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
@@ -851,15 +860,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         Type <span className={`text-[10px] ${hType.active ? '' : 'opacity-40'}`}>{hType.arrow}</span>
                       </Link>
                     </th>
-                  )}
-                  {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
-                  )}
-                  {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
-                  )}
-                  {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
                   )}
                   {!isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
@@ -1048,28 +1048,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           })()}
                         </td>
                       )}
-                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
-                      {(isInvestor || showEntityType) && (
-                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
-                          {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
-                        </td>
-                      )}
-                      {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
-                          {investorCatAll[p.id]?.type_name ? (
-                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                              {investorCatAll[p.id]!.type_name}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
-                          )}
-                        </td>
-                      )}
                       {isInvestor && (
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {(investorStageAll[p.id] ?? []).length > 0 ? (
@@ -1110,6 +1088,28 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                                 </span>
                               ))}
                             </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                        {location || '-'}
+                      </td>
+                      {(isInvestor || showEntityType) && (
+                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
+                          {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
+                        </td>
+                      )}
+                      {isInvestor && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {investorCatAll[p.id]?.type_name ? (
+                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                              {investorCatAll[p.id]!.type_name}
+                            </span>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
