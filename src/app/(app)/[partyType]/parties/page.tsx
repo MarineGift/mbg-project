@@ -311,16 +311,26 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   }
 
   // Investor INVESTMENT TYPES (instruments: Equity, Convertible Note / SAFE, ...)
-  // from investor_profile.investment_types (text[]). Powers the Investment Type column.
+  // from investor_profile.investment_types, and SECTOR FOCUS from
+  // investor_profile.sector_focus (text[]). Both power their directory columns.
   const investorInvestmentAll: Record<string, string[]> = {};
+  const investorSectorTextAll: Record<string, string[]> = {};
+  const titleCase = (s: string) =>
+    s.split('_').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ');
   if (isInvestor) {
     const { data: invRows } = await supabase
       .schema('app')
       .from('investor_profile' as never)
-      .select('party_id, investment_types');
+      .select('party_id, investment_types, sector_focus');
     for (const r of ((invRows ?? []) as any[])) {
-      if (r.party_id && Array.isArray(r.investment_types) && r.investment_types.length > 0) {
+      if (!r.party_id) continue;
+      if (Array.isArray(r.investment_types) && r.investment_types.length > 0) {
         investorInvestmentAll[r.party_id] = (r.investment_types as any[]).filter((t) => typeof t === 'string');
+      }
+      if (Array.isArray(r.sector_focus) && r.sector_focus.length > 0) {
+        investorSectorTextAll[r.party_id] = (r.sector_focus as any[])
+          .filter((t) => typeof t === 'string' && t.trim() !== '')
+          .map((t) => titleCase(String(t)));
       }
     }
   }
@@ -1092,11 +1102,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       )}
                       {isInvestor && (
                         <td className="px-4 py-3 hidden lg:table-cell">
-                          {(investorSectorAll[p.id] ?? []).length > 0 ? (
+                          {(investorSectorTextAll[p.id] ?? []).length > 0 ? (
                             <div className="flex flex-wrap gap-1 max-w-[240px]">
-                              {(investorSectorAll[p.id] ?? []).map((s) => (
-                                <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
-                                  {s.label}
+                              {(investorSectorTextAll[p.id] ?? []).map((s) => (
+                                <span key={s} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                  {s}
                                 </span>
                               ))}
                             </div>
