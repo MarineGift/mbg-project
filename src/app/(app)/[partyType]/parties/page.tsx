@@ -889,6 +889,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Areas of expertise</th>
+                  )}
                   {showEntityType && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hEntityType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hEntityType.active ? 'text-foreground' : ''}`}>
@@ -928,9 +931,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   )}
                   {isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Company</th>
-                  )}
-                  {isMentor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Areas of expertise</th>
                   )}
                   {!isMentor && (
                     <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
@@ -1061,6 +1061,21 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
+                      {isMentor && (
+                        <td className="px-4 py-3 hidden sm:table-cell align-top">
+                          {(mentorRelevanceAll[p.id]?.expertise ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[360px]">
+                              {(mentorRelevanceAll[p.id]?.expertise ?? []).map((e) => (
+                                <span key={e} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                  {e}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
                       {showEntityType && !isMentor && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                           {entityTypeAll[p.id]?.ko ?? '-'}
@@ -1218,21 +1233,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       {isMentor && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                           {mentorRelevanceAll[p.id]?.company || '-'}
-                        </td>
-                      )}
-                      {isMentor && (
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          {(mentorRelevanceAll[p.id]?.expertise ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[320px]">
-                              {(mentorRelevanceAll[p.id]?.expertise ?? []).slice(0, 6).map((e) => (
-                                <span key={e} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                  {e}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
-                          )}
                         </td>
                       )}
                       {!isMentor && (
