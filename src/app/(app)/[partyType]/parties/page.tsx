@@ -251,14 +251,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const greentownCount = greentownPartyIds.size;
 
   // Mentor MBG-relevance (from app.v_mentor_relevance) for sort/filter/column.
-  const mentorRelevanceAll: Record<string, { score: number; tier: string }> = {};
+  const mentorRelevanceAll: Record<string, { score: number; tier: string; company: string | null; expertise: string[] }> = {};
   if (isMentor) {
     const { data: relRows } = await supabase
       .schema('app')
       .from('v_mentor_relevance' as never)
-      .select('party_id, relevance_score, relevance_tier');
+      .select('party_id, relevance_score, relevance_tier, company, expertise');
     for (const r of ((relRows ?? []) as any[])) {
-      if (r.party_id) mentorRelevanceAll[r.party_id] = { score: Number(r.relevance_score ?? 0), tier: String(r.relevance_tier ?? 'Low') };
+      if (r.party_id) mentorRelevanceAll[r.party_id] = { score: Number(r.relevance_score ?? 0), tier: String(r.relevance_tier ?? 'Low'), company: r.company ?? null, expertise: Array.isArray(r.expertise) ? (r.expertise as any[]).filter((x) => typeof x === 'string') : [] };
     }
   }
   const relevantMentorCount = Object.values(mentorRelevanceAll).filter((r) => r.tier === 'High' || r.tier === 'Medium').length;
@@ -889,7 +889,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
-                  {showEntityType && (
+                  {showEntityType && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hEntityType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hEntityType.active ? 'text-foreground' : ''}`}>
                         Type <span className={`text-[10px] ${hEntityType.active ? '' : 'opacity-40'}`}>{hEntityType.arrow}</span>
@@ -926,17 +926,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   {isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Relevance</th>
                   )}
-                  <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
-                      Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
-                    </Link>
-                  </th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
-                    </Link>
-                  </th>
-                  {(isInvestor || showEntityType) && (
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Company</th>
+                  )}
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">Areas of expertise</th>
+                  )}
+                  {!isMentor && (
+                    <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
+                        Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
+                  {!isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                        Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
+                  {(isInvestor || showEntityType) && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
                         State <span className={`text-[10px] ${hState.active ? '' : 'opacity-40'}`}>{hState.arrow}</span>
@@ -950,10 +960,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
-                  {!isInvestor && (
+                  {!isInvestor && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   )}
-                  {!isInvestor && (
+                  {!isInvestor && !isMentor && (
                     <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                       <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
                         Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
@@ -961,7 +971,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                     </th>
                   )}
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
-                  {!isInvestor && (
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Type</th>
+                  )}
+                  {!isInvestor && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                   )}
                 </tr>
@@ -1002,7 +1015,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                             className="mt-1"
                           />
                         )}
-                        {showEntityType && (
+                        {showEntityType && !isMentor && (
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
                             {entityTypeAll[p.id] && (
                               <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.ko}</span>
@@ -1048,7 +1061,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
-                      {showEntityType && (
+                      {showEntityType && !isMentor && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                           {entityTypeAll[p.id]?.ko ?? '-'}
                         </td>
@@ -1202,13 +1215,37 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           })()}
                         </td>
                       )}
-                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
-                      {(isInvestor || showEntityType) && (
+                      {isMentor && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                          {mentorRelevanceAll[p.id]?.company || '-'}
+                        </td>
+                      )}
+                      {isMentor && (
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          {(mentorRelevanceAll[p.id]?.expertise ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[320px]">
+                              {(mentorRelevanceAll[p.id]?.expertise ?? []).slice(0, 6).map((e) => (
+                                <span key={e} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                  {e}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      {!isMentor && (
+                        <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                          {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
+                        </td>
+                      )}
+                      {!isMentor && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                          {location || '-'}
+                        </td>
+                      )}
+                      {(isInvestor || showEntityType) && !isMentor && (
                         <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
                           {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
                         </td>
@@ -1224,7 +1261,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           )}
                         </td>
                       )}
-                      {!isInvestor && (
+                      {!isInvestor && !isMentor && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 flex-wrap">
                             {level && LevelIcon && (
@@ -1241,7 +1278,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         </td>
                       )}
-                      {!isInvestor && (
+                      {!isInvestor && !isMentor && (
                         <td className="px-3 py-3 text-center">
                           <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                         </td>
@@ -1257,7 +1294,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </td>
-                      {!isInvestor && (
+                      {isMentor && (
+                        <td className="px-4 py-3 text-sm hidden lg:table-cell whitespace-nowrap text-muted-foreground">
+                          {entityTypeAll[p.id]?.ko ?? '-'}
+                        </td>
+                      )}
+                      {!isInvestor && !isMentor && (
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {p.status ? (
                             <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
