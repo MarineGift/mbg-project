@@ -131,6 +131,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
   const typeFilter = ((sp as any).type ?? '').trim();
   const isInvestor = moduleParam === 'investor';
+  const isMentor = moduleParam === 'mentor';
   const isPaperMill = moduleParam === 'paper_mill';
   const isFiller = moduleParam === 'filler_supplier';
 
@@ -149,6 +150,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // "Curated by Greentown Labs" toggle (?greentown=1) — filters to parties linked
   // to the Greentown Labs Houston party (see greentownPartyIds below).
   const greentownFilter = ((((sp as any).greentown ?? '') as string).trim() === '1');
+  const relevantFilter = ((((sp as any).relevant ?? '') as string).trim() === '1');
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
@@ -166,6 +168,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // TAGS column sort (asc/desc by each row's first tag, ascending-normalized).
   const sortByTags = sortParam === 'tags_asc' || sortParam === 'tags_desc';
   const tagsAsc    = sortParam === 'tags_asc';
+  // Mentors default to MBG-relevance sort unless another sort is explicitly chosen.
+  const sortByRelevance = isMentor && (((sp as any).sort ?? '') === '' || sortParam === 'relevance' || sortParam === 'relevance_asc');
   // DB-orderable sorts (everything except score, which is computed in JS).
   const DB_SORT: Record<string, { col: string; asc: boolean }> = {
     name_asc:      { col: 'party_name',   asc: true  },
@@ -245,6 +249,19 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     greentownPartyIds = new Set(((gtRows ?? []) as any[]).map((r) => r.party_id as string));
   }
   const greentownCount = greentownPartyIds.size;
+
+  // Mentor MBG-relevance (from app.v_mentor_relevance) for sort/filter/column.
+  const mentorRelevanceAll: Record<string, { score: number; tier: string }> = {};
+  if (isMentor) {
+    const { data: relRows } = await supabase
+      .schema('app')
+      .from('v_mentor_relevance' as never)
+      .select('party_id, relevance_score, relevance_tier');
+    for (const r of ((relRows ?? []) as any[])) {
+      if (r.party_id) mentorRelevanceAll[r.party_id] = { score: Number(r.relevance_score ?? 0), tier: String(r.relevance_tier ?? 'Low') };
+    }
+  }
+  const relevantMentorCount = Object.values(mentorRelevanceAll).filter((r) => r.tier === 'High' || r.tier === 'Medium').length;
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -592,6 +609,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       working = working.filter((p) => greentownPartyIds.has(p.id));
     }
 
+    // Mentors: keep only High/Medium MBG-relevance when the chip is on.
+    if (relevantFilter) {
+      working = working.filter((p) => {
+        const t = mentorRelevanceAll[p.id]?.tier ?? 'Low';
+        return t === 'High' || t === 'Medium';
+      });
+    }
+
     // Null/locale-safe comparison key. localeCompare() on a null value throws,
     // which only surfaces when the primary key ties often (e.g. sorting
     // investors by city, where many rows share an empty city) so the party_name
@@ -599,7 +624,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     // everything through String(... ?? '') so the sort can never 500 the page.
     const nameKey = (p: PartyRow) => String(p.party_name ?? '');
 
-    if (sortByScore) {
+    if (sortByRelevance) {
+      working = [...working].sort((a, b) =>
+        (mentorRelevanceAll[b.id]?.score ?? 0) - (mentorRelevanceAll[a.id]?.score ?? 0)
+        || nameKey(a).localeCompare(nameKey(b)));
+    } else if (sortByScore) {
       working = [...working].sort((a, b) =>
         scoreAsc ? (scores[a.id]?.score ?? 0) - (scores[b.id]?.score ?? 0)
                  : (scores[b.id]?.score ?? 0) - (scores[a.id]?.score ?? 0));
@@ -804,6 +833,24 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </Link>
             </div>
           )}
+          {isMentor && relevantMentorCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs text-muted-foreground">MBG relevance</span>
+              <Link
+                href={relevantFilter ? `/${module}/parties` : `/${module}/parties?relevant=1`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  relevantFilter
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-background hover:bg-muted border-input text-foreground'
+                }`}
+                title="Show only High / Medium relevance mentors (sorted by relevance)"
+              >
+                <span className={`h-2 w-2 rounded-full ${relevantFilter ? 'bg-white' : 'bg-emerald-500'}`} aria-hidden />
+                High &amp; Medium only
+                <span className="tabular-nums opacity-80">{relevantMentorCount}</span>
+              </Link>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
@@ -875,6 +922,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   )}
                   {isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
+                  )}
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">Relevance</th>
                   )}
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
@@ -1130,6 +1180,26 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
+                        </td>
+                      )}
+                      {isMentor && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {(() => {
+                            const r = mentorRelevanceAll[p.id];
+                            if (!r) return <span className="text-sm text-muted-foreground">-</span>;
+                            const cls =
+                              r.tier === 'High'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                : r.tier === 'Medium'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                : 'bg-muted text-muted-foreground';
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full ${cls}`}>
+                                {r.tier}
+                                <span className="tabular-nums opacity-70">{r.score}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
                       )}
                       <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
