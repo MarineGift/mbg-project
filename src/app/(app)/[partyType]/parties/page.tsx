@@ -31,22 +31,9 @@ const PartiesFilterBar = dynamic(
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 
-const PHASE_1_MODULES: readonly PartyTypeCode[] = [
-  'investor', 'paper_mill', 'partner', 'customer', 'filler_supplier', 'buyer', 'government_grant', 'self',
-] as const;
-
-const MODULE_LABELS: Record<PartyTypeCode, string> = {
-  investor:       'Investors',
-  paper_mill:     'Paper Mills',
-  partner:        'Partners',
-  customer:       'Customers',
-  filler_supplier:         'Filler Suppliers',
-  buyer:                   'Buyers',
-  government_grant:        'Government Grants',
-  consultant:              'Consultants',
-  crowdfunding_platform:   'Crowdfunding Platforms',
-  self:                    'MarineBio Group',
-};
+// Party-type directories are DB-driven: both validation and the heading label
+// come from app.party_types (resolved in PartiesListPage below). Adding a new
+// party_type in the database needs no change here.
 
 const TIER_LABELS: Record<PartyTier, string> = {
   tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', cold: 'Cold',
@@ -83,7 +70,7 @@ interface PageProps {
   params: Promise<{ partyType: string }>;
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
-    country?: string; type?: string; grade?: string; priority?: string;
+    country?: string; type?: string; grade?: string; priority?: string; tag?: string; greentown?: string;
   }>;
 }
 
@@ -121,6 +108,22 @@ async function fetchSupplyLinks(
   }
 }
 
+// Fetch ALL rows from a Supabase/PostgREST query, paging past the default
+// 1000-row cap. `makeQuery(from, to)` must return a query with .range(from, to).
+async function fetchAllRows<T = any>(
+  makeQuery: (from: number, to: number) => Promise<{ data: T[] | null }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  const page = 1000;
+  for (let from = 0; from < 200000; from += page) {
+    const { data } = await makeQuery(from, from + page - 1);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < page) break;
+  }
+  return out;
+}
+
 export default async function PartiesListPage({ params, searchParams }: PageProps) {
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
@@ -140,6 +143,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // Investment-stage (round) filter for the investor list: ?stage=<code>
   // (e.g. 'series_a'), matched against the investor's investor_stage_focus set.
   const stageFilter = (((sp as any).stage ?? '') as string).trim();
+  // Interest-tag filter (?tag=<label>): show only parties carrying that tag.
+  // e.g. /mentor/parties?tag=Greentown Labs Houston -> only Greentown mentors.
+  const tagFilter = (((sp as any).tag ?? '') as string).trim();
+  // "Curated by Greentown Labs" toggle (?greentown=1) — filters to parties linked
+  // to the Greentown Labs Houston party (see greentownPartyIds below).
+  const greentownFilter = ((((sp as any).greentown ?? '') as string).trim() === '1');
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
@@ -177,23 +186,65 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const from = (page - 1) * pageSize;
   const to   = from + pageSize - 1;
 
-  // Allow every party-type code that has a directory label (incl. self,
-  // consultant, crowdfunding_platform) -- not just the Phase-1 modules.
-  if (!Object.keys(MODULE_LABELS).includes(moduleParam)) notFound();
   const module = moduleParam as PartyTypeCode;
 
   await requireAuthOrRedirect();
   const supabase = await createSupabaseServerClient();
 
-  // D6-5e: resolve party_type code -> party_type_id (app.party_types lookup)
+  // Load ALL rows of a table/columns, paging past Supabase's 1000-row default so
+  // large link tables (investor_stage_focus / investor_sector_focus) are complete
+  // — otherwise Stage/Sector go missing for investors beyond the first 1000 links.
+  const loadAllRows = async <T = any>(table: string, columns: string): Promise<T[]> => {
+    const out: T[] = [];
+    const pageSize = 1000;
+    for (let from = 0; from <= 200000; from += pageSize) {
+      const { data } = await supabase
+        .schema('app')
+        .from(table as never)
+        .select(columns)
+        .range(from, from + pageSize - 1);
+      const rows = (data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    return out;
+  };
+
+  // Resolve the party_type from the DB (app.party_types) — the single source of
+  // truth for BOTH validation and the directory label. Any code present in the
+  // table renders a directory; unknown codes 404. No hardcoded module list.
   const { data: ptRow } = await supabase
     .schema('app')
     .from('party_types' as never)
-    .select('id')
+    .select('id, code, display_name_en, display_name_ko, display_name_ja')
     .eq('code' as never, module)
     .maybeSingle();
   if (!ptRow) notFound();
-  const partyTypeId = (ptRow as { id: string }).id;
+  const ptMeta = ptRow as {
+    id: string; code: string;
+    display_name_en: string | null; display_name_ko: string | null; display_name_ja: string | null;
+  };
+  const partyTypeId = ptMeta.id;
+  // Directory heading from the DB display name, pluralized ('self' kept as-is).
+  const rawLabel    = (ptMeta.display_name_en ?? ptMeta.code ?? module).trim();
+  const moduleLabel = module === 'self' || rawLabel.endsWith('s') ? rawLabel : `${rawLabel}s`;
+
+  // "Curated by Greentown Labs" filter chip + TAGS indicator. Unified across
+  // EVERY directory via party_relationships FROM the Greentown Labs Houston party
+  // (investors 'sources_investor', partners 'has_partner', mentors 'has_mentor').
+  // Read through app.v_greentown_parties (a definer view that joins the
+  // relationship to parties in SQL): one indexed query per type, no giant .in()
+  // list, and it isn't blocked by party_relationships RLS resolution.
+  let greentownPartyIds = new Set<string>();
+  {
+    const { data: gtRows } = await supabase
+      .schema('app')
+      .from('v_greentown_parties' as never)
+      .select('party_id')
+      .eq('party_type_id' as never, partyTypeId);
+    greentownPartyIds = new Set(((gtRows ?? []) as any[]).map((r) => r.party_id as string));
+  }
+  const greentownCount = greentownPartyIds.size;
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -228,10 +279,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const investorStageAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
   let stageFacets: { code: string; label: string; count: number }[] = [];
   if (isInvestor) {
-    const [{ data: profRows }, { data: stageRows }, { data: focusRows }] = await Promise.all([
+    const [{ data: profRows }, { data: stageRows }, focusRows] = await Promise.all([
       supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
       supabase.schema('app').from('investment_stages' as never).select('id, code, label_en, sort_order'),
-      supabase.schema('app').from('investor_stage_focus' as never).select('investor_profile_id, stage_id'),
+      fetchAllRows((from, to) =>
+        supabase.schema('app').from('investor_stage_focus' as never).select('investor_profile_id, stage_id').range(from, to)
+      ),
     ]);
     const profileToParty = new Map<string, string>();
     for (const r of ((profRows ?? []) as any[])) if (r.party_id) profileToParty.set(r.id, r.party_id);
@@ -264,10 +317,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const investorSectorAll: Record<string, Array<{ code: string; label: string; sort: number }>> = {};
   let sectorFacets: { code: string; label: string; count: number }[] = [];
   if (isInvestor) {
-    const [{ data: profRows2 }, { data: sectorRows }, { data: secFocusRows }] = await Promise.all([
+    const [{ data: profRows2 }, { data: sectorRows }, secFocusRows] = await Promise.all([
       supabase.schema('app').from('investor_profile' as never).select('id, party_id'),
       supabase.schema('app').from('sectors' as never).select('id, code, label_en, sort_order'),
-      supabase.schema('app').from('investor_sector_focus' as never).select('investor_profile_id, sector_id'),
+      fetchAllRows((from, to) =>
+        supabase.schema('app').from('investor_sector_focus' as never).select('investor_profile_id, sector_id').range(from, to)
+      ),
     ]);
     const profileToParty2 = new Map<string, string>();
     for (const r of ((profRows2 ?? []) as any[])) if (r.party_id) profileToParty2.set(r.id, r.party_id);
@@ -292,6 +347,31 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       .map(([code, v]) => ({ code, label: v.label, count: v.parties.size, sort: v.sort }))
       .sort((a, b) => a.sort - b.sort)
       .map(({ code, label, count }) => ({ code, label, count }));
+  }
+
+  // Investor INVESTMENT TYPES (instruments: Equity, Convertible Note / SAFE, ...)
+  // from investor_profile.investment_types, and SECTOR FOCUS from
+  // investor_profile.sector_focus (text[]). Both power their directory columns.
+  const investorInvestmentAll: Record<string, string[]> = {};
+  const investorSectorTextAll: Record<string, string[]> = {};
+  const titleCase = (s: string) =>
+    s.split('_').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(' ');
+  if (isInvestor) {
+    const { data: invRows } = await supabase
+      .schema('app')
+      .from('investor_profile' as never)
+      .select('party_id, investment_types, sector_focus');
+    for (const r of ((invRows ?? []) as any[])) {
+      if (!r.party_id) continue;
+      if (Array.isArray(r.investment_types) && r.investment_types.length > 0) {
+        investorInvestmentAll[r.party_id] = (r.investment_types as any[]).filter((t) => typeof t === 'string');
+      }
+      if (Array.isArray(r.sector_focus) && r.sector_focus.length > 0) {
+        investorSectorTextAll[r.party_id] = (r.sector_focus as any[])
+          .filter((t) => typeof t === 'string' && t.trim() !== '')
+          .map((t) => titleCase(String(t)));
+      }
+    }
   }
 
   // Investor manual Priority (high/medium/low) per party, from investor_profile.
@@ -447,7 +527,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags;
+  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -493,6 +573,25 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
+    // Interest-tag filter: keep only rows carrying the requested tag (matches
+    // both normalized canonical tags and the legacy jsonb interest_tags column,
+    // case-insensitively). Powers the "Greentown Labs Houston mentors only" view.
+    if (tagFilter) {
+      const tf = tagFilter.toLowerCase();
+      working = working.filter((p) => {
+        const norm = investorTagsAll[p.id] ?? [];
+        const legacy = (Array.isArray(p.interest_tags) ? p.interest_tags : [])
+          .filter((t): t is string => typeof t === 'string');
+        return [...norm, ...legacy].some((t) => t.toLowerCase() === tf);
+      });
+    }
+
+    // "Curated by Greentown Labs" — keep only parties linked to Greentown Labs
+    // Houston (relationship-based, works for investors/partners/mentors alike).
+    if (greentownFilter) {
+      working = working.filter((p) => greentownPartyIds.has(p.id));
+    }
+
     // Null/locale-safe comparison key. localeCompare() on a null value throws,
     // which only surfaces when the primary key ties often (e.g. sorting
     // investors by city, where many rows share an empty city) so the party_name
@@ -520,19 +619,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         return (priorityAsc ? -cmp : cmp) || nameKey(a).localeCompare(nameKey(b));
       });
     } else if (sortByTags) {
-      // TAGS sort: key each row by its alphabetically-first tag (rows display
-      // their tags ascending, so the key matches what the user sees). Untagged
-      // rows always sink to the bottom regardless of direction.
-      const tagKey = (p: PartyRow) => {
-        const canonical = investorTagsAll[p.id];
-        if (canonical && canonical.length > 0) return canonical[0]!.toLowerCase();
-        const arr = Array.isArray(p.interest_tags) ? p.interest_tags : [];
-        const norm = arr
-          .map((t) => String(t ?? '').trim().toLowerCase())
-          .filter(Boolean)
-          .sort();
-        return norm[0] ?? '';
-      };
+      // TAGS sort: the column now shows only the "Greentown Labs" curation
+      // indicator, so sort by that (curated rows float up in asc; others sink).
+      const tagKey = (p: PartyRow) => (greentownPartyIds.has(p.id) ? 'greentown labs' : '');
       working = [...working].sort((a, b) => {
         const ka = tagKey(a);
         const kb = tagKey(b);
@@ -661,7 +750,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       {/* Header */}
       <div className="flex flex-col gap-2 sm:gap-0 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl sm:text-2xl font-bold">{MODULE_LABELS[module]}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{moduleLabel}</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-3">
             <span>{totalCount} parties</span>
             {showLinks && unlinkedCount > 0 && (
@@ -694,6 +783,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             sectors={isInvestor ? sectorFacets : undefined}
             sector={sectorFilter}
           />
+          {greentownCount != null && greentownCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs text-muted-foreground">Curated by</span>
+              <Link
+                href={greentownFilter ? `/${module}/parties` : `/${module}/parties?greentown=1`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  greentownFilter
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-background hover:bg-muted border-input text-foreground'
+                }`}
+                title="Show only parties curated by Greentown Labs"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${greentownFilter ? 'bg-white' : 'bg-emerald-500'}`}
+                  aria-hidden
+                />
+                Greentown Labs
+                <span className="tabular-nums opacity-80">{greentownCount}</span>
+              </Link>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
@@ -757,6 +867,15 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
+                  )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
+                  )}
+                  {isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
+                  )}
                   <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                     <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
                       Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
@@ -781,19 +900,20 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
-                  {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
-                  )}
                   {!isInvestor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   )}
-                  <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
-                    <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
-                      Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
-                    </Link>
-                  </th>
+                  {!isInvestor && (
+                    <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
+                      <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
+                        Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
                   <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
+                  {!isInvestor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -803,12 +923,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                   // for some rows; coerce so .slice()/.map() can't 500 the page.
                   // Prefer normalized canonical tags (catalogue order);
                   // fall back to legacy jsonb for parties not yet backfilled.
-                  const legacyTags = (Array.isArray(p.interest_tags) ? p.interest_tags : [])
-                    .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
-                    .slice()
-                    .sort((a, b) => a.localeCompare(b));
-                  const normTags  = investorTagsAll[p.id] ?? [];
-                  const tags      = normTags.length > 0 ? normTags : legacyTags;
+                  // TAGS column intentionally shows ONLY the "Greentown Labs"
+                  // curation indicator (relationship-based). The old interest_tags
+                  // duplicated the Type/Sector columns, so they are not shown here.
+                  const tags = greentownPartyIds.has(p.id) ? ['Greentown Labs'] : [];
                   const level     = p.party_level as PartyLevel | null;
                   const acc       = scores[p.id];
                   const linked    = Array.isArray(supplyLinks[p.id]) ? supplyLinks[p.id]! : [];
@@ -913,9 +1031,15 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           {tags.length <= 2 ? (
                             <div className="flex flex-wrap gap-1 max-w-[280px]">
                               {tags.map((tag) => (
-                                <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
+                                <Link
+                                  key={tag}
+                                  href={`/${module}/parties?greentown=1`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded whitespace-nowrap bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  title="Curated by Greentown Labs — click to filter"
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
                                   {tag}
-                                </span>
+                                </Link>
                               ))}
                             </div>
                           ) : (
@@ -963,6 +1087,51 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           })()}
                         </td>
                       )}
+                      {isInvestor && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {(investorStageAll[p.id] ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {(investorStageAll[p.id] ?? []).map((s) => (
+                                <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                  {s.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      {isInvestor && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {(investorInvestmentAll[p.id] ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                              {(investorInvestmentAll[p.id] ?? []).map((t) => (
+                                <span key={t} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      {isInvestor && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {(investorSectorTextAll[p.id] ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                              {(investorSectorTextAll[p.id] ?? []).map((s) => (
+                                <span key={s} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                         {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
                       </td>
@@ -985,21 +1154,6 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           )}
                         </td>
                       )}
-                      {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
-                          {(investorStageAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {(investorStageAll[p.id] ?? []).map((s) => (
-                                <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                                  {s.label}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
-                          )}
-                        </td>
-                      )}
                       {!isInvestor && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 flex-wrap">
@@ -1017,9 +1171,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         </td>
                       )}
-                      <td className="px-3 py-3 text-center">
-                        <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
-                      </td>
+                      {!isInvestor && (
+                        <td className="px-3 py-3 text-center">
+                          <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
+                        </td>
+                      )}
                       <td className="px-4 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
                           <a href={p.website} target="_blank" rel="noopener noreferrer"
@@ -1031,15 +1187,17 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {p.status ? (
-                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
-                            {String(p.status).replace(/_/g, ' ')}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">-</span>
-                        )}
-                      </td>
+                      {!isInvestor && (
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {p.status ? (
+                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">
+                              {String(p.status).replace(/_/g, ' ')}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
