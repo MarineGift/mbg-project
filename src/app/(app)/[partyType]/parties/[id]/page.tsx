@@ -29,22 +29,18 @@ import { ActivityTimeline } from '@/components/parties/activity-timeline';
 import { PartySequencePanel } from '@/components/parties/party-sequence-panel';
 import { CountryPeersPanel } from '@/components/parties/country-peers-panel';
 import { PartyCommunicationsTimeline } from '@/components/parties/party-communications-timeline';
-import type { PartyTypeCode } from '@/types/ai';
 import { PartySupplyLinksPanel } from '@/components/parties/party-supply-links-panel';
 import { PartyDetailTabs } from '@/components/parties/party-detail-tabs';
 import { PartyInfoCard } from '@/components/parties/party-info-card';
 import { PartyApplicationPanel } from '@/components/parties/party-application-panel';
 import { PartyIntroCard } from '@/components/parties/party-intro-card';
 import { InvestorProfileCard } from '@/components/parties/investor-profile-card';
+import { MentorProfileCard } from '@/components/parties/mentor-profile-card';
 
-const PHASE_1_MODULES: readonly PartyTypeCode[] = [
-  'investor',
-  'paper_mill',
-  'partner',
-  'customer',
-  'filler_supplier',
-  'self'
-] as const;
+// Party-type is validated dynamically against the DB: fetchPartyDetail resolves
+// the party's real type from app.party_types, and the URL module is checked
+// against it below (mismatch -> redirect, missing party -> notFound). No
+// hardcoded module allowlist, so new party_types work without a frontend change.
 
 interface PageProps {
   params: Promise<{ partyType: string; id: string }>;
@@ -72,10 +68,6 @@ function getContactDisplayName(contact: any): string | null {
 
 export default async function PartyDetailPage({ params }: PageProps) {
   const { partyType: urlModule, id } = await params;
-
-  if (!(PHASE_1_MODULES as readonly string[]).includes(urlModule)) {
-    notFound();
-  }
 
   const [full, meetings] = await Promise.all([
     fetchPartyDetail(id),
@@ -147,6 +139,9 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 )}
                 {full.party.partyType === 'investor' && full.investorProfile && (
                   <InvestorProfileCard profile={full.investorProfile} partyName={full.party.name} partyId={full.party.id} />
+                )}
+                {full.party.partyType === 'mentor' && (
+                  <MentorProfileCard partyId={full.party.id} />
                 )}
                 {partyCountry && (urlModule === 'paper_mill' || urlModule === 'filler_supplier') && (
                   <CountryPeersPanel
