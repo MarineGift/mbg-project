@@ -15,16 +15,16 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowUp, FolderOpen, FolderPlus, Plus, Trash2 } from 'lucide-react'
+import { FolderOpen, FolderPlus, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { compareFolders } from '@/components/layout/mail-folder-nav'
 import {
   listMailFoldersWithCountsAction,
   createMailFolderAction,
   updateMailFolderAction,
   deleteMailFolderAction,
-  reorderMailFoldersAction,
   searchPartiesForFolderAction,
   type MailFolderWithCounts,
   type PartyOption,
@@ -75,10 +75,13 @@ export function MailFolderManager() {
   /* ---------------------------------------------------------------- tree */
 
   const ids = new Set(folders.map((f) => f.id))
+  // Same order as the sidebar: folders that receive mail first, then A-Z.
   const childrenOf = (id: string | null) =>
-    folders.filter((f) =>
-      id === null ? !f.parentId || !ids.has(f.parentId) : f.parentId === id,
-    )
+    folders
+      .filter((f) =>
+        id === null ? !f.parentId || !ids.has(f.parentId) : f.parentId === id,
+      )
+      .sort(compareFolders)
 
   // Groups, flattened with an indent prefix, for the "move into" selects.
   const groupOptions: Array<{ id: string; label: string }> = []
@@ -156,25 +159,6 @@ export function MailFolderManager() {
     await reload(); router.refresh()
   }
 
-  // Reorders within the level the arrow was clicked in, not the whole list.
-  async function handleMove(
-    siblings: MailFolderWithCounts[],
-    index: number,
-    delta: number,
-  ) {
-    const target = index + delta
-    if (target < 0 || target >= siblings.length) return
-    const next = [...siblings]
-    const a = next[index]
-    const b = next[target]
-    if (!a || !b) return
-    next[index] = b
-    next[target] = a
-    const res = await reorderMailFoldersAction(next.map((f) => f.id))
-    if (!res.ok) { setError(res.error); return }
-    await reload(); router.refresh()
-  }
-
   async function handleDomainsBlur(f: MailFolderWithCounts, value: string) {
     if (value.trim() === f.matchDomains.join(', ')) return
     const res = await updateMailFolderAction(f.id, { matchDomains: value })
@@ -185,8 +169,7 @@ export function MailFolderManager() {
   /* -------------------------------------------------------------- render */
 
   const renderRows = (parent: string | null, depth: number): React.ReactNode[] => {
-    const siblings = childrenOf(parent)
-    return siblings.flatMap((f, i) => [
+    return childrenOf(parent).flatMap((f) => [
       <li key={f.id} className="border-t first:border-t-0">
         <div
           className="flex flex-wrap items-center gap-3 px-4 py-3"
@@ -241,24 +224,6 @@ export function MailFolderManager() {
           />
 
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              title="Move up"
-              onClick={() => handleMove(siblings, i, -1)}
-              disabled={i === 0}
-              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Move down"
-              onClick={() => handleMove(siblings, i, 1)}
-              disabled={i === siblings.length - 1}
-              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </button>
             <button
               type="button"
               title="Remove"
@@ -426,6 +391,10 @@ export function MailFolderManager() {
       {/* --------------------------------------------------------- list */}
       <section>
         <h2 className="text-sm font-semibold">Folders</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Ordered automatically: folders that receive mail first, then A to Z.
+          Empty folders sink to the bottom of their group.
+        </p>
         {loading ? (
           <p className="mt-3 text-sm text-muted-foreground">Loading...</p>
         ) : folders.length === 0 ? (

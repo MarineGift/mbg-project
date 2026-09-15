@@ -32,6 +32,24 @@ import {
 
 const INDENT = ['pl-9', 'pl-11', 'pl-[3.25rem]', 'pl-[3.75rem]']
 
+// Ordering inside every level, two stages:
+//   1. folders that actually receive mail come first
+//   2. then alphabetically (locale aware, so numbers sort naturally)
+// Manual sort_order is ignored on purpose - with ~30 subsidiaries a curated
+// order is unmaintainable, and an empty folder at the top is just noise.
+export function compareFolders(
+  a: { total: number; name: string },
+  b: { total: number; name: string },
+): number {
+  const aHas = a.total > 0 ? 0 : 1
+  const bHas = b.total > 0 ? 0 : 1
+  if (aHas !== bHas) return aHas - bHas
+  return a.name.localeCompare(b.name, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  })
+}
+
 export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -85,9 +103,11 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
 
   const ids = new Set(folders.map((f) => f.id))
   const childrenOf = (id: string | null) =>
-    folders.filter((f) =>
-      id === null ? !f.parentId || !ids.has(f.parentId) : f.parentId === id,
-    )
+    folders
+      .filter((f) =>
+        id === null ? !f.parentId || !ids.has(f.parentId) : f.parentId === id,
+      )
+      .sort(compareFolders)
 
   const renderRows = (parentId: string | null, depth: number): React.ReactNode[] =>
     childrenOf(parentId).flatMap((f) => {
