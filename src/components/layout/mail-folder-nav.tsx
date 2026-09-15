@@ -30,7 +30,7 @@ import {
   type MailFolderWithCounts,
 } from '@/app/actions/mail-folders'
 
-const INDENT = ['pl-9', 'pl-[3.25rem]', 'pl-[4.25rem]', 'pl-[5rem]']
+const INDENT = ['pl-9', 'pl-11', 'pl-[3.25rem]', 'pl-[3.75rem]']
 
 export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
@@ -80,7 +80,7 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
 
       return [
         <li key={f.id}>
-          <div className="flex items-center">
+          <div className="flex min-w-0 items-center">
             {kids.length > 0 ? (
               <button
                 type="button"
@@ -88,7 +88,7 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
                 onClick={() => setCollapsed((c) => ({ ...c, [f.id]: !isCollapsed }))}
                 className={cn(
                   'rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground',
-                  depth === 0 ? 'ml-6' : depth === 1 ? 'ml-10' : 'ml-14',
+                  depth === 0 ? 'ml-6' : depth === 1 ? 'ml-8' : 'ml-10',
                 )}
               >
                 {isCollapsed
@@ -101,7 +101,7 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
               href={`/inbox?folder=${f.id}`}
               onClick={onNavigate}
               className={cn(
-                'flex flex-1 items-center gap-2 rounded-md py-1.5 pr-2 text-sm transition-colors',
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2 text-sm transition-colors',
                 kids.length > 0 ? 'pl-1.5' : indent,
                 active
                   ? 'bg-accent text-accent-foreground font-medium'
@@ -118,7 +118,7 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
               ) : (
                 <FolderOpen className="h-3.5 w-3.5 shrink-0" />
               )}
-              <span className={cn('flex-1 truncate', f.isGroup && 'font-medium')}>
+              <span className={cn('min-w-0 flex-1 truncate', f.isGroup && 'font-medium')}>
                 {f.name}
               </span>
               {f.total > 0 && (
@@ -137,12 +137,17 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
     })
 
   return (
-    <li>
-      <ul className="mt-0.5 space-y-0.5">
-        <li className="pl-9 pr-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Folders
-        </li>
-        {renderRows(null, 0)}
+    <li className="min-w-0">
+      <p className="pl-9 pr-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        Folders
+      </p>
+      {/* Own scroll area: with 30+ folders the flat list pushed Sent / To-Do /
+          Calendar past the bottom of the sidebar. overflow-x-hidden keeps deep
+          rows from adding a horizontal scrollbar. */}
+      <div className="max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <ul className="mt-0.5 space-y-0.5">{renderRows(null, 0)}</ul>
+      </div>
+      <ul className="mt-0.5">
         <li><ManageLink label="Manage folders" onNavigate={onNavigate} /></li>
       </ul>
     </li>
