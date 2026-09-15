@@ -16,7 +16,15 @@ const TAB_VALUES = [
 ] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 const DEFAULT_TAB: TabValue = 'overview';
-const TRIGGER = 'text-sm h-7';
+// The base TabsTrigger active style is white-on-white with a thin border, which
+// is hard to spot on this page. Override it with a solid brand fill so the
+// selected tab reads at a glance.
+const TRIGGER =
+  'text-sm h-7 rounded-md px-3 transition-colors ' +
+  'data-[state=active]:bg-blue-600 data-[state=active]:text-white ' +
+  'data-[state=active]:font-semibold data-[state=active]:border-transparent ' +
+  'data-[state=active]:shadow-sm ' +
+  'data-[state=inactive]:text-muted-foreground hover:text-foreground';
 
 interface PartyDetailTabsProps {
   overview: ReactNode;
@@ -63,7 +71,7 @@ export function PartyDetailTabs({
       <TabsList className="h-auto flex-wrap justify-start gap-1">
         <TabsTrigger value="overview" className={TRIGGER}>Overview</TabsTrigger>
         {analysis ? (
-          <TabsTrigger value="analysis" className={TRIGGER}>투자사 분석</TabsTrigger>
+          <TabsTrigger value="analysis" className={TRIGGER}>Investor Analysis</TabsTrigger>
         ) : null}
         <TabsTrigger value="activity" className={TRIGGER}>Activity</TabsTrigger>
         <TabsTrigger value="communications" className={TRIGGER}>Communications</TabsTrigger>
