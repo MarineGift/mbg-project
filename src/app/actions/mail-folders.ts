@@ -135,48 +135,30 @@ export async function listMailFoldersWithCountsAction(): Promise<
     if (!base.ok) return base
     const supabase = await createSupabaseServerClient()
 
-    const buildCount = () =>
-      supabase
-        .schema('app')
-        .from('communications' as never)
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('direction', 'inbound')
+    // One round trip. app.mail_folder_counts() walks each folder's subtree and
+    // counts DISTINCT messages, so a group never double-counts a message that
+    // two of its children both match (shared sender domain).
+    // `as never` on the rpc name: the generated Database types are regenerated
+    // separately and do not know this function yet.
+    const { data, error } = await supabase
+      .schema('app')
+      .rpc('mail_folder_counts' as never)
+    if (error) throw error
 
-    // Count each party folder once, then roll the children up into the group.
-    const leaves = base.data.filter((f) => !f.isGroup)
-    const counted = await Promise.all(
-      leaves.map(async (f) => {
-        const orExpr = folderOrExpression(f.partyId ? [f.partyId] : [], f.matchDomains)
-        if (!orExpr) return { id: f.id, total: 0, unread: 0 }
-        const [totalRes, unreadRes] = await Promise.all([
-          buildCount().or(orExpr),
-          buildCount().or(orExpr).is('read_at', null),
-        ])
-        return { id: f.id, total: totalRes.count ?? 0, unread: unreadRes.count ?? 0 }
-      }),
-    )
-    const byId = new Map(counted.map((c) => [c.id, c]))
+    const counts = (data ?? []) as unknown as Array<{
+      folder_id: string
+      inbound: number | string
+      unread: number | string
+    }>
+    const byId = new Map(counts.map((r) => [r.folder_id, r]))
 
-    const rows: MailFolderWithCounts[] = base.data.map((f) => {
-      if (!f.isGroup) {
+    return {
+      ok: true,
+      data: base.data.map((f) => {
         const c = byId.get(f.id)
-        return { ...f, total: c?.total ?? 0, unread: c?.unread ?? 0 }
-      }
-      // NOTE: a group total can double-count a message that matches two of its
-      // children (same sender domain pinned twice). Keep children distinct.
-      let total = 0
-      let unread = 0
-      for (const child of leaves) {
-        if (child.parentId !== f.id) continue
-        const c = byId.get(child.id)
-        total += c?.total ?? 0
-        unread += c?.unread ?? 0
-      }
-      return { ...f, total, unread }
-    })
-
-    return { ok: true, data: rows }
+        return { ...f, total: Number(c?.inbound ?? 0), unread: Number(c?.unread ?? 0) }
+      }),
+    }
   } catch (e) {
     console.error('[mail-folders] counts error:', e)
     return { ok: false, error: toMessage(e) }
@@ -204,9 +186,19 @@ export async function resolveFolderScopeAction(
     const self = all.data.find((f) => f.id === id)
     if (!self) return { ok: false, error: 'Folder not found' }
 
-    const members = self.isGroup
-      ? all.data.filter((f) => !f.isGroup && f.parentId === self.id)
-      : [self]
+    // Groups nest (Business > Omya > Omya (Korea)), so collect the whole
+    // subtree, not just direct children. A group can carry domains itself.
+    const members: MailFolder[] = []
+    const seen = new Set<string>()
+    const walk = (node: MailFolder) => {
+      if (seen.has(node.id)) return
+      seen.add(node.id)
+      members.push(node)
+      for (const child of all.data) {
+        if (child.parentId === node.id) walk(child)
+      }
+    }
+    walk(self)
 
     const partyIds: string[] = []
     const domains: string[] = []
