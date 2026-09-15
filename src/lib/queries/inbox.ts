@@ -170,6 +170,15 @@ export async function fetchInbox(
   if (filters.aiGenerated) {
     query = query.eq('ai_generated', true);
   }
+  // ---- mail folder scope -------------------------------------------------
+  // A folder resolves to any mix of: parties, sender domains, exact sender
+  // addresses. A GROUP can have no party at all (Government is domains only),
+  // so the scope must be applied whenever ANY of the three is present -
+  // keying off partyIds alone silently dropped the filter and showed the whole
+  // inbox (or nothing, once the or() came out empty).
+  const scopedDomains = (filters.partyDomains ?? [])
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+    .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
   const scopedAddresses = (filters.partyAddresses ?? [])
     .map((a) => a.trim().toLowerCase())
     .filter((a) => /^[^@\s,()]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(a));
@@ -179,25 +188,25 @@ export async function fetchInbox(
       : filters.partyId
         ? [filters.partyId]
         : [];
-  if (scopedPartyIds.length > 0) {
-    const domains = (filters.partyDomains ?? [])
-      .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
-      .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
-    if (domains.length === 0 && scopedAddresses.length === 0 && scopedPartyIds.length === 1) {
-      query = query.eq('party_id', scopedPartyIds[0] as string);
-    } else {
-      // Mail folder view: the party (or every party in the group), plus senders
-      // on the pinned domains that were never linked to one.
-      // ilike inside or() uses '*' as the wildcard, not '%'.
-      const parts =
-        scopedPartyIds.length === 1
-          ? [`party_id.eq.${scopedPartyIds[0]}`]
-          : [`party_id.in.(${scopedPartyIds.join(',')})`];
-      for (const d of domains) parts.push(`from_address.ilike.*@${d}`);
-      // no wildcard = exact address match, still case-insensitive
-      for (const a of scopedAddresses) parts.push(`from_address.ilike.${a}`);
-      query = query.or(parts.join(','));
+
+  if (scopedPartyIds.length === 1 && scopedDomains.length === 0 && scopedAddresses.length === 0) {
+    query = query.eq('party_id', scopedPartyIds[0] as string);
+  } else if (
+    scopedPartyIds.length > 0 ||
+    scopedDomains.length > 0 ||
+    scopedAddresses.length > 0
+  ) {
+    const parts: string[] = [];
+    if (scopedPartyIds.length === 1) {
+      parts.push(`party_id.eq.${scopedPartyIds[0]}`);
+    } else if (scopedPartyIds.length > 1) {
+      parts.push(`party_id.in.(${scopedPartyIds.join(',')})`);
     }
+    // ilike inside or() uses '*' as the wildcard, not '%'
+    for (const d of scopedDomains) parts.push(`from_address.ilike.*@${d}`);
+    // no wildcard = exact address match, still case-insensitive
+    for (const a of scopedAddresses) parts.push(`from_address.ilike.${a}`);
+    query = query.or(parts.join(','));
   }
 
   if (filters.query.length > 0) {
