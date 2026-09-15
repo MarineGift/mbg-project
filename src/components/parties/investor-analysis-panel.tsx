@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   getPartyResearchAction,
   savePartyResearchAction,
@@ -59,13 +59,16 @@ export function InvestorAnalysisPanel({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // One form serves both "add" and "edit": editingId null means a new record.
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [source, setSource] = useState('greentown')
   const [subject, setSubject] = useState('')
   const [recipient, setRecipient] = useState('')
   const [sentAt, setSentAt] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const dirty = notes !== savedNotes
 
@@ -105,21 +108,57 @@ export function InvestorAnalysisPanel({
     setUpdatedAt(res.data.updatedAt)
   }
 
-  async function handleAddMail() {
+  async function handleClearNotes() {
+    if (!window.confirm('Delete the research notes for this investor?')) return
+    setSavingNotes(true)
+    setError(null)
+    const res = await savePartyResearchAction(partyId, '')
+    setSavingNotes(false)
+    if (!res.ok) { setError(res.error); return }
+    setNotes(''); setSavedNotes(''); setUpdatedAt(res.data.updatedAt)
+  }
+
+  function resetForm() {
+    setEditingId(null)
+    setSource('greentown')
+    setSubject(''); setBody(''); setRecipient(''); setSentAt('')
+  }
+
+  function startEdit(m: ColdMail) {
+    setEditingId(m.id)
+    setSource(m.source || 'greentown')
+    setSubject(m.subject ?? '')
+    setBody(m.body ?? '')
+    setRecipient(m.recipient ?? '')
+    // <input type="date"> wants YYYY-MM-DD in local time
+    setSentAt(m.sentAt ? new Date(m.sentAt).toISOString().slice(0, 10) : '')
+    setShowForm(true)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function handleSaveMail() {
     setSaving(true)
     setError(null)
-    const res = await createColdMailAction({
-      partyId,
+    const payload = {
       source,
       subject,
       body,
       recipient,
       sentAt: sentAt ? new Date(sentAt).toISOString() : null,
-    })
+    }
+    const res = editingId
+      ? await updateColdMailAction(editingId, payload)
+      : await createColdMailAction({ partyId, ...payload })
     setSaving(false)
     if (!res.ok) { setError(res.error); return }
-    setSubject(''); setBody(''); setRecipient(''); setSentAt(''); setShowForm(false)
-    setMails((prev) => [res.data, ...prev])
+
+    setMails((prev) =>
+      editingId
+        ? prev.map((m) => (m.id === editingId ? res.data : m))
+        : [res.data, ...prev],
+    )
+    resetForm()
+    setShowForm(false)
   }
 
   async function handleOutcome(id: string, outcome: string) {
@@ -161,6 +200,15 @@ export function InvestorAnalysisPanel({
             <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes || !dirty}>
               {savingNotes ? 'Saving...' : 'Save'}
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-red-600"
+              onClick={handleClearNotes}
+              disabled={savingNotes || (!notes && !savedNotes)}
+            >
+              Clear
+            </Button>
           </div>
         </div>
 
@@ -185,7 +233,14 @@ export function InvestorAnalysisPanel({
               channel. They never reach our mailbox, so paste them here.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (showForm) { setShowForm(false); resetForm() }
+              else { resetForm(); setShowForm(true) }
+            }}
+          >
             <Plus className="mr-1 h-4 w-4" />
             {showForm ? 'Cancel' : 'Add'}
           </Button>
@@ -193,6 +248,9 @@ export function InvestorAnalysisPanel({
 
         {showForm && (
           <div className="grid gap-3 border-b bg-muted/20 px-4 py-4 md:grid-cols-2">
+            <p className="text-xs font-medium text-muted-foreground md:col-span-2">
+              {editingId ? 'Edit cold mail' : 'New cold mail'}
+            </p>
             <div className="space-y-1">
               <Label>Sent through</Label>
               <select
@@ -239,10 +297,25 @@ export function InvestorAnalysisPanel({
               />
             </div>
 
-            <div className="md:col-span-2">
-              <Button size="sm" onClick={handleAddMail} disabled={saving}>
-                {saving ? 'Saving...' : 'Save cold mail'}
+            <div className="flex items-center gap-2 md:col-span-2">
+              <Button size="sm" onClick={handleSaveMail} disabled={saving}>
+                {saving
+                  ? 'Saving...'
+                  : editingId
+                    ? 'Save changes'
+                    : 'Save cold mail'}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { setShowForm(false); resetForm() }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              {editingId && (
+                <span className="text-xs text-muted-foreground">Editing an existing record</span>
+              )}
             </div>
           </div>
         )}
@@ -256,7 +329,12 @@ export function InvestorAnalysisPanel({
         ) : (
           <ul className="divide-y">
             {mails.map((m) => (
-              <li key={m.id} className="px-4 py-3">
+              <li
+                key={m.id}
+                className={
+                  'px-4 py-3 ' + (editingId === m.id ? 'bg-blue-50/60' : '')
+                }
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
                     {SOURCES.find((s) => s.value === m.source)?.label ?? m.source}
@@ -282,11 +360,19 @@ export function InvestorAnalysisPanel({
                   </select>
                   <button
                     type="button"
-                    title="Remove"
-                    onClick={() => handleDeleteMail(m.id)}
-                    className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                    onClick={() => startEdit(m)}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMail(m.id)}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
                   </button>
                 </div>
 
@@ -294,9 +380,27 @@ export function InvestorAnalysisPanel({
                   <p className="mt-1.5 text-sm font-medium">{m.subject}</p>
                 )}
                 {m.body && (
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {m.body}
-                  </p>
+                  <>
+                    <p
+                      className={
+                        'mt-1 whitespace-pre-wrap text-sm text-muted-foreground ' +
+                        (expanded[m.id] ? '' : 'line-clamp-4')
+                      }
+                    >
+                      {m.body}
+                    </p>
+                    {m.body.length > 240 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpanded((p) => ({ ...p, [m.id]: !p[m.id] }))
+                        }
+                        className="mt-1 text-xs text-blue-600 hover:underline"
+                      >
+                        {expanded[m.id] ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
+                  </>
                 )}
               </li>
             ))}

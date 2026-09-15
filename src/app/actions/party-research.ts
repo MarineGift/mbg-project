@@ -221,7 +221,14 @@ export async function createColdMailAction(input: {
 
 export async function updateColdMailAction(
   id: string,
-  patch: { outcome?: string | null; subject?: string | null; body?: string | null },
+  patch: {
+    outcome?: string | null
+    subject?: string | null
+    body?: string | null
+    source?: string | null
+    recipient?: string | null
+    sentAt?: string | null
+  },
 ): Promise<ResearchResult<ColdMail>> {
   if (!id) return { ok: false, error: 'Missing id' }
   try {
@@ -230,6 +237,9 @@ export async function updateColdMailAction(
     if (patch.outcome !== undefined) row.outcome = patch.outcome?.trim() || null
     if (patch.subject !== undefined) row.subject = patch.subject?.trim() || null
     if (patch.body !== undefined) row.body = patch.body?.trim() || null
+    if (patch.source !== undefined) row.source = patch.source?.trim() || 'other'
+    if (patch.recipient !== undefined) row.recipient = patch.recipient?.trim() || null
+    if (patch.sentAt !== undefined) row.sent_at = patch.sentAt || null
 
     const { data, error } = await supabase
       .schema('app')
