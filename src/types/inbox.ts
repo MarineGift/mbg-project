@@ -119,6 +119,11 @@ export interface InboxFilters {
    * still land in the folder. Ignored unless partyId is set.
    */
   partyDomains?: string[];
+  /**
+   * 2026-09-15 folder groups: a group folder (Partners / Business) resolves to
+   * several parties at once. When set it supersedes partyId.
+   */
+  partyIds?: string[];
 }
 
 export interface InboxPagination {

@@ -18,7 +18,10 @@ import { revalidatePath } from 'next/cache'
 
 export interface MailFolder {
   id: string
-  partyId: string
+  /** group rows have no party; they aggregate their children */
+  isGroup: boolean
+  parentId: string | null
+  partyId: string | null
   /** label falls back to the party name */
   name: string
   label: string | null
@@ -44,7 +47,7 @@ export type FolderResult<T = null> =
   | { ok: false; error: string }
 
 const COLS =
-  'id, party_id, label, color, match_domains, sort_order, parties:party_id ( party_name )'
+  'id, party_id, parent_id, is_group, label, color, match_domains, sort_order, parties:party_id ( party_name )'
 
 function toMessage(e: unknown): string {
   const err = e as { message?: string; details?: string; hint?: string; code?: string }
@@ -55,7 +58,9 @@ function toMessage(e: unknown): string {
 
 interface RawFolder {
   id: string
-  party_id: string
+  party_id: string | null
+  parent_id: string | null
+  is_group: boolean
   label: string | null
   color: string | null
   match_domains: string[] | null
@@ -65,10 +70,12 @@ interface RawFolder {
 
 function shape(raw: RawFolder): MailFolder {
   const party = Array.isArray(raw.parties) ? raw.parties[0] : raw.parties
-  const partyName = party?.party_name ?? 'Unknown party'
+  const partyName = party?.party_name ?? (raw.is_group ? '' : 'Unknown party')
   return {
     id: raw.id,
-    partyId: raw.party_id,
+    isGroup: !!raw.is_group,
+    parentId: raw.parent_id ?? null,
+    partyId: raw.party_id ?? null,
     label: raw.label,
     partyName,
     name: raw.label?.trim() || partyName,
@@ -128,32 +135,99 @@ export async function listMailFoldersWithCountsAction(): Promise<
     if (!base.ok) return base
     const supabase = await createSupabaseServerClient()
 
-    const rows = await Promise.all(
-      base.data.map(async (f) => {
-        const buildCount = () =>
-          supabase
-            .schema('app')
-            .from('communications' as never)
-            .select('id', { count: 'exact', head: true })
-            .is('deleted_at', null)
-            .eq('direction', 'inbound')
+    const buildCount = () =>
+      supabase
+        .schema('app')
+        .from('communications' as never)
+        .select('id', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .eq('direction', 'inbound')
 
-        const orExpr = folderOrExpression(f.partyId, f.matchDomains)
+    // Count each party folder once, then roll the children up into the group.
+    const leaves = base.data.filter((f) => !f.isGroup)
+    const counted = await Promise.all(
+      leaves.map(async (f) => {
+        const orExpr = folderOrExpression(f.partyId ? [f.partyId] : [], f.matchDomains)
+        if (!orExpr) return { id: f.id, total: 0, unread: 0 }
         const [totalRes, unreadRes] = await Promise.all([
           buildCount().or(orExpr),
           buildCount().or(orExpr).is('read_at', null),
         ])
-
-        return {
-          ...f,
-          total: totalRes.count ?? 0,
-          unread: unreadRes.count ?? 0,
-        }
+        return { id: f.id, total: totalRes.count ?? 0, unread: unreadRes.count ?? 0 }
       }),
     )
+    const byId = new Map(counted.map((c) => [c.id, c]))
+
+    const rows: MailFolderWithCounts[] = base.data.map((f) => {
+      if (!f.isGroup) {
+        const c = byId.get(f.id)
+        return { ...f, total: c?.total ?? 0, unread: c?.unread ?? 0 }
+      }
+      // NOTE: a group total can double-count a message that matches two of its
+      // children (same sender domain pinned twice). Keep children distinct.
+      let total = 0
+      let unread = 0
+      for (const child of leaves) {
+        if (child.parentId !== f.id) continue
+        const c = byId.get(child.id)
+        total += c?.total ?? 0
+        unread += c?.unread ?? 0
+      }
+      return { ...f, total, unread }
+    })
+
     return { ok: true, data: rows }
   } catch (e) {
     console.error('[mail-folders] counts error:', e)
+    return { ok: false, error: toMessage(e) }
+  }
+}
+
+export interface FolderScope {
+  id: string
+  name: string
+  color: string | null
+  isGroup: boolean
+  /** every party whose mail belongs to this folder (a group folds in its children) */
+  partyIds: string[]
+  domains: string[]
+}
+
+// What the inbox needs to filter on when you open ?folder=<id>.
+export async function resolveFolderScopeAction(
+  id: string,
+): Promise<FolderResult<FolderScope>> {
+  if (!id) return { ok: false, error: 'Missing folder id' }
+  try {
+    const all = await listMailFoldersAction()
+    if (!all.ok) return all
+    const self = all.data.find((f) => f.id === id)
+    if (!self) return { ok: false, error: 'Folder not found' }
+
+    const members = self.isGroup
+      ? all.data.filter((f) => !f.isGroup && f.parentId === self.id)
+      : [self]
+
+    const partyIds: string[] = []
+    const domains: string[] = []
+    for (const m of members) {
+      if (m.partyId && !partyIds.includes(m.partyId)) partyIds.push(m.partyId)
+      for (const d of m.matchDomains) if (!domains.includes(d)) domains.push(d)
+    }
+
+    return {
+      ok: true,
+      data: {
+        id: self.id,
+        name: self.name,
+        color: self.color,
+        isGroup: self.isGroup,
+        partyIds,
+        domains,
+      },
+    }
+  } catch (e) {
+    console.error('[mail-folders] scope error:', e)
     return { ok: false, error: toMessage(e) }
   }
 }
@@ -181,30 +255,40 @@ export async function getMailFolderAction(id: string): Promise<FolderResult<Mail
 /* ----------------------------------------------------------------- write */
 
 export async function createMailFolderAction(input: {
-  partyId: string
+  partyId?: string | null
+  /** true => a group header (Partners / Investors / Business) */
+  isGroup?: boolean
+  parentId?: string | null
   label?: string | null
   color?: string | null
   matchDomains?: string[] | string | null
 }): Promise<FolderResult<MailFolder>> {
-  if (!input?.partyId) return { ok: false, error: 'Pick a party first' }
+  if (input?.isGroup) {
+    if (!input.label?.trim()) return { ok: false, error: 'Name the group first' }
+  } else if (!input?.partyId) {
+    return { ok: false, error: 'Pick a party first' }
+  }
   try {
     const auth = await requireAuth()
     const supabase = await createSupabaseServerClient()
 
     // Revive a previously removed folder for the same party instead of
-    // tripping the partial unique index.
-    const { data: existing } = await supabase
-      .schema('app')
-      .from('mail_folders' as never)
-      .select('id, deleted_at')
-      .eq('organization_id', auth.organizationId)
-      .eq('party_id', input.partyId)
-      .maybeSingle()
+    // tripping the partial unique index. Groups have no party, so skip.
+    const { data: existing } = input.partyId
+      ? await supabase
+          .schema('app')
+          .from('mail_folders' as never)
+          .select('id, deleted_at')
+          .eq('organization_id', auth.organizationId)
+          .eq('party_id', input.partyId)
+          .maybeSingle()
+      : { data: null }
 
     const payload = {
       label: input.label?.trim() || null,
       color: input.color?.trim() || null,
       match_domains: normalizeDomains(input.matchDomains),
+      parent_id: input.parentId || null,
       deleted_at: null,
       updated_at: new Date().toISOString(),
     }
@@ -234,7 +318,8 @@ export async function createMailFolderAction(input: {
       .from('mail_folders' as never)
       .insert({
         organization_id: auth.organizationId,
-        party_id: input.partyId,
+        party_id: input.isGroup ? null : input.partyId,
+        is_group: !!input.isGroup,
         sort_order: count ?? 0,
         ...payload,
       } as never)
@@ -258,6 +343,8 @@ export async function updateMailFolderAction(
     color?: string | null
     matchDomains?: string[] | string | null
     sortOrder?: number
+    /** null moves the folder back out to the top level */
+    parentId?: string | null
   },
 ): Promise<FolderResult<MailFolder>> {
   if (!id) return { ok: false, error: 'Missing folder id' }
@@ -268,6 +355,7 @@ export async function updateMailFolderAction(
     if (patch.color !== undefined) row.color = patch.color?.trim() || null
     if (patch.matchDomains !== undefined) row.match_domains = normalizeDomains(patch.matchDomains)
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder
+    if (patch.parentId !== undefined) row.parent_id = patch.parentId || null
 
     const { data, error } = await supabase
       .schema('app')
@@ -376,14 +464,16 @@ export async function searchPartiesForFolderAction(
 // PostgREST or() expression for "belongs to this folder".
 // ilike inside or() uses '*' as the wildcard, not '%'.
 export async function folderOrExpressionAction(
-  partyId: string,
+  partyIds: string[],
   matchDomains: string[],
 ): Promise<string> {
-  return folderOrExpression(partyId, matchDomains)
+  return folderOrExpression(partyIds, matchDomains)
 }
 
-function folderOrExpression(partyId: string, matchDomains: string[]): string {
-  const parts = [`party_id.eq.${partyId}`]
+function folderOrExpression(partyIds: string[], matchDomains: string[]): string {
+  const parts: string[] = []
+  if (partyIds.length === 1) parts.push(`party_id.eq.${partyIds[0]}`)
+  else if (partyIds.length > 1) parts.push(`party_id.in.(${partyIds.join(',')})`)
   for (const d of normalizeDomains(matchDomains)) {
     parts.push(`from_address.ilike.*@${d}`)
   }

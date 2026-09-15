@@ -20,7 +20,7 @@ import { InboxPagination } from '@/components/inbox/inbox-pagination';
 import { InboxEmpty } from '@/components/inbox/inbox-empty';
 import { InboxComposeButton } from '@/components/inbox/inbox-compose-button';
 import { DEFAULT_INBOX_FILTERS } from '@/types/inbox';
-import { getMailFolderAction } from '@/app/actions/mail-folders';
+import { resolveFolderScopeAction } from '@/app/actions/mail-folders';
 import { FolderOpen } from 'lucide-react';
 
 interface PageProps {
@@ -41,12 +41,18 @@ export default async function InboxPage({ searchParams }: PageProps) {
   let folderName: string | null = null;
   let folderColor: string | null = null;
   if (folderId) {
-    const folderRes = await getMailFolderAction(folderId);
-    if (folderRes.ok) {
-      filters.partyId = folderRes.data.partyId;
-      filters.partyDomains = folderRes.data.matchDomains;
-      folderName = folderRes.data.name;
-      folderColor = folderRes.data.color;
+    // A group folder (Partners / Business) resolves to all of its children.
+    const scopeRes = await resolveFolderScopeAction(folderId);
+    if (scopeRes.ok) {
+      filters.partyIds = scopeRes.data.partyIds;
+      filters.partyId = scopeRes.data.partyIds[0] ?? null;
+      filters.partyDomains = scopeRes.data.domains;
+      folderName = scopeRes.data.name;
+      folderColor = scopeRes.data.color;
+      // An empty group would otherwise fall through to the whole inbox.
+      if (scopeRes.data.partyIds.length === 0 && scopeRes.data.domains.length === 0) {
+        filters.partyId = '00000000-0000-0000-0000-000000000000';
+      }
     }
   }
 

@@ -170,23 +170,31 @@ export async function fetchInbox(
   if (filters.aiGenerated) {
     query = query.eq('ai_generated', true);
   }
-  if (filters.partyId) {
+  const scopedPartyIds =
+    filters.partyIds && filters.partyIds.length > 0
+      ? filters.partyIds
+      : filters.partyId
+        ? [filters.partyId]
+        : [];
+  if (scopedPartyIds.length > 0) {
     const domains = (filters.partyDomains ?? [])
       .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
       .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
-    if (domains.length > 0) {
-      // Mail folder view: the party, plus senders on the pinned domains that
-      // were never linked to it. ilike inside or() uses '*' as the wildcard.
-      query = query.or(
-        [
-          `party_id.eq.${filters.partyId}`,
-          ...domains.map((d) => `from_address.ilike.*@${d}`),
-        ].join(','),
-      );
+    if (domains.length === 0 && scopedPartyIds.length === 1) {
+      query = query.eq('party_id', scopedPartyIds[0] as string);
     } else {
-      query = query.eq('party_id', filters.partyId);
+      // Mail folder view: the party (or every party in the group), plus senders
+      // on the pinned domains that were never linked to one.
+      // ilike inside or() uses '*' as the wildcard, not '%'.
+      const parts =
+        scopedPartyIds.length === 1
+          ? [`party_id.eq.${scopedPartyIds[0]}`]
+          : [`party_id.in.(${scopedPartyIds.join(',')})`];
+      for (const d of domains) parts.push(`from_address.ilike.*@${d}`);
+      query = query.or(parts.join(','));
     }
   }
+
   if (filters.query.length > 0) {
     const pattern = `%${escapeLikePattern(filters.query)}%`;
     // Field-scoped search. Note: to_addresses is text[], which PostgREST cannot
