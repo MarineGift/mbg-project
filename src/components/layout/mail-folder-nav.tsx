@@ -174,21 +174,22 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
               >
                 {f.name}
               </span>
-              {hasNew ? (
-                <span
-                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white tabular-nums"
-                  style={{ backgroundColor: accent }}
-                  aria-label={`${f.unread} unread`}
-                >
-                  {f.unread > 999 ? '999+' : f.unread}
-                </span>
-              ) : (
-                f.total > 0 && (
-                  <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
-                    {f.total}
+              {f.total > 0 &&
+                (hasNew ? (
+                  // same unread/total shape as the In Bound row, but coloured
+                  // so a folder with new mail stands out
+                  <span
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white tabular-nums"
+                    style={{ backgroundColor: accent }}
+                    aria-label={`${f.unread} unread of ${f.total}`}
+                  >
+                    {f.unread > 999 ? '999+' : f.unread}/{f.total}
                   </span>
-                )
-              )}
+                ) : (
+                  <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                    {f.unread}/{f.total}
+                  </span>
+                ))}
             </Link>
           </div>
 
