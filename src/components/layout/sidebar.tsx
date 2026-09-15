@@ -22,7 +22,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Inbox,
@@ -150,8 +150,58 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
+// Resizable sidebar: drag the right edge. 240px is the old w-60 default.
+const SIDEBAR_WIDTH_KEY = 'urm.sidebarWidth';
+const SIDEBAR_DEFAULT_WIDTH = 240;
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 560;
+
+function clampWidth(px: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(px)));
+}
+
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
+
+  // Drag-to-resize width. Kept in localStorage rather than the ui-store so it
+  // survives a reload without touching the persisted store shape. Collapsed
+  // mode ignores it (fixed 64px rail).
+  const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+      if (Number.isFinite(saved) && saved > 0) setWidth(clampWidth(saved));
+    } catch {
+      // private mode / storage disabled - the default is fine
+    }
+  }, []);
+
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const onMove = (ev: MouseEvent) => setWidth(clampWidth(ev.clientX));
+    const onUp = (ev: MouseEvent) => {
+      const next = clampWidth(ev.clientX);
+      setWidth(next);
+      setDragging(false);
+      try { window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next)); } catch {}
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const resetWidth = useCallback(() => {
+    setWidth(SIDEBAR_DEFAULT_WIDTH);
+    try { window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH)); } catch {}
+  }, []);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const tNav = useTranslations('nav');
   const pathname = usePathname();
@@ -347,7 +397,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
     return () => { alive = false; };
   }, [pathname]);
 
-  const widthCls = collapsed ? 'w-16' : 'w-60';
+  const widthCls = collapsed ? 'w-16' : '';
 
   // Inner content is rendered both in the desktop aside and the mobile drawer.
   // `isCollapsed` only applies on desktop; the mobile drawer is always expanded.
@@ -531,12 +581,32 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       {/* Desktop sidebar (in-flow, collapsible) */}
       <aside
         className={cn(
-          'group hidden md:flex h-screen flex-col border-r bg-card text-card-foreground transition-[width] duration-200',
+          'group relative hidden md:flex h-screen flex-col border-r bg-card text-card-foreground',
+          // no width transition while dragging, or the edge lags the cursor
+          dragging ? '' : 'transition-[width] duration-200',
           widthCls,
         )}
+        style={collapsed ? undefined : { width }}
         aria-label="Sidebar"
       >
         {renderBody({ isCollapsed: collapsed, mobile: false })}
+
+        {/* Drag handle. Double-click resets to the default width. */}
+        {!collapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            onMouseDown={startDrag}
+            onDoubleClick={resetWidth}
+            title="Drag to resize - double-click to reset"
+            className={cn(
+              'absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize',
+              'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-primary/40',
+              dragging && 'after:bg-primary/60',
+            )}
+          />
+        )}
       </aside>
 
       {/* Mobile backdrop */}

@@ -142,9 +142,11 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
         Folders
       </p>
       {/* Own scroll area: with 30+ folders the flat list pushed Sent / To-Do /
-          Calendar past the bottom of the sidebar. overflow-x-hidden keeps deep
-          rows from adding a horizontal scrollbar. */}
-      <div className="max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain">
+          Calendar past the bottom of the sidebar. 45vh leaves room for the rest
+          of the nav on a short window; overflow-x-hidden keeps deep rows from
+          adding a horizontal scrollbar - widen the sidebar by dragging its
+          right edge instead. */}
+      <div className="max-h-[45vh] overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin">
         <ul className="mt-0.5 space-y-0.5">{renderRows(null, 0)}</ul>
       </div>
       <ul className="mt-0.5">
