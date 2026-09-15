@@ -23,7 +23,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ChevronDown, ChevronRight, FolderOpen, Settings2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   listMailFoldersWithCountsAction,
@@ -41,16 +41,34 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
   const [loaded, setLoaded] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
+  // Refresh on navigation, on a 60s timer, and whenever the tab regains focus,
+  // so a folder lights up when mail arrives without the user reloading. One
+  // RPC call per refresh (app.mail_folder_counts), so this stays cheap.
   useEffect(() => {
     let cancelled = false
-    listMailFoldersWithCountsAction()
-      .then((res) => {
-        if (cancelled) return
-        if (res.ok) setFolders(res.data)
-      })
-      .catch(() => { /* the sidebar must never break navigation */ })
-      .finally(() => { if (!cancelled) setLoaded(true) })
-    return () => { cancelled = true }
+
+    const load = () => {
+      listMailFoldersWithCountsAction()
+        .then((res) => {
+          if (cancelled) return
+          if (res.ok) setFolders(res.data)
+        })
+        .catch(() => { /* the sidebar must never break navigation */ })
+        .finally(() => { if (!cancelled) setLoaded(true) })
+    }
+
+    load()
+    const timer = setInterval(load, 60_000)
+    const onFocus = () => { if (document.visibilityState === 'visible') load() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
   }, [pathname])
 
   if (!loaded) return null
@@ -77,6 +95,10 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
       const isCollapsed = collapsed[f.id] ?? false
       const active = pathname === '/inbox' && activeId === f.id
       const indent = INDENT[Math.min(depth, INDENT.length - 1)] as string
+      // Unread mail pulls the row out of the muted default and swaps the
+      // grey "unread/total" text for a coloured count of what is new.
+      const hasNew = f.unread > 0
+      const accent = f.color ?? '#2563eb'
 
       return [
         <li key={f.id}>
@@ -105,26 +127,47 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
                 kids.length > 0 ? 'pl-1.5' : indent,
                 active
                   ? 'bg-accent text-accent-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  : hasNew
+                    ? 'text-foreground hover:bg-accent'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
               aria-current={active ? 'page' : undefined}
-              title={f.isGroup ? f.name : f.partyName}
+              title={
+                `${f.isGroup ? f.name : f.partyName} \u2014 ` +
+                `${f.unread} new / ${f.total} inbound`
+              }
             >
-              {f.isGroup ? null : f.color ? (
+              {f.isGroup ? null : (
                 <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: f.color }}
+                  className={cn(
+                    'h-2 w-2 shrink-0 rounded-full',
+                    !f.color && 'bg-muted-foreground/40',
+                  )}
+                  style={f.color ? { backgroundColor: f.color } : undefined}
                 />
-              ) : (
-                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
               )}
-              <span className={cn('min-w-0 flex-1 truncate', f.isGroup && 'font-medium')}>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate',
+                  (f.isGroup || hasNew) && 'font-medium',
+                )}
+              >
                 {f.name}
               </span>
-              {f.total > 0 && (
-                <span className="tabular-nums text-xs text-muted-foreground">
-                  {f.unread}/{f.total}
+              {hasNew ? (
+                <span
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white tabular-nums"
+                  style={{ backgroundColor: accent }}
+                  aria-label={`${f.unread} unread`}
+                >
+                  {f.unread > 999 ? '999+' : f.unread}
                 </span>
+              ) : (
+                f.total > 0 && (
+                  <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                    {f.total}
+                  </span>
+                )
               )}
             </Link>
           </div>
