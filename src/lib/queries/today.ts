@@ -299,6 +299,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       supabase.schema('app').from('meetings' as never)
         .select('id, title, scheduled_at, party_id, parties ( name )')
         .neq('status', 'cancelled')
+        .is('deleted_at', null)
         .gte('scheduled_at', todayTs)
         .lte('scheduled_at', weekEndTs)
         .order('scheduled_at'),

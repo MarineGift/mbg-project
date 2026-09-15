@@ -261,6 +261,7 @@ export async function getCalendarFeed(
           .gte('scheduled_at', rangeStart)
           .lte('scheduled_at', rangeEnd)
           .neq('status', 'cancelled')
+          .is('deleted_at', null)
           .order('scheduled_at')
         : noRows,
 
