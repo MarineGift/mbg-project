@@ -45,6 +45,7 @@ export function MailFolderManager() {
   const [label, setLabel] = useState('')
   const [color, setColor] = useState(SWATCHES[0] as string)
   const [domains, setDomains] = useState('')
+  const [addresses, setAddresses] = useState('')
   const [parentId, setParentId] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -133,10 +134,11 @@ export function MailFolderManager() {
       label: label.trim() || null,
       color,
       matchDomains: domains,
+      matchAddresses: addresses,
     })
     setSaving(false)
     if (!res.ok) { setError(res.error); return }
-    setPicked(null); setLabel(''); setDomains(''); setQ('')
+    setPicked(null); setLabel(''); setDomains(''); setAddresses(''); setQ('')
     await reload(); router.refresh()
   }
 
@@ -162,6 +164,13 @@ export function MailFolderManager() {
   async function handleDomainsBlur(f: MailFolderWithCounts, value: string) {
     if (value.trim() === f.matchDomains.join(', ')) return
     const res = await updateMailFolderAction(f.id, { matchDomains: value })
+    if (!res.ok) { setError(res.error); return }
+    await reload()
+  }
+
+  async function handleAddressesBlur(f: MailFolderWithCounts, value: string) {
+    if (value.trim() === f.matchAddresses.join(', ')) return
+    const res = await updateMailFolderAction(f.id, { matchAddresses: value })
     if (!res.ok) { setError(res.error); return }
     await reload()
   }
@@ -219,8 +228,17 @@ export function MailFolderManager() {
           <Input
             defaultValue={f.matchDomains.join(', ')}
             placeholder="extra domains"
-            className="h-8 w-full text-xs md:w-56"
+            title="Sender domains folded into this folder"
+            className="h-8 w-full text-xs md:w-44"
             onBlur={(e) => handleDomainsBlur(f, e.target.value)}
+          />
+
+          <Input
+            defaultValue={f.matchAddresses.join(', ')}
+            placeholder="exact addresses"
+            title="Exact sender addresses, for shared relays like Luma or Mailchimp"
+            className="h-8 w-full text-xs md:w-56"
+            onBlur={(e) => handleAddressesBlur(f, e.target.value)}
           />
 
           <div className="flex items-center gap-1">
@@ -332,7 +350,21 @@ export function MailFolderManager() {
             />
           </div>
 
-          <div className="space-y-1 md:col-span-2">
+          <div className="space-y-1">
+            <Label>Exact sender addresses (optional)</Label>
+            <Input
+              placeholder="GreentownHTX@user.luma-mail.com"
+              value={addresses}
+              onChange={(e) => setAddresses(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use this instead of a domain when the domain is a shared relay
+              (Luma, Mailchimp): pinning user.luma-mail.com would pull in every
+              other organiser sending through it.
+            </p>
+          </div>
+
+          <div className="space-y-1">
             <Label>Extra sender domains (optional)</Label>
             <Input
               placeholder="omya.com"

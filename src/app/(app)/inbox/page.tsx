@@ -47,10 +47,15 @@ export default async function InboxPage({ searchParams }: PageProps) {
       filters.partyIds = scopeRes.data.partyIds;
       filters.partyId = scopeRes.data.partyIds[0] ?? null;
       filters.partyDomains = scopeRes.data.domains;
+      filters.partyAddresses = scopeRes.data.addresses;
       folderName = scopeRes.data.name;
       folderColor = scopeRes.data.color;
       // An empty group would otherwise fall through to the whole inbox.
-      if (scopeRes.data.partyIds.length === 0 && scopeRes.data.domains.length === 0) {
+      if (
+        scopeRes.data.partyIds.length === 0 &&
+        scopeRes.data.domains.length === 0 &&
+        scopeRes.data.addresses.length === 0
+      ) {
         filters.partyId = '00000000-0000-0000-0000-000000000000';
       }
     }

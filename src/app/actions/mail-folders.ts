@@ -28,6 +28,8 @@ export interface MailFolder {
   partyName: string
   color: string | null
   matchDomains: string[]
+  /** exact from_address pins, for shared relays (Luma, Mailchimp, no-reply) */
+  matchAddresses: string[]
   sortOrder: number
 }
 
@@ -47,7 +49,7 @@ export type FolderResult<T = null> =
   | { ok: false; error: string }
 
 const COLS =
-  'id, party_id, parent_id, is_group, label, color, match_domains, sort_order, parties:party_id ( party_name )'
+  'id, party_id, parent_id, is_group, label, color, match_domains, match_addresses, sort_order, parties:party_id ( party_name )'
 
 function toMessage(e: unknown): string {
   const err = e as { message?: string; details?: string; hint?: string; code?: string }
@@ -64,6 +66,7 @@ interface RawFolder {
   label: string | null
   color: string | null
   match_domains: string[] | null
+  match_addresses: string[] | null
   sort_order: number
   parties: { party_name: string } | Array<{ party_name: string }> | null
 }
@@ -81,6 +84,7 @@ function shape(raw: RawFolder): MailFolder {
     name: raw.label?.trim() || partyName,
     color: raw.color,
     matchDomains: raw.match_domains ?? [],
+    matchAddresses: raw.match_addresses ?? [],
     sortOrder: raw.sort_order ?? 0,
   }
 }
@@ -100,6 +104,19 @@ function normalizeDomains(input: string[] | string | null | undefined): string[]
     if (at >= 0) d = d.slice(at + 1)
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) continue
     if (!out.includes(d)) out.push(d)
+  }
+  return out
+}
+
+// Exact sender addresses, lower-cased. Used where a whole domain would be too
+// broad (Luma / Mailchimp relays shared by many senders).
+function normalizeAddresses(input: string[] | string | null | undefined): string[] {
+  const raw = Array.isArray(input) ? input : String(input ?? '').split(/[\s,;]+/)
+  const out: string[] = []
+  for (const item of raw) {
+    const a = item.trim().toLowerCase().replace(/^mailto:/, '')
+    if (!/^[^@\s,()]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(a)) continue
+    if (!out.includes(a)) out.push(a)
   }
   return out
 }
@@ -173,6 +190,7 @@ export interface FolderScope {
   /** every party whose mail belongs to this folder (a group folds in its children) */
   partyIds: string[]
   domains: string[]
+  addresses: string[]
 }
 
 // What the inbox needs to filter on when you open ?folder=<id>.
@@ -202,9 +220,11 @@ export async function resolveFolderScopeAction(
 
     const partyIds: string[] = []
     const domains: string[] = []
+    const addresses: string[] = []
     for (const m of members) {
       if (m.partyId && !partyIds.includes(m.partyId)) partyIds.push(m.partyId)
       for (const d of m.matchDomains) if (!domains.includes(d)) domains.push(d)
+      for (const a of m.matchAddresses) if (!addresses.includes(a)) addresses.push(a)
     }
 
     return {
@@ -216,6 +236,7 @@ export async function resolveFolderScopeAction(
         isGroup: self.isGroup,
         partyIds,
         domains,
+        addresses,
       },
     }
   } catch (e) {
@@ -254,6 +275,7 @@ export async function createMailFolderAction(input: {
   label?: string | null
   color?: string | null
   matchDomains?: string[] | string | null
+  matchAddresses?: string[] | string | null
 }): Promise<FolderResult<MailFolder>> {
   if (input?.isGroup) {
     if (!input.label?.trim()) return { ok: false, error: 'Name the group first' }
@@ -280,6 +302,7 @@ export async function createMailFolderAction(input: {
       label: input.label?.trim() || null,
       color: input.color?.trim() || null,
       match_domains: normalizeDomains(input.matchDomains),
+      match_addresses: normalizeAddresses(input.matchAddresses),
       parent_id: input.parentId || null,
       deleted_at: null,
       updated_at: new Date().toISOString(),
@@ -334,6 +357,7 @@ export async function updateMailFolderAction(
     label?: string | null
     color?: string | null
     matchDomains?: string[] | string | null
+    matchAddresses?: string[] | string | null
     sortOrder?: number
     /** null moves the folder back out to the top level */
     parentId?: string | null
@@ -346,6 +370,8 @@ export async function updateMailFolderAction(
     if (patch.label !== undefined) row.label = patch.label?.trim() || null
     if (patch.color !== undefined) row.color = patch.color?.trim() || null
     if (patch.matchDomains !== undefined) row.match_domains = normalizeDomains(patch.matchDomains)
+    if (patch.matchAddresses !== undefined)
+      row.match_addresses = normalizeAddresses(patch.matchAddresses)
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder
     if (patch.parentId !== undefined) row.parent_id = patch.parentId || null
 
@@ -458,16 +484,25 @@ export async function searchPartiesForFolderAction(
 export async function folderOrExpressionAction(
   partyIds: string[],
   matchDomains: string[],
+  matchAddresses: string[] = [],
 ): Promise<string> {
-  return folderOrExpression(partyIds, matchDomains)
+  return folderOrExpression(partyIds, matchDomains, matchAddresses)
 }
 
-function folderOrExpression(partyIds: string[], matchDomains: string[]): string {
+function folderOrExpression(
+  partyIds: string[],
+  matchDomains: string[],
+  matchAddresses: string[] = [],
+): string {
   const parts: string[] = []
   if (partyIds.length === 1) parts.push(`party_id.eq.${partyIds[0]}`)
   else if (partyIds.length > 1) parts.push(`party_id.in.(${partyIds.join(',')})`)
   for (const d of normalizeDomains(matchDomains)) {
     parts.push(`from_address.ilike.*@${d}`)
+  }
+  // no wildcard = exact match, still case-insensitive
+  for (const a of normalizeAddresses(matchAddresses)) {
+    parts.push(`from_address.ilike.${a}`)
   }
   return parts.join(',')
 }

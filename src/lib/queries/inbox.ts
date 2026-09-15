@@ -170,6 +170,9 @@ export async function fetchInbox(
   if (filters.aiGenerated) {
     query = query.eq('ai_generated', true);
   }
+  const scopedAddresses = (filters.partyAddresses ?? [])
+    .map((a) => a.trim().toLowerCase())
+    .filter((a) => /^[^@\s,()]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(a));
   const scopedPartyIds =
     filters.partyIds && filters.partyIds.length > 0
       ? filters.partyIds
@@ -180,7 +183,7 @@ export async function fetchInbox(
     const domains = (filters.partyDomains ?? [])
       .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
       .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
-    if (domains.length === 0 && scopedPartyIds.length === 1) {
+    if (domains.length === 0 && scopedAddresses.length === 0 && scopedPartyIds.length === 1) {
       query = query.eq('party_id', scopedPartyIds[0] as string);
     } else {
       // Mail folder view: the party (or every party in the group), plus senders
@@ -191,6 +194,8 @@ export async function fetchInbox(
           ? [`party_id.eq.${scopedPartyIds[0]}`]
           : [`party_id.in.(${scopedPartyIds.join(',')})`];
       for (const d of domains) parts.push(`from_address.ilike.*@${d}`);
+      // no wildcard = exact address match, still case-insensitive
+      for (const a of scopedAddresses) parts.push(`from_address.ilike.${a}`);
       query = query.or(parts.join(','));
     }
   }

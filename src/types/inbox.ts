@@ -124,6 +124,8 @@ export interface InboxFilters {
    * several parties at once. When set it supersedes partyId.
    */
   partyIds?: string[];
+  /** exact sender addresses pinned to the folder (shared relays) */
+  partyAddresses?: string[];
 }
 
 export interface InboxPagination {
