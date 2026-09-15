@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const TAB_VALUES = [
   'overview',
+  'analysis',
   'activity',
   'communications',
   'contacts',
@@ -19,6 +20,8 @@ const TRIGGER = 'text-sm h-7';
 
 interface PartyDetailTabsProps {
   overview: ReactNode;
+  /** investor-only research tab; omit for other party types */
+  analysis?: ReactNode;
   activity: ReactNode;
   communications: ReactNode;
   contacts: ReactNode;
@@ -28,6 +31,7 @@ interface PartyDetailTabsProps {
 
 export function PartyDetailTabs({
   overview,
+  analysis,
   activity,
   communications,
   contacts,
@@ -58,6 +62,9 @@ export function PartyDetailTabs({
     <Tabs defaultValue={initial} onValueChange={handleChange} className="w-full">
       <TabsList className="h-auto flex-wrap justify-start gap-1">
         <TabsTrigger value="overview" className={TRIGGER}>Overview</TabsTrigger>
+        {analysis ? (
+          <TabsTrigger value="analysis" className={TRIGGER}>투자사 분석</TabsTrigger>
+        ) : null}
         <TabsTrigger value="activity" className={TRIGGER}>Activity</TabsTrigger>
         <TabsTrigger value="communications" className={TRIGGER}>Communications</TabsTrigger>
         <TabsTrigger value="contacts" className={TRIGGER}>Contacts</TabsTrigger>
@@ -66,6 +73,9 @@ export function PartyDetailTabs({
       </TabsList>
 
       <TabsContent value="overview" className="space-y-4">{overview}</TabsContent>
+      {analysis ? (
+        <TabsContent value="analysis" className="space-y-4">{analysis}</TabsContent>
+      ) : null}
       <TabsContent value="activity" className="space-y-4">{activity}</TabsContent>
       <TabsContent value="communications" className="space-y-4">{communications}</TabsContent>
       <TabsContent value="contacts" className="space-y-4">{contacts}</TabsContent>
