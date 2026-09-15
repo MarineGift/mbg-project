@@ -171,7 +171,21 @@ export async function fetchInbox(
     query = query.eq('ai_generated', true);
   }
   if (filters.partyId) {
-    query = query.eq('party_id', filters.partyId);
+    const domains = (filters.partyDomains ?? [])
+      .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+      .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+    if (domains.length > 0) {
+      // Mail folder view: the party, plus senders on the pinned domains that
+      // were never linked to it. ilike inside or() uses '*' as the wildcard.
+      query = query.or(
+        [
+          `party_id.eq.${filters.partyId}`,
+          ...domains.map((d) => `from_address.ilike.*@${d}`),
+        ].join(','),
+      );
+    } else {
+      query = query.eq('party_id', filters.partyId);
+    }
   }
   if (filters.query.length > 0) {
     const pattern = `%${escapeLikePattern(filters.query)}%`;

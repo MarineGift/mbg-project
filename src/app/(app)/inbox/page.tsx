@@ -20,6 +20,8 @@ import { InboxPagination } from '@/components/inbox/inbox-pagination';
 import { InboxEmpty } from '@/components/inbox/inbox-empty';
 import { InboxComposeButton } from '@/components/inbox/inbox-compose-button';
 import { DEFAULT_INBOX_FILTERS } from '@/types/inbox';
+import { getMailFolderAction } from '@/app/actions/mail-folders';
+import { FolderOpen } from 'lucide-react';
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -30,6 +32,23 @@ export default async function InboxPage({ searchParams }: PageProps) {
   const filters = parseInboxFilters(params);
   const pagination = parseInboxPagination(params);
   const t = await getTranslations('inbox');
+
+  // 2026-09-15 mail folders: ?folder=<uuid> resolves to a party (+ pinned
+  // sender domains). It overrides ?party= so a folder link is self-contained.
+  const folderIdRaw = Array.isArray(params.folder) ? params.folder[0] : params.folder;
+  const folderId =
+    folderIdRaw && /^[0-9a-f-]{36}$/i.test(folderIdRaw) ? folderIdRaw : null;
+  let folderName: string | null = null;
+  let folderColor: string | null = null;
+  if (folderId) {
+    const folderRes = await getMailFolderAction(folderId);
+    if (folderRes.ok) {
+      filters.partyId = folderRes.data.partyId;
+      filters.partyDomains = folderRes.data.matchDomains;
+      folderName = folderRes.data.name;
+      folderColor = folderRes.data.color;
+    }
+  }
 
   const result = await fetchInbox(filters, pagination);
 
@@ -45,9 +64,34 @@ export default async function InboxPage({ searchParams }: PageProps) {
       <header className="px-6 py-5 border-b bg-background">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold">{t('queueTitle')}</h1>
+            <h1 className="flex items-center gap-2 text-xl font-semibold">
+              {folderName ? (
+                <>
+                  {folderColor ? (
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: folderColor }}
+                    />
+                  ) : (
+                    <FolderOpen className="h-5 w-5 text-muted-foreground" />
+                  )}
+                  {folderName}
+                </>
+              ) : (
+                t('queueTitle')
+              )}
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {t('queueDescription')}
+              {folderName ? (
+                <>
+                  Mail filed to this folder.{' '}
+                  <Link href="/inbox/folders" className="underline hover:no-underline">
+                    Manage folders
+                  </Link>
+                </>
+              ) : (
+                t('queueDescription')
+              )}
             </p>
           </div>
           <InboxComposeButton />
@@ -58,7 +102,7 @@ export default async function InboxPage({ searchParams }: PageProps) {
       </header>
 
       {/* Inbox sections: Inbound / Outbound / AI Drafts (quick switch) */}
-      <InboxTabs direction={filters.direction} hasDraft={filters.hasDraft} />
+      <InboxTabs direction={filters.direction} hasDraft={filters.hasDraft} folderId={folderId} />
 
       <InboxFiltersBar filters={filters} />
 
@@ -89,24 +133,28 @@ export default async function InboxPage({ searchParams }: PageProps) {
 function InboxTabs({
   direction,
   hasDraft,
+  folderId,
 }: {
   direction: 'inbound' | 'outbound' | 'all';
   hasDraft: boolean;
+  /** carried through so switching tabs stays inside the mail folder */
+  folderId?: string | null;
 }) {
+  const keep = folderId ? `&folder=${folderId}` : '';
   const tabs: Array<{ label: string; href: string; active: boolean }> = [
     {
       label: 'Inbound',
-      href: '/inbox?direction=inbound',
+      href: `/inbox?direction=inbound${keep}`,
       active: !hasDraft && direction === 'inbound',
     },
     {
       label: 'Outbound',
-      href: '/inbox?direction=outbound',
+      href: `/inbox?direction=outbound${keep}`,
       active: !hasDraft && direction === 'outbound',
     },
     {
       label: 'AI Drafts',
-      href: '/inbox?hasDraft=1',
+      href: `/inbox?hasDraft=1${keep}`,
       active: hasDraft,
     },
   ];

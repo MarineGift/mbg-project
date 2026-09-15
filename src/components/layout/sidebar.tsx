@@ -41,6 +41,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { MailFolderNav } from '@/components/layout/mail-folder-nav';
 import { useUiStore } from '@/lib/stores/ui-store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -434,6 +435,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                       })}
                     </ul>
                   </li>
+                )}
+                {item.href === '/inbox' && !isCollapsed && (
+                  <MailFolderNav onNavigate={onNavigate} />
                 )}
               </Fragment>
             ))}
