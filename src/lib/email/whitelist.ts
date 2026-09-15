@@ -5,7 +5,10 @@
  *
  * Match priority:
  *   1. address - exact match
- *   2. domain - match the domain after @
+ *   2. domain - match the domain after @.
+ *      A pattern starting with a dot is a SUFFIX match, so '.gov' accepts
+ *      uscis.dhs.gov, nist.gov, mail.house.gov - every subdomain of the TLD.
+ *      Without the dot the pattern still has to equal the domain exactly.
  *   3. regex - regular-expression match
  *
  * Only entries with is_active = true are checked.
@@ -60,7 +63,12 @@ export async function isFromAllowedSender(
         if (normalized === pattern) return true;
         break;
       case 'domain':
-        if (domain === pattern || normalized.endsWith(`@${pattern}`)) return true;
+        if (pattern.startsWith('.')) {
+          // suffix rule: '.gov' -> any *.gov, and bare 'gov' itself
+          if (domain === pattern.slice(1) || domain.endsWith(pattern)) return true;
+        } else if (domain === pattern || normalized.endsWith(`@${pattern}`)) {
+          return true;
+        }
         break;
       case 'regex':
         try {
