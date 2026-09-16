@@ -582,7 +582,20 @@ export class MailCarrierClient {
   /**
    * Look up the last processed UID from the DB. Returns 0 if no record (treats all messages as new).
    */
-  private async loadLastProcessedUid(): Promise<number> {
+  private async loadLastProcessedUid(): Promise<number | null> {
+    // 2026-09-16: on a DB error never default to 0 - that re-scanned the whole
+    // mailbox on every pass while the DB was overloaded (thousands of lookups).
+    // Retry briefly, then return null so the caller skips this pass.
+    const waits = [0, 5_000, 15_000];
+    for (const w of waits) {
+      if (w > 0) await new Promise((resolve) => setTimeout(resolve, w));
+      const uid = await this.loadLastProcessedUidOnce();
+      if (uid !== null) return uid;
+    }
+    return null;
+  }
+
+  private async loadLastProcessedUidOnce(): Promise<number | null> {
     const { data, error } = await this.supabase
       .schema('app')
       .from('mailcarrier_state')
@@ -595,10 +608,10 @@ export class MailCarrierClient {
     if (error) {
       // eslint-disable-next-line no-console
       console.warn(
-        `[mailcarrier:${this.logTag}] loadLastProcessedUid failed, defaulting to 0:`,
+        `[mailcarrier:${this.logTag}] loadLastProcessedUid failed (no fallback to 0):`,
         error.message,
       );
-      return 0;
+      return null;
     }
     return data?.last_processed_uid ?? 0;
   }
@@ -706,7 +719,13 @@ export class MailCarrierClient {
 
     try {
       // 1. look up the last UID from the DB
-      const lastUid = await this.loadLastProcessedUid();
+      const loadedUid = await this.loadLastProcessedUid();
+      if (loadedUid === null) {
+        // eslint-disable-next-line no-console
+        console.warn(`[mailcarrier:${this.logTag}] fetch: DB unavailable - skipping this pass`);
+        return;
+      }
+      const lastUid = loadedUid;
       const range = `${lastUid + 1}:*`;
       // eslint-disable-next-line no-console
       console.log(

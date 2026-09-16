@@ -126,28 +126,36 @@ export async function runMailCarrierWorker(): Promise<void> {
   };
 
   let dbMailboxes: InboundMailboxRow[] = [];
-  try {
-    const { data, error } = await supabase
-      .schema('app')
-      .from('inbound_mailboxes')
-      .select('id, address, imap_host, imap_port, password_encrypted')
-      .eq('organization_id', ORG_ID)
-      .eq('is_active', true);
-    if (error) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[${label}] inbound_mailboxes lookup failed - falling back to env path:`,
-        error.message,
-      );
-    } else if (data) {
-      dbMailboxes = data as unknown as InboundMailboxRow[];
+  // 2026-09-16: a DB error is NOT "no DB mailboxes". Falling back to the env
+  // credentials on a transient DB error caused IMAP auth failures and a
+  // Railway restart loop. Retry with backoff; only a successful empty result
+  // uses the env path.
+  for (let attempt = 1; ; attempt += 1) {
+    let lookupError: string | null = null;
+    try {
+      const { data, error } = await supabase
+        .schema('app')
+        .from('inbound_mailboxes')
+        .select('id, address, imap_host, imap_port, password_encrypted')
+        .eq('organization_id', ORG_ID)
+        .eq('is_active', true);
+      if (error) {
+        lookupError = error.message;
+      } else {
+        dbMailboxes = (data ?? []) as unknown as InboundMailboxRow[];
+      }
+    } catch (err) {
+      lookupError = (err as Error).message;
     }
-  } catch (err) {
+    if (lookupError === null) break;
+    if (ctl.isShuttingDown()) return;
+    const waitMs = Math.min(300_000, 15_000 * attempt);
     // eslint-disable-next-line no-console
     console.error(
-      `[${label}] inbound_mailboxes lookup error - falling back to env path:`,
-      (err as Error).message,
+      `[${label}] inbound_mailboxes lookup failed (attempt ${attempt}) - retry in ${Math.round(waitMs / 1000)}s:`,
+      lookupError,
     );
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
   // ─ create MailCarrierClient instances ─
@@ -251,7 +259,8 @@ export async function runMailCarrierWorker(): Promise<void> {
 
   if (connected.length === 0) {
     // eslint-disable-next-line no-console
-    console.error(`[${label}] All IMAP connections failed. Exiting.`);
+    console.error(`[${label}] All IMAP connections failed. Waiting 5 min before exit (avoid restart storm / IMAP lockout).`);
+    await new Promise((resolve) => setTimeout(resolve, 300_000));
     process.exit(1);
   }
 
