@@ -151,7 +151,7 @@ export async function fetchInbox(
     .from('communications' as never)
     .select(
       `id, channel, direction, status, from_address, from_name, to_addresses,
-       subject, body_plain, occurred_at, sent_at, received_at, ai_generated, read_at,
+       subject, body_plain:body_preview, occurred_at, sent_at, received_at, ai_generated, read_at,
        thread_id,
        party_id,
        parties:party_id ( name:party_name, party_types(code) )`,
