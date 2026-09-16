@@ -810,8 +810,14 @@ export class MailCarrierClient {
           // but the messages after it are also not processed this tick (guarantees sequential order).
           // 2026-09-16: after 3 failed passes the message is skipped so one bad
           // mail cannot block every later message of this inbox.
-          const fails = (this.uidFailures.get(uid) ?? 0) + 1;
-          this.uidFailures.set(uid, fails);
+          // Only DATA errors (Postgres class 22/23, e.g. 22P05 NUL) count toward the skip.
+          // DB outages / timeouts must never skip a message - they are retried instead.
+          const causeCode = String(
+            (err as { cause?: { code?: unknown } } | null)?.cause?.code ?? '',
+          );
+          const isDataError = /^(22|23)/.test(causeCode);
+          const fails = isDataError ? (this.uidFailures.get(uid) ?? 0) + 1 : 0;
+          if (isDataError) this.uidFailures.set(uid, fails);
           if (fails >= 3) {
             // eslint-disable-next-line no-console
             console.error(
