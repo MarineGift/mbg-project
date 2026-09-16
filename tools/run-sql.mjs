@@ -65,6 +65,9 @@ const t0 = Date.now();
 let client;
 try {
   client = await connect();
+  // 2026-09-17: long maintenance statements (pooler default timeout is short); show NOTICEs
+  await client.query("set statement_timeout = '30min'");
+  client.on('notice', (n) => console.log('NOTICE ' + n.message));
   console.log('connected (' + (Date.now() - t0) + ' ms) - running ' + file);
   const res = await client.query(fs.readFileSync(file, 'utf8'));
   const list = Array.isArray(res) ? res : [res];
