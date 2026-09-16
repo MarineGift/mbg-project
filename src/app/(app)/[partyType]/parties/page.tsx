@@ -904,27 +904,27 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       {linkLabel}
                     </th>
                   ) : (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hTags.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hTags.active ? 'text-foreground' : ''}`}>
                         Tags <span className={`text-[10px] ${hTags.active ? '' : 'opacity-40'}`}>{hTags.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap">
                       <Link href={hPriority.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hPriority.active ? 'text-foreground' : ''}`}>
                         Priority <span className={`text-[10px] ${hPriority.active ? '' : 'opacity-40'}`}>{hPriority.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap hidden lg:table-cell min-w-[400px]">Sector Focus</th>
                   )}
                   {isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Relevance</th>
@@ -933,28 +933,28 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Company</th>
                   )}
                   {!isMentor && (
-                    <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
                         Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {!isMentor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
                         Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {(isInvestor || showEntityType) && !isMentor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
                         State <span className={`text-[10px] ${hState.active ? '' : 'opacity-40'}`}>{hState.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">
                       <Link href={hType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hType.active ? 'text-foreground' : ''}`}>
                         Type <span className={`text-[10px] ${hType.active ? '' : 'opacity-40'}`}>{hType.arrow}</span>
                       </Link>
@@ -970,7 +970,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       </Link>
                     </th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
+                  <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-10 text-center">Web</th>
                   {isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Type</th>
                   )}
@@ -1003,8 +1003,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       key={p.id}
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
-                      <td className="px-4 py-3">
-                        <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
+                      <td className="px-4 py-3 min-w-[150px]">
+                        <Link href={`/${module}/parties/${p.id}`} title={p.party_name} className="font-medium hover:underline line-clamp-2 leading-snug">
                           {p.party_name}
                         </Link>
                         {p.preferred_contact_method && (
@@ -1105,7 +1105,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {!showLinks && (
-                        <td className="px-4 py-3 hidden md:table-cell">
+                        <td className="px-2 py-3 hidden md:table-cell">
                           {tags.length <= 2 ? (
                             <div className="flex flex-wrap gap-1 max-w-[280px]">
                               {tags.map((tag) => (
@@ -1147,7 +1147,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-3">
                           {(() => {
                             const pr = investorPriorityAll[p.id];
                             if (!pr) return <span className="text-sm text-muted-foreground">-</span>;
@@ -1166,9 +1166,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {(investorStageAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 max-w-[130px]">
                               {(investorStageAll[p.id] ?? []).map((s) => (
                                 <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                   {s.label}
@@ -1181,9 +1181,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {(investorInvestmentAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            <div className="flex flex-wrap gap-1 max-w-[170px]">
                               {(investorInvestmentAll[p.id] ?? []).map((t) => (
                                 <span key={t} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
                                   {t}
@@ -1196,9 +1196,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-3 py-3 hidden lg:table-cell">
                           {(investorSectorTextAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            <div className="flex flex-wrap gap-1 min-w-[400px] max-w-[520px]">
                               {(investorSectorTextAll[p.id] ?? []).map((s) => (
                                 <span key={s} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
                                   {s}
@@ -1236,22 +1236,22 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {!isMentor && (
-                        <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                        <td className="px-2 py-3 text-sm hidden sm:table-cell leading-tight min-w-[80px] text-muted-foreground">
                           {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
                         </td>
                       )}
                       {!isMentor && (
-                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
+                        <td className="px-2 py-3 text-sm hidden sm:table-cell leading-tight min-w-[80px]">
                           {location || '-'}
                         </td>
                       )}
                       {(isInvestor || showEntityType) && !isMentor && (
-                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
+                        <td className="px-2 py-3 text-sm hidden md:table-cell leading-tight min-w-[70px]">
                           {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {investorCatAll[p.id]?.type_name ? (
                             <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                               {investorCatAll[p.id]!.type_name}
@@ -1283,7 +1283,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                         </td>
                       )}
-                      <td className="px-4 py-3 hidden lg:table-cell text-center">
+                      <td className="px-2 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
                           <a href={p.website} target="_blank" rel="noopener noreferrer"
                             className="text-primary hover:text-primary/70 inline-flex items-center justify-center"
