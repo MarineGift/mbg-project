@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
 // Readdy-migrated marketing pages (served from src/app/(marketing)/...).
 // These pass through on every host so they work on www/apex domains
@@ -22,7 +23,7 @@ function siteSlugForHost(host: string, req: NextRequest): string {
   return h || 'marinebiogroup';
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const host = req.headers.get('host') ?? '';
 
@@ -51,7 +52,10 @@ export function middleware(req: NextRequest) {
   }
 
   if (isCrmHost(host, req)) {
-    return NextResponse.next();
+    // 2026-09-16: refresh the Supabase session cookie here. The root middleware.ts
+    // (which did this) is ignored because src/middleware.ts takes precedence, so
+    // server-side queries ran as anon once the access token expired (42501 on parties).
+    return updateSession(req);
   }
 
   // Non-CRM hosts (www.marinebiogroup.com, marinebiogroup.com, marinebio.kr):
