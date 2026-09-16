@@ -27,6 +27,7 @@ import {
   Star,
 } from 'lucide-react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { MeetingDetailActions } from '@/components/meetings/meeting-detail-actions';
 
 interface Props {
   params: { id: string };
@@ -193,6 +194,10 @@ export default async function MeetingDetailPage({ params }: Props) {
               {titleCase(m.meeting_type)}
             </span>
           )}
+          {/* 2026-09-14: meetings were read-only here; edit/delete island */}
+          <div className="ml-auto">
+            <MeetingDetailActions meetingId={m.id} />
+          </div>
         </div>
 
         {/* When / duration / channel */}

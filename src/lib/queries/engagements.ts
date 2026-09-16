@@ -17,10 +17,8 @@
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { EngagementStatus, KanbanCard } from '@/types/engagement';
-import {
-  PARTY_TYPE_CODE_BY_ID,
-  type PartyTypeCode,
-} from '@/types/party-type';
+import { type PartyTypeCode } from '@/types/party-type';
+import { fetchPartyTypeMaps } from '@/lib/party-type-maps';
 
 /* ============================================================
  * Raw row types - app.deals + parties join
@@ -67,11 +65,12 @@ function toNumberOrNull(v: number | string | null | undefined): number | null {
 
 function partyTypeIdToModule(
   partyTypeId: number | null | undefined,
+  idToCode: Record<number, string>,
 ): PartyTypeCode {
   if (partyTypeId == null) return 'investor';
-  const code: PartyTypeCode | undefined = PARTY_TYPE_CODE_BY_ID[partyTypeId];
+  const code = idToCode[partyTypeId];
   if (!code) return 'investor';
-  return (code ?? 'investor') as PartyTypeCode;
+  return code as PartyTypeCode;
 }
 
 function computeWeightedAmount(
@@ -82,14 +81,14 @@ function computeWeightedAmount(
   return (valueAmount * probabilityPct) / 100;
 }
 
-function mapCard(r: RawEngagementListRow): KanbanCard {
+function mapCard(r: RawEngagementListRow, idToCode: Record<number, string>): KanbanCard {
   const party = Array.isArray(r.parties) ? r.parties[0] : r.parties;
   const valueAmount = toNumberOrNull(r.value_amount);
   const probabilityPct = r.probability_pct ?? 0;
   return {
     id: r.id,
     name: r.deal_name,
-    partyType: partyTypeIdToModule(party?.party_type_id ?? null),
+    partyType: partyTypeIdToModule(party?.party_type_id ?? null, idToCode),
     status: r.status,
     currentStageId: r.current_stage_id,
     pipelineDefinitionId: r.pipeline_id ?? null,
@@ -114,6 +113,7 @@ export async function fetchPartyEngagements(
   partyId: string,
 ): Promise<KanbanCard[]> {
   const supabase = await createSupabaseServerClient();
+  const { idToCode } = await fetchPartyTypeMaps(supabase);
 
   const { data } = await supabase
     .schema('app')
@@ -125,5 +125,5 @@ export async function fetchPartyEngagements(
     .order('updated_at', { ascending: false });
 
   const rows = (data ?? []) as unknown as RawEngagementListRow[];
-  return rows.map(mapCard);
+  return rows.map((r) => mapCard(r, idToCode));
 }

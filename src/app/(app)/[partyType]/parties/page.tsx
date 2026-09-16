@@ -131,6 +131,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const countryFilter = ((sp as any).country ?? '').trim().toUpperCase();
   const typeFilter = ((sp as any).type ?? '').trim();
   const isInvestor = moduleParam === 'investor';
+  const isMentor = moduleParam === 'mentor';
   const isPaperMill = moduleParam === 'paper_mill';
   const isFiller = moduleParam === 'filler_supplier';
 
@@ -149,6 +150,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // "Curated by Greentown Labs" toggle (?greentown=1) — filters to parties linked
   // to the Greentown Labs Houston party (see greentownPartyIds below).
   const greentownFilter = ((((sp as any).greentown ?? '') as string).trim() === '1');
+  const relevantFilter = ((((sp as any).relevant ?? '') as string).trim() === '1');
   // Sector focus filter for the investor list: ?sector=<code> (e.g. 'advanced_materials'),
   // matched against the investor's investor_sector_focus set.
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
@@ -166,6 +168,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // TAGS column sort (asc/desc by each row's first tag, ascending-normalized).
   const sortByTags = sortParam === 'tags_asc' || sortParam === 'tags_desc';
   const tagsAsc    = sortParam === 'tags_asc';
+  // Mentors default to MBG-relevance sort unless another sort is explicitly chosen.
+  const sortByRelevance = isMentor && (((sp as any).sort ?? '') === '' || sortParam === 'relevance' || sortParam === 'relevance_asc');
   // DB-orderable sorts (everything except score, which is computed in JS).
   const DB_SORT: Record<string, { col: string; asc: boolean }> = {
     name_asc:      { col: 'party_name',   asc: true  },
@@ -245,6 +249,19 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     greentownPartyIds = new Set(((gtRows ?? []) as any[]).map((r) => r.party_id as string));
   }
   const greentownCount = greentownPartyIds.size;
+
+  // Mentor MBG-relevance (from app.v_mentor_relevance) for sort/filter/column.
+  const mentorRelevanceAll: Record<string, { score: number; tier: string; company: string | null; expertise: string[] }> = {};
+  if (isMentor) {
+    const { data: relRows } = await supabase
+      .schema('app')
+      .from('v_mentor_relevance' as never)
+      .select('party_id, relevance_score, relevance_tier, company, expertise');
+    for (const r of ((relRows ?? []) as any[])) {
+      if (r.party_id) mentorRelevanceAll[r.party_id] = { score: Number(r.relevance_score ?? 0), tier: String(r.relevance_tier ?? 'Low'), company: r.company ?? null, expertise: Array.isArray(r.expertise) ? (r.expertise as any[]).filter((x) => typeof x === 'string') : [] };
+    }
+  }
+  const relevantMentorCount = Object.values(mentorRelevanceAll).filter((r) => r.tier === 'High' || r.tier === 'Medium').length;
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -592,6 +609,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       working = working.filter((p) => greentownPartyIds.has(p.id));
     }
 
+    // Mentors: keep only High/Medium MBG-relevance when the chip is on.
+    if (relevantFilter) {
+      working = working.filter((p) => {
+        const t = mentorRelevanceAll[p.id]?.tier ?? 'Low';
+        return t === 'High' || t === 'Medium';
+      });
+    }
+
     // Null/locale-safe comparison key. localeCompare() on a null value throws,
     // which only surfaces when the primary key ties often (e.g. sorting
     // investors by city, where many rows share an empty city) so the party_name
@@ -599,7 +624,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     // everything through String(... ?? '') so the sort can never 500 the page.
     const nameKey = (p: PartyRow) => String(p.party_name ?? '');
 
-    if (sortByScore) {
+    if (sortByRelevance) {
+      working = [...working].sort((a, b) =>
+        (mentorRelevanceAll[b.id]?.score ?? 0) - (mentorRelevanceAll[a.id]?.score ?? 0)
+        || nameKey(a).localeCompare(nameKey(b)));
+    } else if (sortByScore) {
       working = [...working].sort((a, b) =>
         scoreAsc ? (scores[a.id]?.score ?? 0) - (scores[b.id]?.score ?? 0)
                  : (scores[b.id]?.score ?? 0) - (scores[a.id]?.score ?? 0));
@@ -804,6 +833,24 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
               </Link>
             </div>
           )}
+          {isMentor && relevantMentorCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs text-muted-foreground">MBG relevance</span>
+              <Link
+                href={relevantFilter ? `/${module}/parties` : `/${module}/parties?relevant=1`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  relevantFilter
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-background hover:bg-muted border-input text-foreground'
+                }`}
+                title="Show only High / Medium relevance mentors (sorted by relevance)"
+              >
+                <span className={`h-2 w-2 rounded-full ${relevantFilter ? 'bg-white' : 'bg-emerald-500'}`} aria-hidden />
+                High &amp; Medium only
+                <span className="tabular-nums opacity-80">{relevantMentorCount}</span>
+              </Link>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <SavedViewsDropdown views={savedViews} entityType="party" partyType={module} />
@@ -842,7 +889,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
-                  {showEntityType && (
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Areas of expertise</th>
+                  )}
+                  {showEntityType && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
                       <Link href={hEntityType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hEntityType.active ? 'text-foreground' : ''}`}>
                         Type <span className={`text-[10px] ${hEntityType.active ? '' : 'opacity-40'}`}>{hEntityType.arrow}</span>
@@ -854,64 +904,77 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       {linkLabel}
                     </th>
                   ) : (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hTags.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hTags.active ? 'text-foreground' : ''}`}>
                         Tags <span className={`text-[10px] ${hTags.active ? '' : 'opacity-40'}`}>{hTags.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap">
                       <Link href={hPriority.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hPriority.active ? 'text-foreground' : ''}`}>
                         Priority <span className={`text-[10px] ${hPriority.active ? '' : 'opacity-40'}`}>{hPriority.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Stage</th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Investment Type</th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Sector Focus</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap hidden lg:table-cell min-w-[400px]">Sector Focus</th>
                   )}
-                  <th className="px-3 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
-                      Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
-                    </Link>
-                  </th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
-                    <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
-                      Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
-                    </Link>
-                  </th>
-                  {(isInvestor || showEntityType) && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden md:table-cell">
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">Relevance</th>
+                  )}
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Company</th>
+                  )}
+                  {!isMentor && (
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hCountry.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hCountry.active ? 'text-foreground' : ''}`}>
+                        Country <span className={`text-[10px] ${hCountry.active ? '' : 'opacity-40'}`}>{hCountry.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
+                  {!isMentor && (
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden sm:table-cell">
+                      <Link href={hLocation.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hLocation.active ? 'text-foreground' : ''}`}>
+                        Location <span className={`text-[10px] ${hLocation.active ? '' : 'opacity-40'}`}>{hLocation.arrow}</span>
+                      </Link>
+                    </th>
+                  )}
+                  {(isInvestor || showEntityType) && !isMentor && (
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden md:table-cell">
                       <Link href={hState.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hState.active ? 'text-foreground' : ''}`}>
                         State <span className={`text-[10px] ${hState.active ? '' : 'opacity-40'}`}>{hState.arrow}</span>
                       </Link>
                     </th>
                   )}
                   {isInvestor && (
-                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">
+                    <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell">
                       <Link href={hType.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hType.active ? 'text-foreground' : ''}`}>
                         Type <span className={`text-[10px] ${hType.active ? '' : 'opacity-40'}`}>{hType.arrow}</span>
                       </Link>
                     </th>
                   )}
-                  {!isInvestor && (
+                  {!isInvestor && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap">Level / Tier</th>
                   )}
-                  {!isInvestor && (
+                  {!isInvestor && !isMentor && (
                     <th className="px-3 py-3 font-medium whitespace-nowrap w-20 text-center">
                       <Link href={hScore.href} className={`inline-flex items-center gap-1 hover:text-foreground ${hScore.active ? 'text-foreground' : ''}`}>
                         Score <span className={`text-[10px] ${hScore.active ? '' : 'opacity-40'}`}>{hScore.arrow}</span>
                       </Link>
                     </th>
                   )}
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-16 text-center">Web</th>
-                  {!isInvestor && (
+                  <th className="px-2 py-3 font-medium whitespace-nowrap hidden lg:table-cell w-10 text-center">Web</th>
+                  {isMentor && (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Type</th>
+                  )}
+                  {!isInvestor && !isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden lg:table-cell">Status</th>
                   )}
                 </tr>
@@ -940,8 +1003,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       key={p.id}
                       className={`border-b hover:bg-muted/20 transition ${showLinks && !hasLinks ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}
                     >
-                      <td className="px-4 py-3">
-                        <Link href={`/${module}/parties/${p.id}`} className="font-medium hover:underline line-clamp-1">
+                      <td className="px-4 py-3 min-w-[150px]">
+                        <Link href={`/${module}/parties/${p.id}`} title={p.party_name} className="font-medium hover:underline line-clamp-2 leading-snug">
                           {p.party_name}
                         </Link>
                         {p.preferred_contact_method && (
@@ -952,7 +1015,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                             className="mt-1"
                           />
                         )}
-                        {showEntityType && (
+                        {showEntityType && !isMentor && (
                           <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground sm:hidden">
                             {entityTypeAll[p.id] && (
                               <span className="font-medium text-slate-700 dark:text-slate-200">{entityTypeAll[p.id]!.ko}</span>
@@ -998,7 +1061,22 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
-                      {showEntityType && (
+                      {isMentor && (
+                        <td className="px-4 py-3 hidden sm:table-cell align-top">
+                          {(mentorRelevanceAll[p.id]?.expertise ?? []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[360px]">
+                              {(mentorRelevanceAll[p.id]?.expertise ?? []).map((e) => (
+                                <span key={e} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                  {e}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      )}
+                      {showEntityType && !isMentor && (
                         <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
                           {entityTypeAll[p.id]?.ko ?? '-'}
                         </td>
@@ -1027,7 +1105,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {!showLinks && (
-                        <td className="px-4 py-3 hidden md:table-cell">
+                        <td className="px-2 py-3 hidden md:table-cell">
                           {tags.length <= 2 ? (
                             <div className="flex flex-wrap gap-1 max-w-[280px]">
                               {tags.map((tag) => (
@@ -1069,7 +1147,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-3">
                           {(() => {
                             const pr = investorPriorityAll[p.id];
                             if (!pr) return <span className="text-sm text-muted-foreground">-</span>;
@@ -1088,9 +1166,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {(investorStageAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 max-w-[130px]">
                               {(investorStageAll[p.id] ?? []).map((s) => (
                                 <span key={s.code} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                   {s.label}
@@ -1103,9 +1181,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {(investorInvestmentAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            <div className="flex flex-wrap gap-1 max-w-[170px]">
                               {(investorInvestmentAll[p.id] ?? []).map((t) => (
                                 <span key={t} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
                                   {t}
@@ -1118,9 +1196,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-3 py-3 hidden lg:table-cell">
                           {(investorSectorTextAll[p.id] ?? []).length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            <div className="flex flex-wrap gap-1 min-w-[400px] max-w-[520px]">
                               {(investorSectorTextAll[p.id] ?? []).map((s) => (
                                 <span key={s} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
                                   {s}
@@ -1132,19 +1210,48 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           )}
                         </td>
                       )}
-                      <td className="px-3 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
-                        {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap">
-                        {location || '-'}
-                      </td>
-                      {(isInvestor || showEntityType) && (
-                        <td className="px-4 py-3 text-sm hidden md:table-cell whitespace-nowrap">
+                      {isMentor && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {(() => {
+                            const r = mentorRelevanceAll[p.id];
+                            if (!r) return <span className="text-sm text-muted-foreground">-</span>;
+                            const cls =
+                              r.tier === 'High'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                : r.tier === 'Medium'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                : 'bg-muted text-muted-foreground';
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full ${cls}`}>
+                                {r.tier}
+                                <span className="tabular-nums opacity-70">{r.score}</span>
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
+                      {isMentor && (
+                        <td className="px-4 py-3 text-sm hidden sm:table-cell whitespace-nowrap text-muted-foreground">
+                          {mentorRelevanceAll[p.id]?.company || '-'}
+                        </td>
+                      )}
+                      {!isMentor && (
+                        <td className="px-2 py-3 text-sm hidden sm:table-cell leading-tight min-w-[80px] text-muted-foreground">
+                          {p.country_code ? (countryNames[p.country_code] ?? p.country_code) : '-'}
+                        </td>
+                      )}
+                      {!isMentor && (
+                        <td className="px-2 py-3 text-sm hidden sm:table-cell leading-tight min-w-[80px]">
+                          {location || '-'}
+                        </td>
+                      )}
+                      {(isInvestor || showEntityType) && !isMentor && (
+                        <td className="px-2 py-3 text-sm hidden md:table-cell leading-tight min-w-[70px]">
                           {p.region ? (US_STATES[p.region] ?? p.region) : '-'}
                         </td>
                       )}
                       {isInvestor && (
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-2 py-3 hidden lg:table-cell">
                           {investorCatAll[p.id]?.type_name ? (
                             <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                               {investorCatAll[p.id]!.type_name}
@@ -1154,7 +1261,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           )}
                         </td>
                       )}
-                      {!isInvestor && (
+                      {!isInvestor && !isMentor && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 flex-wrap">
                             {level && LevelIcon && (
@@ -1171,12 +1278,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         </td>
                       )}
-                      {!isInvestor && (
+                      {!isInvestor && !isMentor && (
                         <td className="px-3 py-3 text-center">
                           <AccountScoreBadge score={acc?.score ?? null} tier={acc?.tier ?? null} size="sm" />
                         </td>
                       )}
-                      <td className="px-4 py-3 hidden lg:table-cell text-center">
+                      <td className="px-2 py-3 hidden lg:table-cell text-center">
                         {p.website ? (
                           <a href={p.website} target="_blank" rel="noopener noreferrer"
                             className="text-primary hover:text-primary/70 inline-flex items-center justify-center"
@@ -1187,7 +1294,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </td>
-                      {!isInvestor && (
+                      {isMentor && (
+                        <td className="px-4 py-3 text-sm hidden lg:table-cell whitespace-nowrap text-muted-foreground">
+                          {entityTypeAll[p.id]?.ko ?? '-'}
+                        </td>
+                      )}
+                      {!isInvestor && !isMentor && (
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {p.status ? (
                             <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-muted text-muted-foreground capitalize">

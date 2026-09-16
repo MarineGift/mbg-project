@@ -22,7 +22,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Inbox,
@@ -41,6 +41,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { MailFolderNav } from '@/components/layout/mail-folder-nav';
 import { useUiStore } from '@/lib/stores/ui-store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -55,6 +56,7 @@ const PIPELINE_DOT: Record<string, string> = {
   crowdfunding:     'bg-rose-500',
   government_grant: 'bg-violet-500',
   partner:          'bg-orange-500',
+  mentor:           'bg-emerald-500',
   self:             'bg-teal-600',
 };
 const FALLBACK_DOT = 'bg-zinc-400';
@@ -71,14 +73,19 @@ const STATIC_PIPELINES: Pipeline[] = [
 
 // Directory section -- party-list (info) pages, distinct from pipelines (workflow).
 // Links to /[partyType]/parties where partyType is the enum code.
+// This is only the STATIC FALLBACK shown until the live app.party_types fetch
+// resolves (and if it ever fails). The live list loads only is_active=true
+// types from the DB (see `directoryItems` below), so enabling a party_type
+// surfaces it here automatically -- no code change needed.
 type DirectoryItem = { code: string; name: string };
-const DIRECTORY_ITEMS: readonly DirectoryItem[] = [
+const STATIC_DIRECTORY: DirectoryItem[] = [
   { code: 'investor',        name: 'Investors' },
   { code: 'paper_mill',      name: 'Paper Mills' },
   { code: 'filler_supplier', name: 'Filler Suppliers' },
   { code: 'partner',         name: 'Partners' },
+  { code: 'mentor',          name: 'Mentors' },
   { code: 'self',            name: 'MarineBio Group' },
-] as const;
+];
 
 interface NavItem {
   href: string;
@@ -102,6 +109,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   // touching the next-intl messages files.
   { href: '/todo',     labelKey: 'tasks',     icon: CheckSquare, label: 'To-Do', badgeKey: 'openTaskCount' },
   { href: '/calendar', labelKey: 'calendar',  icon: CalendarDays, badgeKey: 'calendarUpcomingCount' },
+  { href: '/schedule', labelKey: 'schedule',  icon: CalendarCheck, label: 'Schedule' },
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
   { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
@@ -142,8 +150,58 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
+// Resizable sidebar: drag the right edge. 240px is the old w-60 default.
+const SIDEBAR_WIDTH_KEY = 'urm.sidebarWidth';
+const SIDEBAR_DEFAULT_WIDTH = 240;
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 560;
+
+function clampWidth(px: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(px)));
+}
+
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
+
+  // Drag-to-resize width. Kept in localStorage rather than the ui-store so it
+  // survives a reload without touching the persisted store shape. Collapsed
+  // mode ignores it (fixed 64px rail).
+  const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+      if (Number.isFinite(saved) && saved > 0) setWidth(clampWidth(saved));
+    } catch {
+      // private mode / storage disabled - the default is fine
+    }
+  }, []);
+
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const onMove = (ev: MouseEvent) => setWidth(clampWidth(ev.clientX));
+    const onUp = (ev: MouseEvent) => {
+      const next = clampWidth(ev.clientX);
+      setWidth(next);
+      setDragging(false);
+      try { window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next)); } catch {}
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const resetWidth = useCallback(() => {
+    setWidth(SIDEBAR_DEFAULT_WIDTH);
+    try { window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH)); } catch {}
+  }, []);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const tNav = useTranslations('nav');
   const pathname = usePathname();
@@ -188,6 +246,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
   };
 
   const [pipelines, setPipelines] = useState<Pipeline[]>(STATIC_PIPELINES);
+  // Live Directory items, loaded from app.party_types (is_active=true) below.
+  const [directoryItems, setDirectoryItems] = useState<DirectoryItem[]>(STATIC_DIRECTORY);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -255,7 +315,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
           comm().select('id', { count: 'exact', head: true }).eq('direction', 'outbound').is('deleted_at' as never, null),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
           supabase.schema('ai').from('drafts' as never).select('id', { count: 'exact', head: true }),
-          supabase.schema('app').from('party_types' as never).select('id, code'),
+          supabase.schema('app').from('party_types' as never)
+            .select('id, code, display_name_en, sort_order')
+            .eq('is_active' as never, true)
+            .order('sort_order' as never, { ascending: true }),
           // Open To-Do items: todo_items.status is plain text (todo/backlog/
           // in_progress/review/done); open = not 'done' and not archived. The old
           // status_option_id column does not exist (42703 broke this badge).
@@ -269,9 +332,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         ]);
         if (!alive) return;
 
-        // Parties per type code — head counts per type (a plain select() caps at
+        // Parties per type code ??head counts per type (a plain select() caps at
         // 1000 rows and would undercount, e.g. paper_mill 1067).
-        const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string }>;
+        const typeRows = ((partyTypesRes as any).data ?? []) as Array<{ id: number; code: string; display_name_en: string | null; sort_order: number | null }>;
         const partyCountResults = await Promise.all(
           typeRows.map((t) =>
             supabase
@@ -291,6 +354,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
         typeRows.forEach((t, i) => {
           parties[t.code] = (partyCountResults[i] as any).count ?? 0;
         });
+
+        // Live Directory list from active party_types (DB is the source of truth).
+        // Label = display_name_en, pluralized; 'self' kept as-is.
+        setDirectoryItems(
+          typeRows.map((t) => {
+            const raw = (t.display_name_en ?? t.code).trim();
+            const name = t.code === 'self' || raw.endsWith('s') ? raw : `${raw}s`;
+            return { code: t.code, name };
+          }),
+        );
 
         // Open todos = items not in the 'done' status (computed by the head
         // count query above).
@@ -324,7 +397,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
     return () => { alive = false; };
   }, [pathname]);
 
-  const widthCls = collapsed ? 'w-16' : 'w-60';
+  const widthCls = collapsed ? 'w-16' : '';
 
   // Inner content is rendered both in the desktop aside and the mobile drawer.
   // `isCollapsed` only applies on desktop; the mobile drawer is always expanded.
@@ -413,6 +486,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                     </ul>
                   </li>
                 )}
+                {item.href === '/inbox' && !isCollapsed && (
+                  <MailFolderNav onNavigate={onNavigate} />
+                )}
               </Fragment>
             ))}
           </ul>
@@ -425,7 +501,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
             </p>
           )}
           <ul className="space-y-0.5">
-            {DIRECTORY_ITEMS.map((d) => {
+            {directoryItems.map((d) => {
               const dotCls = PIPELINE_DOT[d.code] ?? FALLBACK_DOT;
               const href = `/${d.code}/parties`;
               const partyCount = counts.parties[d.code] ?? 0;
@@ -505,12 +581,32 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       {/* Desktop sidebar (in-flow, collapsible) */}
       <aside
         className={cn(
-          'group hidden md:flex h-screen flex-col border-r bg-card text-card-foreground transition-[width] duration-200',
+          'group relative hidden md:flex h-screen flex-col border-r bg-card text-card-foreground',
+          // no width transition while dragging, or the edge lags the cursor
+          dragging ? '' : 'transition-[width] duration-200',
           widthCls,
         )}
+        style={collapsed ? undefined : { width }}
         aria-label="Sidebar"
       >
         {renderBody({ isCollapsed: collapsed, mobile: false })}
+
+        {/* Drag handle. Double-click resets to the default width. */}
+        {!collapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            onMouseDown={startDrag}
+            onDoubleClick={resetWidth}
+            title="Drag to resize - double-click to reset"
+            className={cn(
+              'absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize',
+              'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-primary/40',
+              dragging && 'after:bg-primary/60',
+            )}
+          />
+        )}
       </aside>
 
       {/* Mobile backdrop */}

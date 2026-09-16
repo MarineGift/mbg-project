@@ -13,6 +13,9 @@ import {
 } from '@/app/actions/calendar'
 import { EditEventModal } from '@/components/calendar/edit-event-modal'
 import { EmailAttendeesModal } from '@/components/calendar/email-attendees-modal'
+// 2026-09-14: meetings (app.meetings) are editable/deletable from the calendar too
+import { MeetingEditModal } from '@/components/meetings/meeting-edit-modal'
+import { deleteMeetingAction } from '@/app/actions/meetings'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -362,18 +365,22 @@ function rruleSummary(rr: string | null | undefined): string {
 }
 
 function ItemDetailPopup({
-  item, onClose, onEdit, onEmail,
+  item, onClose, onEdit, onEditMeeting, onEmail, onChanged,
 }: {
   item: CalendarItem | null
   onClose: () => void
   onEdit: (item: CalendarItem) => void
+  onEditMeeting: (item: CalendarItem) => void
   onEmail: (item: CalendarItem) => void
+  onChanged: () => void
 }) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   if (!item) return null
 
   const isEvent    = item.type === 'event'
+  const isMeeting  = item.type === 'meeting'
   const isExternal = item.source === 'google' || item.source === 'microsoft'
   // Expanded recurrence occurrences carry a synthetic id (`${baseId}__${ymd}`);
   // edit/delete must target the real app.calendar_events row.
@@ -391,8 +398,30 @@ function ItemDetailPopup({
       : 'Delete this event? This cannot be undone.'
     if (!window.confirm(msg)) return
     setDeleting(true)
+    setError(null)
     try {
       await deleteCalendarEvent(realId, item.source ?? 'internal')
+      // The grid is client state fed by a server action, so router.refresh()
+      // alone leaves the deleted chip on screen — re-pull the feed.
+      onChanged()
+      router.refresh()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete event')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleDeleteMeeting() {
+    if (!item) return
+    if (!window.confirm('Delete this meeting? It will be removed from the calendar and Today.')) return
+    setDeleting(true)
+    setError(null)
+    try {
+      const res = await deleteMeetingAction(item.id)
+      if (!res.ok) { setError(res.error); return }
+      onChanged()
       router.refresh()
       onClose()
     } finally {
@@ -437,7 +466,30 @@ function ItemDetailPopup({
               </button>
             </div>
           )}
+          {isMeeting && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                title="Edit"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => onEditMeeting(item)}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                title="Delete"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                onClick={handleDeleteMeeting}
+                disabled={deleting}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="space-y-2 text-sm">
           <div className="text-muted-foreground">
@@ -499,6 +551,10 @@ export default function CalendarPage() {
   const [detailItem,  setDetailItem]  = useState<CalendarItem | null>(null)
   const [editItem,    setEditItem]    = useState<CalendarItem | null>(null)
   const [emailItem,   setEmailItem]   = useState<CalendarItem | null>(null)
+  // 2026-09-14: meeting chips get their own editor (app.meetings, not calendar_events)
+  const [editMeetingId, setEditMeetingId] = useState<string | null>(null)
+  // Remember the range currently on screen so a mutation can re-pull exactly it.
+  const [range, setRange] = useState<{ start: string; end: string } | null>(null)
 
   // Source visibility filter (close-date milestones default OFF per CALENDAR_FEED_META)
   const [visibleSources, setVisibleSources] = useState<Set<CalendarFeedSource>>(
@@ -521,6 +577,7 @@ export default function CalendarPage() {
   }, [])
 
   async function loadItems(start: string, end: string) {
+    setRange({ start, end })
     setLoading(true)
     try {
       const data = await getCalendarFeed(start, end)
@@ -529,6 +586,17 @@ export default function CalendarPage() {
       setLoading(false)
     }
   }
+
+  // Re-pull the visible range after a create / edit / delete. Without this the
+  // grid keeps showing the stale chip, which reads as "editing does nothing".
+  const reload = useCallback(() => {
+    if (range) { void loadItems(range.start, range.end); return }
+    const now = new Date()
+    void loadItems(
+      new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(),
+      new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString(),
+    )
+  }, [range])
 
   function handleCreateEvent(date: Date) {
     setCreateDate(date)
@@ -604,7 +672,7 @@ export default function CalendarPage() {
         <QuickEventModal
           open
           defaultDate={createDate}
-          onClose={() => setCreateDate(null)}
+          onClose={() => { setCreateDate(null); reload() }}
         />
       )}
 
@@ -613,7 +681,7 @@ export default function CalendarPage() {
         <MeetingCreateModal
           open
           defaultDate={createDate}
-          onClose={() => setCreateDate(null)}
+          onClose={() => { setCreateDate(null); reload() }}
         />
       )}
 
@@ -622,13 +690,24 @@ export default function CalendarPage() {
         item={detailItem}
         onClose={() => setDetailItem(null)}
         onEdit={(it) => { setDetailItem(null); setEditItem(it) }}
+        onEditMeeting={(it) => { setDetailItem(null); setEditMeetingId(it.id) }}
         onEmail={(it) => { setDetailItem(null); setEmailItem(it) }}
+        onChanged={reload}
       />
 
       {/* Edit Event Modal (Phase 1) */}
       <EditEventModal
         item={editItem}
         onClose={() => setEditItem(null)}
+        onChanged={reload}
+      />
+
+      {/* Edit Meeting Modal (2026-09-14) */}
+      <MeetingEditModal
+        meetingId={editMeetingId}
+        onClose={() => setEditMeetingId(null)}
+        onSaved={reload}
+        onDeleted={reload}
       />
 
       {/* Email Attendees Modal (Phase 3) */}

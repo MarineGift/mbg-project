@@ -1,8 +1,5 @@
 // t9c: thread merged view
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { fetchCommunicationDetailV2, fetchMessagesInThread } from '@/lib/queries/communication-detail-v2';
 import { listEmailTemplates } from '@/lib/queries/email-templates';
 import { fetchOpenStatuses } from '@/lib/queries/open-status';
@@ -43,15 +40,10 @@ export default async function InboxDetailPage({ params }: PageProps) {
   const timeZone = profile?.timezone ?? DEFAULT_TIMEZONE;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
+    <div className="px-2 py-2 sm:px-4 sm:py-3">
       <MarkThreadRead ids={threadIds} />
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/inbox">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back
-        </Link>
-      </Button>
       <CommunicationDetailView
+        backHref="/inbox"
         thread={messages}
         rootId={id}
         templates={templates}

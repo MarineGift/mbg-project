@@ -26,6 +26,7 @@ const PARTY_TYPE_STYLES: Record<PartyTypeCode, string> = {
   government_grant: 'bg-gray-100 text-gray-700',  // standard tailwind colors; a module-filler token can be added later
   consultant: 'bg-sky-100 text-sky-700',
   crowdfunding_platform: 'bg-rose-100 text-rose-700',
+  mentor: 'bg-emerald-100 text-emerald-700',
   self: 'bg-teal-100 text-teal-700',
 };
 

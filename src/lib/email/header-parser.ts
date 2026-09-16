@@ -278,7 +278,12 @@ export async function findThreadId(
 export interface SenderMatchResult {
   contactId?: string;
   partyId?: string;
-  matchedBy: 'contact_email' | 'party_email' | 'party_email_domain' | 'none';
+  matchedBy:
+    | 'contact_email'
+    | 'party_email'
+    | 'party_email_domain'
+    | 'folder_pin'
+    | 'none';
 }
 
 export async function matchSenderToContactAndParty(
@@ -339,6 +344,15 @@ export async function matchSenderToContactAndParty(
   const domain = lowered.slice(at + 1);
   if (domain.length === 0) return { matchedBy: 'none' };
 
+  // [2a] 2026-09-15: mail-folder pins. A party folder can pin exact sender
+  // addresses (GreentownHTX@user.luma-mail.com) and extra domains. Those pins
+  // are the operator saying "this sender IS that party", so honour them here
+  // at ingest instead of only when a backfill happens to run. Exact address
+  // first, because a pinned address on a shared relay (Luma, Mailchimp) must
+  // win even though the relay domain itself is never trusted.
+  const folderHit = await matchFolderPin(supabase, organizationId, lowered, domain);
+  if (folderHit) return folderHit;
+
   // Exclude common mail domains from matching (avoid false positives)
   const generic = new Set([
     'gmail.com',
@@ -375,4 +389,61 @@ export async function matchSenderToContactAndParty(
   }
 
   return { matchedBy: 'none' };
+}
+
+/**
+ * Sender -> party via app.mail_folders pins (leaf folders only: groups have
+ * no party). Returns null when nothing is pinned for this sender.
+ */
+async function matchFolderPin(
+  supabase: SupabaseClient,
+  organizationId: string,
+  lowered: string,
+  domain: string,
+): Promise<SenderMatchResult | null> {
+  try {
+    // exact address pin
+    const { data: byAddress } = await supabase
+      .schema('app')
+      .from('mail_folders')
+      .select('party_id')
+      .eq('organization_id', organizationId)
+      .eq('is_group', false)
+      .not('party_id', 'is', null)
+      .is('deleted_at', null)
+      .contains('match_addresses', [lowered])
+      .limit(1)
+      .maybeSingle();
+    if (byAddress?.party_id) {
+      return { partyId: byAddress.party_id as string, matchedBy: 'folder_pin' };
+    }
+
+    // domain pin - the domain itself or a parent of it (a.b.example.com -> example.com)
+    const labels = domain.split('.');
+    const candidates: string[] = [];
+    for (let i = 0; i < labels.length - 1; i += 1) {
+      candidates.push(labels.slice(i).join('.'));
+    }
+    if (candidates.length === 0) return null;
+
+    const { data: byDomain } = await supabase
+      .schema('app')
+      .from('mail_folders')
+      .select('party_id')
+      .eq('organization_id', organizationId)
+      .eq('is_group', false)
+      .not('party_id', 'is', null)
+      .is('deleted_at', null)
+      .overlaps('match_domains', candidates)
+      .limit(1)
+      .maybeSingle();
+    if (byDomain?.party_id) {
+      return { partyId: byDomain.party_id as string, matchedBy: 'folder_pin' };
+    }
+  } catch (e) {
+    // a lookup failure must never block ingest
+    // eslint-disable-next-line no-console
+    console.error('[header-parser] folder pin lookup failed:', e);
+  }
+  return null;
 }

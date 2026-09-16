@@ -7,9 +7,9 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   Sparkles, ArrowRight, AlertCircle,
-  ChevronDown, ChevronRight, Eye, Send,
+  ChevronDown, ChevronRight, Eye, Send, ArrowLeft,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChannelDirectionIcon } from './channel-direction-icon';
@@ -19,6 +19,7 @@ import { StatusBadge } from '@/components/common/status-badge';
 import { DealReassignPicker } from '@/components/inbox/deal-reassign-picker';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
+import { EmailHtmlFrame } from '@/components/inbox/email-html-frame';
 import type { CommunicationDetail } from '@/types/communication-detail';
 import type { DraftStatus } from '@/types/ai';
 
@@ -53,9 +54,11 @@ interface Props {
   openStatuses?: Record<string, { firstOpenedAt: string | null; openCount: number }>;
   /** Viewer's configured display timezone (IANA). Falls back to runtime default when unset. */
   timeZone?: string;
+  /** When set, a compact back arrow is shown next to the subject. */
+  backHref?: string;
 }
 
-export function CommunicationDetailView({ thread, rootId, templates, openStatuses, timeZone }: Props) {
+export function CommunicationDetailView({ thread, rootId, templates, openStatuses, timeZone, backHref }: Props) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
 
@@ -101,33 +104,40 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
   const isReplyable = replyTarget != null;
 
   return (
-    <div className="space-y-3">
-      {/* Thread header */}
-      <div className="px-1 pb-1">
-        <h1 className="text-lg font-semibold truncate">
-          {threadSubject || <span className="italic text-muted-foreground">{t('noSubject')}</span>}
-        </h1>
-        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-          {partyContext && <PartyTypeBadge partyType={partyContext.partyType} size="sm" />}
-          {partyContext && (
+    <div className="space-y-2">
+      {/* Thread header (compact: back + subject + count on one row) */}
+      <div className="px-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {backHref && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+              <Link href={backHref} aria-label="Back">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+          <h1 className="flex-1 min-w-0 text-base sm:text-lg font-semibold truncate">
+            {threadSubject || <span className="italic text-muted-foreground">{t('noSubject')}</span>}
+          </h1>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {thread.length} {thread.length === 1 ? 'message' : 'messages'}
+          </span>
+        </div>
+        {partyContext && (
+          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+            <PartyTypeBadge partyType={partyContext.partyType} size="sm" />
             <Link
               href={`/${partyContext.partyType}/parties/${partyContext.id}`}
               className="hover:underline truncate text-primary"
             >
               {partyContext.name}
             </Link>
-          )}
-          <span className="ml-auto">
-            {thread.length} {thread.length === 1 ? 'message' : 'messages'}
-          </span>
-        </div>
-        {partyContext && (
-          <div className="mt-2">
-            <DealReassignPicker
-              communicationId={root?.id ?? rootId}
-              partyId={partyContext.id}
-              currentDealId={root?.dealId ?? latest?.dealId ?? null}
-            />
+            <div className="ml-auto">
+              <DealReassignPicker
+                communicationId={root?.id ?? rootId}
+                partyId={partyContext.id}
+                currentDealId={root?.dealId ?? latest?.dealId ?? null}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -148,10 +158,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
       {/* Reply card (inbound latest only) */}
       {isReplyable && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Reply</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 items-center">
+          <CardContent className="flex flex-wrap gap-2 items-center p-3">
             <Button onClick={() => openReply('direct')} variant="default" size="sm">
               <Send className="h-4 w-4 mr-1" />
               Reply
@@ -223,7 +230,7 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onRe
     <Card className={cn(!expanded && 'hover:bg-muted/20 transition-colors')}>
       {/* Always-visible header (clickable to toggle) */}
       <button type="button" onClick={onToggle} className="w-full text-left block">
-        <CardHeader className="pb-3">
+        <CardHeader className="px-3 py-2 sm:px-4">
           <div className="flex items-start gap-2">
             {expanded ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -281,23 +288,10 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onRe
 
       {/* Expanded content */}
       {expanded && (
-        <CardContent className="space-y-3 pt-0">
-          {onReply && (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={(e) => { e.stopPropagation(); onReply(); }}
-              >
-                <Send className="h-3 w-3 mr-1" />
-                Reply to this message
-              </Button>
-            </div>
-          )}
+        <CardContent className="space-y-2 px-2 pb-2 pt-0 sm:px-3 sm:pb-3">
+          <div className="flex items-start gap-3 px-1">
           {/* Metadata grid */}
-          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <div className="flex-1 min-w-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
             {msg.toAddresses.length > 0 && (
               <>
                 <span className="text-muted-foreground">{t('to')}</span>
@@ -352,24 +346,25 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onRe
               </>
             )}
           </div>
+          {onReply && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={(e) => { e.stopPropagation(); onReply(); }}
+            >
+              <Send className="h-3 w-3 mr-1" />
+              Reply to this message
+            </Button>
+          )}
+          </div>
 
           {/* Body */}
           {msg.bodyHtml ? (
-            <iframe
-              title="email-body"
-              sandbox="allow-popups allow-popups-to-escape-sandbox"
-              className="w-full rounded-md border border-border bg-white min-h-[240px] max-h-[600px]"
-              srcDoc={
-                '<base target="_blank">' +
-                '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
-                'font-size:14px;line-height:1.6;color:#111;padding:12px;' +
-                'word-break:break-word;overflow-wrap:anywhere;">' +
-                msg.bodyHtml +
-                '</div>'
-              }
-            />
+            <EmailHtmlFrame html={msg.bodyHtml} />
           ) : msg.bodyPlain ? (
-            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto scrollbar-thin break-words">
+            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap leading-relaxed break-words">
               <Linkified text={msg.bodyPlain} />
             </div>
           ) : (

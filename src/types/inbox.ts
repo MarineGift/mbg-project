@@ -111,6 +111,21 @@ export interface InboxFilters {
   aiGenerated: boolean;
   /** a specific party (UUID) - Phase 1 supports only direct URL input */
   partyId: string | null;
+  /**
+   * 2026-09-15 mail folders: extra sender domains folded in with partyId.
+   * When set, the party filter widens to
+   *   party_id = partyId OR from_address ILIKE '%@<domain>'
+   * so newsletters / no-reply@ senders that were never registered as contacts
+   * still land in the folder. Ignored unless partyId is set.
+   */
+  partyDomains?: string[];
+  /**
+   * 2026-09-15 folder groups: a group folder (Partners / Business) resolves to
+   * several parties at once. When set it supersedes partyId.
+   */
+  partyIds?: string[];
+  /** exact sender addresses pinned to the folder (shared relays) */
+  partyAddresses?: string[];
 }
 
 export interface InboxPagination {

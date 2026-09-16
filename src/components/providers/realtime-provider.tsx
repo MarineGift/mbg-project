@@ -1,6 +1,9 @@
 /**
  * components/providers/realtime-provider.tsx
  * Phase 22b: inbox unread + open tasks count
+ * 2026-09-15b: new inbound mail -> toast (Open), desktop notification,
+ *              "(N) " tab-title prefix while the tab is in the background,
+ *              and a `urm:mail-arrived` window event for the folder sidebar.
  */
 
 'use client';
@@ -45,6 +48,32 @@ export function RealtimeProvider({
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  const notifyRef = useRef(notificationsEnabled);
+  notifyRef.current = notificationsEnabled;
+
+  // "(3) URM" in the browser tab for mail that arrived while the tab was hidden.
+  const unseenRef = useRef(0);
+  const paintTitle = () => {
+    if (typeof document === 'undefined') return;
+    const cur = document.title.replace(/^\(\d+\+?\)\s/, '');
+    const n = unseenRef.current;
+    document.title = n > 0 ? `(${n > 99 ? '99+' : n}) ${cur}` : cur;
+  };
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && unseenRef.current > 0) {
+        unseenRef.current = 0;
+        paintTitle();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Server-component refresh helper - only refresh on relevant routes
   // inbox events: /inbox, /sent, /inbox/[id]
@@ -68,6 +97,45 @@ export function RealtimeProvider({
   const setTaskRef = useRef(setOpenTaskCount);
   setTaskRef.current = setOpenTaskCount;
   useEffect(() => { setTaskRef.current(initialOpenTaskCount); }, [initialOpenTaskCount]);
+
+  // New inbound mail: sidebar refresh event + toast + optional desktop popup.
+  const announceMail = (n: Record<string, unknown>) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('urm:mail-arrived', { detail: { id: n.id } }));
+
+    const who = String(n.from_name || n.from_address || 'Unknown sender');
+    const subject = String(n.subject || '(no subject)');
+    const id = typeof n.id === 'string' ? n.id : null;
+    toast.info(`New mail from ${who}`, {
+      description: subject,
+      duration: 8000,
+      action: id ? { label: 'Open', onClick: () => router.push(`/inbox/${id}`) } : undefined,
+    });
+
+    if (document.visibilityState !== 'visible') {
+      unseenRef.current += 1;
+      paintTitle();
+    }
+
+    if (
+      notifyRef.current &&
+      'Notification' in window &&
+      Notification.permission === 'granted' &&
+      document.visibilityState !== 'visible'
+    ) {
+      try {
+        const note = new Notification(`New mail from ${who}`, {
+          body: subject,
+          tag: id ? `mail-${id}` : undefined,
+        });
+        note.onclick = () => {
+          window.focus();
+          if (id) router.push(`/inbox/${id}`);
+          note.close();
+        };
+      } catch { /* ignore */ }
+    }
+  };
 
   // communications change subscription (decrements the inbox count on soft-delete)
   const inboxCountRef = useRef(inboxUnreadCount);
@@ -120,6 +188,9 @@ export function RealtimeProvider({
           // which wrongly counted outbound/sent mail as unread.)
           if (n.direction === 'inbound' && !n.read_at) {
             setInboxUnreadCount(inboxCountRef.current + 1);
+          }
+          if (n.direction === 'inbound' && !n.deleted_at) {
+            announceMail(n);
           }
           refreshIfRelevant('inbox');
         },

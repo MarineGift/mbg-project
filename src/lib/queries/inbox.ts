@@ -170,9 +170,45 @@ export async function fetchInbox(
   if (filters.aiGenerated) {
     query = query.eq('ai_generated', true);
   }
-  if (filters.partyId) {
-    query = query.eq('party_id', filters.partyId);
+  // ---- mail folder scope -------------------------------------------------
+  // A folder resolves to any mix of: parties, sender domains, exact sender
+  // addresses. A GROUP can have no party at all (Government is domains only),
+  // so the scope must be applied whenever ANY of the three is present -
+  // keying off partyIds alone silently dropped the filter and showed the whole
+  // inbox (or nothing, once the or() came out empty).
+  const scopedDomains = (filters.partyDomains ?? [])
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+    .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+  const scopedAddresses = (filters.partyAddresses ?? [])
+    .map((a) => a.trim().toLowerCase())
+    .filter((a) => /^[^@\s,()]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(a));
+  const scopedPartyIds =
+    filters.partyIds && filters.partyIds.length > 0
+      ? filters.partyIds
+      : filters.partyId
+        ? [filters.partyId]
+        : [];
+
+  if (scopedPartyIds.length === 1 && scopedDomains.length === 0 && scopedAddresses.length === 0) {
+    query = query.eq('party_id', scopedPartyIds[0] as string);
+  } else if (
+    scopedPartyIds.length > 0 ||
+    scopedDomains.length > 0 ||
+    scopedAddresses.length > 0
+  ) {
+    const parts: string[] = [];
+    if (scopedPartyIds.length === 1) {
+      parts.push(`party_id.eq.${scopedPartyIds[0]}`);
+    } else if (scopedPartyIds.length > 1) {
+      parts.push(`party_id.in.(${scopedPartyIds.join(',')})`);
+    }
+    // ilike inside or() uses '*' as the wildcard, not '%'
+    for (const d of scopedDomains) parts.push(`from_address.ilike.*@${d}`);
+    // no wildcard = exact address match, still case-insensitive
+    for (const a of scopedAddresses) parts.push(`from_address.ilike.${a}`);
+    query = query.or(parts.join(','));
   }
+
   if (filters.query.length > 0) {
     const pattern = `%${escapeLikePattern(filters.query)}%`;
     // Field-scoped search. Note: to_addresses is text[], which PostgREST cannot

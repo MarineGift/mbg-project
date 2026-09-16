@@ -35,6 +35,7 @@ import { PartyInfoCard } from '@/components/parties/party-info-card';
 import { PartyApplicationPanel } from '@/components/parties/party-application-panel';
 import { PartyIntroCard } from '@/components/parties/party-intro-card';
 import { InvestorProfileCard } from '@/components/parties/investor-profile-card';
+import { InvestorAnalysisPanel } from '@/components/parties/investor-analysis-panel';
 import { MentorProfileCard } from '@/components/parties/mentor-profile-card';
 
 // Party-type is validated dynamically against the DB: fetchPartyDetail resolves
@@ -118,6 +119,14 @@ export default async function PartyDetailPage({ params }: PageProps) {
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-6">
           <PartyDetailTabs
+            analysis={
+              full.party.partyType === 'investor' ? (
+                <InvestorAnalysisPanel
+                  partyId={full.party.id}
+                  partyName={full.party.name}
+                />
+              ) : null
+            }
             overview={
               <>
                 <PartyStatsGrid party={full.party} />

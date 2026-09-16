@@ -574,6 +574,7 @@ export async function fetchPartyMeetings(
     .from('meetings' as never)
     .select(MEETING_SELECT_COLS)
     .eq('party_id', partyId)
+    .is('deleted_at', null)
     .order('occurred_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
@@ -597,6 +598,7 @@ export async function fetchUpcomingPartyMeetings(
     .select(MEETING_SELECT_COLS)
     .eq('party_id', partyId)
     .eq('status', 'scheduled')
+    .is('deleted_at', null)
     .gte('scheduled_at', nowIso)
     .order('scheduled_at', { ascending: true })
     .limit(SIDEBAR_LIMIT);
@@ -626,7 +628,8 @@ export async function fetchPartyMeetingStats(
     .schema('app')
     .from('meetings' as never)
     .select('status, occurred_at, scheduled_at')
-    .eq('party_id', partyId);
+    .eq('party_id', partyId)
+    .is('deleted_at', null);
 
   if (error) {
     console.error('[party-detail] meeting stats error:', error);

@@ -108,8 +108,14 @@ function presetToRrule(preset: RecurrencePreset, custom: string): string | null 
 // ─────────────────────────────────────────────
 
 export function EditEventModal({
-  item, onClose,
-}: { item: CalendarItem | null; onClose: () => void }) {
+  item, onClose, onChanged,
+}: {
+  item: CalendarItem | null
+  onClose: () => void
+  // 2026-09-14: the calendar grid is client state fed by a server action, so
+  // router.refresh() does not re-pull it. The page passes a reload callback.
+  onChanged?: () => void
+}) {
   const router = useRouter()
   const [title,         setTitle]         = useState('')
   const [allDay,        setAllDay]        = useState(false)
@@ -194,6 +200,7 @@ export function EditEventModal({
         reminders,
         transparency,
       })
+      onChanged?.()
       router.refresh()
       onClose()
     } catch (e) {
@@ -213,6 +220,7 @@ export function EditEventModal({
     setError(null)
     try {
       await deleteCalendarEventAction(item.id, item.source ?? 'internal')
+      onChanged?.()
       router.refresh()
       onClose()
     } catch (e) {
