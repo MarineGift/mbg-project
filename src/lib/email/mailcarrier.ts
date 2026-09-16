@@ -168,6 +168,8 @@ export class MailCarrierClient {
   }
   /** 2026-06-12: prevents overlapping fetch passes on the same client. */
   private fetchInFlight = false;
+  /** 2026-09-16: consecutive failure count per UID (poison-message guard). */
+  private uidFailures = new Map<number, number>();
 
   // AI processing is decoupled from the fetch loop: persistInbound runs
   // synchronously (mail shows in the inbox immediately), while AI drafting
@@ -404,8 +406,18 @@ export class MailCarrierClient {
 
   private async runIdleLoop(onMessage: InboundHandler): Promise<void> {
     let iterations = 0;
+    let lastPassAt = 0;
+    const minPassGapMs = 30_000;
     while (this.isRunning) {
       try {
+        // 2026-09-16: some servers end IDLE immediately, which produced a fetch
+        // pass (plus a DB read) every second. Keep at least 30s between passes.
+        const sinceLast = Date.now() - lastPassAt;
+        if (sinceLast < minPassGapMs) {
+          await new Promise((resolve) => setTimeout(resolve, minPassGapMs - sinceLast));
+          if (!this.isRunning) break;
+        }
+        lastPassAt = Date.now();
         await this.fetchAndProcessNew(onMessage);
         // IDLE wait - some IMAP servers drop after 30 minutes, so imapflow auto-restarts
         await this.client.idle();
@@ -796,6 +808,20 @@ export class MailCarrierClient {
           );
           // on a single failure, don't update lastUidProcessed -> retry on the next tick.
           // but the messages after it are also not processed this tick (guarantees sequential order).
+          // 2026-09-16: after 3 failed passes the message is skipped so one bad
+          // mail cannot block every later message of this inbox.
+          const fails = (this.uidFailures.get(uid) ?? 0) + 1;
+          this.uidFailures.set(uid, fails);
+          if (fails >= 3) {
+            // eslint-disable-next-line no-console
+            console.error(
+              `[mailcarrier:${this.logTag}] fetch: giving up on uid=${uid} after ${fails} failed passes - skipped`,
+            );
+            this.uidFailures.delete(uid);
+            lastUidProcessed = uid;
+            await this.saveLastProcessedUid(uid);
+            continue;
+          }
           break;
         }
       }
@@ -1036,7 +1062,8 @@ export class MailCarrierClient {
     const { data: inserted, error: insertError } = await this.supabase
       .schema('app')
       .from('communications')
-      .insert({
+      // 2026-09-16: strip NUL chars - Postgres text/jsonb reject \u0000 (22P05)
+      .insert(stripNulDeep({
         organization_id: this.organizationId,
         party_id: resolvedPartyId,
         contact_id: resolvedContactId,
@@ -1079,7 +1106,7 @@ export class MailCarrierClient {
             matched_by: senderMatch.matchedBy,
           },
         },
-      })
+      }))
       .select('id')
       .single();
 
@@ -1302,4 +1329,26 @@ export function toStorageKeySegment(name: string): string {
   if (base.length > 160) base = base.slice(0, 160);
 
   return cleanExt ? `${base}.${cleanExt}` : base;
+}
+
+/**
+ * 2026-09-16: remove NUL characters from every string in a payload.
+ * Postgres text and jsonb cannot store \u0000 (error 22P05), and one such
+ * mail blocked every later message of that inbox.
+ */
+function stripNulDeep<T>(value: T): T {
+  if (typeof value === 'string') {
+    return value.split('\u0000').join('') as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNulDeep(v)) as unknown as T;
+  }
+  if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = stripNulDeep(v);
+    }
+    return out as T;
+  }
+  return value;
 }
