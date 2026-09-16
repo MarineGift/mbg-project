@@ -97,7 +97,7 @@ export interface IImapClient {
   getMailboxLock(folder: string): Promise<{ release(): void | Promise<void> }>;
   fetch(
     range: { seen?: boolean } | string,
-    options: { source: boolean; envelope?: boolean; uid?: boolean },
+    options: { source: boolean; envelope?: boolean; uid?: boolean; size?: boolean },
     queryOptions?: { uid?: boolean },
   ): AsyncIterable<FetchMessageObject>;
   messageFlagsAdd(uid: string | number, flags: string[]): Promise<unknown>;
@@ -168,6 +168,51 @@ export class MailCarrierClient {
   }
   /** 2026-06-12: prevents overlapping fetch passes on the same client. */
   private fetchInFlight = false;
+
+  /**
+   * 2026-09-17: yield new messages one by one in uid order. A size pre-scan leaves out
+   * messages above MAILCARRIER_MAX_MESSAGE_BYTES (default 10 MB): one 13 MB message
+   * stalled an inbox for hours because its download never finished on a slow server.
+   * Such a message is yielded WITHOUT source, so the caller marks it processed and
+   * moves on (the mail itself stays in the mailbox).
+   */
+  private async *fetchNewInOrder(
+    range: string,
+    lastUid: number,
+  ): AsyncGenerator<FetchMessageObject> {
+    const maxBytes = Number(process.env.MAILCARRIER_MAX_MESSAGE_BYTES ?? 10 * 1024 * 1024);
+    const metas: Array<{ uid: number; size: number }> = [];
+    for await (const meta of this.client.fetch(
+      range,
+      { source: false, size: true, uid: true },
+      { uid: true },
+    )) {
+      const uid = Number((meta as unknown as { uid?: number | string }).uid);
+      if (!Number.isFinite(uid) || uid <= lastUid) continue;
+      const size = Number((meta as unknown as { size?: number }).size ?? 0);
+      metas.push({ uid, size });
+    }
+    metas.sort((a, b) => a.uid - b.uid);
+    for (const { uid, size } of metas) {
+      if (size > maxBytes) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[mailcarrier:${this.logTag}] fetch: uid=${uid} is ${Math.round(size / 1048576)} MB ` +
+            `(limit ${Math.round(maxBytes / 1048576)} MB) - not downloaded, left in mailbox`,
+        );
+        yield { uid } as unknown as FetchMessageObject;
+        continue;
+      }
+      for await (const message of this.client.fetch(
+        String(uid),
+        { source: true, envelope: true, uid: true },
+        { uid: true },
+      )) {
+        const got = Number((message as unknown as { uid?: number | string }).uid);
+        if (got === uid) yield message;
+      }
+    }
+  }
   /** 2026-09-16: consecutive failure count per UID (poison-message guard). */
   private uidFailures = new Map<number, number>();
 
@@ -745,11 +790,7 @@ export class MailCarrierClient {
       );
 
       // 2. UID-based fetch (imapflow's third argument { uid: true })
-      for await (const message of this.client.fetch(
-        range,
-        { source: true, envelope: true, uid: true },
-        { uid: true },
-      )) {
+      for await (const message of this.fetchNewInOrder(range, lastUid)) {
         const uid = Number((message as unknown as { uid?: number | string }).uid);
 
         // safety guard: skip UIDs already processed (the IMAP server may return them inclusively)
