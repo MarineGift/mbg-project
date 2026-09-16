@@ -69,7 +69,7 @@ try {
   const res = await client.query(fs.readFileSync(file, 'utf8'));
   const list = Array.isArray(res) ? res : [res];
   const last = list[list.length - 1];
-  if (last && last.rows) for (const r of last.rows.slice(0, 60)) console.log(JSON.stringify(r));
+  if (last && last.rows) for (const r of last.rows.slice(0, 500)) console.log(JSON.stringify(r));
   console.log('OK ' + list.length + ' statement(s) in ' + (Date.now() - t0) + ' ms');
 } catch (e) {
   console.error('ERROR ' + (e && e.message ? e.message : e));
