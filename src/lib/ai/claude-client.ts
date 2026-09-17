@@ -1,11 +1,16 @@
 /**
  * lib/ai/claude-client.ts
  *
- * Single entry point for the Anthropic API.
+ * Single entry point for LLM text generation.
+ * Provider: OpenAI Chat Completions (switched from Anthropic on 2026-09-16 for cost).
+ * The class/error names keep the "Claude" prefix so existing callers and
+ * ai.agents rows (legacy model tier ids) keep working unchanged.
+ * See lib/ai/openai-chat.ts for the tier -> OpenAI model mapping.
+ *
  * All AI calls must go through this class so that ai.runs logging, PII masking, and cost tracking
  * are applied consistently.
  *
- * Do not call anthropic.messages.create() directly from outside.
+ * Do not call openai.chat.completions.create() for drafting directly from outside.
  *
  * Main responsibilities:
  *   1. validate the model ID against a whitelist
@@ -17,9 +22,8 @@
  *   7. JSON parsing (output_format='json' or agent.outputFormat='structured')
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '../env';
 import type {
   AgentRole,
   AgentRow,
@@ -31,6 +35,12 @@ import type {
 } from '../../types/ai';
 import { maskPii, restorePii, type PiiTokenMap } from './pii-masker';
 import { renderPrompt } from './prompt-renderer';
+import {
+  buildChatParams,
+  extractChatText,
+  getOpenAiClient,
+  resolveOpenAiModel,
+} from './openai-chat';
 import {
   calculateCost,
   checkDailyBudget,
@@ -94,7 +104,7 @@ export class ClaudeAgentNotFoundError extends Error {
 
 export class ClaudeTimeoutError extends ClaudeApiError {
   constructor(timeoutMs: number) {
-    super(`Claude API timed out after ${timeoutMs}ms`, undefined, undefined);
+    super(`LLM API timed out after ${timeoutMs}ms`, undefined, undefined);
     this.name = 'ClaudeTimeoutError';
   }
 }
@@ -155,13 +165,6 @@ function dbRowToAgent(row: Record<string, unknown>): AgentRow {
   };
 }
 
-function extractTextContent(message: Anthropic.Messages.Message): string {
-  return message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n');
-}
-
 function tryParseJson(content: string): object | undefined {
   // remove a ```json fence or a plain ``` fence
   let cleaned = content.trim();
@@ -183,7 +186,7 @@ function tryParseJson(content: string): object | undefined {
 
 export interface ClaudeClientOptions {
   /** Used to inject the SDK in unit tests. */
-  anthropicClient?: Anthropic;
+  openaiClient?: OpenAI;
   /**
    * Whether to auto-downgrade when the monthly cost exceeds the threshold.
    * Default true. Set to false in tests for deterministic behavior.
@@ -192,7 +195,7 @@ export interface ClaudeClientOptions {
 }
 
 export class ClaudeClient {
-  private readonly anthropic: Anthropic;
+  private readonly openai: OpenAI;
   private readonly enableMonthlyDowngrade: boolean;
 
   constructor(
@@ -200,12 +203,11 @@ export class ClaudeClient {
     private readonly organizationId: string,
     options: ClaudeClientOptions = {},
   ) {
-    this.anthropic =
-      options.anthropicClient ??
-      new Anthropic({
-        apiKey: env.ANTHROPIC_API_KEY,
+    this.openai =
+      options.openaiClient ??
+      getOpenAiClient({
         maxRetries: 0, // disable SDK retries - controlled directly in this class
-        timeout: HARD_TIMEOUT_MS,
+        timeoutMs: HARD_TIMEOUT_MS,
       });
     this.enableMonthlyDowngrade = options.enableMonthlyDowngrade ?? true;
   }
@@ -301,20 +303,19 @@ export class ClaudeClient {
     const startedAt = Date.now();
     let attempt = 0;
     let lastError: unknown;
-    let response: Anthropic.Messages.Message | null = null;
+    let response: OpenAI.Chat.ChatCompletion | null = null;
 
     while (attempt < MAX_RETRY_ATTEMPTS && response === null) {
       try {
-        response = await this.anthropic.messages.create({
-          model: modelUsed,
-          max_tokens: agent.maxTokens || DEFAULT_MAX_TOKENS,
-          // Claude Opus 4.7+ does not support the temperature parameter (Anthropic policy change)
-          ...(modelUsed === 'claude-opus-4-7'
-            ? {}
-            : { temperature: agent.temperature ?? DEFAULT_TEMPERATURE }),
-          system: rendered.system,
-          messages: rendered.messages,
-        });
+        response = await this.openai.chat.completions.create(
+          buildChatParams({
+            model: resolveOpenAiModel(modelUsed),
+            system: rendered.system,
+            messages: rendered.messages,
+            maxTokens: agent.maxTokens || DEFAULT_MAX_TOKENS,
+            temperature: agent.temperature ?? DEFAULT_TEMPERATURE,
+          }),
+        );
       } catch (err) {
         lastError = err;
         const apiError = this.normalizeError(err);
@@ -341,6 +342,8 @@ export class ClaudeClient {
     }
 
     const latencyMs = Date.now() - startedAt;
+    // actual provider model id - this is what ai.runs.model_used records
+    const providerModel = resolveOpenAiModel(modelUsed);
 
     // ── [8] failure path: record then throw ──
     if (response === null) {
@@ -349,7 +352,7 @@ export class ClaudeClient {
         agentId: agent.id,
         status:
           apiError instanceof ClaudeTimeoutError ? 'timeout' : 'failed',
-        model: modelUsed,
+        model: providerModel,
         tokensIn: 0,
         tokensOut: 0,
         costUsd: 0,
@@ -369,7 +372,7 @@ export class ClaudeClient {
     }
 
     // ── [9] success path: extract + restore + parse ──
-    const rawContent = extractTextContent(response);
+    const rawContent = extractChatText(response);
     const content = maskPiiEnabled
       ? restorePii(rawContent, maskResult.tokens)
       : rawContent;
@@ -381,11 +384,12 @@ export class ClaudeClient {
     }
 
     // ── [10] cost calculation + ai.runs INSERT ──
-    const tokensIn = response.usage?.input_tokens ?? 0;
-    const tokensOut = response.usage?.output_tokens ?? 0;
+    const tokensIn = response.usage?.prompt_tokens ?? 0;
+    // completion_tokens already includes reasoning tokens (billed as output)
+    const tokensOut = response.usage?.completion_tokens ?? 0;
     let costUsd = 0;
     try {
-      costUsd = calculateCost(modelUsed, tokensIn, tokensOut);
+      costUsd = calculateCost(providerModel, tokensIn, tokensOut);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[claude-client] calculateCost failed:', err);
@@ -394,7 +398,7 @@ export class ClaudeClient {
     const runId = await recordRun(this.supabase, this.organizationId, {
       agentId: agent.id,
       status: 'success',
-      model: modelUsed,
+      model: providerModel,
       tokensIn,
       tokensOut,
       costUsd,
@@ -415,6 +419,7 @@ export class ClaudeClient {
       runId,
       agentId: agent.id,
       model: modelUsed,
+      providerModel,
       latencyMs,
       tokensIn,
       tokensOut,
@@ -455,12 +460,16 @@ export class ClaudeClient {
   }
 
   /* --------------------------------------------------------
-   * Normalize Anthropic SDK errors -> ClaudeApiError
+   * Normalize OpenAI SDK errors -> ClaudeApiError
    * -------------------------------------------------------- */
   private normalizeError(err: unknown): ClaudeApiError {
     if (err instanceof ClaudeApiError) return err;
 
-    if (err instanceof Anthropic.APIError) {
+    if (err instanceof OpenAI.APIConnectionTimeoutError) {
+      return new ClaudeTimeoutError(HARD_TIMEOUT_MS);
+    }
+
+    if (err instanceof OpenAI.APIError) {
       // extract the retry-after header (supports both a Headers object and a plain object)
       let retryAfter: number | undefined;
       const headers = (err as { headers?: unknown }).headers;

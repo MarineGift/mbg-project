@@ -6,15 +6,12 @@
  * all env variables are injected here in advance.
  */
 
-// Anthropic
-process.env.ANTHROPIC_API_KEY ??= 'sk-ant-test-1234567890abcdefghij';
-process.env.ANTHROPIC_MODEL_OPUS ??= 'claude-opus-4-7';
-process.env.ANTHROPIC_MODEL_HAIKU ??= 'claude-haiku-4-5-20251001';
-process.env.ANTHROPIC_MODEL_SONNET ??= 'claude-sonnet-4-6';
-
-// OpenAI
+// OpenAI (text generation + embeddings)
 process.env.OPENAI_API_KEY ??= 'sk-test-1234567890abcdefghij';
 process.env.OPENAI_EMBEDDING_MODEL ??= 'text-embedding-3-large';
+process.env.OPENAI_MODEL_OPUS ??= 'gpt-5-mini';
+process.env.OPENAI_MODEL_SONNET ??= 'gpt-5-mini';
+process.env.OPENAI_MODEL_HAIKU ??= 'gpt-5-nano';
 
 // Supabase
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'https://test.supabase.co';

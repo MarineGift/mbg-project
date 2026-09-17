@@ -16,15 +16,20 @@ import { z } from 'zod';
  * ============================================================ */
 const envSchema = z
   .object({
-    // ── Anthropic ────────────────────────────────────────
-    ANTHROPIC_API_KEY: z.string().min(20),
-    ANTHROPIC_MODEL_OPUS: z.literal('claude-opus-4-7'),
-    ANTHROPIC_MODEL_HAIKU: z.literal('claude-haiku-4-5-20251001'),
-    ANTHROPIC_MODEL_SONNET: z.literal('claude-sonnet-4-6'),
+    // ── Anthropic (no longer used since 2026-09-16; kept optional so an old
+    //    Railway variable does not break boot. Safe to delete from Railway.) ──
+    ANTHROPIC_API_KEY: z.string().optional(),
+    ANTHROPIC_MODEL_OPUS: z.string().optional(),
+    ANTHROPIC_MODEL_HAIKU: z.string().optional(),
+    ANTHROPIC_MODEL_SONNET: z.string().optional(),
 
-    // ── OpenAI (embeddings only) ──
+    // ── OpenAI (text generation + embeddings) ──
     OPENAI_API_KEY: z.string().min(20),
     OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-large'),
+    // ai.agents model tier -> OpenAI model (see lib/ai/openai-chat.ts)
+    OPENAI_MODEL_OPUS: z.string().min(1).default('gpt-5-mini'),
+    OPENAI_MODEL_SONNET: z.string().min(1).default('gpt-5-mini'),
+    OPENAI_MODEL_HAIKU: z.string().min(1).default('gpt-5-nano'),
 
     // ── Supabase ─────────────────────────────────────────
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),

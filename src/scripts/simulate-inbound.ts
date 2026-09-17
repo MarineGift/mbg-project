@@ -10,7 +10,7 @@
  * Flow:
  *   [1] look up the UPM-Kymmene party (uses seed data)
  *   [2] INSERT a new inbound communication
- *   [3] call processInbound() -> 2 Anthropic API calls (Haiku -> Opus)
+ *   [3] call processInbound() -> 2 OpenAI API calls (haiku tier -> opus tier)
  *   [4] dump the return value
  *   [5] verify the ai.drafts row
  *
@@ -20,7 +20,7 @@
  * Required environment variables (env.local.mjs):
  *   - NEXT_PUBLIC_SUPABASE_URL
  *   - SUPABASE_SERVICE_ROLE_KEY  (for bypassing RLS)
- *   - ANTHROPIC_API_KEY          (a real key - a dummy value will fail)
+ *   - OPENAI_API_KEY             (a real key - a dummy value will fail)
  *
  * Notes:
  *   - using service_role = bypass RLS (for verification)
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
 
   // ── [3] call processInbound ──
   console.log('[3/5] Calling processInbound() -> Haiku classification + Opus reply drafting...');
-  console.log('      (2 Anthropic API calls - about 5-20s)\n');
+  console.log('      (2 OpenAI API calls - about 5-20s)\n');
 
   const startMs = Date.now();
   let result: unknown;

@@ -1,8 +1,8 @@
 /**
  * lib/ai/prompt-renderer.ts
  *
- * Converts ClaudeClient's input into the Anthropic Messages API's
- * { system, messages } format.
+ * Converts ClaudeClient's input into a provider-neutral
+ * { system, messages } format (sent to OpenAI Chat Completions).
  *
  * Composed data:
  *   1. agent.systemPrompt           → system
@@ -16,9 +16,9 @@
  * (this file provides a buildBundle branch that takes the query embedding as an external argument)
  */
 
-import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import type { ChatMessage } from './openai-chat';
 import { env } from '../env';
 import type {
   AgentRow,
@@ -48,7 +48,7 @@ export interface RenderInput {
 
 export interface RenderedPrompt {
   system: string;
-  messages: Anthropic.MessageParam[];
+  messages: ChatMessage[];
   metadata: {
     brandVoiceId?: string;
     knowledgeChunkIds: string[];
@@ -357,7 +357,7 @@ export async function renderPrompt(input: RenderInput): Promise<RenderedPrompt> 
     extra_context: extraContext ?? null,
   };
 
-  const userMessage: Anthropic.MessageParam = {
+  const userMessage: ChatMessage = {
     role: 'user',
     content: JSON.stringify(contextBundle, null, 2),
   };

@@ -10,7 +10,7 @@
 import { requireAuth } from '@/lib/auth';
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SendingAddressKind } from '@/types/email';
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/ai/openai-chat";
 import { sendOutboundEmail } from "@/lib/email/send-outbound";
 
 // ─────────────────────────────────────────────
@@ -256,8 +256,6 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
         ? "Write the entire reply in Korean."
         : "LANGUAGE: Detect the language of the original email below and write the ENTIRE reply in that same language. If the original email is in English, the reply MUST be in English. Do not default to Korean and do not translate.";
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const systemPrompt = `You are a B2B sales email professional.
 Write a ${tone === "professional" ? "professional and courteous" : tone === "friendly" ? "warm and friendly" : "concise and clear"} reply draft for the incoming email.
 - If the recipient name is provided, use proper salutation.
@@ -281,19 +279,13 @@ ${contactName ? `Recipient name: ${contactName}` : ""}${instructionBlock}
 Write a plain text reply draft for this email. Do not use any HTML tags.`;
 
   try {
-    const response = await anthropic.messages.create({
-      // Use the app-configured Sonnet model (env-validated to claude-sonnet-4-6).
-      // A stale hardcoded model id was returning 404 (model not found).
-      model: process.env.ANTHROPIC_MODEL_SONNET ?? "claude-sonnet-4-6",
-      max_tokens: 1000,
+    // OpenAI (sonnet tier -> OPENAI_MODEL_SONNET, default gpt-5-mini)
+    const draft = await generateText({
+      tier: "claude-sonnet-4-6",
       system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+      user: userPrompt,
+      maxTokens: 1000,
     });
-
-    const draft = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("");
 
     // Safety net: strip a trailing sign-off / signature block the model may add
     // despite instructions; the user's signature is appended automatically at send.
@@ -437,8 +429,6 @@ export async function generateAIEmail(payload: AIComposePayload): Promise<{
         ? "Write the entire email in Korean."
         : "LANGUAGE: Write the email in the same language as the instructions above. If the instructions are in English, write in English; if in Korean, write in Korean. Do not translate.";
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const systemPrompt = `You are a B2B sales email professional drafting a NEW outbound email.
 Write a ${tone === "professional" ? "professional and courteous" : tone === "friendly" ? "warm and friendly" : "concise and clear"} email based on the user's instructions.
 - If a recipient name is provided, open with a proper salutation; otherwise use a neutral greeting.
@@ -458,17 +448,13 @@ Write a ${tone === "professional" ? "professional and courteous" : tone === "fri
   const userPrompt = `${contextLines ? contextLines + "\n\n" : ""}Instructions for the email:\n${instructions}\n\nWrite the email now. Remember: first line "SUBJECT: ...", blank line, then plain-text body, no sign-off.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL_SONNET ?? "claude-sonnet-4-6",
-      max_tokens: 1200,
+    // OpenAI (sonnet tier -> OPENAI_MODEL_SONNET, default gpt-5-mini)
+    let text = await generateText({
+      tier: "claude-sonnet-4-6",
       system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+      user: userPrompt,
+      maxTokens: 1200,
     });
-
-    let text = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("");
 
     let subject: string | undefined;
     const m = text.match(/^\s*SUBJECT:\s*(.+?)\s*(?:\n|$)/i);

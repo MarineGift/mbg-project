@@ -22,7 +22,7 @@
  *
  * Required environment variables:
  *   - SUPABASE_SERVICE_ROLE_KEY
- *   - ANTHROPIC_API_KEY
+ *   - OPENAI_API_KEY
  *   - MAILCARRIER_HOST / PORT (common)
  *   - MAILCARRIER_POLL_KINDS (e.g. "personal,role,shared")
  *   - MAIL_<KIND>_USERNAME / PASSWORD (per kind)

@@ -24,7 +24,11 @@ export type AgentRole =
   | 'translator' // translator (Haiku)
   | 'task_decomposer'; // goal -> subtasks (Haiku, JSON)
 
-/** Allowed Claude model IDs. Any other value throws ClaudeInvalidModelError. */
+/**
+ * Allowed model tier IDs stored in ai.agents.model. Any other value throws
+ * ClaudeInvalidModelError. Since 2026-09-16 these are mapped to OpenAI models
+ * (lib/ai/openai-chat.ts) and are never sent to Anthropic.
+ */
 export type ClaudeModel =
   | 'claude-opus-4-7'
   | 'claude-sonnet-4-6'
@@ -236,7 +240,10 @@ export interface ClaudeCompleteOutput {
   runId: string;
   /** Same as ai.runs.agent_id. Used for ai.drafts.agent_id (NOT NULL). */
   agentId: string;
+  /** Legacy tier id from ai.agents (after downgrade/fallback). */
   model: ClaudeModel;
+  /** Actual provider model id that served the request (e.g. gpt-5-mini). */
+  providerModel?: string;
   latencyMs: number;
   tokensIn: number;
   tokensOut: number;

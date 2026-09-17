@@ -14,17 +14,35 @@ import { env } from '../env';
 import type { ClaudeModel, RecordRunInput } from '../../types/ai';
 
 /* ============================================================
- * 1. Unit-price table (USD per 1M tokens, as of May 2026)
+ * 1. Unit-price table (USD per 1M tokens)
  * ----------------------------------------------------------
- * Must match the master system prompt §2.4.
+ * Keyed by the PROVIDER model id actually called (ai.runs.model_used).
+ * Text generation moved to OpenAI on 2026-09-16 (OpenAI list prices,
+ * checked 2026-09). The legacy Claude rows stay only so old ai.runs rows
+ * can still be priced.
  * ============================================================ */
 export const MODEL_PRICING: Readonly<
-  Record<ClaudeModel, { input: number; output: number }>
+  Record<string, { input: number; output: number }>
 > = Object.freeze({
+  // OpenAI (current)
+  'gpt-5-nano': { input: 0.05, output: 0.4 },
+  'gpt-5-mini': { input: 0.25, output: 2.0 },
+  'gpt-5': { input: 1.25, output: 10.0 },
+  'gpt-5.6-luna': { input: 0.2, output: 1.2 },
+  'gpt-5.6-terra': { input: 2.0, output: 12.0 },
+  'gpt-4o-mini': { input: 0.15, output: 0.6 },
+  'gpt-4.1-mini': { input: 0.4, output: 1.6 },
+  // Anthropic (legacy, no longer called)
   'claude-opus-4-7': { input: 15.0, output: 75.0 },
   'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
 });
+
+/**
+ * Used when a model id is not in MODEL_PRICING (e.g. a new model set via
+ * OPENAI_MODEL_* env). Deliberately high so budget limits still protect us.
+ */
+export const FALLBACK_PRICING = Object.freeze({ input: 5.0, output: 30.0 });
 
 export class UnknownModelPricingError extends Error {
   constructor(public readonly model: string) {
@@ -39,16 +57,22 @@ export class UnknownModelPricingError extends Error {
 
 /**
  * input/output token counts -> USD cost.
- * Models not in MODEL_PRICING throw.
+ * Models not in MODEL_PRICING (or dated snapshots of them) are priced with
+ * FALLBACK_PRICING and a warning, so the budget check never silently sees $0.
  */
 export function calculateCost(
   model: ClaudeModel | string,
   tokensIn: number,
   tokensOut: number,
 ): number {
-  const pricing = MODEL_PRICING[model as ClaudeModel];
+  const base = String(model).replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  let pricing = MODEL_PRICING[model] ?? MODEL_PRICING[base];
   if (!pricing) {
-    throw new UnknownModelPricingError(model);
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[cost-tracker] ${new UnknownModelPricingError(String(model)).message} - using fallback pricing`,
+    );
+    pricing = FALLBACK_PRICING;
   }
   // unit price is per 1M tokens
   return (tokensIn * pricing.input + tokensOut * pricing.output) / 1_000_000;
