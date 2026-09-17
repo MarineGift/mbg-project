@@ -34,7 +34,6 @@ import {
 import {
   sendEmail,
   generateAIReply,
-  generateAIEmail,
   type ComposePayload,
   type ComposeMode,
 } from "@/lib/actions/email-compose";
@@ -530,35 +529,6 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     }
   }
 
-  // AI generate for a brand-new email (instructions-driven, no original).
-  async function handleGenerateAIEmail() {
-    if (!aiInstruction.trim()) {
-      toast.error("Describe what the email should say first.");
-      return;
-    }
-    setGeneratingAI(true);
-    try {
-      const result = await generateAIEmail({
-        partyId: props.partyId ?? null,
-        contactId: selectedContactId ?? props.contactId ?? null,
-        toAddress: to || effectiveTo || null,
-        subject: subject || null,
-        tone: aiTone,
-        language: aiLanguage,
-        instructions: aiInstruction,
-      });
-      if (result.success && result.draft) {
-        setBody(result.draft);
-        if (result.subject && !subject.trim()) setSubject(result.subject);
-        toast.success("AI draft generated.");
-      } else {
-        toast.error(result.error ?? "AI generation failed.");
-      }
-    } finally {
-      setGeneratingAI(false);
-    }
-  }
-
   // ?? Attachments ?????????????????????????????????????????
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -902,14 +872,17 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             <FileText className="h-3.5 w-3.5" />
             Template
           </button>
-          <button
-            type="button"
-            className={tabBtnClass("ai")}
-            onClick={() => setActiveTab("ai")}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            AI Draft
-          </button>
+          {/* AI is available only when replying to a received message */}
+          {isReplyMode && (
+            <button
+              type="button"
+              className={tabBtnClass("ai")}
+              onClick={() => setActiveTab("ai")}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI Draft
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-1 pt-2">
@@ -975,7 +948,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             </div>
           )}
 
-          {activeTab === "ai" && (
+          {activeTab === "ai" && isReplyMode && (
             <div className="space-y-2 rounded-md border bg-violet-50/50 p-3">
               <div className="space-y-1">
                 <Label htmlFor="ai-instruction" className="text-xs">
@@ -1038,8 +1011,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
               <Button
                 type="button"
                 size="sm"
-                onClick={isReplyMode ? handleGenerateAI : handleGenerateAIEmail}
-                disabled={generatingAI || (!isReplyMode && !aiInstruction.trim())}
+                onClick={handleGenerateAI}
+                disabled={generatingAI}
                 className="w-full bg-violet-600 hover:bg-violet-700 text-white"
               >
                 {generatingAI ? (
@@ -1050,7 +1023,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    {isReplyMode ? "Generate AI reply" : "Generate AI email"}
+                    Generate AI reply
                   </>
                 )}
               </Button>

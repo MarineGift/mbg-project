@@ -1,384 +1,84 @@
 /**
  * __tests__/email/processor.test.ts
  *
- * Verifies processor.ts's 5-step pipeline.
- * ClaudeClient isn't abstracted via an interface, but to allow injecting a fake instance
- * it accepts options.claudeClient. This test stubs only ClaudeClient's complete()
- * to control the classifier/replier responses.
- *
- * Scenarios:
- *   1. normal flow - standard category, normal reply, ai.drafts INSERT
- *   2. non-standard category -> forced to 'other' + requires_human=true
- *   3. replier output validation fails -> fallback reply + requires_human=true
- *   4. unrestored PII token in the reply body -> requires_human=true
- *   5. communications already has ai_draft_id + force=false -> error
- *   6. ClaudeBudgetExceededError → ai_processing_status='failed'
+ * processInbound is rules-only (no AI): it classifies and saves
+ * communications.ai_classification, merging external_data.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { processInbound, ProcessorError } from '../../lib/email/processor';
-import { ClaudeBudgetExceededError } from '../../lib/ai/claude-client';
-import { buildSupabaseMock, type MockSupabase } from '../setup/supabase-mock';
-import type {
-  ClaudeCompleteInput,
-  ClaudeCompleteOutput,
-} from '../../types/ai';
-
-// since auto-send-gate always blocks when env.AI_AUTO_SEND_ENABLED=false,
-// the processor tests only check that ai.drafts is created normally even when blocked.
+import { describe, it, expect } from 'vitest';
+import {
+  processInbound,
+  ProcessorCommunicationNotFoundError,
+} from '../../lib/email/processor';
+import { buildSupabaseMock } from '../setup/supabase-mock';
 
 const orgId = 'org-1';
 const commId = 'comm-1';
 
-interface MockClaudeOptions {
-  classifierResponse?: object | null;
-  drafterResponse?: object | null;
-  classifierThrows?: Error;
-  drafterThrows?: Error;
-}
-
-function buildMockClaude(opts: MockClaudeOptions): {
-  complete: ReturnType<typeof vi.fn>;
-} {
-  const complete = vi.fn(async (input: ClaudeCompleteInput): Promise<ClaudeCompleteOutput> => {
-    const isClassifier = input.agentRole === 'classifier';
-    if (isClassifier && opts.classifierThrows) throw opts.classifierThrows;
-    if (!isClassifier && opts.drafterThrows) throw opts.drafterThrows;
-
-    const parsed = isClassifier ? opts.classifierResponse : opts.drafterResponse;
-    return {
-      content: parsed === null ? '' : JSON.stringify(parsed),
-      parsedJson: parsed ?? undefined,
-      runId: isClassifier ? 'run-classifier-1' : 'run-drafter-1',
-      agentId: isClassifier ? 'agent-classifier-1' : 'agent-drafter-1',
-      model: isClassifier
-        ? 'claude-haiku-4-5-20251001'
-        : 'claude-opus-4-7',
-      latencyMs: 1234,
-      tokensIn: 500,
-      tokensOut: 200,
-      costUsd: 0.001,
-    };
-  });
-  return { complete };
-}
-
-const validClassification = {
-  category: 'information_request',
-  urgency: 'medium',
-  sentiment: 'neutral',
-  requiresHuman: false,
-  confidence: 0.92,
-  rationale: 'asking about pricing',
-  riskFlags: [],
-  detectedLanguage: 'ko',
-};
-
-const validReply = {
-  subject: 'Re: 가격 문의',
-  bodyPlain: '가격은 KG당 50달러입니다.',
-  bodyHtml: '<p>가격은 KG당 50달러입니다.</p>',
-  rationale: 'Direct pricing answer',
-  riskFlags: [],
-  requiresHumanApproval: false,
-  language: 'ko',
-};
-
-function buildBaseSupabase(): MockSupabase {
+function build(row: Record<string, unknown> | null) {
   return buildSupabaseMock({
     'app.communications': {
-      selectMaybeSingle: {
-        data: {
-          id: commId,
-          organization_id: orgId,
-          party_id: 'party-1',
-          contact_id: 'contact-1',
-          engagement_id: 'eng-1',
-          module: 'paper_mill',
-          from_address: 'buyer@acme.com',
-          body_plain: '가격이 어떻게 되나요?',
-          subject: '가격 문의',
-          language_detected: 'ko',
-          ai_draft_id: null,
-          ai_processing_status: 'pending',
-        },
-      },
+      selectMaybeSingle: { data: row },
       updateResult: { error: null },
-    },
-    'app.contacts': {
-      selectMaybeSingle: { data: { preferred_language: 'ko' } },
-    },
-    'app.parties': {
-      selectMaybeSingle: { data: { country_code: 'KR' } },
-    },
-    'ai.drafts': {
-      insertSingle: { data: { id: 'draft-1' } },
-    },
-    'ai.auto_send_rules': {
-      selectMaybeSingle: { data: null }, // no_rule_defined → blocked
-    },
-    'app.organizations': {
-      selectMaybeSingle: { data: { settings: {} } },
     },
   });
 }
 
-describe('processInbound — happy path', () => {
-  let supabase: MockSupabase;
+function lastUpdate(supabase: ReturnType<typeof build>): Record<string, unknown> {
+  const updates = supabase.__calls.update.filter(
+    (c) => c.schema === 'app' && c.table === 'communications',
+  );
+  return updates[updates.length - 1]?.payload as Record<string, unknown>;
+}
 
-  beforeEach(() => {
-    supabase = buildBaseSupabase();
+describe('processInbound (rules only)', () => {
+  it('classifies a normal message and keeps existing external_data', async () => {
+    const supabase = build({
+      id: commId,
+      subject: '가격 문의',
+      body_plain: '견적 단가를 알려주실 수 있을까요?',
+      from_address: 'buyer@acme.com',
+      language_detected: null,
+      external_data: { urm_headers: { keep: 'me' } },
+    });
+
+    const result = await processInbound(supabase as never, orgId, commId);
+
+    expect(result.classification.category).toBe('price_negotiation');
+    expect(result.isAutomated).toBe(false);
+    const u = lastUpdate(supabase);
+    expect((u.ai_classification as Record<string, unknown>).category).toBe('price_negotiation');
+    expect(u.language_detected).toBe('ko');
+    const ext = u.external_data as Record<string, unknown>;
+    expect(ext.urm_headers).toEqual({ keep: 'me' });
+    expect(ext.classified_by).toBe('rules');
+    expect(u).not.toHaveProperty('ai_draft_id');
   });
 
-  it('runs classifier, drafter, gate, draft INSERT, communications update', async () => {
-    const claude = buildMockClaude({
-      classifierResponse: validClassification,
-      drafterResponse: validReply,
-    });
-
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-    });
-
-    expect(result.communicationId).toBe(commId);
-    expect(result.draftId).toBe('draft-1');
-    expect(result.classifierRunId).toBe('run-classifier-1');
-    expect(result.drafterRunId).toBe('run-drafter-1');
-    expect(result.classification.category).toBe('information_request');
-    expect(result.reply.subject).toBe('Re: 가격 문의');
-    // env.AI_AUTO_SEND_ENABLED=false (test setup) -> blocked
-    expect(result.autoSendAllowed).toBe(false);
-    expect(result.autoSendBlockedReasons).toContain('global_disabled');
-
-    // claude is called exactly twice (classifier + drafter)
-    expect(claude.complete).toHaveBeenCalledTimes(2);
-    expect(claude.complete.mock.calls[0]?.[0]?.agentRole).toBe('classifier');
-    expect(claude.complete.mock.calls[1]?.[0]?.agentRole).toBe('reply_drafter');
-
-    // verify the ai.drafts INSERT
-    const draftInserts = supabase.__calls.insert.filter(
-      (c) => c.schema === 'ai' && c.table === 'drafts',
-    );
-    expect(draftInserts).toHaveLength(1);
-    const payload = draftInserts[0]?.payload as Record<string, unknown>;
-    expect(payload.inbound_communication_id).toBe(commId);
-    expect(payload.agent_id).toBe('agent-drafter-1');
-    expect(payload.classification_category).toBe('information_request');
-    expect(payload.confidence_score).toBe(0.92);
-    expect(payload.subject).toBe('Re: 가격 문의');
-    expect(payload.classifier_run_id).toBe('run-classifier-1');
-    expect(payload.drafter_run_id).toBe('run-drafter-1');
-    expect(payload.ai_generated).toBe(true);
-    expect(payload.status).toBe('pending_review');
-    expect(payload.requires_human_approval).toBe(true); // because the gate blocked it
-    expect(payload.auto_send_eligible).toBe(false);
-    expect(payload.language).toBe('ko');
-    expect(typeof payload.expires_at).toBe('string');
-
-    // verify the communications UPDATE (the last call updates ai_draft_id)
-    const updates = supabase.__calls.update.filter(
-      (c) => c.schema === 'app' && c.table === 'communications',
-    );
-    expect(updates.length).toBeGreaterThanOrEqual(2); // processing → completed
-    const lastUpdate = updates[updates.length - 1]?.payload as Record<string, unknown>;
-    expect(lastUpdate.ai_draft_id).toBe('draft-1');
-    expect((lastUpdate.ai_classification as Record<string, unknown>).category).toBe(
-      'information_request',
-    );
-  });
-});
-
-describe('processInbound — non-standard category enforcement', () => {
-  it('forces invalid category to "other" with requires_human=true', async () => {
-    const supabase = buildBaseSupabase();
-    const claude = buildMockClaude({
-      classifierResponse: {
-        ...validClassification,
-        category: 'material_request', // non-standard!
-      },
-      drafterResponse: validReply,
-    });
-
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-    });
-
-    expect(result.classification.category).toBe('other');
-    expect(result.classification.requiresHuman).toBe(true);
-    expect(result.classification.confidence).toBeLessThanOrEqual(0.5);
-
-    const draftInserts = supabase.__calls.insert.filter(
-      (c) => c.schema === 'ai' && c.table === 'drafts',
-    );
-    const payload = draftInserts[0]?.payload as Record<string, unknown>;
-    expect(payload.classification_category).toBe('other');
-    expect(payload.requires_human_approval).toBe(true);
-  });
-
-  it('handles classifier returning malformed JSON', async () => {
-    const supabase = buildBaseSupabase();
-    const claude = buildMockClaude({
-      classifierResponse: null, // parsedJson undefined
-      drafterResponse: validReply,
-    });
-
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-    });
-
-    expect(result.classification.category).toBe('other');
-    expect(result.classification.requiresHuman).toBe(true);
-    expect(result.classification.rationale).toContain('validation failed');
-  });
-});
-
-describe('processInbound — drafter validation failure', () => {
-  it('uses fallback reply with requires_human=true', async () => {
-    const supabase = buildBaseSupabase();
-    const claude = buildMockClaude({
-      classifierResponse: validClassification,
-      drafterResponse: { subject: '', bodyPlain: '' }, // invalid
-    });
-
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-    });
-
-    // the fallback reply is in Korean
-    expect(result.reply.language).toBe('ko');
-    expect(result.reply.requiresHumanApproval).toBe(true);
-    expect(result.reply.bodyPlain).toContain('검토');
-    expect(result.reply.rationale).toContain('Fallback');
-  });
-});
-
-describe('processInbound — unrestored PII tokens', () => {
-  it('forces requires_human=true when reply still contains {{PII_xxx}}', async () => {
-    const supabase = buildBaseSupabase();
-    const claude = buildMockClaude({
-      classifierResponse: validClassification,
-      drafterResponse: {
-        ...validReply,
-        bodyPlain: '안녕하세요, {{PII_001}}로 연락드리겠습니다.', // 미복원!
+  it('marks automated mail', async () => {
+    const supabase = build({
+      id: commId,
+      subject: 'September update',
+      body_plain: 'Our monthly newsletter',
+      from_address: 'news@vendor.example',
+      language_detected: 'en',
+      external_data: {
+        raw_selected_headers: { 'list-unsubscribe': '<mailto:u@vendor.example>' },
       },
     });
 
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-    });
+    const result = await processInbound(supabase as never, orgId, commId);
 
-    expect(result.reply.requiresHumanApproval).toBe(true);
-    expect(result.reply.rationale).toContain('unrestored PII');
+    expect(result.isAutomated).toBe(true);
+    const u = lastUpdate(supabase);
+    expect(u).not.toHaveProperty('language_detected');
+    expect((u.external_data as Record<string, unknown>).automated_mail).toContain('list-unsubscribe');
+  });
 
-    const draftInserts = supabase.__calls.insert.filter(
-      (c) => c.schema === 'ai' && c.table === 'drafts',
+  it('throws when the row is missing', async () => {
+    const supabase = build(null);
+    await expect(processInbound(supabase as never, orgId, commId)).rejects.toBeInstanceOf(
+      ProcessorCommunicationNotFoundError,
     );
-    const payload = draftInserts[0]?.payload as Record<string, unknown>;
-    expect(payload.requires_human_approval).toBe(true);
-  });
-});
-
-describe('processInbound — already processed', () => {
-  it('throws when communication already has ai_draft_id and force=false', async () => {
-    const supabase = buildSupabaseMock({
-      'app.communications': {
-        selectMaybeSingle: {
-          data: {
-            id: commId,
-            organization_id: orgId,
-            ai_draft_id: 'existing-draft',
-            body_plain: 'x',
-            subject: 'y',
-          },
-        },
-      },
-    });
-    const claude = buildMockClaude({
-      classifierResponse: validClassification,
-      drafterResponse: validReply,
-    });
-
-    await expect(
-      processInbound(supabase as never, orgId, commId, {
-        claudeClient: claude as never,
-      }),
-    ).rejects.toThrow(/already has draft/);
-  });
-
-  it('processes again when force=true', async () => {
-    const supabase = buildSupabaseMock({
-      'app.communications': {
-        selectMaybeSingle: {
-          data: {
-            id: commId,
-            organization_id: orgId,
-            party_id: null,
-            engagement_id: null,
-            ai_draft_id: 'existing-draft',
-            body_plain: 'hello',
-            subject: 'sub',
-            module: 'paper_mill',
-          },
-        },
-        updateResult: { error: null },
-      },
-      'ai.drafts': { insertSingle: { data: { id: 'draft-2' } } },
-      'ai.auto_send_rules': { selectMaybeSingle: { data: null } },
-    });
-    const claude = buildMockClaude({
-      classifierResponse: validClassification,
-      drafterResponse: validReply,
-    });
-
-    const result = await processInbound(supabase as never, orgId, commId, {
-      claudeClient: claude as never,
-      force: true,
-    });
-    expect(result.draftId).toBe('draft-2');
-  });
-});
-
-describe('processInbound — error handling', () => {
-  it('marks failed when ClaudeBudgetExceededError thrown', async () => {
-    const supabase = buildBaseSupabase();
-    const claude = buildMockClaude({
-      classifierThrows: new ClaudeBudgetExceededError(60, 50, 'daily'),
-    });
-
-    await expect(
-      processInbound(supabase as never, orgId, commId, {
-        claudeClient: claude as never,
-      }),
-    ).rejects.toBeInstanceOf(ClaudeBudgetExceededError);
-
-    // whether communications was updated to the failed state
-    const updates = supabase.__calls.update.filter(
-      (c) => c.schema === 'app' && c.table === 'communications',
-    );
-    const lastUpdate = updates[updates.length - 1]?.payload as Record<string, unknown>;
-    const ed = lastUpdate.external_data as Record<string, unknown>;
-    expect(ed.ai_processing_status).toBe('failed');
-    expect(ed.ai_processing_error_class).toBe('ClaudeBudgetExceededError');
-    expect(ed.ai_processing_retryable).toBe(false);
-  });
-
-  it('throws ProcessorCommunicationNotFoundError for missing comm', async () => {
-    const supabase = buildSupabaseMock({
-      'app.communications': { selectMaybeSingle: { data: null } },
-    });
-    await expect(
-      processInbound(supabase as never, orgId, 'missing'),
-    ).rejects.toThrow(/Communication not found/);
-  });
-
-  it('wraps generic DB errors in ProcessorError', async () => {
-    const supabase = buildSupabaseMock({
-      'app.communications': {
-        selectMaybeSingle: { data: null, error: { message: 'pg connection lost' } },
-      },
-    });
-    await expect(
-      processInbound(supabase as never, orgId, commId),
-    ).rejects.toBeInstanceOf(ProcessorError);
   });
 });

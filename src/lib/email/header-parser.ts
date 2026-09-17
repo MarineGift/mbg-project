@@ -96,6 +96,11 @@ export function parseInboundMessage(parsed: ParsedMail): ParsedHeaders {
     'date',
     'return-path',
     'list-unsubscribe',
+    // automated-mail detection (rule-classifier.ts)
+    'precedence',
+    'auto-submitted',
+    'x-autoreply',
+    'x-autorespond',
   ]) {
     const v = headers.get(name);
     if (typeof v === 'string') rawSelectedHeaders[name] = v;

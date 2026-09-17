@@ -14,7 +14,6 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "worker:consultation": "tsx src/workers/consultation-worker.ts",
     "worker:draft-expiry": "tsx src/workers/draft-expiry-worker.ts",
     "worker:mail-merge": "tsx src/workers/mail-merge-worker.ts",
     "worker:mailcarrier": "tsx --env-file=.env.local src/workers/mailcarrier-worker.ts",

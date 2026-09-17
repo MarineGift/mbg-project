@@ -16,20 +16,9 @@ import { z } from 'zod';
  * ============================================================ */
 const envSchema = z
   .object({
-    // ── Anthropic (no longer used since 2026-09-16; kept optional so an old
-    //    Railway variable does not break boot. Safe to delete from Railway.) ──
-    ANTHROPIC_API_KEY: z.string().optional(),
-    ANTHROPIC_MODEL_OPUS: z.string().optional(),
-    ANTHROPIC_MODEL_HAIKU: z.string().optional(),
-    ANTHROPIC_MODEL_SONNET: z.string().optional(),
-
-    // ── OpenAI (text generation + embeddings) ──
-    OPENAI_API_KEY: z.string().min(20),
-    OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-large'),
-    // ai.agents model tier -> OpenAI model (see lib/ai/openai-chat.ts)
-    OPENAI_MODEL_OPUS: z.string().min(1).default('gpt-5-mini'),
-    OPENAI_MODEL_SONNET: z.string().min(1).default('gpt-5-mini'),
-    OPENAI_MODEL_HAIKU: z.string().min(1).default('gpt-5-nano'),
+    // ── OpenAI: used ONLY by the "Generate AI reply" button (web service) ──
+    OPENAI_API_KEY: z.string().min(20).optional(),
+    OPENAI_REPLY_MODEL: z.string().min(1).default('gpt-5-mini'),
 
     // ── Supabase ─────────────────────────────────────────
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
@@ -121,8 +110,6 @@ const envSchema = z
       .union([z.boolean(), z.enum(['true', 'false'])])
       .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
       .default(true),
-    MAX_DAILY_AI_COST_USD: z.coerce.number().nonnegative().default(50),
-    MAX_MONTHLY_AI_COST_USD: z.coerce.number().nonnegative().default(1500),
     DRAFT_EXPIRY_DAYS: z.coerce.number().int().min(1).max(30).default(7),
     LOG_LEVEL: z
       .enum(['debug', 'info', 'warn', 'error'])
@@ -167,14 +154,6 @@ const envSchema = z
           message: 'Required when TABS_MAILER_AUTH_METHOD is plain or login',
         });
       }
-    }
-    // the daily limit must not exceed the monthly limit
-    if (data.MAX_DAILY_AI_COST_USD > data.MAX_MONTHLY_AI_COST_USD) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['MAX_DAILY_AI_COST_USD'],
-        message: 'Daily limit cannot exceed monthly limit',
-      });
     }
   });
 

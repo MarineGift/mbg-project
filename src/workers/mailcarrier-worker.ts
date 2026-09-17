@@ -1,7 +1,7 @@
 /**
  * src/workers/mailcarrier-worker.ts
  *
- * Worker that receives new mail from IMAP and triggers the ai.drafts pipeline.
+ * Worker that receives new mail from IMAP, stores it and classifies it with rules (no AI).
  *
  * Phase 2 changes:
  *   - from a single MAILCARRIER_USERNAME -> based on the MAILCARRIER_POLL_KINDS array
@@ -14,7 +14,7 @@
  *   [1] create the Supabase service_role client (bypasses RLS)
  *   [2] create 1-3 MailCarrierClients per MAILCARRIER_POLL_KINDS + connect()
  *   [3] run each client.startListening(onMessage) in parallel
- *   [4] on new mail arrival -> persistInbound -> processInbound -> ai.drafts INSERT
+ *   [4] on new mail arrival -> persistInbound -> processInbound (rule-based classification, no AI)
  *   [5] SIGTERM/SIGINT -> graceful shutdown of all clients in parallel
  *
  * Run:
@@ -22,7 +22,6 @@
  *
  * Required environment variables:
  *   - SUPABASE_SERVICE_ROLE_KEY
- *   - OPENAI_API_KEY
  *   - MAILCARRIER_HOST / PORT (common)
  *   - MAILCARRIER_POLL_KINDS (e.g. "personal,role,shared")
  *   - MAIL_<KIND>_USERNAME / PASSWORD (per kind)
@@ -30,7 +29,7 @@
  *
  * Notes:
  *   - Phase 1 handles a single organization (MBG Project).
- *   - errors during processing are recorded as communications.ai_processing_status='failed'.
+ *   - classification errors are logged only; the stored message is unaffected.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -287,16 +286,14 @@ export async function runMailCarrierWorker(): Promise<void> {
             const result = await processInbound(supabase, ORG_ID, event.communicationId);
             // eslint-disable-next-line no-console
             console.log(
-              `${tag} processed → draft.id=${result.draftId} ` +
-                `category=${result.classification?.category} ` +
-                `confidence=${result.classification?.confidence?.toFixed(2)} ` +
-                `auto_send=${result.autoSendAllowed}`,
+              `${tag} classified (rules, no AI) → category=${result.classification.category}` +
+                (result.isAutomated ? ` automated=${result.automatedReason}` : ''),
             );
           })(),
         );
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(`${tag} processInbound failed:`, err);
+        console.error(`${tag} classification failed:`, err);
       }
     };
 
