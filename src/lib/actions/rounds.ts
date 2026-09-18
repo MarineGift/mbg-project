@@ -128,14 +128,18 @@ const roundUpdateSchema = z.object({
 export async function updateRound(
   input: z.input<typeof roundUpdateSchema>,
 ): Promise<RoundActionResult> {
+  console.log('[updateRound] start', JSON.stringify(input));
+
   try {
     await requireAuth();
-  } catch {
+  } catch (e) {
+    console.error('[updateRound] auth failed', e);
     return { ok: false, errorCode: 'unauthorized' };
   }
 
   const parsed = roundUpdateSchema.safeParse(input);
   if (!parsed.success) {
+    console.error('[updateRound] validation failed', JSON.stringify(parsed.error.issues));
     return {
       ok: false,
       errorCode: 'validation',
@@ -167,11 +171,18 @@ export async function updateRound(
     .select('id')
     .maybeSingle();
 
+  console.log('[updateRound] db result', JSON.stringify({ data, error }));
+
   if (error)
     return { ok: false, errorCode: 'database', errorMessage: error.message };
   if (!data) return { ok: false, errorCode: 'not_found' };
 
-  revalidateRounds();
+  try {
+    revalidateRounds();
+  } catch (e) {
+    console.error('[updateRound] revalidate threw', e);
+  }
+  console.log('[updateRound] ok');
   return { ok: true };
 }
 
