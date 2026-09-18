@@ -19,7 +19,7 @@ interface Props {
 
 export default async function RoundsPage({ params }: Props) {
   // Rounds only make sense for the investor pipeline.
-  if (params.code !== 'investor') notFound();
+  if (params.code !== 'investors') notFound();
 
   const supabase = await createSupabaseServerClient();
 

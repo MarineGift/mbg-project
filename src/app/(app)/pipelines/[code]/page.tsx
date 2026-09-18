@@ -58,7 +58,7 @@ export default async function PipelinePage({ params }: Props) {
   // and are correctly staged. Until a real round linkage (column or junction)
   // is added, we drop round_id here and treat round as null below.
   const dealSelect =
-    'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, ' +
+    'id, deal_name, current_stage_id, value_amount, value_currency, campaign_id, round_id, ' +
     'start_date, end_date, expected_close_date, ' +
     'last_activity_at, status, ' +
     'deal_parties ( id, party_id, role, commitment_amount, currency, ' +
@@ -86,10 +86,11 @@ export default async function PipelinePage({ params }: Props) {
   // Round name join: app.deals has no round_id, so there is nothing to join on.
   // Set round to null for every deal (the round filter defaults to 'all', so the
   // board still shows everything). Re-enable this once a round linkage exists.
-  void rounds; // kept for the filter UI / New Deal modal selector
+  const roundById = new Map(rounds.map((r) => [r.id, r]));
   const deals = ((dealsData ?? []) as Array<Record<string, unknown>>).map((d) => ({
     ...d,
-    round: null as { id: string; name: string } | null,
+    round: (d.round_id ? (roundById.get(d.round_id as string) ?? null) : null) as
+      { id: string; name: string } | null,
   }));
 
   // Campaigns (all pipelines) for the New Deal modal + board filter.

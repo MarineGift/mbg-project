@@ -136,7 +136,7 @@ export async function listRoundsWithRollup(): Promise<RoundWithRollup[]> {
     .schema('app')
     .from('pipelines' as never)
     .select('id')
-    .eq('code', 'investor')
+    .eq('code', 'investors')
     .eq('is_active', true)
     .maybeSingle();
 
