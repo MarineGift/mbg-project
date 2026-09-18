@@ -194,14 +194,21 @@ export function RoundsClient({ pipelineName, rounds }: Props) {
     };
 
     startTransition(async () => {
-      const res = editingId
-        ? await updateRound({ roundId: editingId, ...common })
-        : await createRound({ currency: 'USD', ...common });
-      if (res.ok) {
-        setDialogOpen(false);
-        router.refresh();
-      } else {
-        setError(res.errorMessage ?? 'Save failed');
+      try {
+        const res = editingId
+          ? await updateRound({ roundId: editingId, ...common })
+          : await createRound({ currency: 'USD', ...common });
+        if (res.ok) {
+          setDialogOpen(false);
+          router.refresh();
+        } else {
+          setError(
+            res.errorMessage ?? ('Save failed [' + (res.errorCode ?? 'unknown') + ']'),
+          );
+        }
+      } catch (e) {
+        console.error('[rounds] save threw:', e);
+        setError('Action threw: ' + (e instanceof Error ? e.message : String(e)));
       }
     });
   };
