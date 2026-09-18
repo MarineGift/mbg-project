@@ -34,8 +34,8 @@ export interface RoundActionResult {
 }
 
 // Rounds only surface on the Investor board for now.
-const INVESTOR_PIPELINE_PATH = '/pipelines/investor';
-const INVESTOR_ROUNDS_PATH = '/pipelines/investor/rounds';
+const INVESTOR_PIPELINE_PATH = '/pipelines/investors';
+const INVESTOR_ROUNDS_PATH = '/pipelines/investors/rounds';
 
 function revalidateRounds() {
   revalidatePath(INVESTOR_PIPELINE_PATH);

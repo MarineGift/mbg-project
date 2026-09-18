@@ -226,7 +226,7 @@ export function RoundsClient({ pipelineName, rounds }: Props) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Link
-              href="/pipelines/investor"
+              href="/pipelines/investors"
               className="inline-flex items-center gap-1 hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
