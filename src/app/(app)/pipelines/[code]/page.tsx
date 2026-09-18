@@ -47,6 +47,7 @@ export default async function PipelinePage({ params }: Props) {
     .from('stages' as never)
     .select('id, code, name, sort_order')
     .eq('pipeline_id', pipeline.id)
+    .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
   // 3) deals in this pipeline, with their companies (deal_parties).
