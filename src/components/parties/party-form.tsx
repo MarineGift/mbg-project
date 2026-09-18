@@ -284,7 +284,7 @@ export function PartyForm({
           status: 'active',
           priority: 'none',
           countryCode: 'US',
-          region: 'Texas',
+          region: '',
           city: '',
           website: '',
           industryTags: '',
@@ -672,9 +672,7 @@ export function PartyForm({
                   onValueChange={(v) => {
                     const code = v === '__none' ? '' : v;
                     setValue('countryCode', code, { shouldDirty: true });
-                    if (code === 'US' && !watch('region')) {
-                      setValue('region', 'Texas', { shouldDirty: true });
-                    }
+
                   }}
                   disabled={isPending}
                 >
