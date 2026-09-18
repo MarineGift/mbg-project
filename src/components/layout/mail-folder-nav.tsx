@@ -102,6 +102,13 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
           if (cancelled) return
           if (!res.ok) return
           setFolders(res.data)
+          // First load starts fully collapsed; once the user has toggled
+          // anything, collapsed has keys and their choice is kept.
+          setCollapsed((prev) =>
+            Object.keys(prev).length > 0
+              ? prev
+              : Object.fromEntries(res.data.map((f) => [f.id, true])),
+          )
           // Baseline any folder this browser has never seen, so the first
           // visit does not flag every folder as new.
           const m = readSeen()
