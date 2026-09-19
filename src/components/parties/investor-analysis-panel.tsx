@@ -54,6 +54,7 @@ export function InvestorAnalysisPanel({
   const [savedNotes, setSavedNotes] = useState('')
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [savingNotes, setSavingNotes] = useState(false)
+  const [editingNotes, setEditingNotes] = useState(false)
 
   const [mails, setMails] = useState<ColdMail[]>([])
   const [loading, setLoading] = useState(true)
@@ -196,29 +197,77 @@ export function InvestorAnalysisPanel({
                 Saved {fmtDate(updatedAt)}
               </span>
             )}
-            {dirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
-            <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes || !dirty}>
-              {savingNotes ? 'Saving...' : 'Save'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground hover:text-red-600"
-              onClick={handleClearNotes}
-              disabled={savingNotes || (!notes && !savedNotes)}
-            >
-              Clear
-            </Button>
+            {editingNotes && dirty && (
+              <span className="text-xs text-amber-600">Unsaved changes</span>
+            )}
+
+            {editingNotes ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={async () => { await handleSaveNotes(); setEditingNotes(false) }}
+                  disabled={savingNotes}
+                >
+                  {savingNotes ? 'Saving...' : 'Save'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setNotes(savedNotes); setEditingNotes(false) }}
+                  disabled={savingNotes}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setEditingNotes(true)}
+                  disabled={loading}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  {savedNotes ? 'Edit' : 'Add research'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5 text-muted-foreground hover:text-red-600"
+                  onClick={async () => {
+                    if (!window.confirm('Delete the research note for this party?')) return
+                    await handleClearNotes()
+                    setEditingNotes(false)
+                  }}
+                  disabled={savingNotes || !savedNotes}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        <Textarea
-          className="mt-3 min-h-[60vh] resize-y text-sm leading-relaxed"
-          placeholder={loading ? 'Loading...' : 'What did we find out about this firm?'}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          disabled={loading}
-        />
+        {editingNotes ? (
+          <Textarea
+            className="mt-3 min-h-[60vh] resize-y text-sm leading-relaxed"
+            placeholder={loading ? 'Loading...' : 'What did we find out about this firm?'}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={loading}
+            autoFocus
+          />
+        ) : savedNotes ? (
+          <div className="mt-3 max-h-[70vh] overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/20 px-4 py-3 text-sm leading-relaxed">
+            {savedNotes}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+            {loading ? 'Loading...' : 'No research yet. Use Add research to start.'}
+          </p>
+        )}
       </section>
 
       {/* ------------------------------------------------------ cold mail */}
