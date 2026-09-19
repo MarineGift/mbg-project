@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  CalendarPlus,
 } from "lucide-react";
 import {
   Dialog,
@@ -35,6 +36,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ComposeEmailDialog } from "@/components/email/compose-email-dialog";
+import {
+  AddToCalendarModal,
+  emailHasMeetingSignal,
+  type CalendarSourceEmail,
+} from "@/components/meetings/add-to-calendar-modal";
 import type {
   CommunicationTimelineItem,
   PartyCommunicationStats,
@@ -58,6 +64,7 @@ export function PartyCommunicationsTimeline(
 ) {
   const {
     partyId,
+    partyName,
     defaultContactEmail,
     defaultContactId,
     defaultContactName,
@@ -70,6 +77,9 @@ export function PartyCommunicationsTimeline(
   const [composeOpen, setComposeOpen] = useState(false);
   // The email currently shown in the read modal (null = closed).
   const [viewItem, setViewItem] = useState<CommunicationTimelineItem | null>(null);
+  // 2026-09-19: the email whose meeting details are being added to the calendar.
+  const [calendarItem, setCalendarItem] =
+    useState<CommunicationTimelineItem | null>(null);
   const router = useRouter();
   const [replyContext, setReplyContext] = useState<{
     messageId: string;
@@ -134,6 +144,29 @@ export function PartyCommunicationsTimeline(
     handleReply(item);
   };
 
+  // 2026-09-19: an email that carried a meeting time / Meet link goes onto the
+  // calendar. The modal re-parses and lets the user correct everything first.
+  const handleAddToCalendar = (item: CommunicationTimelineItem) => {
+    setViewItem(null);
+    setCalendarItem(item);
+  };
+
+  const calendarSource: CalendarSourceEmail | null = calendarItem
+    ? {
+        communicationId: calendarItem.id,
+        subject: calendarItem.subject,
+        bodyPlain: calendarItem.body_plain,
+        bodyHtml: calendarItem.body_html,
+        occurredAt: calendarItem.occurred_at,
+        direction: calendarItem.direction,
+        partyId,
+        partyName,
+        fromAddress: calendarItem.from_address,
+        fromName: calendarItem.from_name,
+        toAddresses: calendarItem.to_addresses || [],
+      }
+    : null;
+
   return (
     <div className="bg-white rounded-lg border shadow-sm">
       {/* Header */}
@@ -176,6 +209,7 @@ export function PartyCommunicationsTimeline(
               items={threadItems}
               onReply={handleReply}
               onView={handleView}
+              onAddToCalendar={handleAddToCalendar}
             />
           ))
         )}
@@ -186,6 +220,14 @@ export function PartyCommunicationsTimeline(
         item={viewItem}
         onClose={() => setViewItem(null)}
         onReply={handleReplyFromModal}
+        onAddToCalendar={handleAddToCalendar}
+      />
+
+      {/* Add-to-calendar modal */}
+      <AddToCalendarModal
+        open={calendarSource !== null}
+        onClose={() => setCalendarItem(null)}
+        source={calendarSource}
       />
 
       {/* Compose Dialog */}
@@ -238,10 +280,12 @@ function ThreadGroup({
   items,
   onReply,
   onView,
+  onAddToCalendar,
 }: {
   items: CommunicationTimelineItem[];
   onReply: (item: CommunicationTimelineItem) => void;
   onView: (item: CommunicationTimelineItem) => void;
+  onAddToCalendar: (item: CommunicationTimelineItem) => void;
 }) {
   const [expanded, setExpanded] = useState(items.length <= 3);
   const latest = items[items.length - 1]!;
@@ -250,7 +294,12 @@ function ThreadGroup({
   if (items.length === 1) {
     return (
       <div className="px-6 py-3">
-        <MessageRow item={items[0]!} onReply={onReply} onView={onView} />
+        <MessageRow
+          item={items[0]!}
+          onReply={onReply}
+          onView={onView}
+          onAddToCalendar={onAddToCalendar}
+        />
       </div>
     );
   }
@@ -288,6 +337,7 @@ function ThreadGroup({
               item={item}
               onReply={onReply}
               onView={onView}
+              onAddToCalendar={onAddToCalendar}
               compact={true}
             />
           ))}
@@ -302,14 +352,24 @@ function MessageRow({
   item,
   onReply,
   onView,
+  onAddToCalendar,
   compact = false,
 }: {
   item: CommunicationTimelineItem;
   onReply: (item: CommunicationTimelineItem) => void;
   onView: (item: CommunicationTimelineItem) => void;
+  onAddToCalendar: (item: CommunicationTimelineItem) => void;
   compact?: boolean;
 }) {
   const isOutbound = item.direction === "outbound";
+  // Only offer the button when the body actually carries a meeting link or a
+  // parseable date - otherwise every row would sprout a dead action.
+  const hasMeeting = emailHasMeetingSignal({
+    subject: item.subject,
+    bodyPlain: item.body_plain,
+    bodyHtml: item.body_html,
+    occurredAt: item.occurred_at,
+  });
 
   return (
     <div
@@ -397,6 +457,16 @@ function MessageRow({
                 Reply
               </button>
             )}
+            {hasMeeting && (
+              <button
+                onClick={() => onAddToCalendar(item)}
+                className="text-xs text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-0.5"
+                title="Add the meeting time and link in this email to the calendar"
+              >
+                <CalendarPlus className="w-3 h-3" />
+                Add to Calendar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -409,12 +479,22 @@ function EmailViewModal({
   item,
   onClose,
   onReply,
+  onAddToCalendar,
 }: {
   item: CommunicationTimelineItem | null;
   onClose: () => void;
   onReply: (item: CommunicationTimelineItem) => void;
+  onAddToCalendar: (item: CommunicationTimelineItem) => void;
 }) {
   const open = item !== null;
+  const hasMeeting = item
+    ? emailHasMeetingSignal({
+        subject: item.subject,
+        bodyPlain: item.body_plain,
+        bodyHtml: item.body_html,
+        occurredAt: item.occurred_at,
+      })
+    : false;
 
   return (
     <Dialog
@@ -471,6 +551,16 @@ function EmailViewModal({
             </div>
 
             <DialogFooter>
+              {hasMeeting && (
+                <Button
+                  variant="outline"
+                  onClick={() => onAddToCalendar(item)}
+                  className="text-emerald-700"
+                >
+                  <CalendarPlus className="w-4 h-4 mr-1" />
+                  Add to Calendar
+                </Button>
+              )}
               {item.message_id && (
                 <Button variant="outline" onClick={() => onReply(item)}>
                   <CornerDownRight className="w-4 h-4 mr-1" />

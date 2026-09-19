@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   Sparkles, ArrowRight, AlertCircle,
-  ChevronDown, ChevronRight, Eye, Send, ArrowLeft,
+  ChevronDown, ChevronRight, Eye, Send, ArrowLeft, CalendarPlus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,11 @@ import { DealReassignPicker } from '@/components/inbox/deal-reassign-picker';
 import { ConfidenceBar } from '@/components/common/confidence-bar';
 import { ComposeEmailDialog } from '@/components/email/compose-email-dialog';
 import { EmailHtmlFrame } from '@/components/inbox/email-html-frame';
+import {
+  AddToCalendarModal,
+  emailHasMeetingSignal,
+  type CalendarSourceEmail,
+} from '@/components/meetings/add-to-calendar-modal';
 import type { CommunicationDetail } from '@/types/communication-detail';
 import type { DraftStatus } from '@/types/ai';
 
@@ -94,6 +99,13 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
     setDialogOpen(true);
   }
 
+  // 2026-09-19: add-to-calendar - the message whose meeting details are being
+  // turned into a calendar entry (null = modal closed).
+  const [calendarMsgId, setCalendarMsgId] = useState<string | null>(null);
+  const calendarMsg = calendarMsgId
+    ? (thread.find((m) => m.id === calendarMsgId) ?? null)
+    : null;
+
   // Thread-level context
   const partyContext = root?.party ?? latest?.party ?? null;
   const threadSubject = root?.subject ?? latest?.subject ?? '';
@@ -102,6 +114,23 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
   // Per-message reply: an explicitly chosen message wins; default stays the latest inbound.
   const replyTarget = selectedTarget ?? latestInbound;
   const isReplyable = replyTarget != null;
+
+  const calendarSource: CalendarSourceEmail | null = calendarMsg
+    ? {
+        communicationId: calendarMsg.id,
+        subject: calendarMsg.subject,
+        bodyPlain: calendarMsg.bodyPlain,
+        bodyHtml: calendarMsg.bodyHtml,
+        occurredAt: calendarMsg.occurredAt,
+        direction: calendarMsg.direction,
+        partyId: calendarMsg.party?.id ?? partyContext?.id ?? null,
+        partyName: calendarMsg.party?.name ?? partyContext?.name ?? null,
+        fromAddress: calendarMsg.fromAddress,
+        fromName: calendarMsg.fromName,
+        toAddresses: calendarMsg.toAddresses ?? [],
+        ccAddresses: calendarMsg.ccAddresses ?? [],
+      }
+    : null;
 
   return (
     <div className="space-y-2">
@@ -152,6 +181,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           openStatus={openStatuses?.[msg.id]}
           timeZone={timeZone}
           onReply={msg.messageId ? () => openReply('direct', msg.id) : undefined}
+          onAddToCalendar={() => setCalendarMsgId(msg.id)}
         />
       ))}
 
@@ -199,6 +229,14 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           onSent={() => router.refresh()}
         />
       )}
+
+      {/* Add-to-calendar modal (meeting time + Meet link pulled from the email) */}
+      <AddToCalendarModal
+        open={calendarSource !== null}
+        onClose={() => setCalendarMsgId(null)}
+        source={calendarSource}
+        timeZone={timeZone}
+      />
     </div>
   );
 }
@@ -215,12 +253,22 @@ interface ThreadMessageCardProps {
   timeZone?: string;
   /** Present when this specific message can be replied to (has a Message-ID). */
   onReply?: () => void;
+  /** Opens the add-to-calendar modal for this message. */
+  onAddToCalendar?: () => void;
 }
 
-function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onReply }: ThreadMessageCardProps) {
+function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onReply, onAddToCalendar }: ThreadMessageCardProps) {
   const t = useTranslations('inbox.detail');
   const tCat = useTranslations('classificationCategory');
   const hasDrafts = msg.generatedDrafts && msg.generatedDrafts.length > 0;
+  // Button appears only when the body really carries a meeting link or a date.
+  const hasMeeting = emailHasMeetingSignal({
+    subject: msg.subject,
+    bodyPlain: msg.bodyPlain,
+    bodyHtml: msg.bodyHtml,
+    occurredAt: msg.occurredAt,
+    timeZone,
+  });
 
   const previewText = (msg.bodyPlain ?? '').replace(/\s+/g, ' ').slice(0, 180);
 
@@ -346,18 +394,32 @@ function ThreadMessageCard({ msg, expanded, onToggle, openStatus, timeZone, onRe
               </>
             )}
           </div>
-          {onReply && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs shrink-0"
-              onClick={(e) => { e.stopPropagation(); onReply(); }}
-            >
-              <Send className="h-3 w-3 mr-1" />
-              Reply to this message
-            </Button>
-          )}
+          <div className="flex flex-col gap-1 shrink-0">
+            {onReply && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={(e) => { e.stopPropagation(); onReply(); }}
+              >
+                <Send className="h-3 w-3 mr-1" />
+                Reply to this message
+              </Button>
+            )}
+            {hasMeeting && onAddToCalendar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-emerald-700"
+                onClick={(e) => { e.stopPropagation(); onAddToCalendar(); }}
+              >
+                <CalendarPlus className="h-3 w-3 mr-1" />
+                Add to Calendar
+              </Button>
+            )}
+          </div>
           </div>
 
           {/* Body */}
