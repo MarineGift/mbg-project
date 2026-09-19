@@ -213,7 +213,7 @@ export function InvestorAnalysisPanel({
         </div>
 
         <Textarea
-          className="mt-3 min-h-[220px] text-sm"
+          className="mt-3 min-h-[60vh] resize-y text-sm leading-relaxed"
           placeholder={loading ? 'Loading...' : 'What did we find out about this firm?'}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -290,7 +290,7 @@ export function InvestorAnalysisPanel({
             <div className="space-y-1 md:col-span-2">
               <Label>Message</Label>
               <Textarea
-                className="min-h-[160px] text-sm"
+                className="min-h-[40vh] resize-y text-sm leading-relaxed"
                 placeholder="Paste what was sent"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
