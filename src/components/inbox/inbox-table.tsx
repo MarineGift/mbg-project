@@ -8,8 +8,6 @@ import {
   Sparkles,
   Paperclip,
   Trash2,
-  Ban,
-  Globe,
   Loader2,
   AlertTriangle,
   Eye,
@@ -18,7 +16,6 @@ import {
 import { toast } from 'sonner';
 import { ChannelDirectionIcon } from './channel-direction-icon';
 import { InboxDeleteButton } from './inbox-delete-button';
-import { addBlocklistEntry } from '@/lib/actions/email-blocklist';
 import { PartyTypeBadge } from '@/components/common/party-type-badge';
 import { RelativeTime } from '@/components/common/relative-time';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -133,7 +130,6 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
-  const [blockKind, setBlockKind] = useState<'domain' | 'address' | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -154,66 +150,6 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
     } else {
       setSelected(new Set(rows.map((r) => r.id)));
     }
-  }
-
-  // Blocking one of these by domain would cut off every other sender on
-  // the same host, so a domain block is refused for them.
-  const FREE_MAIL = new Set([
-    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
-    'naver.com', 'daum.net', 'kakao.com', 'qq.com', '163.com', 'hanmail.net',
-  ]);
-
-  // What would actually be written, for the chosen scope.
-  function blockPatterns(kind: 'domain' | 'address'): {
-    patterns: string[];
-    refused: string[];
-  } {
-    const patterns = new Set<string>();
-    const refused = new Set<string>();
-    for (const r of rows) {
-      if (!selected.has(r.id)) continue;
-      const addr = (r.fromAddress ?? '').trim().toLowerCase();
-      if (!addr.includes('@')) continue;
-      if (kind === 'address') {
-        patterns.add(addr);
-        continue;
-      }
-      const domain = addr.split('@')[1] ?? '';
-      if (!domain) continue;
-      if (FREE_MAIL.has(domain)) refused.add(domain);
-      else patterns.add(domain);
-    }
-    return { patterns: Array.from(patterns).sort(), refused: Array.from(refused).sort() };
-  }
-
-  function handleBulkDeleteAndBlock() {
-    if (!blockKind) return;
-    const kind = blockKind;
-    const ids = Array.from(selected);
-    const { patterns } = blockPatterns(kind);
-
-    startTransition(async () => {
-      let blocked = 0;
-      const already: string[] = [];
-      const failed: string[] = [];
-      for (const pattern of patterns) {
-        const res = await addBlocklistEntry(pattern, kind, 'Blocked from Inbox');
-        if (res.ok) blocked += 1;
-        else if (/already/i.test(res.error ?? '')) already.push(pattern);
-        else failed.push(pattern);
-      }
-
-      const { deleted, errors } = await deleteCommunicationsBulk(ids);
-      if (deleted > 0) toast.success(${deleted} message deleted);
-      if (errors.length > 0) toast.error(${errors.length} failed to delete);
-      if (blocked > 0) toast.success(${blocked}  blocked);
-      if (already.length > 0) toast.info(Already blocked: );
-      if (failed.length > 0) toast.error(Could not block: );
-
-      setSelected(new Set());
-      setBlockKind(null);
-      router.refresh();
-    });
   }
 
   function handleBulkDelete() {
@@ -248,28 +184,6 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete Selected
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setBlockKind('domain')}
-            disabled={isPending}
-            title="Delete these messages and block the whole sending domain"
-          >
-            <Globe className="h-3.5 w-3.5" />
-            Delete + block domain
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setBlockKind('address')}
-            disabled={isPending}
-            title="Delete these messages and block only these exact addresses"
-          >
-            <Ban className="h-3.5 w-3.5" />
-            Delete + block address
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} disabled={isPending}>
             Cancel
@@ -393,59 +307,6 @@ export function InboxTable({ rows, openStatuses, timeZone }: Props) {
       </ul>
 
       {/* bulk delete confirmation dialog */}
-      <Dialog open={blockKind !== null} onOpenChange={(o) => { if (!o) setBlockKind(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-destructive" />
-              Delete and block by {blockKind === 'domain' ? 'domain' : 'address'}?
-            </DialogTitle>
-            <DialogDescription asChild>
-              <div>
-                <span className="block text-sm">
-                  Deletes <strong>{selected.size}</strong> message{selected.size > 1 ? 's' : ''} and
-                  blocks {blockKind === 'domain'
-                    ? 'everything from these domains'
-                    : 'these exact addresses only'}:
-                </span>
-                {blockKind && (
-                  <span className="mt-2 block max-h-40 overflow-y-auto rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">
-                    {blockPatterns(blockKind).patterns.length > 0
-                      ? blockPatterns(blockKind).patterns.join('\n')
-                      : 'nothing to block'}
-                  </span>
-                )}
-                {blockKind === 'domain' && blockPatterns('domain').refused.length > 0 && (
-                  <span className="mt-2 block text-sm text-amber-600">
-                    Skipped (free mail, blocking the domain would cut off everyone
-                    else on it): {blockPatterns('domain').refused.join(', ')}.
-                    Use block by address for those.
-                  </span>
-                )}
-                <span className="mt-2 block text-sm text-muted-foreground">
-                  Reviewable in Settings, Email blocklist.
-                </span>
-                <span className="mt-2 block text-sm font-medium text-destructive">
-                  The deletion cannot be undone.
-                </span>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBlockKind(null)} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleBulkDeleteAndBlock} disabled={isPending}>
-              {isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Working??/>
-              ) : (
-                Delete and block
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
         <DialogContent>
           <DialogHeader>
