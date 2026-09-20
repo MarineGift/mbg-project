@@ -101,7 +101,16 @@ export function MailFolderNav({ onNavigate }: { onNavigate?: () => void }) {
         .then((res) => {
           if (cancelled) return
           if (!res.ok) return
-          setFolders(res.data)
+          // unreadFirst: folders with unseen mail float to the top, then by
+          // unread count, then by the curated sort_order the API returned.
+          const unreadFirst = [...res.data].sort((a, b) => {
+            const au = a.unread ?? 0
+            const bu = b.unread ?? 0
+            if (au > 0 !== bu > 0) return bu > 0 ? 1 : -1
+            if (au !== bu) return bu - au
+            return 0
+          })
+          setFolders(unreadFirst)
           // First load starts fully collapsed; once the user has toggled
           // anything, collapsed has keys and their choice is kept.
           setCollapsed((prev) =>
