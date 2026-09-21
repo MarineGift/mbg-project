@@ -183,7 +183,7 @@ export function IpoGantt({
                         )}
                       </div>
                       <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}
-                        title={`${m.start_date} → ${m.end_date}${preds[m.code]?.length ? ' · 선행: ' + preds[m.code].join(', ') : ''}`}>
+                        title={`${m.start_date} → ${m.end_date}${preds[m.code]?.length ? ' · 선행: ' + preds[m.code]?.join(', ') : ''}`}>
                         <div className={'absolute rounded-sm ' + (isPred ? 'ring-2 ring-foreground ring-offset-1' : '')}
                           style={{ top: 9, height: 12, left: x(m.start_date), width: Math.max(COL * 0.6, x(m.end_date) - x(m.start_date)), background: color, opacity: done ? 0.45 : 0.85 }} />
                         {m.is_gate && (
