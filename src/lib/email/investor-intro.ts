@@ -196,6 +196,54 @@ const GENERIC_DOMAINS = new Set([
   'protonmail.com', 'naver.com', 'daum.net', 'kakao.com', 'qq.com', '163.com',
 ]);
 
+/**
+ * Platform / big-corporate hosts. An investor party whose website is a
+ * LinkedIn profile or a parent company (microsoft.com, samsung.com) must never
+ * pull platform mail (LinkedIn notifications, Azure promos) onto itself.
+ * 2026-09-21: the first sender-domain backfill did exactly that.
+ */
+const PLATFORM_HOSTS = new Set([
+  'linkedin.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com',
+  'youtube.com', 'medium.com', 'substack.com', 'github.com', 'crunchbase.com',
+  'angel.co', 'wellfound.com', 'pitchbook.com', 'google.com', 'microsoft.com',
+  'apple.com', 'amazon.com', 'samsung.com', 'notion.site', 'wix.com',
+  'squarespace.com', 'linktr.ee', 'bit.ly', 'mailchimp.com', 'hubspot.com',
+]);
+
+/** hosts that belong to a platform (or any subdomain of one) */
+export function isPlatformHost(host: string): boolean {
+  for (const p of PLATFORM_HOSTS) if (host === p || host.endsWith(`.${p}`)) return true;
+  return false;
+}
+
+/**
+ * Local parts that are machines or shared inboxes, anywhere in the name
+ * (messages-noreply@, account-security-noreply@, health.info@, invitations@).
+ */
+const ROLE_LOCAL =
+  /(^|[-_.+])(no-?reply|do-?not-?reply|notifications?|notify|alerts?|news(letter)?s?|marketing|promo|mailer|bounces?|digest|updates|info|hello|contact|support|team|admin|billing|security|account|invitations?|jobs|editors|messages|messaging|groups|hit-reply|events?|community|membership|sales|press|careers|office)([-_.+]|$)/i;
+
+export function isRoleSender(address: string): boolean {
+  const local = address.toLowerCase().split('@')[0] ?? '';
+  return ROLE_LOCAL.test(local);
+}
+
+const US_MENTION = /\b(marine\s*bio(\s*group)?|mbg|marinebiogroup|fcc|hfcc)\b/i;
+
+/**
+ * The mail is a conversation with us, not a broadcast: it is a reply
+ * (In-Reply-To present) or names MarineBio / MBG in the subject or new text.
+ * Addresses and URLs are stripped first - account mail quotes our address.
+ */
+export function mentionsUs(input: InvestorIntroInput): boolean {
+  const h = input.headers ?? {};
+  if ((h['in-reply-to'] ?? '').trim()) return true;
+  const text = `${input.subject ?? ''}\n${extractNewText(input.bodyPlain ?? '')}`
+    .replace(/\S+@\S+/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ');
+  return US_MENTION.test(text);
+}
+
 /** "https://www.APVentures.com/team" -> "apventures.com" */
 export function hostOf(url: string | null | undefined): string | undefined {
   let s = (url ?? '').trim().toLowerCase();
@@ -222,7 +270,8 @@ async function uniqueInvestorByDomain(
   const at = sender.lastIndexOf('@');
   if (at < 0) return undefined;
   const domain = sender.slice(at + 1);
-  if (!domain || GENERIC_DOMAINS.has(domain)) return undefined;
+  if (!domain || GENERIC_DOMAINS.has(domain) || isPlatformHost(domain)) return undefined;
+  if (isRoleSender(sender)) return undefined;
   // registrable part for the coarse ilike ("mail.apventures.com" -> "apventures.com")
   const labels = domain.split('.');
   const base = labels.slice(-2).join('.');
@@ -239,7 +288,8 @@ async function uniqueInvestorByDomain(
   for (const r of (data ?? []) as Array<{ id: string; website: string | null; email: string | null }>) {
     const w = hostOf(r.website);
     const e = (r.email ?? '').toLowerCase().split('@')[1];
-    if ((w && domainMatches(domain, w)) || (e && domainMatches(domain, e))) ids.add(r.id);
+    if (w && !isPlatformHost(w) && domainMatches(domain, w)) ids.add(r.id);
+    else if (e && !isPlatformHost(e) && domainMatches(domain, e)) ids.add(r.id);
   }
   return ids.size === 1 ? [...ids][0] : undefined;
 }
@@ -276,7 +326,10 @@ async function priorInvestorMail(
  *   D    subject names an investor firm ("MarineBio Group <> Strategic Ventures")
  *        and exactly one investor party has that name
  *   F    the sender's company domain is the website/email domain of exactly
- *        one investor party (girven@apventures.com -> AP Ventures)
+ *        one investor party (girven@apventures.com -> AP Ventures); personal
+ *        senders only (no role/no-reply locals), platform hosts (linkedin.com,
+ *        microsoft.com, samsung.com, ...) never match, and the mail must be a
+ *        reply or name MarineBio / MBG
  *   E    the same sender already had mail classified investor (e.g. the
  *        warm-intro reply) - later mail from them (calendar invites, follow-ups)
  *        follows it to the same investor party
@@ -347,8 +400,11 @@ export async function resolveInvestorIntro(
       }
     }
 
-    // F - sender's company domain is an investor party's website/email domain
-    const byDomain = await uniqueInvestorByDomain(supabase, organizationId, sender);
+    // F - sender's company domain is an investor party's website/email domain,
+    //     only for a personal sender writing to us (reply, or names MarineBio)
+    const byDomain = mentionsUs(input)
+      ? await uniqueInvestorByDomain(supabase, organizationId, sender)
+      : undefined;
     if (byDomain) {
       return {
         detection,

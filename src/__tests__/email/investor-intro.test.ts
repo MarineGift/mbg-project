@@ -3,7 +3,7 @@
  * Greentown Labs investor-intro detection (rule-based, no AI).
  */
 import { describe, it, expect } from 'vitest';
-import { detectInvestorIntro, domainMatches, extractIntroFirm, extractPairFirm, hostOf } from '../../lib/email/investor-intro';
+import { detectInvestorIntro, domainMatches, extractIntroFirm, extractPairFirm, hostOf, isPlatformHost, isRoleSender, mentionsUs } from '../../lib/email/investor-intro';
 
 describe('investor-intro', () => {
   it('reads the firm from the warm-intro subject', () => {
@@ -77,5 +77,25 @@ describe('sender domain helpers', () => {
     expect(domainMatches('apventures.com', 'apventures.com')).toBe(true);
     expect(domainMatches('mail.apventures.com', 'apventures.com')).toBe(true);
     expect(domainMatches('notapventures.com', 'apventures.com')).toBe(false);
+  });
+});
+
+describe('sender-domain guards', () => {
+  it('rejects platform hosts and role senders', () => {
+    expect(isPlatformHost('linkedin.com')).toBe(true);
+    expect(isPlatformHost('em.linkedin.com')).toBe(true);
+    expect(isPlatformHost('promomail.microsoft.com')).toBe(true);
+    expect(isPlatformHost('apventures.com')).toBe(false);
+    for (const a of ['messages-noreply@linkedin.com', 'account-security-noreply@x.com',
+      'health.info@samsung.com', 'info@activate.org', 'invitations@linkedin.com', 'Azure@promomail.microsoft.com'.replace('Azure', 'no-reply')]) {
+      expect(isRoleSender(a)).toBe(true);
+    }
+    expect(isRoleSender('girven@apventures.com')).toBe(false);
+    expect(isRoleSender('josh@helioscv.com')).toBe(false);
+  });
+  it('requires a conversation with us', () => {
+    expect(mentionsUs({ subject: 'APV <> Marinebio intro', bodyPlain: '' })).toBe(true);
+    expect(mentionsUs({ subject: 'Password reset', bodyPlain: 'Account yunyoung.heo@marinebiogroup.com' })).toBe(false);
+    expect(mentionsUs({ subject: 'Hi', bodyPlain: 'x', headers: { 'in-reply-to': '<a@b>' } })).toBe(true);
   });
 });
