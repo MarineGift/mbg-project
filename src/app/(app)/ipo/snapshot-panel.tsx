@@ -24,7 +24,7 @@ export function SnapshotForm({ metrics }: { metrics: MetricOpt[] }) {
       e.preventDefault();
       start(async () => {
         const r = await addMetricSnapshot({ metricId, asOf, value: Number(value), verified, sourceNote: note });
-        setMsg(r.ok ? '저장됨' : r.error);
+        setMsg(r.ok ? 'Saved' : r.error);
         if (r.ok) setValue('');
       });
     }}>
@@ -33,17 +33,17 @@ export function SnapshotForm({ metrics }: { metrics: MetricOpt[] }) {
           {metrics.map((x) => <option key={x.id} value={x.id}>{x.label} ({x.unit})</option>)}
         </select>
         <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="h-9 rounded border bg-background px-2" />
-        <input type="number" step="any" required value={value} onChange={(e) => setValue(e.target.value)} placeholder="값" className="h-9 rounded border bg-background px-2" />
+        <input type="number" step="any" required value={value} onChange={(e) => setValue(e.target.value)} placeholder="Value" className="h-9 rounded border bg-background px-2" />
       </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="출처 (예: FY2027 감사보고서, 캡테이블 v12)" className="h-9 rounded border bg-background px-2" />
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Source (e.g. FY2027 audit report, cap table v12)" className="h-9 rounded border bg-background px-2" />
         <label className="inline-flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> 검증됨
-          {m?.requires_verification && <span className="text-amber-700">(이 항목은 검증 없이는 요건 판정에 쓰이지 않음)</span>}
+          <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified
+          {m?.requires_verification && <span className="text-amber-700">(not used for criteria until verified)</span>}
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending || !metricId} className="rounded bg-foreground px-3 py-1.5 text-xs text-background disabled:opacity-50">스냅샷 저장</button>
+        <button type="submit" disabled={pending || !metricId} className="rounded bg-foreground px-3 py-1.5 text-xs text-background disabled:opacity-50">Save snapshot</button>
         {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
       </div>
     </form>
@@ -62,22 +62,22 @@ export function DecisionForm({ programId }: { programId: string }) {
       e.preventDefault();
       start(async () => {
         const r = await recordDecisionReview({ programId, stage, decision, rationale });
-        setMsg(r.ok ? '기록됨' : r.error);
+        setMsg(r.ok ? 'Recorded' : r.error);
       });
     }}>
       <div className="grid gap-2 sm:grid-cols-2">
         <select value={stage} onChange={(e) => setStage(e.target.value)} className="h-9 rounded border bg-background px-2">
-          <option value="quarterly">분기 리뷰</option><option value="gate1">Gate 1 — Preliminary</option>
+          <option value="quarterly">Quarterly review</option><option value="gate1">Gate 1 — Preliminary</option>
           <option value="gate2">Gate 2 — Final Internal</option><option value="gate3">Gate 3 — Underwriter</option>
         </select>
         <select value={decision} onChange={(e) => setDecision(e.target.value)} className="h-9 rounded border bg-background px-2">
-          <option value="undecided">미정</option><option value="accelerated_2029q4">2029 Q4 가속</option>
-          <option value="base_2030q2">2030 Q2 기본</option><option value="defer">연기</option>
+          <option value="undecided">Undecided</option><option value="accelerated_2029q4">Accelerate — 2029 Q4</option>
+          <option value="base_2030q2">Base — 2030 Q2</option><option value="defer">Defer</option>
         </select>
       </div>
-      <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} rows={2} placeholder="판단 근거" className="rounded border bg-background p-2" />
+      <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} rows={2} placeholder="Rationale" className="rounded border bg-background p-2" />
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending} className="rounded bg-foreground px-3 py-1.5 text-xs text-background disabled:opacity-50">판정 기록</button>
+        <button type="submit" disabled={pending} className="rounded bg-foreground px-3 py-1.5 text-xs text-background disabled:opacity-50">Record decision</button>
         {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
       </div>
     </form>

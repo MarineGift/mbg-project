@@ -31,7 +31,7 @@ export async function setGateVerdict(input: {
     return { ok: false, error: 'invalid verdict' };
   }
   if (input.verdict !== 'unknown' && !input.evidence.trim()) {
-    return { ok: false, error: '근거(evidence) 없이 판정할 수 없습니다.' };
+    return { ok: false, error: 'A verdict other than unknown requires evidence.' };
   }
   const supabase = await createSupabaseServerClient();
   const patch: Record<string, unknown> = {
@@ -57,7 +57,7 @@ export async function addMetricSnapshot(input: {
   sourceNote: string;
 }): Promise<Result> {
   if (!input.metricId || !input.asOf || !Number.isFinite(input.value)) {
-    return { ok: false, error: 'metric, as_of, value 가 필요합니다.' };
+    return { ok: false, error: 'metric, as_of and value are required.' };
   }
   const supabase = await createSupabaseServerClient();
   const { data: m, error: mErr } = await supabase
@@ -155,6 +155,90 @@ export async function recordDecisionReview(input: {
     .schema('app')
     .from('ipo_decision_reviews' as never)
     .upsert(row as never, { onConflict: 'program_id,review_date,stage' });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
+
+// ============================================================
+// Patents (app.patents) -- entered here, never committed to the repo.
+// ============================================================
+
+const FAMILY_ROLES = ['foundational', 'improvement', 'application_specific'] as const;
+const ASSIGN = ['not_started', 'executed', 'recorded', 'not_required'] as const;
+const PSTATUS = ['pending', 'granted', 'opposed', 'lapsed', 'expired', 'abandoned'] as const;
+
+export type PatentInput = {
+  id?: string | null;
+  program_id: string;
+  family_code: string;
+  family_role: string;
+  jurisdiction: string;
+  application_no: string;
+  patent_no: string;
+  title_short: string;
+  assignment_status: string;
+  recordation_date: string;
+  priority_date: string;
+  filing_date: string;
+  grant_date: string;
+  expected_expiration: string;
+  status: string;
+  is_material: boolean;
+  royalty_weight: string;
+  challenge_note: string;
+  maintenance_next_due: string;
+};
+
+const nz = (s: string) => (s && s.trim() ? s.trim() : null);
+
+export async function upsertPatent(p: PatentInput): Promise<Result> {
+  if (!p.family_code.trim() || !p.jurisdiction.trim()) return { ok: false, error: 'family_code and jurisdiction are required.' };
+  if (!(FAMILY_ROLES as readonly string[]).includes(p.family_role)) return { ok: false, error: 'invalid family_role' };
+  if (!(ASSIGN as readonly string[]).includes(p.assignment_status)) return { ok: false, error: 'invalid assignment_status' };
+  if (!(PSTATUS as readonly string[]).includes(p.status)) return { ok: false, error: 'invalid status' };
+  if (p.is_material && !nz(p.expected_expiration)) return { ok: false, error: 'A material patent needs expected_expiration (drives L4 and patent-life KPI).' };
+  if (p.assignment_status === 'recorded' && !nz(p.recordation_date)) return { ok: false, error: 'recorded requires recordation_date.' };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: prog } = await supabase.schema('app').from('ipo_programs' as never).select('organization_id').eq('id', p.program_id).maybeSingle();
+  if (!prog) return { ok: false, error: 'program not found' };
+  const orgId = (prog as { organization_id: string }).organization_id;
+
+  const row = {
+    organization_id: orgId,
+    program_id: p.program_id,
+    family_code: p.family_code.trim(),
+    family_role: p.family_role,
+    jurisdiction: p.jurisdiction.trim().toUpperCase(),
+    application_no: nz(p.application_no),
+    patent_no: nz(p.patent_no),
+    title_short: nz(p.title_short),
+    assignment_status: p.assignment_status,
+    recordation_date: nz(p.recordation_date),
+    priority_date: nz(p.priority_date),
+    filing_date: nz(p.filing_date),
+    grant_date: nz(p.grant_date),
+    expected_expiration: nz(p.expected_expiration),
+    status: p.status,
+    is_material: p.is_material,
+    royalty_weight: nz(p.royalty_weight) ? Number(p.royalty_weight) : null,
+    challenge_note: nz(p.challenge_note),
+    maintenance_next_due: nz(p.maintenance_next_due),
+  };
+  const q = supabase.schema('app').from('patents' as never);
+  const { error } = p.id
+    ? await q.update(row as never).eq('id', p.id)
+    : await q.insert(row as never);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
+
+export async function deletePatent(id: string): Promise<Result> {
+  if (!id) return { ok: false, error: 'id required' };
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.schema('app').from('patents' as never).delete().eq('id', id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/ipo');
   return { ok: true };

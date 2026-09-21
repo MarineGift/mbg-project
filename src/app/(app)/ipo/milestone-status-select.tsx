@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { setMilestoneStatus } from './actions';
 
 const OPTIONS: Array<[string, string]> = [
-  ['not_started', '미착수'], ['in_progress', '진행'], ['blocked', '막힘'], ['done', '완료'], ['waived', '해당없음'],
+  ['not_started', 'Not started'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done'], ['waived', 'Waived'],
 ];
 
 export function MilestoneStatusSelect({ id, status, compact }: { id: string; status: string; compact?: boolean }) {
@@ -27,7 +27,7 @@ export function MilestoneStatusSelect({ id, status, compact }: { id: string; sta
           });
         }}
         className={'rounded border bg-background ' + (compact ? 'h-6 px-1 text-[11px]' : 'h-8 px-2 text-sm')}
-        aria-label="마일스톤 상태"
+        aria-label="Milestone status"
       >
         {OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>

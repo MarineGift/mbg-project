@@ -13,6 +13,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { IpoGantt, type GanttRow, type Workstream, type Dep } from './ipo-gantt';
 import { GatePanel, type GateRow } from './gate-panel';
 import { SnapshotForm, DecisionForm, type MetricOpt } from './snapshot-panel';
+import { PatentsPanel, type PatentRow, type Horizon } from './patents-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +23,8 @@ type Dash = {
   milestone_gates_open: number; milestones_overdue: number; patent_min_remaining_years: number | null;
   patents_unrecorded: number | null; royalty_periods_not_clean: number; latest_decision: string | null;
 };
-type Tab = 'overview' | 'gantt' | 'gates' | 'metrics';
-const TABS: Array<[Tab, string]> = [['overview', '개요'], ['gantt', '일정'], ['gates', '판정 게이트'], ['metrics', '요건·KPI']];
+type Tab = 'overview' | 'gantt' | 'gates' | 'metrics' | 'patents';
+const TABS: Array<[Tab, string]> = [['overview', 'Overview'], ['gantt', 'Timeline'], ['gates', 'Readiness Gates'], ['metrics', 'Criteria & KPIs'], ['patents', 'Patents']];
 
 function quarterRange(q: string): { start: string; end: string } {
   const y = Number(q.slice(0, 4)); const n = Number(q.slice(5));
@@ -43,7 +44,7 @@ const VERDICT_CLS: Record<string, string> = {
 };
 
 export default async function IpoPage({ searchParams }: { searchParams: { tab?: string } }) {
-  const tab: Tab = (['overview', 'gantt', 'gates', 'metrics'] as const).includes(searchParams.tab as Tab) ? (searchParams.tab as Tab) : 'overview';
+  const tab: Tab = (['overview', 'gantt', 'gates', 'metrics', 'patents'] as const).includes(searchParams.tab as Tab) ? (searchParams.tab as Tab) : 'overview';
   const sb = await createSupabaseServerClient();
   const app = sb.schema('app');
 
@@ -53,7 +54,7 @@ export default async function IpoPage({ searchParams }: { searchParams: { tab?: 
   if (!dash) {
     return (
       <div className="p-6 text-sm text-muted-foreground">
-        IPO 프로그램이 없습니다. <code>seed_ipo_module.sql</code> 을 실행하십시오.
+        No IPO program found. Run <code>seed_ipo_module.sql</code> first.
       </div>
     );
   }
@@ -86,9 +87,9 @@ export default async function IpoPage({ searchParams }: { searchParams: { tab?: 
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
         <h1 className="text-lg font-semibold">{dash.name}</h1>
-        <span className="text-sm text-muted-foreground">준비 기준 <b className="text-foreground">{dash.build_to_quarter}</b></span>
-        <span className="text-sm text-muted-foreground">상장 창 <b className="text-foreground">{dash.window_start} – {dash.window_end}</b></span>
-        {dash.latest_decision && <span className="text-sm text-muted-foreground">최근 판정 <b className="text-foreground">{dash.latest_decision}</b></span>}
+        <span className="text-sm text-muted-foreground">Build-to <b className="text-foreground">{dash.build_to_quarter}</b></span>
+        <span className="text-sm text-muted-foreground">IPO window <b className="text-foreground">{dash.window_start} – {dash.window_end}</b></span>
+        {dash.latest_decision && <span className="text-sm text-muted-foreground">Latest decision <b className="text-foreground">{dash.latest_decision}</b></span>}
       </header>
 
       <nav className="flex gap-1 border-b text-sm">
@@ -103,6 +104,7 @@ export default async function IpoPage({ searchParams }: { searchParams: { tab?: 
       )}
       {tab === 'gates' && (await Gates({ pid, milestones }))}
       {tab === 'metrics' && (await Metrics({ pid }))}
+      {tab === 'patents' && (await Patents({ pid }))}
     </div>
   );
 }
@@ -127,34 +129,34 @@ async function Overview({ dash, pid }: { dash: Dash; pid: string }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">6레벨 판정</h2>
+        <h2 className="mb-2 text-sm font-semibold">Six-level readiness</h2>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {LEVELS.map((n, i) => {
             const v = lv[String(i + 1)] ?? 'incomplete';
             return <div key={n} className={'rounded p-2 text-center text-xs ' + (VERDICT_CLS[v] ?? '')}><div className="font-medium">L{i + 1}</div><div>{n}</div><div className="mt-1">{v}</div></div>;
           })}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">unknown 게이트가 하나라도 있으면 incomplete. 미평가가 미달보다 위험하다.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Any unknown gate makes the level incomplete. Unassessed is more dangerous than failing.</p>
       </section>
 
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">지금 봐야 할 숫자</h2>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-          <Stat label="법정요건 미측정" v={dash.listing_unmeasured} warn={dash.listing_unmeasured > 0} />
-          <Stat label="법정요건 미달" v={dash.listing_failing} warn={dash.listing_failing > 0} />
-          <Stat label="내부 KPI 미달" v={dash.kpi_failing} warn={dash.kpi_failing > 0} />
-          <Stat label="열린 관문" v={dash.milestone_gates_open} />
-          <Stat label="지연 마일스톤" v={dash.milestones_overdue} warn={dash.milestones_overdue > 0} />
-          <Stat label="정산 미정리 기간" v={dash.royalty_periods_not_clean} warn={dash.royalty_periods_not_clean > 0} />
-          <Stat label="material 특허 최소 잔여" v={dash.patent_min_remaining_years == null ? '—' : dash.patent_min_remaining_years + '년'} />
-          <Stat label="미등록 material 특허" v={dash.patents_unrecorded ?? '—'} warn={(dash.patents_unrecorded ?? 0) > 0} />
+        <h2 className="mb-2 text-sm font-semibold">Numbers to watch</h2>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+          <Stat label="Listing criteria unmeasured" v={dash.listing_unmeasured} warn={dash.listing_unmeasured > 0} />
+          <Stat label="Listing criteria failing" v={dash.listing_failing} warn={dash.listing_failing > 0} />
+          <Stat label="Internal KPIs failing" v={dash.kpi_failing} warn={dash.kpi_failing > 0} />
+          <Stat label="Open gate milestones" v={dash.milestone_gates_open} />
+          <Stat label="Overdue milestones" v={dash.milestones_overdue} warn={dash.milestones_overdue > 0} />
+          <Stat label="Royalty periods not clean" v={dash.royalty_periods_not_clean} warn={dash.royalty_periods_not_clean > 0} />
+          <Stat label="Material patent min. life" v={dash.patent_min_remaining_years == null ? '—' : dash.patent_min_remaining_years + ' yrs'} />
+          <Stat label="Material patents unrecorded" v={dash.patents_unrecorded ?? '—'} warn={(dash.patents_unrecorded ?? 0) > 0} />
         </dl>
       </section>
 
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">단계 진척</h2>
+        <h2 className="mb-2 text-sm font-semibold">Phase progress</h2>
         <table className="w-full text-xs">
-          <thead className="text-muted-foreground"><tr><th className="text-left">단계</th><th>기간</th><th>완료</th><th>관문</th><th>지연</th></tr></thead>
+          <thead className="text-muted-foreground"><tr><th className="text-left">Phase</th><th>Window</th><th>Done</th><th>Gates</th><th>Overdue</th></tr></thead>
           <tbody>
             {phases.map((p) => (
               <tr key={p.phase_code} className="border-t">
@@ -170,9 +172,9 @@ async function Overview({ dash, pid }: { dash: Dash; pid: string }) {
       </section>
 
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">Conservative 시나리오 vs 실적</h2>
+        <h2 className="mb-2 text-sm font-semibold">Conservative scenario vs. actual</h2>
         <table className="w-full text-xs">
-          <thead className="text-muted-foreground"><tr><th className="text-left">FY</th><th>물량 (t)</th><th>$/t</th><th>로열티</th><th>실적</th></tr></thead>
+          <thead className="text-muted-foreground"><tr><th className="text-left">FY</th><th>Volume (t)</th><th>$/t</th><th>Royalty</th><th>Actual</th></tr></thead>
           <tbody>
             {scen.map((s) => (
               <tr key={s.fiscal_year} className="border-t">
@@ -185,14 +187,14 @@ async function Overview({ dash, pid }: { dash: Dash; pid: string }) {
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-xs text-muted-foreground">$/t 는 저장값이 아니라 가정 판매가 × 요율의 파생값. Management·Global Rollout 은 승인 전까지 비어 있다.</p>
+        <p className="mt-2 text-xs text-muted-foreground">$/t is derived (assumed price × rate), never stored. Management and Global Rollout stay empty until approved.</p>
       </section>
 
       {vsGaap.length > 0 && (
         <section className="rounded-md border p-4">
-          <h2 className="mb-2 text-sm font-semibold">로열티 원장 vs GAAP 확정치</h2>
+          <h2 className="mb-2 text-sm font-semibold">Royalty ledger vs. GAAP</h2>
           <table className="w-full text-xs">
-            <thead className="text-muted-foreground"><tr><th className="text-left">FY</th><th>원장 인식</th><th>GAAP</th><th>차이</th></tr></thead>
+            <thead className="text-muted-foreground"><tr><th className="text-left">FY</th><th>Ledger recognized</th><th>GAAP</th><th>Difference</th></tr></thead>
             <tbody>{vsGaap.map((g) => (
               <tr key={g.fy} className="border-t"><td className="py-1">{g.fy}</td><td className="text-center">{fmt(g.recognized_revenue_ledger, 'usd')}</td><td className="text-center">{fmt(g.gaap_royalty_revenue, 'usd')}</td><td className={'text-center ' + ((g.reconciliation_difference ?? 0) !== 0 ? 'text-amber-700' : '')}>{fmt(g.reconciliation_difference, 'usd')}</td></tr>
             ))}</tbody>
@@ -201,8 +203,8 @@ async function Overview({ dash, pid }: { dash: Dash; pid: string }) {
       )}
 
       <section className="rounded-md border p-4 lg:col-span-2">
-        <h2 className="mb-2 text-sm font-semibold">판정 기록</h2>
-        {reviews.length === 0 ? <p className="text-xs text-muted-foreground">아직 없음. 분기마다 한 줄씩.</p> : (
+        <h2 className="mb-2 text-sm font-semibold">Decision log</h2>
+        {reviews.length === 0 ? <p className="text-xs text-muted-foreground">Nothing yet. One line per quarter.</p> : (
           <ul className="mb-3 text-xs">{reviews.map((r) => <li key={r.review_date + r.stage} className="border-t py-1"><b>{r.review_date}</b> · {r.stage} · {r.window_decision}{r.rationale && <> — {r.rationale}</>}</li>)}</ul>
         )}
         <DecisionForm programId={pid} />
@@ -248,15 +250,15 @@ async function Metrics({ pid }: { pid: string }) {
 
   const Table = ({ rows, showRule }: { rows: Row[]; showRule?: boolean }) => (
     <table className="w-full text-xs">
-      <thead className="text-muted-foreground"><tr><th className="text-left">항목</th>{showRule && <th>규칙</th>}<th>기준</th><th>현재</th><th>측정일</th><th>충족</th></tr></thead>
+      <thead className="text-muted-foreground"><tr><th className="text-left">Item</th>{showRule && <th>Rule</th>}<th>Threshold</th><th>Current</th><th>As of</th><th>Meets</th></tr></thead>
       <tbody>{rows.map((r) => (
         <tr key={r.code} className="border-t">
-          <td className="py-1">{r.label}{r.from_offering_only && <span className="ml-1 rounded border px-1 text-[10px] text-amber-700">공모대금만</span>}</td>
+          <td className="py-1">{r.label}{r.from_offering_only && <span className="ml-1 rounded border px-1 text-[10px] text-amber-700">offering proceeds only</span>}</td>
           {showRule && <td className="text-center text-muted-foreground">{r.rule_ref}</td>}
           <td className="text-center">{r.comparator === 'lte' ? '≤' : '≥'} {fmt(r.threshold, r.unit)}</td>
           <td className="text-center">{fmt(r.value, r.unit)}</td>
           <td className="text-center text-muted-foreground">{r.measured_at ?? '—'}</td>
-          <td className="text-center">{r.meets == null ? <span className="rounded bg-muted px-1.5 text-muted-foreground">미측정</span> : r.meets ? <span className="rounded bg-emerald-100 px-1.5 text-emerald-800">충족</span> : <span className="rounded bg-red-100 px-1.5 text-red-800">미달</span>}</td>
+          <td className="text-center">{r.meets == null ? <span className="rounded bg-muted px-1.5 text-muted-foreground">unmeasured</span> : r.meets ? <span className="rounded bg-emerald-100 px-1.5 text-emerald-800">meets</span> : <span className="rounded bg-red-100 px-1.5 text-red-800">fails</span>}</td>
         </tr>
       ))}</tbody>
     </table>
@@ -265,18 +267,29 @@ async function Metrics({ pid }: { pid: string }) {
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">스냅샷 입력 — 숫자는 여기서만 들어간다</h2>
+        <h2 className="mb-2 text-sm font-semibold">Metric snapshot — the only place numbers enter</h2>
         <SnapshotForm metrics={metrics} />
       </section>
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">Nasdaq / SEC 법정요건 (Capital Market · Equity Standard)</h2>
+        <h2 className="mb-2 text-sm font-semibold">Nasdaq / SEC listing criteria (Capital Market · Equity Standard)</h2>
         <Table rows={listing.filter((r) => !r.is_alternate)} showRule />
-        <details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground">대체·상향 경로 보기</summary><div className="mt-2"><Table rows={listing.filter((r) => r.is_alternate)} showRule /></div></details>
+        <details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground">Show alternate / uplist standards</summary><div className="mt-2"><Table rows={listing.filter((r) => r.is_alternate)} showRule /></div></details>
       </section>
       <section className="rounded-md border p-4">
-        <h2 className="mb-2 text-sm font-semibold">내부 KPI — 판정 참고선, 상장요건 아님</h2>
+        <h2 className="mb-2 text-sm font-semibold">Internal KPIs — decision reference, not listing requirements</h2>
         <Table rows={kpis} />
       </section>
     </div>
   );
+}
+
+/* ---------------- Patents ---------------- */
+async function Patents({ pid }: { pid: string }) {
+  const sb = await createSupabaseServerClient();
+  const app = sb.schema('app');
+  const [{ data: ps }, { data: hz }] = await Promise.all([
+    app.from('patents' as never).select('*').eq('program_id', pid).order('family_code').order('jurisdiction'),
+    app.from('v_patent_horizon' as never).select('*').eq('program_id', pid).maybeSingle(),
+  ]);
+  return <PatentsPanel patents={(ps ?? []) as PatentRow[]} horizon={(hz ?? null) as Horizon} programId={pid} />;
 }

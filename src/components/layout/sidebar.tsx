@@ -114,7 +114,6 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
   { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
-  { href: '/ipo',      labelKey: 'ipo',       icon: Landmark,  label: 'IPO' },
 ] as const;
 
 const BOTTOM_ITEMS: readonly NavItem[] = [
@@ -556,6 +555,24 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                 />
               );
             })}
+          </ul>
+
+          <Separator className="my-3" />
+
+          {!isCollapsed && (
+            <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Nasdaq IPO
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            <NavLink
+              href="/ipo"
+              icon={<Landmark className="h-4 w-4 shrink-0" />}
+              label="IPO Readiness"
+              active={isActive(pathname, '/ipo')}
+              collapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
           </ul>
         </nav>
 

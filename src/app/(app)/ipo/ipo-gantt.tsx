@@ -104,9 +104,9 @@ export function IpoGantt({
         ))}
         <span className="mx-1 h-5 w-px bg-border" />
         <button type="button" aria-pressed={gatesOnly} onClick={() => setGatesOnly(!gatesOnly)}
-          className="rounded-full border px-2.5 py-1 aria-[pressed=false]:opacity-40">관문만 보기</button>
+          className="rounded-full border px-2.5 py-1 aria-[pressed=false]:opacity-40">Gates only</button>
         <span className="ml-auto text-muted-foreground">
-          {rows.filter((r) => r.row_type === 'milestone').length}개 마일스톤 · {rows.filter((r) => r.row_type === 'milestone' && r.is_gate).length}개 관문
+          {rows.filter((r) => r.row_type === 'milestone').length} milestones · {rows.filter((r) => r.row_type === 'milestone' && r.is_gate).length} gates
         </span>
       </div>
 
@@ -145,7 +145,7 @@ export function IpoGantt({
             </div>
           ))}
           <div className="pointer-events-none absolute bottom-0 z-10 w-0.5 bg-foreground" style={{ top: 52, left: LEFT + x(today) }}>
-            <span className="absolute left-1 top-1 rounded bg-foreground px-1 text-[10px] text-background">오늘</span>
+            <span className="absolute left-1 top-1 rounded bg-foreground px-1 text-[10px] text-background">Today</span>
           </div>
 
           {/* rows */}
@@ -183,7 +183,7 @@ export function IpoGantt({
                         )}
                       </div>
                       <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}
-                        title={`${m.start_date} → ${m.end_date}${preds[m.code]?.length ? ' · 선행: ' + preds[m.code].join(', ') : ''}`}>
+                        title={`${m.start_date} → ${m.end_date}${(preds[m.code] ?? []).length ? ' · after: ' + (preds[m.code] ?? []).join(', ') : ''}`}>
                         <div className={'absolute rounded-sm ' + (isPred ? 'ring-2 ring-foreground ring-offset-1' : '')}
                           style={{ top: 9, height: 12, left: x(m.start_date), width: Math.max(COL * 0.6, x(m.end_date) - x(m.start_date)), background: color, opacity: done ? 0.45 : 0.85 }} />
                         {m.is_gate && (
@@ -198,7 +198,7 @@ export function IpoGantt({
           })}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">◆ 관문 · 점선 띠 Go/No-Go 판정 창 · 빗금 IPO 창(붉은색 2029 Q4, 푸른색 2030 Q2) · 단계 행을 누르면 접힘 · 마일스톤에 올리면 선행 항목 강조</p>
+      <p className="text-xs text-muted-foreground">◆ gate · dashed band = Go/No-Go decision window · hatched = IPO window (red 2029 Q4, blue 2030 Q2) · click a phase to collapse · hover a milestone to highlight predecessors</p>
     </div>
   );
 }
