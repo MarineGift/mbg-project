@@ -28,8 +28,8 @@ export type Workstream = { code: string; name: string; color_hex: string | null 
 export type Dep = { milestone_code: string; depends_on_code: string };
 
 const MIN_COL = 26;  // px per month when the timeline must scroll
-const LEFT = 440;    // label column
-const ROW = 30;
+const LEFT = 560;    // label column
+const ROW = 40;      // two-line titles
 const PHASE_ROW = 38;
 
 function parse(s: string) { return new Date(s + 'T00:00:00'); }
@@ -172,7 +172,7 @@ export function IpoGantt({
                     className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r bg-muted/40 px-3 text-left text-sm font-semibold backdrop-blur"
                     style={{ width: LEFT }}>
                     <span className="w-8 text-xs text-muted-foreground">{p.code}</span>
-                    <span className="min-w-0 flex-1 truncate" title={p.label}>{p.label}</span>
+                    <span className="min-w-0 flex-1 whitespace-normal leading-tight" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={p.label}>{p.label}</span>
                     <span className="ml-auto text-xs font-normal text-muted-foreground">{p.pct_done ?? 0}%</span>
                   </button>
                   <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}>
@@ -189,7 +189,8 @@ export function IpoGantt({
                       onMouseEnter={() => setHover(m.code)} onMouseLeave={() => setHover(null)}>
                       <div className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r bg-background px-3 text-xs" style={{ width: LEFT }}>
                         <span className="w-14 shrink-0 text-muted-foreground">{m.code}</span>
-                        <span className={'min-w-0 flex-1 truncate ' + (done ? 'line-through text-muted-foreground' : '')} title={m.label}>{m.label}</span>
+                        <span className={'min-w-0 flex-1 whitespace-normal leading-tight text-[11px] ' + (done ? 'line-through text-muted-foreground' : '')}
+                          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={m.label}>{m.label}</span>
                         {m.milestone_id && (
                           <span className="shrink-0"><MilestoneStatusSelect id={m.milestone_id} status={m.status ?? 'not_started'} compact /></span>
                         )}
@@ -197,9 +198,9 @@ export function IpoGantt({
                       <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}
                         title={`${m.start_date} → ${m.end_date}${(preds[m.code] ?? []).length ? ' · after: ' + (preds[m.code] ?? []).join(', ') : ''}`}>
                         <div className={'absolute rounded-sm ' + (isPred ? 'ring-2 ring-foreground ring-offset-1' : '')}
-                          style={{ top: 9, height: 12, left: x(m.start_date), width: Math.max(COL * 0.6, x(m.end_date) - x(m.start_date)), background: color, opacity: done ? 0.45 : 0.85 }} />
+                          style={{ top: 14, height: 12, left: x(m.start_date), width: Math.max(COL * 0.6, x(m.end_date) - x(m.start_date)), background: color, opacity: done ? 0.45 : 0.85 }} />
                         {m.is_gate && (
-                          <div className="absolute h-3.5 w-3.5 rotate-45 border-2 border-background bg-foreground" style={{ top: 8, left: x(m.end_date) - 6 }} />
+                          <div className="absolute h-3.5 w-3.5 rotate-45 border-2 border-background bg-foreground" style={{ top: 13, left: x(m.end_date) - 6 }} />
                         )}
                       </div>
                     </div>
