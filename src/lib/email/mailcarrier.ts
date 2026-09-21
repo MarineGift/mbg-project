@@ -1177,8 +1177,8 @@ export class MailCarrierClient {
             ? {
                 inferred_party_type: investorIntro.inferredPartyType,
                 investor_intro: {
-                  reason: investorIntro.detection.reason ?? null,
-                  firm_hint: investorIntro.detection.firmHint ?? null,
+                  reason: investorIntro.reason ?? null,
+                  firm_hint: investorIntro.firmHint ?? null,
                   relinked: Boolean(investorIntro.relinkPartyId),
                 },
               }

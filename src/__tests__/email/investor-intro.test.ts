@@ -3,7 +3,7 @@
  * Greentown Labs investor-intro detection (rule-based, no AI).
  */
 import { describe, it, expect } from 'vitest';
-import { detectInvestorIntro, extractIntroFirm } from '../../lib/email/investor-intro';
+import { detectInvestorIntro, extractIntroFirm, extractPairFirm } from '../../lib/email/investor-intro';
 
 describe('investor-intro', () => {
   it('reads the firm from the warm-intro subject', () => {
@@ -57,5 +57,14 @@ describe('investor-intro', () => {
       subject: 'Re: FCC trial',
       bodyPlain: 'Thanks, see you on the call.\n\nOn Mon, YunYoung wrote:\n> MarineBio Group, Greentown Labs Houston',
     }).isInvestorIntro).toBe(false);
+  });
+});
+
+describe('extractPairFirm', () => {
+  it('reads the firm from meeting subjects', () => {
+    expect(extractPairFirm('Invitation: Intro Meeting | MarineBio Group <> Strategic Ventures @ Thu Oct 1, 2026 2:30pm - 3pm (EDT) (yunyoung.heo@marinebiogroup.com)'))
+      .toBe('Strategic Ventures');
+    expect(extractPairFirm('Acme Capital <> MBG follow-up')).toBe('Acme Capital');
+    expect(extractPairFirm('Re: FCC trial schedule')).toBeUndefined();
   });
 });
