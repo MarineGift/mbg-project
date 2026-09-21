@@ -15,6 +15,10 @@ export type PatentRow = {
   priority_date: string | null; filing_date: string | null; grant_date: string | null; expected_expiration: string | null;
   status: string; is_material: boolean; royalty_weight: number | null; challenge_note: string | null; maintenance_next_due: string | null;
 };
+export type PublicationRow = {
+  id: string; family_code: string | null; title: string; authors: string; venue: string; year: number;
+  volume_pages: string | null; doi: string | null; published_on: string | null; key_finding: string | null; ir_use: string | null;
+};
 export type Horizon = {
   material_count: number; material_foundational: number; material_improvement: number;
   earliest_material_expiration: string | null; latest_material_expiration: string | null;
@@ -43,7 +47,7 @@ function Field({ label, children, span }: { label: string; children: React.React
 }
 const inp = 'h-8 rounded border bg-background px-2 text-sm';
 
-export function PatentsPanel({ patents, horizon, programId }: { patents: PatentRow[]; horizon: Horizon; programId: string }) {
+export function PatentsPanel({ patents, horizon, programId, publications = [] }: { patents: PatentRow[]; horizon: Horizon; programId: string; publications?: PublicationRow[] }) {
   const [form, setForm] = useState<PatentInput | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -140,6 +144,26 @@ export function PatentsPanel({ patents, horizon, programId }: { patents: PatentR
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">Investors should see foundational and improvement families separately; the remaining life of the oldest foundational patent alone misstates the IP position.</p>
+      </section>
+
+      <section className="rounded-md border p-4">
+        <h2 className="mb-2 text-sm font-semibold">Peer-reviewed publications <span className="ml-2 text-xs font-normal text-muted-foreground">{publications.length} papers · entered via SQL (public data)</span></h2>
+        {publications.length === 0 ? <p className="text-xs text-muted-foreground">None yet.</p> : (
+          <ul className="flex flex-col gap-3">
+            {publications.map((pub) => (
+              <li key={pub.id} className="border-t pt-2 text-sm first:border-t-0 first:pt-0">
+                <div className="font-medium">{pub.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {pub.authors} · <i>{pub.venue}</i> {pub.year}{pub.volume_pages && <>, {pub.volume_pages}</>}
+                  {pub.doi && <> · <a className="underline" href={`https://doi.org/${pub.doi}`} target="_blank" rel="noreferrer">doi:{pub.doi}</a></>}
+                  {pub.family_code && <> · <span className="rounded bg-muted px-1">{pub.family_code}</span></>}
+                </div>
+                {pub.key_finding && <p className="mt-1 text-xs">{pub.key_finding}</p>}
+                {pub.ir_use && <p className="mt-1 text-xs text-muted-foreground">Use: {pub.ir_use}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

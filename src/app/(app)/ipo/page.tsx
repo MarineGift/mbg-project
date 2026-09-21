@@ -13,7 +13,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { IpoGantt, type GanttRow, type Workstream, type Dep } from './ipo-gantt';
 import { GatePanel, type GateRow } from './gate-panel';
 import { SnapshotForm, DecisionForm, type MetricOpt } from './snapshot-panel';
-import { PatentsPanel, type PatentRow, type Horizon } from './patents-panel';
+import { PatentsPanel, type PatentRow, type Horizon, type PublicationRow } from './patents-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -287,9 +287,10 @@ async function Metrics({ pid }: { pid: string }) {
 async function Patents({ pid }: { pid: string }) {
   const sb = await createSupabaseServerClient();
   const app = sb.schema('app');
-  const [{ data: ps }, { data: hz }] = await Promise.all([
+  const [{ data: ps }, { data: hz }, { data: pubs }] = await Promise.all([
     app.from('patents' as never).select('*').eq('program_id', pid).order('family_code').order('jurisdiction'),
     app.from('v_patent_horizon' as never).select('*').eq('program_id', pid).maybeSingle(),
+    app.from('ipo_publications' as never).select('*').eq('program_id', pid).order('year'),
   ]);
-  return <PatentsPanel patents={(ps ?? []) as PatentRow[]} horizon={(hz ?? null) as Horizon} programId={pid} />;
+  return <PatentsPanel patents={(ps ?? []) as PatentRow[]} horizon={(hz ?? null) as Horizon} programId={pid} publications={(pubs ?? []) as PublicationRow[]} />;
 }
