@@ -61,21 +61,23 @@ export default async function IpoPage({ searchParams }: { searchParams: { tab?: 
   const pid = dash.program_id;
 
   const [{ data: prog }, { data: gantt }, { data: ms }, { data: depsRaw }, { data: wsRaw }] = await Promise.all([
-    app.from('ipo_programs' as never).select('program_start').eq('id', pid).maybeSingle(),
+    app.from('ipo_programs' as never).select('program_start, deal_id').eq('id', pid).maybeSingle(),
     app.from('v_ipo_gantt' as never).select('*').eq('program_id', pid).order('ord'),
-    app.from('ipo_milestones' as never).select('id, code, status').eq('program_id', pid),
+    app.from('ipo_milestones' as never).select('id, code, status, task_id').eq('program_id', pid),
     app.from('ipo_milestone_deps' as never).select('milestone_id, depends_on_milestone_id'),
     app.from('ipo_workstreams' as never).select('code, name, color_hex').order('sort_order'),
   ]);
-  const milestones = (ms ?? []) as Array<{ id: string; code: string; status: string }>;
+  const milestones = (ms ?? []) as Array<{ id: string; code: string; status: string; task_id: string | null }>;
   const idToCode = new Map(milestones.map((m) => [m.id, m.code]));
   const codeToId = new Map(milestones.map((m) => [m.code, m.id]));
-  const rows: GanttRow[] = ((gantt ?? []) as GanttRow[]).map((r) => ({ ...r, milestone_id: r.row_type === 'milestone' ? codeToId.get(r.code) ?? null : null }));
+  const codeToTask = new Map(milestones.map((m) => [m.code, m.task_id]));
+  const rows: GanttRow[] = ((gantt ?? []) as GanttRow[]).map((r) => ({ ...r, milestone_id: r.row_type === 'milestone' ? codeToId.get(r.code) ?? null : null, task_id: r.row_type === 'milestone' ? codeToTask.get(r.code) ?? null : null }));
   const deps: Dep[] = ((depsRaw ?? []) as Array<{ milestone_id: string; depends_on_milestone_id: string }>)
     .map((d) => ({ milestone_code: idToCode.get(d.milestone_id) ?? '', depends_on_code: idToCode.get(d.depends_on_milestone_id) ?? '' }))
     .filter((d) => d.milestone_code && d.depends_on_code);
   const workstreams = (wsRaw ?? []) as Workstream[];
-  const programStart = (prog as { program_start: string } | null)?.program_start ?? '2026-09-01';
+  const programStart = (prog as { program_start: string; deal_id: string | null } | null)?.program_start ?? '2026-09-01';
+  const dealId = (prog as { deal_id: string | null } | null)?.deal_id ?? null;
   const programEnd = quarterRange(dash.window_end).end;
   const today = new Date().toISOString().slice(0, 10);
   const windows = [
@@ -90,6 +92,7 @@ export default async function IpoPage({ searchParams }: { searchParams: { tab?: 
         <span className="text-sm text-muted-foreground">Build-to <b className="text-foreground">{dash.build_to_quarter}</b></span>
         <span className="text-sm text-muted-foreground">IPO window <b className="text-foreground">{dash.window_start} – {dash.window_end}</b></span>
         {dash.latest_decision && <span className="text-sm text-muted-foreground">Latest decision <b className="text-foreground">{dash.latest_decision}</b></span>}
+        {dealId && <Link href="/pipelines/ipo_program" className="text-sm underline text-muted-foreground hover:text-foreground">Program deal / tasks →</Link>}
       </header>
 
       <nav className="flex gap-1 border-b text-sm">

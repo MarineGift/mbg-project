@@ -22,6 +22,7 @@ export type GanttRow = {
   ord: number;
   pct_done: number | null;
   milestone_id?: string | null;
+  task_id?: string | null;
 };
 
 export type Workstream = { code: string; name: string; color_hex: string | null };
@@ -191,6 +192,9 @@ export function IpoGantt({
                         <span className="w-14 shrink-0 text-muted-foreground">{m.code}</span>
                         <span className={'min-w-0 flex-1 whitespace-normal leading-tight text-[11px] ' + (done ? 'line-through text-muted-foreground' : '')}
                           style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={m.label}>{m.label}</span>
+                        {m.task_id && (
+                          <a href={`/tasks/${m.task_id}`} className="shrink-0 rounded border px-1 text-[10px] text-muted-foreground hover:text-foreground" title="Open URM task (engagements, assignee, notes)">task</a>
+                        )}
                         {m.milestone_id && (
                           <span className="shrink-0"><MilestoneStatusSelect id={m.milestone_id} status={m.status ?? 'not_started'} compact /></span>
                         )}
