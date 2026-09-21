@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MilestoneStatusSelect } from './milestone-status-select';
 
 export type GanttRow = {
@@ -27,8 +27,8 @@ export type GanttRow = {
 export type Workstream = { code: string; name: string; color_hex: string | null };
 export type Dep = { milestone_code: string; depends_on_code: string };
 
-const COL = 30;      // px per month
-const LEFT = 320;    // label column
+const MIN_COL = 26;  // px per month when the timeline must scroll
+const LEFT = 440;    // label column
 const ROW = 30;
 const PHASE_ROW = 38;
 
@@ -48,12 +48,23 @@ export function IpoGantt({
 }) {
   const start = parse(programStart);
   const end = parse(programEnd);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [COL, setCol] = useState(MIN_COL);
   const months = useMemo(() => {
     const out: Date[] = [];
     let d = new Date(start);
     while (d <= end) { out.push(new Date(d)); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
     return out;
   }, [programStart, programEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stretch columns to fill the available width; scroll only when narrower than MIN_COL.
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return;
+    const fit = () => setCol(Math.max(MIN_COL, Math.floor((el.clientWidth - LEFT - 2) / months.length)));
+    fit();
+    const ro = new ResizeObserver(fit); ro.observe(el);
+    return () => ro.disconnect();
+  }, [months.length]);
 
   const x = (s: string) => {
     const d = parse(s);
@@ -110,8 +121,8 @@ export function IpoGantt({
         </span>
       </div>
 
-      <div className="relative overflow-auto rounded-md border">
-        <div className="relative" style={{ width: gridWidth, minWidth: '100%' }}>
+      <div ref={wrapRef} className="relative overflow-auto rounded-md border">
+        <div className="relative" style={{ width: gridWidth }}>
           {/* header */}
           <div className="sticky top-0 z-20 flex border-b bg-background" style={{ height: 52 }}>
             <div className="sticky left-0 z-30 shrink-0 border-r bg-background" style={{ width: LEFT }} />
@@ -131,17 +142,18 @@ export function IpoGantt({
           </div>
 
           {/* bands */}
-          {decisions.map((d) => (
+          {decisions.map((d, i) => (
             <div key={d.code} className="pointer-events-none absolute bottom-0 z-10 border-x border-dashed border-muted-foreground/60 bg-foreground/5"
-              style={{ top: 52, left: LEFT + x(d.start_date), width: Math.max(4, x(d.end_date) - x(d.start_date) + COL / 30) }}>
-              <span className="absolute left-1 top-0.5 whitespace-nowrap text-[10px] text-muted-foreground">{d.label}</span>
+              style={{ top: 52, left: LEFT + x(d.start_date), width: Math.max(4, x(d.end_date) - x(d.start_date) + COL / 30) }}
+              title={d.label}>
+              <span className="absolute left-1 whitespace-nowrap rounded bg-background/80 px-1 text-[10px] text-muted-foreground" style={{ top: 2 + i * 14 }}>{d.label.split(' — ')[0]}</span>
             </div>
           ))}
           {windows.map((w) => (
             <div key={w.name} className="pointer-events-none absolute bottom-0 z-10"
               style={{ top: 52, left: LEFT + x(w.start), width: x(w.end) - x(w.start) + COL / 30,
                 backgroundImage: `repeating-linear-gradient(135deg, ${w.tone === 'red' ? 'rgba(220,38,38,.12)' : 'rgba(37,99,235,.12)'} 0 6px, transparent 6px 12px)` }}>
-              <span className="absolute left-1 top-4 whitespace-nowrap text-[10px] text-muted-foreground">{w.name}</span>
+              <span className="absolute left-1 whitespace-nowrap rounded bg-background/80 px-1 text-[10px] text-muted-foreground" style={{ top: 46 }}>{w.name}</span>
             </div>
           ))}
           <div className="pointer-events-none absolute bottom-0 z-10 w-0.5 bg-foreground" style={{ top: 52, left: LEFT + x(today) }}>
@@ -160,7 +172,7 @@ export function IpoGantt({
                     className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r bg-muted/40 px-3 text-left text-sm font-semibold backdrop-blur"
                     style={{ width: LEFT }}>
                     <span className="w-8 text-xs text-muted-foreground">{p.code}</span>
-                    <span className="truncate">{p.label}</span>
+                    <span className="min-w-0 flex-1 truncate" title={p.label}>{p.label}</span>
                     <span className="ml-auto text-xs font-normal text-muted-foreground">{p.pct_done ?? 0}%</span>
                   </button>
                   <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}>
@@ -177,9 +189,9 @@ export function IpoGantt({
                       onMouseEnter={() => setHover(m.code)} onMouseLeave={() => setHover(null)}>
                       <div className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r bg-background px-3 text-xs" style={{ width: LEFT }}>
                         <span className="w-14 shrink-0 text-muted-foreground">{m.code}</span>
-                        <span className={'truncate ' + (done ? 'line-through text-muted-foreground' : '')} title={m.label}>{m.label}</span>
+                        <span className={'min-w-0 flex-1 truncate ' + (done ? 'line-through text-muted-foreground' : '')} title={m.label}>{m.label}</span>
                         {m.milestone_id && (
-                          <span className="ml-auto shrink-0"><MilestoneStatusSelect id={m.milestone_id} status={m.status ?? 'not_started'} compact /></span>
+                          <span className="shrink-0"><MilestoneStatusSelect id={m.milestone_id} status={m.status ?? 'not_started'} compact /></span>
                         )}
                       </div>
                       <div className="relative flex-1" style={{ backgroundImage: 'linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: `${COL}px 100%` }}
