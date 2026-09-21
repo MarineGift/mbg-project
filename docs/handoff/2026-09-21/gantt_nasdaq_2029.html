@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nasdaq Listing 2029 — 간트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f2; --panel:#ffffff; --ink:#1c2128; --ink-2:#5a6270; --line:#d9dcd6; --line-2:#eceee9;
+  --today:#1c2128; --band:rgba(28,33,40,.06); --band-ipo:rgba(220,38,38,.10); --band-ipo-2:rgba(37,99,235,.10);
+  --gate:#1c2128; --focus:#2563eb;
+  --left:320px; --col:30px; --row:30px; --phase-row:38px; --head:58px;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#14171c; --panel:#1b1f26; --ink:#e8eaee; --ink-2:#98a0ad; --line:#2e343d; --line-2:#242930;
+  --today:#e8eaee; --band:rgba(232,234,238,.07); --band-ipo:rgba(248,113,113,.14); --band-ipo-2:rgba(96,165,250,.14); --gate:#e8eaee; }}
+:root[data-theme="dark"]{
+  --bg:#14171c; --panel:#1b1f26; --ink:#e8eaee; --ink-2:#98a0ad; --line:#2e343d; --line-2:#242930;
+  --today:#e8eaee; --band:rgba(232,234,238,.07); --band-ipo:rgba(248,113,113,.14); --band-ipo-2:rgba(96,165,250,.14); --gate:#e8eaee; }
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;font-size:13px;line-height:1.45;font-feature-settings:"tnum"}
+header{padding:18px 20px 12px;display:flex;flex-wrap:wrap;gap:8px 28px;align-items:baseline;border-bottom:1px solid var(--line)}
+header h1{font-size:17px;font-weight:600;margin:0}
+header .meta{color:var(--ink-2)}
+header .meta b{color:var(--ink);font-weight:500}
+.controls{display:flex;flex-wrap:wrap;gap:6px;padding:10px 20px;border-bottom:1px solid var(--line);align-items:center}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:3px 10px 3px 8px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;font:inherit}
+.chip .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.chip[aria-pressed="false"]{opacity:.38}
+.chip:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sep{width:1px;height:20px;background:var(--line);margin:0 6px}
+.wrap{position:relative;overflow:auto;height:calc(100% - 0px)}
+.grid{position:relative;display:grid;grid-template-columns:var(--left) 1fr;min-width:max-content}
+.lhead,.thead{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);height:var(--head)}
+.lhead{left:0;z-index:6;border-right:1px solid var(--line);padding:8px 12px;color:var(--ink-2);display:flex;align-items:flex-end}
+.thead{position:sticky;top:0}
+.years,.months{display:flex;height:50%}
+.years div{border-right:1px solid var(--line);padding:4px 8px;font-weight:600}
+.months div{border-right:1px solid var(--line-2);width:var(--col);text-align:center;color:var(--ink-2);font-size:11px;padding-top:3px}
+.months div.q{border-right-color:var(--line);font-weight:500;color:var(--ink)}
+.lcell{position:sticky;left:0;z-index:4;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line-2);padding:0 12px;display:flex;align-items:center;gap:10px;height:var(--row);white-space:nowrap;overflow:hidden}
+.lcell.phase{height:var(--phase-row);font-weight:600;background:var(--bg);cursor:pointer}
+.lcell .code{color:var(--ink-2);font-size:11px;width:56px;flex:none}
+.lcell .t{overflow:hidden;text-overflow:ellipsis}
+.tcell{position:relative;height:var(--row);border-bottom:1px solid var(--line-2);background-image:linear-gradient(to right,var(--line-2) 1px,transparent 1px);background-size:var(--col) 100%}
+.tcell.phase{height:var(--phase-row);background-color:var(--bg)}
+.bar{position:absolute;top:9px;height:12px;border-radius:2px;opacity:.85}
+.tcell.phase .bar{top:13px;height:12px;background:var(--ink);opacity:.9;border-radius:1px}
+.gate{position:absolute;top:8px;width:14px;height:14px;transform:rotate(45deg) translate(-2px,-2px);background:var(--gate);border:2px solid var(--panel)}
+.band{position:absolute;top:0;bottom:0;pointer-events:none}
+.band.dec{background:var(--band);border-left:1px dashed var(--ink-2);border-right:1px dashed var(--ink-2)}
+.band.ipo{background:repeating-linear-gradient(135deg,var(--band-ipo) 0 6px,transparent 6px 12px)}
+.band.ipo2{background:repeating-linear-gradient(135deg,var(--band-ipo-2) 0 6px,transparent 6px 12px)}
+.band label{position:absolute;top:2px;left:4px;font-size:11px;color:var(--ink-2);white-space:nowrap}
+.today{position:absolute;top:0;bottom:0;width:2px;background:var(--today);pointer-events:none;z-index:3}
+.today span{position:absolute;top:var(--head);left:4px;font-size:11px;background:var(--today);color:var(--bg);padding:1px 5px;border-radius:2px}
+.row{display:contents}
+.row.dim .lcell,.row.dim .tcell{opacity:.25}
+.row.pred .bar{outline:2px solid var(--ink);outline-offset:1px;opacity:1}
+.row.hidden{display:none}
+.tip{position:fixed;z-index:20;background:var(--ink);color:var(--bg);padding:8px 10px;border-radius:4px;max-width:340px;font-size:12px;pointer-events:none;display:none}
+.tip b{display:block;font-weight:600;margin-bottom:2px}
+.legend{display:flex;gap:16px;padding:8px 20px;color:var(--ink-2);border-top:1px solid var(--line);flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:12px;height:12px}
+.legend i.g{transform:rotate(45deg) scale(.8);background:var(--gate)}
+.legend i.d{background:var(--band);border-left:1px dashed var(--ink-2);border-right:1px dashed var(--ink-2)}
+.legend i.w{background:repeating-linear-gradient(135deg,var(--band-ipo) 0 3px,transparent 3px 6px)}
+@media (max-width:640px){ :root{--left:190px;--col:22px} .lcell .code{width:48px} header{padding:14px 14px 10px} .controls,.legend{padding-left:14px;padding-right:14px} }
+@media (prefers-reduced-motion:no-preference){ .row .bar{transition:outline-color .12s} }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="meta">준비 기준 <b id="buildto"></b></span>
+  <span class="meta">상장 창 <b id="window"></b></span>
+  <span class="meta">기준일 <b id="today"></b></span>
+</header>
+<div class="controls" id="controls"></div>
+<div class="wrap" id="wrap">
+  <div class="grid" id="grid"></div>
+</div>
+<div class="legend">
+  <span><i class="g"></i> 관문(gate) 마일스톤</span>
+  <span><i class="d"></i> Go/No-Go 판정 창</span>
+  <span><i class="w"></i> IPO 창 (빗금 · 붉은색 2029 Q4, 푸른색 2030 Q2)</span>
+  <span>단계 행을 누르면 접힘 · 마일스톤에 마우스를 올리면 선행 항목이 강조됨</span>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+const D = {"program": {"name": "MarineBio Group Inc. — Nasdaq Listing 2029", "start": "2026-09-01", "end": "2030-06-30", "build_to": "2029Q4", "window": "2029 Q4 – 2030 Q2", "today": "2026-09-20"}, "phases": [{"code": "P0", "name": "Foundation — ownership and corporate clean-up", "label": "2026 H2 – 2027 H1"}, {"code": "P1", "name": "Commercial Proof — commercial production", "label": "2026 Q4 – 2028 H1"}, {"code": "P2", "name": "Audit & Controls — audit-ready", "label": "2026 Q4 – 2029 Q1"}, {"code": "P3", "name": "Governance — public-company structure", "label": "2028 H2 – 2029 Q3"}, {"code": "P4", "name": "Pre-IPO Capital — funding, underwriters, decision", "label": "2028 – 2029 H1"}, {"code": "P5", "name": "Filing — S-1 and listing application", "label": "2029 H1 – Q3"}, {"code": "P6", "name": "Listing & Aftermarket", "label": "2029 Q4 – 2030 H1"}], "ws": [{"code": "ip", "name": "IP / Patents", "color": "#7c3aed"}, {"code": "commercial", "name": "Commercial / Licensing", "color": "#059669"}, {"code": "finance_audit", "name": "Finance / Audit", "color": "#2563eb"}, {"code": "legal_gov", "name": "Legal / Governance", "color": "#d97706"}, {"code": "capital", "name": "Capital Markets", "color": "#dc2626"}, {"code": "ir", "name": "IR / Disclosure", "color": "#0891b2"}], "milestones": [{"code": "F-IP-01", "phase": "P0", "ws": "ip", "title": "Transfer all FCC-related patents to MarineBio Group Inc.", "rule": null, "start": "2026-09-01", "end": "2026-10-31", "gate": true}, {"code": "F-IP-02", "phase": "P0", "ws": "ip", "title": "Record assignments at KIPO / USPTO / EPO / JPO", "rule": null, "start": "2026-11-01", "end": "2027-02-28", "gate": true}, {"code": "F-IP-03", "phase": "P0", "ws": "ip", "title": "File JP opposition", "rule": null, "start": "2026-09-01", "end": "2026-10-27", "gate": true}, {"code": "F-IP-04", "phase": "P0", "ws": "ip", "title": "Build patent register — family_role, expiration, maintenance dues", "rule": null, "start": "2026-11-01", "end": "2027-03-31", "gate": false}, {"code": "F-IP-05", "phase": "P0", "ws": "ip", "title": "Compute remaining life of material patents; review PTA/PTE", "rule": null, "start": "2027-01-01", "end": "2027-03-31", "gate": false}, {"code": "F-LG-01", "phase": "P0", "ws": "legal_gov", "title": "Written agency agreement with Marinepad (fees, voting, economic interest)", "rule": "Reg S-K Item 404", "start": "2026-10-01", "end": "2026-12-31", "gate": true}, {"code": "F-LG-02", "phase": "P0", "ws": "legal_gov", "title": "Clean up Delaware charter, bylaws and shareholder agreement", "rule": null, "start": "2027-01-01", "end": "2027-03-31", "gate": false}, {"code": "F-LG-03", "phase": "P0", "ws": "legal_gov", "title": "Cap table clean-up, stock option plan, 409A valuation", "rule": null, "start": "2027-01-01", "end": "2027-06-30", "gate": true}, {"code": "F-FA-01", "phase": "P0", "ws": "finance_audit", "title": "Convert books to US GAAP; monthly close in place", "rule": null, "start": "2026-11-01", "end": "2027-03-31", "gate": true}, {"code": "F-CM-01", "phase": "P0", "ws": "commercial", "title": "Start commercial production for Moorim 9,000 t order", "rule": null, "start": "2026-10-01", "end": "2026-10-31", "gate": true}, {"code": "C-CM-01", "phase": "P1", "ws": "commercial", "title": "Deliver 9,000 t order; Moorim commercial-scale validation and quality approval", "rule": null, "start": "2026-11-01", "end": "2027-06-30", "gate": true}, {"code": "C-CM-02", "phase": "P1", "ws": "commercial", "title": "Sign definitive license agreement with global filler manufacturer", "rule": null, "start": "2027-01-01", "end": "2027-06-30", "gate": true}, {"code": "C-CM-03", "phase": "P1", "ws": "commercial", "title": "Fix royalty reporting and audit-rights clauses (statements, Net Sales definition, audit right, record retention)", "rule": "ASC 606", "start": "2027-01-01", "end": "2027-06-30", "gate": true}, {"code": "C-CM-04", "phase": "P1", "ws": "commercial", "title": "Negotiate minimum volume / minimum royalty, exclusivity scope, termination", "rule": null, "start": "2027-01-01", "end": "2027-06-30", "gate": false}, {"code": "C-CM-05", "phase": "P1", "ws": "commercial", "title": "Agree licensee conversion of its own plants to FCC production", "rule": null, "start": "2027-07-01", "end": "2027-12-31", "gate": false}, {"code": "C-CM-06", "phase": "P1", "ws": "commercial", "title": "Receive licensee rollout plan → write and approve Management scenario", "rule": null, "start": "2027-07-01", "end": "2027-12-31", "gate": true}, {"code": "C-CM-07", "phase": "P1", "ws": "commercial", "title": "Start commercial supply for tissue grades", "rule": null, "start": "2028-01-01", "end": "2028-06-30", "gate": false}, {"code": "C-FA-01", "phase": "P1", "ws": "finance_audit", "title": "Document ASC 606 royalty revenue-recognition policy", "rule": "ASC 606-10-55-65", "start": "2027-01-01", "end": "2027-03-31", "gate": true}, {"code": "C-FA-02", "phase": "P1", "ws": "finance_audit", "title": "First royalty recognized with auditable settlement evidence", "rule": null, "start": "2027-04-01", "end": "2027-09-30", "gate": true}, {"code": "C-FA-03", "phase": "P1", "ws": "finance_audit", "title": "Royalty ledger live — minimum / due / received / recognized kept separate", "rule": null, "start": "2027-07-01", "end": "2027-09-30", "gate": true}, {"code": "A-FA-01", "phase": "P2", "ws": "finance_audit", "title": "Interview and engage PCAOB-registered auditor", "rule": null, "start": "2026-11-01", "end": "2027-03-31", "gate": true}, {"code": "A-FA-02", "phase": "P2", "ws": "finance_audit", "title": "Receive FY2027 audit report", "rule": null, "start": "2028-01-01", "end": "2028-03-31", "gate": true}, {"code": "A-FA-03", "phase": "P2", "ws": "finance_audit", "title": "Receive FY2028 audit report", "rule": null, "start": "2029-01-01", "end": "2029-03-31", "gate": true}, {"code": "A-FA-04", "phase": "P2", "ws": "finance_audit", "title": "Quarterly review process in place", "rule": null, "start": "2028-04-01", "end": "2028-06-30", "gate": false}, {"code": "A-FA-05", "phase": "P2", "ws": "finance_audit", "title": "Hire CFO with US public-company experience", "rule": null, "start": "2027-10-01", "end": "2028-03-31", "gate": true}, {"code": "A-FA-06", "phase": "P2", "ws": "finance_audit", "title": "SOX 302 documentation and ICFR gap remediation", "rule": "SOX 302/404(a)", "start": "2028-04-01", "end": "2028-12-31", "gate": true}, {"code": "A-FA-07", "phase": "P2", "ws": "finance_audit", "title": "Korea–US transfer pricing documentation", "rule": null, "start": "2028-01-01", "end": "2028-06-30", "gate": false}, {"code": "A-FA-08", "phase": "P2", "ws": "finance_audit", "title": "Complete ASC 810 / VIE assessment of Marinepad", "rule": "ASC 810", "start": "2027-10-01", "end": "2028-03-31", "gate": false}, {"code": "A-FA-09", "phase": "P2", "ws": "finance_audit", "title": "Domestic-issuer (non-FPI) reporting set-up — 10-K / 10-Q / 8-K / Proxy", "rule": null, "start": "2029-01-01", "end": "2029-06-30", "gate": false}, {"code": "A-CM-01", "phase": "P2", "ws": "commercial", "title": "Secure a second licensee (concentration relief)", "rule": null, "start": "2028-01-01", "end": "2028-12-31", "gate": false}, {"code": "G-LG-01", "phase": "P3", "ws": "legal_gov", "title": "Identify and interview independent director candidates", "rule": null, "start": "2028-07-01", "end": "2028-12-31", "gate": false}, {"code": "G-AC-01", "phase": "P3", "ws": "legal_gov", "title": "Appoint audit committee member #1 (listing-date requirement)", "rule": "5615(b)(1)", "start": "2029-01-01", "end": "2029-03-31", "gate": true}, {"code": "G-AC-02", "phase": "P3", "ws": "legal_gov", "title": "Appoint audit committee member #2 (90-day requirement, met early)", "rule": "5615(b)(1)", "start": "2029-03-01", "end": "2029-05-31", "gate": true}, {"code": "G-AC-03", "phase": "P3", "ws": "legal_gov", "title": "Appoint audit committee member #3 (1-year requirement, met early)", "rule": "5615(b)(1)", "start": "2029-05-01", "end": "2029-07-31", "gate": false}, {"code": "G-BD-01", "phase": "P3", "ws": "legal_gov", "title": "Majority-independent board before listing (no phase-in)", "rule": "5605(b)", "start": "2029-01-01", "end": "2029-06-30", "gate": true}, {"code": "G-LG-02", "phase": "P3", "ws": "legal_gov", "title": "Compensation committee — two or more independent directors", "rule": "5605(d)", "start": "2029-01-01", "end": "2029-03-31", "gate": false}, {"code": "G-LG-03", "phase": "P3", "ws": "legal_gov", "title": "Independent-director-led nomination process", "rule": "5605(e)", "start": "2029-01-01", "end": "2029-03-31", "gate": false}, {"code": "G-LG-04", "phase": "P3", "ws": "legal_gov", "title": "Adopt code of conduct", "rule": "5610", "start": "2028-10-01", "end": "2028-12-31", "gate": false}, {"code": "G-LG-05", "phase": "P3", "ws": "legal_gov", "title": "Related-party review procedure and whistleblower hotline", "rule": "5630", "start": "2028-10-01", "end": "2028-12-31", "gate": false}, {"code": "G-LG-06", "phase": "P3", "ws": "legal_gov", "title": "Bylaw clean-up — 33⅓% quorum, no disparate voting rights", "rule": "5620(c)/5640", "start": "2029-01-01", "end": "2029-03-31", "gate": false}, {"code": "G-LG-07", "phase": "P3", "ws": "legal_gov", "title": "Bind D&O insurance", "rule": null, "start": "2029-04-01", "end": "2029-06-30", "gate": false}, {"code": "K-CP-01", "phase": "P4", "ws": "capital", "title": "Secure cash runway through IPO plus contingency buffer (any instrument)", "rule": null, "start": "2028-01-01", "end": "2028-12-31", "gate": true}, {"code": "K-CP-02", "phase": "P4", "ws": "capital", "title": "Underwriter longlist and initial outreach", "rule": null, "start": "2028-07-01", "end": "2028-12-31", "gate": false}, {"code": "K-CP-03", "phase": "P4", "ws": "capital", "title": "Underwriter bake-off and selection", "rule": null, "start": "2029-01-01", "end": "2029-02-28", "gate": true}, {"code": "K-CP-04", "phase": "P4", "ws": "capital", "title": "Engage securities counsel and transfer agent", "rule": null, "start": "2029-01-01", "end": "2029-02-28", "gate": false}, {"code": "K-CP-05", "phase": "P4", "ws": "capital", "title": "Fix offering structure — gross proceeds $20–30M; MVUPHS $15M from offering proceeds only", "rule": "5505(a)", "start": "2029-02-01", "end": "2029-03-31", "gate": true}, {"code": "K-CP-06", "phase": "P4", "ws": "capital", "title": "Reverse split / par adjustment for $4+ offering price", "rule": "5505(a)", "start": "2029-02-01", "end": "2029-03-31", "gate": true}, {"code": "K-CP-07", "phase": "P4", "ws": "capital", "title": "Plan for 300 round-lot holders (150+ holding $2,500+ unrestricted)", "rule": "5505(a)", "start": "2029-04-01", "end": "2029-06-30", "gate": true}, {"code": "D-GO-01", "phase": "P4", "ws": "capital", "title": "Gate 1 — Preliminary Go/No-Go (FY2028 preliminary figures)", "rule": null, "start": "2028-12-01", "end": "2028-12-15", "gate": true}, {"code": "D-GO-02", "phase": "P4", "ws": "capital", "title": "Gate 2 — Final Internal Go/No-Go (FY2028 audit reflected)", "rule": null, "start": "2029-03-15", "end": "2029-03-31", "gate": true}, {"code": "D-GO-03", "phase": "P4", "ws": "capital", "title": "Gate 3 — Underwriter bake-off validation", "rule": null, "start": "2029-01-01", "end": "2029-06-30", "gate": true}, {"code": "S-CP-01", "phase": "P5", "ws": "capital", "title": "Reserve Nasdaq ticker symbol", "rule": null, "start": "2029-01-01", "end": "2029-01-31", "gate": false}, {"code": "S-CP-02", "phase": "P5", "ws": "capital", "title": "Draft S-1 (Business, Risk Factors, MD&A, Legal Proceedings)", "rule": null, "start": "2029-02-01", "end": "2029-04-30", "gate": false}, {"code": "S-CP-03", "phase": "P5", "ws": "capital", "title": "Confidential draft S-1 submission", "rule": "Securities Act 6(e)", "start": "2029-04-15", "end": "2029-04-30", "gate": true}, {"code": "S-CP-04", "phase": "P5", "ws": "capital", "title": "Respond to SEC comments (2–3 rounds)", "rule": null, "start": "2029-05-01", "end": "2029-08-31", "gate": true}, {"code": "S-CP-05", "phase": "P5", "ws": "capital", "title": "File Nasdaq listing application, agreement and governance certification; 4–6 week review", "rule": "5505", "start": "2029-07-15", "end": "2029-08-31", "gate": true}, {"code": "S-CP-06", "phase": "P5", "ws": "capital", "title": "Public S-1 filing — at least 15 days before roadshow", "rule": "JOBS Act", "start": "2029-09-01", "end": "2029-09-15", "gate": true}, {"code": "S-CP-07", "phase": "P5", "ws": "capital", "title": "Secure three registered market makers", "rule": "5505(a)", "start": "2029-07-01", "end": "2029-09-30", "gate": true}, {"code": "S-IR-01", "phase": "P5", "ws": "ir", "title": "IR website, disclosure controls and Reg FD policy live", "rule": "5250(d)", "start": "2029-06-01", "end": "2029-08-31", "gate": false}, {"code": "L-CP-01", "phase": "P6", "ws": "capital", "title": "Roadshow and book-building", "rule": null, "start": "2029-10-01", "end": "2029-10-31", "gate": false}, {"code": "L-CP-02", "phase": "P6", "ws": "capital", "title": "Pricing and S-1 effectiveness", "rule": null, "start": "2029-11-01", "end": "2029-11-15", "gate": true}, {"code": "L-CP-03", "phase": "P6", "ws": "capital", "title": "Nasdaq listing and first trade", "rule": null, "start": "2029-11-15", "end": "2029-11-30", "gate": true}, {"code": "L-CP-04", "phase": "P6", "ws": "capital", "title": "Switch to continued-listing (5550) monitoring", "rule": "5550", "start": "2029-12-01", "end": "2029-12-31", "gate": true}, {"code": "L-FA-01", "phase": "P6", "ws": "finance_audit", "title": "First 10-Q after listing", "rule": null, "start": "2030-01-01", "end": "2030-02-28", "gate": false}, {"code": "L-FA-02", "phase": "P6", "ws": "finance_audit", "title": "First 10-K and management ICFR assessment", "rule": "SOX 404(a)", "start": "2030-01-01", "end": "2030-03-31", "gate": false}, {"code": "L-LG-01", "phase": "P6", "ws": "legal_gov", "title": "First annual shareholder meeting after listing", "rule": "5620(a)", "start": "2030-04-01", "end": "2030-06-30", "gate": false}], "deps": [["F-IP-02", "F-IP-01"], ["C-CM-02", "F-IP-01"], ["C-CM-03", "C-CM-02"], ["C-FA-02", "C-FA-01"], ["C-FA-03", "C-CM-03"], ["C-CM-06", "C-CM-05"], ["A-FA-02", "A-FA-01"], ["A-FA-02", "C-CM-03"], ["A-FA-03", "A-FA-02"], ["A-FA-06", "A-FA-05"], ["G-AC-02", "G-AC-01"], ["G-AC-03", "G-AC-02"], ["K-CP-03", "A-FA-02"], ["K-CP-05", "K-CP-03"], ["D-GO-02", "A-FA-03"], ["D-GO-02", "D-GO-01"], ["D-GO-03", "K-CP-03"], ["S-CP-03", "D-GO-02"], ["S-CP-03", "A-FA-03"], ["S-CP-03", "G-AC-01"], ["S-CP-04", "S-CP-03"], ["S-CP-05", "S-CP-04"], ["S-CP-06", "S-CP-04"], ["L-CP-02", "S-CP-06"], ["L-CP-03", "S-CP-05"], ["L-CP-03", "S-CP-07"], ["L-CP-03", "L-CP-02"]], "decisions": [{"stage": "gate1", "name": "Gate 1 — Preliminary Go/No-Go", "start": "2028-12-01", "end": "2028-12-15", "purpose": "Direction call on FY2028 preliminary results, commercialization and run-rate"}, {"stage": "gate2", "name": "Gate 2 — Final Internal Go/No-Go", "start": "2029-03-15", "end": "2029-03-31", "purpose": "Confirm with FY2028 PCAOB audit results"}, {"stage": "gate3", "name": "Gate 3 — Underwriter Validation", "start": "2029-01-01", "end": "2029-06-30", "purpose": "Capital-market feasibility via underwriter bake-off"}], "windows": [{"name": "Accelerated — 2029 Q4", "start": "2029-10-01", "end": "2029-12-31"}, {"name": "Base — 2030 Q2", "start": "2030-04-01", "end": "2030-06-30"}]};
+const $ = s => document.querySelector(s);
+const parse = s => new Date(s + 'T00:00:00');
+const start = parse(D.program.start), end = parse(D.program.end);
+const months = []; { let d = new Date(start); while (d <= end) { months.push(new Date(d)); d = new Date(d.getFullYear(), d.getMonth()+1, 1); } }
+const col = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col'));
+const monthIndex = d => (d.getFullYear()-start.getFullYear())*12 + (d.getMonth()-start.getMonth()) + (d.getDate()-1)/30;
+const x = d => monthIndex(parse(d)) * col();
+
+$('#title').textContent = D.program.name;
+$('#buildto').textContent = D.program.build_to;
+$('#window').textContent = D.program.window;
+$('#today').textContent = D.program.today;
+
+const wsMap = Object.fromEntries(D.ws.map(w => [w.code, w]));
+const state = { ws: new Set(D.ws.map(w => w.code)), gatesOnly: false, collapsed: new Set() };
+
+// controls
+const ctl = $('#controls');
+D.ws.forEach(w => {
+  const b = document.createElement('button'); b.className = 'chip'; b.setAttribute('aria-pressed','true');
+  b.innerHTML = `<span class="sw" style="background:${w.color}"></span>${w.name}`;
+  b.onclick = () => { const on = b.getAttribute('aria-pressed')==='true'; b.setAttribute('aria-pressed', String(!on)); on ? state.ws.delete(w.code) : state.ws.add(w.code); apply(); };
+  ctl.appendChild(b);
+});
+const sep = document.createElement('span'); sep.className='sep'; ctl.appendChild(sep);
+const gb = document.createElement('button'); gb.className='chip'; gb.setAttribute('aria-pressed','false'); gb.textContent='관문만 보기';
+gb.onclick = () => { state.gatesOnly = !state.gatesOnly; gb.setAttribute('aria-pressed', String(state.gatesOnly)); apply(); };
+ctl.appendChild(gb);
+
+// header
+const grid = $('#grid');
+const lh = document.createElement('div'); lh.className='lhead'; lh.textContent = `${D.milestones.length}개 마일스톤 · ${D.milestones.filter(m=>m.gate).length}개 관문`; grid.appendChild(lh);
+const th = document.createElement('div'); th.className='thead';
+const yrs = document.createElement('div'); yrs.className='years';
+let i = 0; while (i < months.length) { const y = months[i].getFullYear(); let n=0; while (i+n<months.length && months[i+n].getFullYear()===y) n++; const d=document.createElement('div'); d.style.width=`calc(var(--col)*${n})`; d.textContent=y; yrs.appendChild(d); i+=n; }
+const mos = document.createElement('div'); mos.className='months';
+months.forEach(m => { const d=document.createElement('div'); d.textContent = m.getMonth()+1; if ((m.getMonth()+1)%3===0) d.classList.add('q'); mos.appendChild(d); });
+th.appendChild(yrs); th.appendChild(mos); grid.appendChild(th);
+
+// rows
+const rows = [];
+function addRow(kind, code, label, s, e, extra={}) {
+  const r = document.createElement('div'); r.className='row'; r.dataset.kind=kind; r.dataset.code=code;
+  const l = document.createElement('div'); l.className='lcell '+kind;
+  l.innerHTML = `<span class="code">${code}</span><span class="t">${label}</span>`;
+  const t = document.createElement('div'); t.className='tcell '+kind;
+  const bar = document.createElement('div'); bar.className='bar';
+  bar.style.left = x(s)+'px'; bar.style.width = Math.max(col()*0.6, x(e)-x(s))+'px';
+  if (extra.color) bar.style.background = extra.color;
+  t.appendChild(bar);
+  if (extra.gate) { const g=document.createElement('div'); g.className='gate'; g.style.left=(x(e)-6)+'px'; t.appendChild(g); }
+  r.appendChild(l); r.appendChild(t); grid.appendChild(r);
+  Object.assign(r, {kind, code, extra});
+  rows.push(r); return r;
+}
+const byPhase = {};
+D.milestones.forEach(m => (byPhase[m.phase] ||= []).push(m));
+D.phases.forEach(p => {
+  const ms = byPhase[p.code] || [];
+  const s = ms.map(m=>m.start).sort()[0], e = ms.map(m=>m.end).sort().slice(-1)[0];
+  const pr = addRow('phase', p.code, `${p.name}  <span style="font-weight:400;color:var(--ink-2)">${p.label}</span>`, s, e);
+  pr.querySelector('.lcell').onclick = () => { state.collapsed.has(p.code) ? state.collapsed.delete(p.code) : state.collapsed.add(p.code); apply(); };
+  pr.querySelector('.lcell').tabIndex = 0;
+  pr.querySelector('.lcell').onkeydown = ev => { if (ev.key==='Enter'||ev.key===' ') { ev.preventDefault(); pr.querySelector('.lcell').click(); } };
+  ms.forEach(m => {
+    const r = addRow('milestone', m.code, m.title, m.start, m.end, {color: wsMap[m.ws].color, gate: m.gate, m});
+    r.phase = p.code;
+    const l = r.querySelector('.lcell'); l.tabIndex = 0;
+    const show = ev => { hi(m.code); tip(ev, m); }, hide = () => { hi(null); $('#tip').style.display='none'; };
+    l.onmouseenter = show; l.onmouseleave = hide; l.onfocus = show; l.onblur = hide;
+    r.querySelector('.tcell').onmouseenter = show; r.querySelector('.tcell').onmouseleave = hide;
+  });
+});
+
+// decision bands + IPO windows (span all rows via absolutely positioned overlay in grid)
+function band(cls, s, e, label) {
+  const b = document.createElement('div'); b.className='band '+cls;
+  b.style.left = `calc(var(--left) + ${x(s)}px)`; b.style.width = (x(e)-x(s)+col()*(1/30))+'px';
+  if (label) { const l=document.createElement('label'); l.textContent=label; l.style.top='var(--head)'; b.appendChild(l); }
+  grid.appendChild(b);
+}
+D.decisions.forEach(d => band('dec', d.start, d.end, d.name));
+band('ipo', D.windows[0].start, D.windows[0].end, D.windows[0].name);
+band('ipo2', D.windows[1].start, D.windows[1].end, D.windows[1].name);
+const td = document.createElement('div'); td.className='today'; td.style.left=`calc(var(--left) + ${x(D.program.today)}px)`; td.innerHTML=`<span>오늘</span>`; grid.appendChild(td);
+
+const preds = {}; D.deps.forEach(([a,b]) => (preds[a] ||= []).push(b));
+function hi(code) {
+  rows.forEach(r => { r.classList.remove('dim','pred'); });
+  if (!code) return;
+  const p = new Set(preds[code] || []);
+  rows.forEach(r => { if (r.kind!=='milestone') return; if (r.code===code) return; if (p.has(r.code)) r.classList.add('pred'); else r.classList.add('dim'); });
+}
+function tip(ev, m) {
+  const t = $('#tip'); const ws = wsMap[m.ws].name;
+  t.innerHTML = `<b>${m.code} ${m.gate?'· 관문':''}</b>${m.title}<br>${m.start} → ${m.end} · ${ws}${m.rule?`<br>근거: ${m.rule}`:''}${(preds[m.code]||[]).length?`<br>선행: ${preds[m.code].join(', ')}`:''}`;
+  t.style.display='block';
+  const px = (ev.clientX||0)+14, py = (ev.clientY||0)+14;
+  t.style.left = Math.min(px, window.innerWidth-360)+'px'; t.style.top = Math.min(py, window.innerHeight-120)+'px';
+}
+function apply() {
+  rows.forEach(r => {
+    if (r.kind==='phase') return;
+    const m = r.extra.m;
+    const show = state.ws.has(m.ws) && (!state.gatesOnly || m.gate) && !state.collapsed.has(r.phase);
+    r.classList.toggle('hidden', !show);
+  });
+}
+// scroll to today on load (keep a little context before it)
+try { $('#wrap').scrollLeft = Math.max(0, x(D.program.today) - col()*2); } catch(e) {}
+</script>
+</body>
+</html>
