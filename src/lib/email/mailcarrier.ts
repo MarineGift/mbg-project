@@ -52,6 +52,7 @@ import {
   matchSenderToContactAndParty,
 } from './header-parser';
 import { isFromAllowedSender } from './whitelist';
+import { resolveInvestorIntro } from './investor-intro';
 import { detectSuppressions } from './bounce-parser';
 import { registerSuppressions } from './blocklist';
 import { detectNdrOutcome } from './ndr-outcome';
@@ -1099,6 +1100,26 @@ export class MailCarrierClient {
       }
     }
 
+    // 2026-09-21: Greentown Labs investor intros (outreach went out through
+    // Greentown's mail system, so URM has no outbound to thread against).
+    // Rule-based, no AI. May re-link a mentor-matched reply to the investor firm.
+    const investorIntro = await resolveInvestorIntro(
+      this.supabase,
+      this.organizationId,
+      {
+        fromAddress: headers.from.address,
+        subject: headers.subject,
+        bodyPlain: parsed.text ?? '',
+        headers: headers.rawSelectedHeaders ?? {},
+      },
+      resolvedPartyId,
+    );
+    if (investorIntro.relinkPartyId && investorIntro.relinkPartyId !== resolvedPartyId) {
+      resolvedPartyId = investorIntro.relinkPartyId;
+      // the matched contact belonged to the other (mentor) party
+      resolvedContactId = null;
+    }
+
     // PII pre-masking
     const bodyPlainRaw = parsed.text ?? '';
     const { categories } = maskPii(bodyPlainRaw); // A-fix: store raw body; keep categories for AI-run metadata
@@ -1152,6 +1173,16 @@ export class MailCarrierClient {
           sender_match: {
             matched_by: senderMatch.matchedBy,
           },
+          ...(investorIntro.inferredPartyType
+            ? {
+                inferred_party_type: investorIntro.inferredPartyType,
+                investor_intro: {
+                  reason: investorIntro.detection.reason ?? null,
+                  firm_hint: investorIntro.detection.firmHint ?? null,
+                  relinked: Boolean(investorIntro.relinkPartyId),
+                },
+              }
+            : {}),
         },
       }))
       .select('id')

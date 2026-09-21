@@ -68,6 +68,8 @@ export interface InboxRow {
   partyId: string | null;
   partyName: string | null;
   partyTypeCode: PartyTypeCode | null;
+  /** 2026-09-21: rule-based module hint (Greentown investor intro); wins over partyTypeCode */
+  inferredPartyType?: PartyTypeCode | null;
   /** Whether an AI draft was generated from this inbound (if applicable) */
   hasDraft: boolean;
   /** Whether this outbound was generated from an AI draft */

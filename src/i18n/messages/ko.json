@@ -44,6 +44,7 @@
     "settings": "설정"
   },
   "partyTypes": {
+  "mentor": "멘토",
   "investor": "투자자",
   "paper_mill": "구매자",
   "partner": "파트너",

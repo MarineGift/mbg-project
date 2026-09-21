@@ -136,6 +136,8 @@ interface RawInboxRow {
   ai_generated: boolean;
   read_at: string | null;
   party_id: string | null;
+  /** 2026-09-21: rule-based module hint (external_data.inferred_party_type) */
+  inferred_party_type: string | null;
   parties: { name: string; party_types: { code: string } | Array<{ code: string }> | null } | null;
   thread_id: string | null;
 }
@@ -154,6 +156,7 @@ export async function fetchInbox(
        subject, body_plain:body_preview, occurred_at, sent_at, received_at, ai_generated, read_at,
        thread_id,
        party_id,
+       inferred_party_type:external_data->>inferred_party_type,
        parties:party_id ( name:party_name, party_types(code) )`,
       { count: 'exact' },
     );
@@ -280,7 +283,7 @@ export async function fetchInbox(
 
   // t9a: group by threadId, pick latest representative + count + OR-aggregate hasDraft.
   // allRows is sorted by occurred_at desc, so first seen per thread IS the latest message.
-  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean; anyAiGenerated: boolean; allRead: boolean }>();
+  const threadMap = new Map<string, { latest: InboxRow; count: number; anyHasDraft: boolean; anyAiGenerated: boolean; allRead: boolean; inferred: PartyTypeCode | null }>();
   for (const row of allRows) {
     const existing = threadMap.get(row.threadId);
     if (existing) {
@@ -289,13 +292,16 @@ export async function fetchInbox(
       if (row.aiGenerated) existing.anyAiGenerated = true;
       // a thread is unread if ANY of its inbound messages is unread
       existing.allRead = existing.allRead && row.isRead;
+      if (!existing.inferred && row.inferredPartyType) existing.inferred = row.inferredPartyType;
     } else {
-      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft, anyAiGenerated: row.aiGenerated, allRead: row.isRead });
+      threadMap.set(row.threadId, { latest: row, count: 1, anyHasDraft: row.hasDraft, anyAiGenerated: row.aiGenerated, allRead: row.isRead, inferred: row.inferredPartyType ?? null });
     }
   }
 
-  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft, anyAiGenerated, allRead }) => ({
+  let rows: InboxRow[] = Array.from(threadMap.values()).map(({ latest, count, anyHasDraft, anyAiGenerated, allRead, inferred }) => ({
     ...latest,
+    // any message in the thread flagged as an investor intro labels the thread
+    partyTypeCode: inferred ?? latest.partyTypeCode,
     threadCount: count,
     hasDraft: anyHasDraft,
     aiGenerated: anyAiGenerated,
@@ -330,7 +336,11 @@ function toInboxRow(
   
 const ptJoin = party?.party_types;
   
-const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?? null;
+const linkedTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?? null;
+  // 2026-09-21: a Greentown investor intro wins over the linked party's type
+  // (e.g. a person who is also a Greentown mentor) and fills in when the
+  // sender is not a URM party yet.
+  const partyTypeCode = raw.inferred_party_type ?? linkedTypeCode;
 
   const bodyPreview = (raw.body_plain ?? '')
     .replace(/\s+/g, ' ')
@@ -353,6 +363,7 @@ const partyTypeCode = (Array.isArray(ptJoin) ? ptJoin[0]?.code : ptJoin?.code) ?
     partyId: raw.party_id,
     partyName: party?.name ?? null,
     partyTypeCode: (partyTypeCode as PartyTypeCode | null) ?? null,
+    inferredPartyType: (raw.inferred_party_type as PartyTypeCode | null) ?? null,
     hasDraft:
       raw.direction === 'inbound' && draftsByInboundId.has(raw.id),
     aiGenerated: raw.ai_generated,
