@@ -138,6 +138,7 @@ const OVERRIDABLE_TYPES = new Set(['mentor', 'investor']);
 export type InvestorReason =
   | NonNullable<InvestorIntroResult['reason']>
   | 'subject_firm'
+  | 'sender_domain'
   | 'prior_intro_sender';
 
 export interface InvestorIntroResolution {
@@ -188,6 +189,61 @@ async function uniqueInvestorByName(
   return rows.length === 1 && rows[0] ? rows[0].id : undefined;
 }
 
+/* webmail / shared domains never identify a firm */
+const GENERIC_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+  'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'proton.me',
+  'protonmail.com', 'naver.com', 'daum.net', 'kakao.com', 'qq.com', '163.com',
+]);
+
+/** "https://www.APVentures.com/team" -> "apventures.com" */
+export function hostOf(url: string | null | undefined): string | undefined {
+  let s = (url ?? '').trim().toLowerCase();
+  if (!s) return undefined;
+  s = s.replace(/^[a-z]+:\/\//, '').replace(/^www\d*\./, '');
+  s = s.split(/[/?#:\s]/)[0] ?? '';
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s) ? s : undefined;
+}
+
+/** sender domain belongs to host (equal, or a subdomain of it) */
+export function domainMatches(senderDomain: string, host: string): boolean {
+  return senderDomain === host || senderDomain.endsWith(`.${host}`);
+}
+
+/**
+ * Rule F: exactly one investor party whose website (or email) domain is the
+ * sender's domain, e.g. girven@apventures.com -> AP Ventures.
+ */
+async function uniqueInvestorByDomain(
+  supabase: Sb,
+  organizationId: string,
+  sender: string,
+): Promise<string | undefined> {
+  const at = sender.lastIndexOf('@');
+  if (at < 0) return undefined;
+  const domain = sender.slice(at + 1);
+  if (!domain || GENERIC_DOMAINS.has(domain)) return undefined;
+  // registrable part for the coarse ilike ("mail.apventures.com" -> "apventures.com")
+  const labels = domain.split('.');
+  const base = labels.slice(-2).join('.');
+  const { data } = await supabase
+    .schema('app')
+    .from('parties')
+    .select('id, website, email, party_types!inner(code)')
+    .eq('organization_id', organizationId)
+    .eq('party_types.code', 'investor')
+    .is('deleted_at', null)
+    .or(`website.ilike.*${base}*,email.ilike.*@*${base}`)
+    .limit(25);
+  const ids = new Set<string>();
+  for (const r of (data ?? []) as Array<{ id: string; website: string | null; email: string | null }>) {
+    const w = hostOf(r.website);
+    const e = (r.email ?? '').toLowerCase().split('@')[1];
+    if ((w && domainMatches(domain, w)) || (e && domainMatches(domain, e))) ids.add(r.id);
+  }
+  return ids.size === 1 ? [...ids][0] : undefined;
+}
+
 /** latest earlier mail from this sender that was classified investor */
 async function priorInvestorMail(
   supabase: Sb,
@@ -219,6 +275,8 @@ async function priorInvestorMail(
  *   A-C  detectInvestorIntro (Greentown sender / intro subject / Greentown mention)
  *   D    subject names an investor firm ("MarineBio Group <> Strategic Ventures")
  *        and exactly one investor party has that name
+ *   F    the sender's company domain is the website/email domain of exactly
+ *        one investor party (girven@apventures.com -> AP Ventures)
  *   E    the same sender already had mail classified investor (e.g. the
  *        warm-intro reply) - later mail from them (calendar invites, follow-ups)
  *        follows it to the same investor party
@@ -256,6 +314,9 @@ export async function resolveInvestorIntro(
         const id = await uniqueInvestorByName(supabase, organizationId, detection.firmHint);
         if (id) return { ...base, relinkPartyId: id };
       }
+      // no firm in the subject - the sender's company domain may still name it
+      const byDomain = await uniqueInvestorByDomain(supabase, organizationId, sender);
+      if (byDomain) return { ...base, relinkPartyId: byDomain };
       return base;
     }
 
@@ -284,6 +345,17 @@ export async function resolveInvestorIntro(
           relinkPartyId: id,
         };
       }
+    }
+
+    // F - sender's company domain is an investor party's website/email domain
+    const byDomain = await uniqueInvestorByDomain(supabase, organizationId, sender);
+    if (byDomain) {
+      return {
+        detection,
+        inferredPartyType: 'investor',
+        reason: 'sender_domain',
+        relinkPartyId: byDomain,
+      };
     }
 
     // E - sender already known as an investor contact through an intro

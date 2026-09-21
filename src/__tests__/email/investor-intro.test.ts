@@ -3,7 +3,7 @@
  * Greentown Labs investor-intro detection (rule-based, no AI).
  */
 import { describe, it, expect } from 'vitest';
-import { detectInvestorIntro, extractIntroFirm, extractPairFirm } from '../../lib/email/investor-intro';
+import { detectInvestorIntro, domainMatches, extractIntroFirm, extractPairFirm, hostOf } from '../../lib/email/investor-intro';
 
 describe('investor-intro', () => {
   it('reads the firm from the warm-intro subject', () => {
@@ -66,5 +66,16 @@ describe('extractPairFirm', () => {
       .toBe('Strategic Ventures');
     expect(extractPairFirm('Acme Capital <> MBG follow-up')).toBe('Acme Capital');
     expect(extractPairFirm('Re: FCC trial schedule')).toBeUndefined();
+  });
+});
+
+describe('sender domain helpers', () => {
+  it('normalises websites and matches sender domains', () => {
+    expect(hostOf('https://www.APVentures.com/team')).toBe('apventures.com');
+    expect(hostOf('apventures.com')).toBe('apventures.com');
+    expect(hostOf('')).toBeUndefined();
+    expect(domainMatches('apventures.com', 'apventures.com')).toBe(true);
+    expect(domainMatches('mail.apventures.com', 'apventures.com')).toBe(true);
+    expect(domainMatches('notapventures.com', 'apventures.com')).toBe(false);
   });
 });
