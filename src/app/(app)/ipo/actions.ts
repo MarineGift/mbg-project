@@ -1,0 +1,161 @@
+// src/app/(app)/ipo/actions.ts
+//
+// Server Actions for the IPO readiness module (app.ipo_* tables).
+//   setGateVerdict        -- human judgment on a readiness gate (L1–L6)
+//   addMetricSnapshot     -- the ONLY numeric input point (ipo_metric_snapshots)
+//   setMilestoneStatus    -- milestone status; 'done' requires actual_date
+//   recordDecisionReview  -- quarterly / gate1 / gate2 / gate3 log
+//
+// All actions use the RLS-scoped server client (organization_id from JWT).
+// Views are security_invoker, so no org filter is needed here.
+
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+type Result = { ok: true } | { ok: false; error: string };
+
+const VERDICTS = ['unknown', 'pass', 'watch', 'fail'] as const;
+const STATUSES = ['not_started', 'in_progress', 'blocked', 'done', 'waived'] as const;
+const STAGES = ['quarterly', 'gate1', 'gate2', 'gate3'] as const;
+const DECISIONS = ['undecided', 'accelerated_2029q4', 'base_2030q2', 'defer'] as const;
+
+export async function setGateVerdict(input: {
+  gateId: string;
+  verdict: string;
+  evidence: string;
+}): Promise<Result> {
+  if (!input.gateId) return { ok: false, error: 'gateId required' };
+  if (!(VERDICTS as readonly string[]).includes(input.verdict)) {
+    return { ok: false, error: 'invalid verdict' };
+  }
+  if (input.verdict !== 'unknown' && !input.evidence.trim()) {
+    return { ok: false, error: '근거(evidence) 없이 판정할 수 없습니다.' };
+  }
+  const supabase = await createSupabaseServerClient();
+  const patch: Record<string, unknown> = {
+    verdict: input.verdict,
+    evidence: input.evidence.trim() || null,
+    assessed_at: input.verdict === 'unknown' ? null : new Date().toISOString().slice(0, 10),
+  };
+  const { error } = await supabase
+    .schema('app')
+    .from('ipo_readiness_gates' as never)
+    .update(patch as never)
+    .eq('id', input.gateId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
+
+export async function addMetricSnapshot(input: {
+  metricId: string;
+  asOf: string;
+  value: number;
+  verified: boolean;
+  sourceNote: string;
+}): Promise<Result> {
+  if (!input.metricId || !input.asOf || !Number.isFinite(input.value)) {
+    return { ok: false, error: 'metric, as_of, value 가 필요합니다.' };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data: m, error: mErr } = await supabase
+    .schema('app')
+    .from('ipo_metrics' as never)
+    .select('organization_id')
+    .eq('id', input.metricId)
+    .maybeSingle();
+  if (mErr || !m) return { ok: false, error: mErr?.message ?? 'metric not found' };
+  const orgId = (m as { organization_id: string }).organization_id;
+
+  const row = {
+    organization_id: orgId,
+    metric_id: input.metricId,
+    as_of: input.asOf,
+    value: input.value,
+    verified: input.verified,
+    source_note: input.sourceNote.trim() || null,
+  };
+  // UNIQUE(metric_id, as_of): same date = overwrite.
+  const { error } = await supabase
+    .schema('app')
+    .from('ipo_metric_snapshots' as never)
+    .upsert(row as never, { onConflict: 'metric_id,as_of' });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
+
+export async function setMilestoneStatus(input: {
+  milestoneId: string;
+  status: string;
+  actualDate?: string | null;
+}): Promise<Result> {
+  if (!input.milestoneId) return { ok: false, error: 'milestoneId required' };
+  if (!(STATUSES as readonly string[]).includes(input.status)) {
+    return { ok: false, error: 'invalid status' };
+  }
+  const patch: Record<string, unknown> = { status: input.status };
+  if (input.status === 'done') {
+    patch.actual_date = input.actualDate || new Date().toISOString().slice(0, 10);
+  } else {
+    patch.actual_date = null;
+  }
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema('app')
+    .from('ipo_milestones' as never)
+    .update(patch as never)
+    .eq('id', input.milestoneId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
+
+export async function recordDecisionReview(input: {
+  programId: string;
+  stage: string;
+  decision: string;
+  rationale: string;
+}): Promise<Result> {
+  if (!(STAGES as readonly string[]).includes(input.stage)) return { ok: false, error: 'invalid stage' };
+  if (!(DECISIONS as readonly string[]).includes(input.decision)) return { ok: false, error: 'invalid decision' };
+  const supabase = await createSupabaseServerClient();
+  const { data: p } = await supabase
+    .schema('app')
+    .from('ipo_programs' as never)
+    .select('organization_id')
+    .eq('id', input.programId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: 'program not found' };
+  const orgId = (p as { organization_id: string }).organization_id;
+
+  let scheduleId: string | null = null;
+  if (input.stage !== 'quarterly') {
+    const { data: s } = await supabase
+      .schema('app')
+      .from('ipo_decision_schedule' as never)
+      .select('id')
+      .eq('program_id', input.programId)
+      .eq('stage', input.stage)
+      .maybeSingle();
+    scheduleId = (s as { id: string } | null)?.id ?? null;
+  }
+  const row = {
+    organization_id: orgId,
+    program_id: input.programId,
+    schedule_id: scheduleId,
+    review_date: new Date().toISOString().slice(0, 10),
+    stage: input.stage,
+    window_decision: input.decision,
+    rationale: input.rationale.trim() || null,
+  };
+  const { error } = await supabase
+    .schema('app')
+    .from('ipo_decision_reviews' as never)
+    .upsert(row as never, { onConflict: 'program_id,review_date,stage' });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/ipo');
+  return { ok: true };
+}
