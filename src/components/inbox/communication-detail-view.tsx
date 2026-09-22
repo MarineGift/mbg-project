@@ -214,6 +214,7 @@ export function CommunicationDetailView({ thread, rootId, templates, openStatuse
           defaultPartyType={partyContext?.partyType ?? undefined}
           dealId={root?.dealId ?? latest?.dealId ?? replyTarget.dealId ?? null}
           defaultTo={replyTarget.fromAddress ?? ''}
+          contactName={replyTarget.fromName ?? null}
           defaultSubject={
             replyTarget.subject
               ? replyTarget.subject.toLowerCase().startsWith('re:')

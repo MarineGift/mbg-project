@@ -50,7 +50,10 @@ import {
   getReplyFromAccountId,
   type MailAccountOption,
 } from "@/lib/actions/mail-account-options";
-import { addWhitelistEntry } from "@/lib/actions/email-whitelist";
+import {
+  previewRecipientRegistration,
+  registerRecipientAsInvestor,
+} from "@/lib/actions/register-recipient";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { getReplyRecipients, type ReplyRecipients } from "@/lib/actions/reply-recipients";
 import { toast } from "sonner";
@@ -227,6 +230,27 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   const [fromAccountId, setFromAccountId] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [sending, setSending] = useState(false);
+
+  // 2026-09-21: "not in whitelist" confirm (OK = register + send, Decline = cancel).
+  // Rendered as an overlay inside the dialog; handleSend awaits the answer.
+  const [registerAsk, setRegisterAsk] = useState<{
+    email: string;
+    partyName: string;
+    partyTypeCode: string | null;
+    willCreateParty: boolean;
+  } | null>(null);
+  const registerResolver = useRef<((ok: boolean) => void) | null>(null);
+  function askRegister(info: NonNullable<typeof registerAsk>): Promise<boolean> {
+    return new Promise((resolve) => {
+      registerResolver.current = resolve;
+      setRegisterAsk(info);
+    });
+  }
+  function answerRegister(ok: boolean) {
+    registerResolver.current?.(ok);
+    registerResolver.current = null;
+    setRegisterAsk(null);
+  }
 
   // ?? Deal linkage (engagement auto-log) ??????????????????
   const NO_DEAL = "__none__";
@@ -643,27 +667,53 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       // First attempt. doSend returns a normalized result incl. whitelist info.
       let res = await doSend({ attachmentPaths, attachmentsMeta, finalMode });
 
-      // Whitelist gate: offer to add the blocked address, then retry once.
-      if (!res.ok && res.errorCode === "not_whitelisted") {
-        const blocked = res.blockedRecipient || toParts[0] || "this recipient";
-        const proceed = window.confirm(
-          `${blocked} is not in your whitelist.\n\n` +
-            `Add it to the whitelist and send? ` +
-            `(Future emails from this address will also be allowed in.)`,
-        );
+      // Whitelist gate: ask to register the blocked recipient in the whitelist
+      // AND as an Investors contact, then retry. Loops so Reply-all with several
+      // unknown addresses is handled one by one (guard against endless loops).
+      const originalSender = (props.defaultTo ?? "").trim().toLowerCase();
+      const handled = new Set<string>();
+      let linkOverride: { partyId: string; contactId: string | null } | undefined;
+      while (!res.ok && res.errorCode === "not_whitelisted") {
+        const blocked = (res.blockedRecipient || toParts[0] || "").trim().toLowerCase();
+        if (!blocked || handled.has(blocked) || handled.size >= 10) break;
+        handled.add(blocked);
+
+        const fullName =
+          blocked === originalSender ? (props.contactName ?? null) : null;
+        const preview = await previewRecipientRegistration({
+          email: blocked,
+          hintPartyId: blocked === originalSender ? (props.partyId ?? null) : null,
+          fullName,
+        });
+        if (!preview.ok) {
+          toast.error(`Could not check recipient: ${preview.error}`);
+          return;
+        }
+        const proceed = await askRegister({
+          email: blocked,
+          partyName: preview.plan.partyName,
+          partyTypeCode: preview.plan.partyTypeCode,
+          willCreateParty: preview.plan.willCreateParty,
+        });
         if (!proceed) {
           toast.error("Send cancelled.");
           return;
         }
-        // Add the full address (kind='address') so only this sender is allowed,
-        // not the entire domain.
-        const add = await addWhitelistEntry(blocked, "address", "Added from compose");
-        if (!add.ok) {
-          toast.error(`Could not add to whitelist: ${add.error ?? "unknown error"}`);
+        const reg = await registerRecipientAsInvestor({
+          email: blocked,
+          hintPartyId: blocked === originalSender ? (props.partyId ?? null) : null,
+          fullName,
+        });
+        if (!reg.ok) {
+          toast.error(`Could not register ${blocked}: ${reg.error}`);
           return;
         }
-        toast.success(`${blocked} added to whitelist. Sending...`);
-        res = await doSend({ attachmentPaths, attachmentsMeta, finalMode });
+        toast.success(`${blocked} registered (${reg.partyName}). Sending...`);
+        // Link the sent mail to the party when replying to a single unknown sender.
+        if (!props.partyId && toParts.length === 1 && blocked === (toParts[0] ?? "").toLowerCase()) {
+          linkOverride = { partyId: reg.partyId, contactId: reg.contactId };
+        }
+        res = await doSend({ attachmentPaths, attachmentsMeta, finalMode, linkOverride });
       }
 
       if (res.ok) {
@@ -684,6 +734,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     attachmentPaths: string[];
     attachmentsMeta: UploadedAttachment[];
     finalMode: ComposeMode;
+    /** set after registering an unknown recipient: link the manual send */
+    linkOverride?: { partyId: string; contactId: string | null };
   }): Promise<{
     ok: boolean;
     errMsg?: string;
@@ -736,8 +788,8 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       cc: ccParts.length > 0 ? ccParts.join(",") : undefined,
       subject: subject.trim(),
       bodyPlain: body,
-      partyId: null,
-      contactId: selectedContactId ?? props.contactId ?? null,
+      partyId: args.linkOverride?.partyId ?? null,
+      contactId: args.linkOverride?.contactId ?? selectedContactId ?? props.contactId ?? null,
       dealId: dealId !== NO_DEAL ? dealId : null,
       inReplyTo: props.replyToMessageId ?? null,
       threadId: props.threadId ?? null,
@@ -746,12 +798,13 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       aiGenerated: activeTab === "ai",
     });
     if (result.ok) return { ok: true };
-    // sendOutboundManual does not echo the blocked address; fall back to To[0].
+    // The core reports "Recipient not in whitelist: <addr>"; fall back to To[0].
+    const m = /not in whitelist:\s*(\S+)/i.exec(result.errorMessage ?? "");
     return {
       ok: false,
       errMsg: result.errorMessage ?? undefined,
       errorCode: result.errorCode,
-      blockedRecipient: toParts[0],
+      blockedRecipient: m?.[1] ?? toParts[0],
     };
   }
 
@@ -1248,6 +1301,40 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
             )}
           </Button>
         </DialogFooter>
+
+        {registerAsk && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              className="w-full max-w-md rounded-lg border bg-background p-5 shadow-lg space-y-3"
+            >
+              <h3 className="text-base font-semibold">Recipient not registered</h3>
+              <p className="text-sm">
+                <span className="font-medium">{registerAsk.email}</span> is not in the whitelist.
+              </p>
+              <p className="text-sm">
+                Register this recipient in the <span className="font-medium">whitelist</span> and{" "}
+                <span className="font-medium">Investors contacts</span>, then send the email?
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {registerAsk.willCreateParty
+                  ? `A new investor party "${registerAsk.partyName}" will be created (rename it later if needed).`
+                  : `Contact will be added under "${registerAsk.partyName}"${
+                      registerAsk.partyTypeCode ? ` (${registerAsk.partyTypeCode})` : ""
+                    }.`}
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => answerRegister(false)}>
+                  Decline
+                </Button>
+                <Button onClick={() => answerRegister(true)} autoFocus>
+                  OK
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
