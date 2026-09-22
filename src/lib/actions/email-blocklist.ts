@@ -134,3 +134,80 @@ export async function deleteBlocklistEntry(id: string): Promise<{ ok: boolean; e
   revalidatePath(PATH);
   return { ok: true };
 }
+
+/* ============================================================
+ * 2026-09-21: compose-time release (reply to an auto-suppressed address)
+ * ============================================================ */
+
+export type BlocklistMatch = {
+  id: string;
+  pattern: string;
+  kind: string;
+  reason: string | null;
+  notes: string | null;
+};
+
+/** Active blocklist rows that match this address (address / domain / regex). */
+export async function findBlocklistMatches(
+  email: string,
+): Promise<{ ok: true; matches: BlocklistMatch[] } | { ok: false; error: string }> {
+  let auth;
+  try {
+    auth = await requireAuth();
+  } catch {
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const e = (email ?? '').trim().toLowerCase();
+  const domain = e.split('@')[1] ?? '';
+  const sb = await createSupabaseServerClient();
+  const { data, error } = await sb
+    .schema('app')
+    .from('email_blocklist' as never)
+    .select('id, pattern, kind, reason, notes')
+    .eq('organization_id', auth.organizationId)
+    .eq('is_active', true);
+  if (error) return { ok: false, error: error.message };
+  const matches = ((data ?? []) as unknown as BlocklistMatch[]).filter((r) => {
+    const p = (r.pattern ?? '').trim().toLowerCase();
+    if (r.kind === 'address') return p === e;
+    if (r.kind === 'domain') return p === domain;
+    if (r.kind === 'regex') {
+      try { return new RegExp(r.pattern, 'i').test(e); } catch { return false; }
+    }
+    return false;
+  });
+  return { ok: true, matches };
+}
+
+/**
+ * Deactivate (not delete - history kept) the ADDRESS-kind rows for this email.
+ * Domain / regex rules are left alone on purpose: they cover more than one
+ * person and must be changed in Settings > Email blocklist.
+ */
+export async function releaseBlocklistAddress(
+  email: string,
+): Promise<{ ok: boolean; released: number; remaining: number; error?: string }> {
+  const found = await findBlocklistMatches(email);
+  if (!found.ok) return { ok: false, released: 0, remaining: 0, error: found.error };
+  const addressIds = found.matches.filter((m) => m.kind === 'address').map((m) => m.id);
+  const remaining = found.matches.length - addressIds.length;
+  if (addressIds.length === 0) return { ok: true, released: 0, remaining };
+
+  const auth = await requireAuth();
+  const sb = await createSupabaseServerClient();
+  const stamp = new Date().toISOString().slice(0, 10);
+  for (const m of found.matches.filter((x) => x.kind === 'address')) {
+    const { error } = await sb
+      .schema('app')
+      .from('email_blocklist' as never)
+      .update({
+        is_active: false,
+        notes: `${m.notes ? m.notes + ' | ' : ''}released from reply ${stamp}`.slice(0, 500),
+      } as never)
+      .eq('id', m.id)
+      .eq('organization_id', auth.organizationId);
+    if (error) return { ok: false, released: 0, remaining, error: error.message };
+  }
+  revalidatePath(PATH);
+  return { ok: true, released: addressIds.length, remaining };
+}

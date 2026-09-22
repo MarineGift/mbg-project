@@ -54,6 +54,10 @@ import {
   previewRecipientRegistration,
   registerRecipientAsInvestor,
 } from "@/lib/actions/register-recipient";
+import {
+  findBlocklistMatches,
+  releaseBlocklistAddress,
+} from "@/lib/actions/email-blocklist";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
 import { getReplyRecipients, type ReplyRecipients } from "@/lib/actions/reply-recipients";
 import { toast } from "sonner";
@@ -234,6 +238,12 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
   // 2026-09-21: "not in whitelist" confirm (OK = register + send, Decline = cancel).
   // Rendered as an overlay inside the dialog; handleSend awaits the answer.
   const [registerAsk, setRegisterAsk] = useState<{
+    /** whitelist = not registered; blocklist = on the do-not-send list */
+    gate: "whitelist" | "blocklist";
+    /** blocklist only: reason / notes of the matching rows */
+    blockInfo?: string[];
+    /** blocklist only: domain/regex rules that cannot be released from here */
+    nonReleasable?: number;
     email: string;
     partyName: string;
     partyTypeCode: string | null;
@@ -667,29 +677,55 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
       // First attempt. doSend returns a normalized result incl. whitelist info.
       let res = await doSend({ attachmentPaths, attachmentsMeta, finalMode });
 
-      // Whitelist gate: ask to register the blocked recipient in the whitelist
-      // AND as an Investors contact, then retry. Loops so Reply-all with several
-      // unknown addresses is handled one by one (guard against endless loops).
+      // Recipient gates (2026-09-21):
+      //   not_whitelisted -> register in whitelist + Investors contacts, send
+      //   blocklisted     -> release the do-not-send address row, register, send
+      // One confirm per address; loops so Reply-all with several addresses is
+      // handled one by one (guard against endless loops).
       const originalSender = (props.defaultTo ?? "").trim().toLowerCase();
       const handled = new Set<string>();
       let linkOverride: { partyId: string; contactId: string | null } | undefined;
-      while (!res.ok && res.errorCode === "not_whitelisted") {
+      while (
+        !res.ok &&
+        (res.errorCode === "not_whitelisted" || res.errorCode === "blocklisted")
+      ) {
+        const gate = res.errorCode === "blocklisted" ? "blocklist" : "whitelist";
         const blocked = (res.blockedRecipient || toParts[0] || "").trim().toLowerCase();
-        if (!blocked || handled.has(blocked) || handled.size >= 10) break;
-        handled.add(blocked);
+        const key = `${gate}:${blocked}`;
+        if (!blocked || handled.has(key) || handled.size >= 20) break;
+        handled.add(key);
 
-        const fullName =
-          blocked === originalSender ? (props.contactName ?? null) : null;
-        const preview = await previewRecipientRegistration({
-          email: blocked,
-          hintPartyId: blocked === originalSender ? (props.partyId ?? null) : null,
-          fullName,
-        });
+        const isSender = blocked === originalSender;
+        const fullName = isSender ? (props.contactName ?? null) : null;
+        const hintPartyId = isSender ? (props.partyId ?? null) : null;
+
+        const preview = await previewRecipientRegistration({ email: blocked, hintPartyId, fullName });
         if (!preview.ok) {
           toast.error(`Could not check recipient: ${preview.error}`);
           return;
         }
+
+        let blockInfo: string[] | undefined;
+        let nonReleasable = 0;
+        if (gate === "blocklist") {
+          const bl = await findBlocklistMatches(blocked);
+          if (!bl.ok) {
+            toast.error(`Could not read do-not-send list: ${bl.error}`);
+            return;
+          }
+          blockInfo = bl.matches.map(
+            (m) =>
+              `${m.kind}: ${m.pattern}` +
+              (m.reason ? ` (${m.reason})` : "") +
+              (m.notes ? ` - ${m.notes}` : ""),
+          );
+          nonReleasable = bl.matches.filter((m) => m.kind !== "address").length;
+        }
+
         const proceed = await askRegister({
+          gate,
+          blockInfo,
+          nonReleasable,
           email: blocked,
           partyName: preview.plan.partyName,
           partyTypeCode: preview.plan.partyTypeCode,
@@ -699,11 +735,22 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
           toast.error("Send cancelled.");
           return;
         }
-        const reg = await registerRecipientAsInvestor({
-          email: blocked,
-          hintPartyId: blocked === originalSender ? (props.partyId ?? null) : null,
-          fullName,
-        });
+
+        if (gate === "blocklist") {
+          const rel = await releaseBlocklistAddress(blocked);
+          if (!rel.ok) {
+            toast.error(`Could not release ${blocked}: ${rel.error ?? "unknown error"}`);
+            return;
+          }
+          if (rel.remaining > 0) {
+            toast.error(
+              `${blocked} is still blocked by a domain/regex rule. Change it in Settings > Email blocklist.`,
+            );
+            return;
+          }
+        }
+
+        const reg = await registerRecipientAsInvestor({ email: blocked, hintPartyId, fullName });
         if (!reg.ok) {
           toast.error(`Could not register ${blocked}: ${reg.error}`);
           return;
@@ -799,7 +846,7 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
     });
     if (result.ok) return { ok: true };
     // The core reports "Recipient not in whitelist: <addr>"; fall back to To[0].
-    const m = /not in whitelist:\s*(\S+)/i.exec(result.errorMessage ?? "");
+    const m = /(?:not in whitelist|do-not-send list):\s*(\S+)/i.exec(result.errorMessage ?? "");
     return {
       ok: false,
       errMsg: result.errorMessage ?? undefined,
@@ -1309,14 +1356,40 @@ export function ComposeEmailDialog(props: ComposeEmailDialogProps) {
               aria-modal="true"
               className="w-full max-w-md rounded-lg border bg-background p-5 shadow-lg space-y-3"
             >
-              <h3 className="text-base font-semibold">Recipient not registered</h3>
-              <p className="text-sm">
-                <span className="font-medium">{registerAsk.email}</span> is not in the whitelist.
-              </p>
-              <p className="text-sm">
-                Register this recipient in the <span className="font-medium">whitelist</span> and{" "}
-                <span className="font-medium">Investors contacts</span>, then send the email?
-              </p>
+              {registerAsk.gate === "blocklist" ? (
+                <>
+                  <h3 className="text-base font-semibold">Recipient is on the do-not-send list</h3>
+                  <p className="text-sm">
+                    <span className="font-medium">{registerAsk.email}</span> is blocked by:
+                  </p>
+                  <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5 break-all">
+                    {(registerAsk.blockInfo ?? []).map((b, i) => (
+                      <li key={i}>{b}</li>
+                    ))}
+                  </ul>
+                  {(registerAsk.nonReleasable ?? 0) > 0 ? (
+                    <p className="text-xs text-destructive">
+                      A domain/regex rule also matches - it must be changed in Settings &gt; Email blocklist.
+                    </p>
+                  ) : null}
+                  <p className="text-sm">
+                    Remove this address from the do-not-send list, register it in the{" "}
+                    <span className="font-medium">whitelist</span> and{" "}
+                    <span className="font-medium">Investors contacts</span>, then send the email?
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base font-semibold">Recipient not registered</h3>
+                  <p className="text-sm">
+                    <span className="font-medium">{registerAsk.email}</span> is not in the whitelist.
+                  </p>
+                  <p className="text-sm">
+                    Register this recipient in the <span className="font-medium">whitelist</span> and{" "}
+                    <span className="font-medium">Investors contacts</span>, then send the email?
+                  </p>
+                </>
+              )}
               <p className="text-xs text-muted-foreground">
                 {registerAsk.willCreateParty
                   ? `A new investor party "${registerAsk.partyName}" will be created (rename it later if needed).`

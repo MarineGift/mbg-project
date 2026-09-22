@@ -144,12 +144,43 @@ export function detectBounce(input: InboundForSuppression): { recipients: string
 const UNSUB_RE =
   /\bunsubscribe\s+me\b|\bplease\s+(unsubscribe|remove)\b|\bremove\s+me\b|\btake\s+me\s+off\b|\bopt[\s-]?out\b|\bstop\s+(sending|emailing|contacting)\b|\bdo\s+not\s+(e-?mail|contact)\s+me\b|수신\s*거부|구독\s*취소|메일.*(받지\s*않|그만\s*보내|중단)|더\s*이상.*보내지/i;
 
+/**
+ * The part of a reply the sender actually wrote: cut at the first quoted-history
+ * marker, at the signature delimiter / a sign-off line, and cap the length
+ * (real opt-out requests are short and at the top).
+ */
+export function freshReplyText(text: string): string {
+  const lines = (text ?? '').replace(/\r\n/g, '\n').split('\n');
+  const out: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (
+      /^>/.test(line) ||
+      /^On .+wrote:?$/i.test(line) ||
+      /wrote:$/i.test(line) ||
+      /^-{2,}\s*(Original|Forwarded) Message/i.test(line) ||
+      /^_{5,}$/.test(line) ||
+      /^From:\s.+/i.test(line) ||
+      /^(보낸 사람|From)\s*:/.test(line) ||
+      /^--\s*$/.test(raw) ||
+      /^(best|best regards|regards|kind regards|warm regards|thanks|thank you|many thanks|sincerely|cheers|br|감사합니다|드림)[,.!]?$/i.test(line)
+    ) {
+      break;
+    }
+    out.push(raw);
+  }
+  return out.join('\n').slice(0, 1200);
+}
+
 /** Detect an unsubscribe request; returns the SENDER address to suppress. */
 export function detectUnsubscribe(input: InboundForSuppression): { email: string } | null {
   const from = input.fromAddress.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return null;
   if (/mailer-daemon|postmaster/i.test(from)) return null;
-  const hay = `${input.subject ?? ''}\n${input.text ?? ''}`;
+  // 2026-09-21: scan only the sender's NEW text, above quoted history and the
+  // sign-off/signature. A business reply (Strategic Ventures) was auto-
+  // suppressed because a match sat in the quoted thread / company footer.
+  const hay = `${input.subject ?? ''}\n${freshReplyText(input.text ?? '')}`;
   if (!UNSUB_RE.test(hay)) return null;
   if (isOwn(from, ownSet(input.ownAddresses))) return null;
   return { email: from };

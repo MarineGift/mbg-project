@@ -71,6 +71,7 @@ export interface ComposeResult {
     | 'send_failed'
     | 'database'
     | 'not_whitelisted'
+    | 'blocklisted'
     | 'not_found';
   errorMessage?: string;
   /** the outbound communications row id on success */
@@ -247,7 +248,9 @@ export async function sendOutboundManual(
     const errorCode: ComposeResult['errorCode'] =
       result.errorCode === 'not_whitelisted'
         ? 'not_whitelisted'
-        : result.errorCode === 'database'
+        : result.errorCode === 'blocklisted'
+          ? 'blocklisted'
+          : result.errorCode === 'database'
           ? 'database'
           : 'send_failed';
     return { ok: false, errorCode, errorMessage: result.errorMessage };

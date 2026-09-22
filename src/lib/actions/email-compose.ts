@@ -91,7 +91,7 @@ export async function sendEmail(payload: ComposePayload): Promise<{
   messageId?: string;
   error?: string;
   /** Step 4: surfaced so the dialog can offer "add to whitelist and send". */
-  errorCode?: "not_whitelisted" | "database" | "send_failed";
+  errorCode?: "not_whitelisted" | "blocklisted" | "database" | "send_failed";
   /** The blocked recipient address (when errorCode === 'not_whitelisted'). */
   blockedRecipient?: string;
 }> {
@@ -183,13 +183,15 @@ export async function sendEmail(payload: ComposePayload): Promise<{
     const errorCode =
       result.errorCode === "not_whitelisted"
         ? "not_whitelisted"
-        : result.errorCode === "database"
+        : result.errorCode === "blocklisted"
+          ? "blocklisted"
+          : result.errorCode === "database"
           ? "database"
           : "send_failed";
     // For not_whitelisted, the core puts the blocked address in errorMessage
     // ("Recipient not in whitelist: <addr>"); extract it for the prompt.
     const blockedRecipient =
-      errorCode === "not_whitelisted"
+      errorCode === "not_whitelisted" || errorCode === "blocklisted"
         ? (result.errorMessage?.split(":").pop()?.trim() ?? undefined)
         : undefined;
     return {
