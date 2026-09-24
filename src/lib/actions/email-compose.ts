@@ -50,7 +50,7 @@ export interface AIReplyPayload {
   partyId: string;
   contactId?: string | null;
   tone?: "professional" | "friendly" | "concise";
-  /** Reply language: "auto" mirrors the language of the original email. */
+  /** Ignored: reply language is fixed server-side (English default, Korean only for Korean mail). */
   language?: "auto" | "en" | "ko";
   /** Optional free-text guidance from the user: what the reply should say/do. */
   instructions?: string;
@@ -208,6 +208,47 @@ export async function sendEmail(payload: ComposePayload): Promise<{
 // ─────────────────────────────────────────────
 // generate an AI reply
 // ─────────────────────────────────────────────
+// ---------------------------------------------
+// reply language: fixed rule (English default; Korean only for Korean mail)
+// ---------------------------------------------
+const HANGUL_RE = /[\uAC00-\uD7A3\u3131-\u318E]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+/** Drop quoted history so an old Korean/English thread below the new message
+ *  does not decide the language. */
+function stripQuotedHistory(text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (
+      /^On .{3,200}wrote:\s*$/i.test(t) ||
+      /^-{2,}\s*(Original Message|Forwarded message)/i.test(t) ||
+      /\uB2D8\uC774 \uC791\uC131:\s*$/.test(t) ||           // Korean Gmail quote header
+      (out.length > 0 && /^(From|\uBCF4\uB0B8 \uC0AC\uB78C|\uBCF4\uB0B8\uC0AC\uB78C)\s*:/.test(t)) // From: header (EN/KO)
+    ) break;
+    if (t.startsWith(">")) continue;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/** Korean only when Hangul clearly dominates; everything else is English. */
+function scoreLanguage(text: string): "en" | "ko" {
+  const clean = text.replace(/https?:\/\/\S+|\S+@\S+/g, " ");
+  const hangul = (clean.match(HANGUL_RE) ?? []).length;
+  if (hangul === 0) return "en";
+  const latin = (clean.match(LATIN_RE) ?? []).length;
+  // one Hangul syllable ~ 2-3 Latin letters of content
+  return hangul * 2.5 >= latin ? "ko" : "en";
+}
+
+function detectReplyLanguage(subject: string, body: string): "en" | "ko" {
+  const main = stripQuotedHistory(body);
+  const basis = main.trim().length >= 20 ? main : body;
+  return scoreLanguage(`${subject ?? ""}\n${basis}`);
+}
+
 export async function generateAIReply(payload: AIReplyPayload): Promise<{
   success: boolean;
   draft?: string;
@@ -236,13 +277,15 @@ export async function generateAIReply(payload: AIReplyPayload): Promise<{
 
   const originalBody = comm.body_plain ?? comm.body_html?.replace(/<[^>]+>/g, "") ?? "";
   const tone = payload.tone ?? "professional";
-  const language = payload.language ?? "auto";
+  // Language is FIXED by rule, not by the model or the UI:
+  // English mail -> English reply, Korean mail -> Korean reply, default English.
+  // (payload.language is ignored on purpose.)
+  const language = detectReplyLanguage(comm.subject ?? "", originalBody);
+  const languageName = language === "ko" ? "Korean" : "English";
   const languageInstruction =
-    language === "en"
-      ? "Write the entire reply in English."
-      : language === "ko"
-        ? "Write the entire reply in Korean."
-        : "LANGUAGE: Detect the language of the original email below and write the ENTIRE reply in that same language. If the original email is in English, the reply MUST be in English. Do not default to Korean and do not translate.";
+    `LANGUAGE (mandatory): Write the ENTIRE reply in ${languageName}. ` +
+    `The user's instructions may be written in Korean or another language - they are internal guidance only and must NOT change the reply language. ` +
+    `Never mix languages and never translate the recipient's name.`;
 
   const systemPrompt = `You are a B2B sales email professional.
 Write a ${tone === "professional" ? "professional and courteous" : tone === "friendly" ? "warm and friendly" : "concise and clear"} reply draft for the incoming email.
@@ -268,11 +311,20 @@ Write a plain text reply draft for this email. Do not use any HTML tags.`;
 
   try {
     // OpenAI - the only AI call in the app (runs only when the user presses the button)
-    const draft = await generateReply({
+    let draft = await generateReply({
       system: systemPrompt,
       user: userPrompt,
       maxTokens: 1000,
     });
+
+    // Guard: if the model still answered in the wrong language, retry once.
+    if (draft.trim() && scoreLanguage(draft) !== language) {
+      draft = await generateReply({
+        system: `${systemPrompt}\n- CRITICAL: Your previous draft was in the wrong language. Output ${languageName} ONLY.`,
+        user: userPrompt,
+        maxTokens: 1000,
+      });
+    }
 
     // Safety net: strip a trailing sign-off / signature block the model may add
     // despite instructions; the user's signature is appended automatically at send.
