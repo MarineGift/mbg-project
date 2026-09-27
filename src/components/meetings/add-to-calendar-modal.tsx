@@ -185,7 +185,7 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg grid-cols-[minmax(0,1fr)] max-h-[88vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <CalendarPlus className="w-4 h-4" />
@@ -228,9 +228,9 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
                   href={parsed.meetingUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="truncate underline inline-flex items-center gap-1"
+                  className="min-w-0 flex-1 underline flex items-center gap-1"
                 >
-                  {parsed.meetingUrl.replace(/^https?:\/\//, '')}
+                  <span className="truncate">{parsed.meetingUrl.replace(/^https?:\/\//, '')}</span>
                   <ExternalLink className="w-3 h-3 shrink-0" />
                 </a>
               </div>
@@ -279,7 +279,7 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="space-y-1">
                   <Label htmlFor="atc-when" className="text-xs">Date & time</Label>
                   <Input
@@ -298,7 +298,7 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
                       setZone(next)
                     }}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {zoneOptions.map((t) => (
                         <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -317,14 +317,14 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
                 </p>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="space-y-1">
                   <Label className="text-xs">Duration</Label>
                   <Select
                     value={String(duration)}
                     onValueChange={(v) => setDuration(Number(v))}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {DURATIONS.map((d) => (
                         <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
@@ -335,7 +335,7 @@ export function AddToCalendarModal({ open, onClose, source, timeZone }: Props) {
                 <div className="space-y-1">
                   <Label className="text-xs">Type</Label>
                   <Select value={meetingType} onValueChange={setMeetingType}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {MEETING_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>
