@@ -1108,6 +1108,7 @@ export class MailCarrierClient {
       this.organizationId,
       {
         fromAddress: headers.from.address,
+        fromName: headers.from.name ?? null,
         subject: headers.subject,
         bodyPlain: parsed.text ?? '',
         headers: headers.rawSelectedHeaders ?? {},

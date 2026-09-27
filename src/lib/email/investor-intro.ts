@@ -218,6 +218,8 @@ const PLATFORM_HOSTS = new Set([
   'angel.co', 'wellfound.com', 'pitchbook.com', 'google.com', 'microsoft.com',
   'apple.com', 'amazon.com', 'samsung.com', 'notion.site', 'wix.com',
   'squarespace.com', 'linktr.ee', 'bit.ly', 'mailchimp.com', 'hubspot.com',
+  // 2026-09-27: accelerator broadcasts (Activate Houston cohort mail)
+  'activate.org',
 ]);
 
 /** hosts that belong to a platform (or any subdomain of one) */
