@@ -16,6 +16,8 @@ import { EmailAttendeesModal } from '@/components/calendar/email-attendees-modal
 // 2026-09-14: meetings (app.meetings) are editable/deletable from the calendar too
 import { MeetingEditModal } from '@/components/meetings/meeting-edit-modal'
 import { deleteMeetingAction } from '@/app/actions/meetings'
+// 2026-09-27: drag & drop rescheduling (Google write-back + Pipeline dates)
+import { moveCalendarItemAction } from '@/app/actions/calendar-move'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -598,6 +600,55 @@ export default function CalendarPage() {
     )
   }, [range])
 
+  // 2026-09-27: drag & drop move. Optimistic: the chip jumps at once, the row
+  // is updated on the server (Google/Microsoft write-back, deal dates), then the
+  // visible range is re-pulled silently (no Loading swap, so the month stays).
+  const [moveMsg, setMoveMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const silentReload = useCallback(async () => {
+    if (!range) return
+    try { setItems(await getCalendarFeed(range.start, range.end)) } catch { /* keep optimistic */ }
+  }, [range])
+
+  async function handleItemMove(item: CalendarItem, targetDay: Date) {
+    const oldStart = new Date(item.start_at)
+    const oldDay = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate())
+    const newDay = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate())
+    const dayDelta = Math.round((newDay.getTime() - oldDay.getTime()) / 86_400_000)
+    if (dayDelta === 0) return
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const toYmd = `${newDay.getFullYear()}-${pad(newDay.getMonth() + 1)}-${pad(newDay.getDate())}`
+
+    // same local wall-clock time on the target day (DST-safe via setFullYear)
+    const ns = new Date(oldStart)
+    ns.setFullYear(newDay.getFullYear(), newDay.getMonth(), newDay.getDate())
+    const dur = new Date(item.end_at).getTime() - oldStart.getTime()
+    const optimistic: CalendarItem = item.is_all_day && /T00:00:00$/.test(item.start_at)
+      ? { ...item, start_at: `${toYmd}T00:00:00`, end_at: `${toYmd}T00:00:00` }
+      : { ...item, start_at: ns.toISOString(), end_at: new Date(ns.getTime() + Math.max(dur, 0)).toISOString() }
+    setItems(prev => prev.map(it => (it.id === item.id ? optimistic : it)))
+
+    const res = await moveCalendarItemAction({
+      feed_source:     item.feed_source ?? (item.type === 'meeting' ? 'meeting' : 'event'),
+      id:              item.id,
+      source_event_id: item.source_event_id ?? null,
+      deal_id:         item.deal_id ?? null,
+      toYmd,
+      dayDelta,
+      newStartIso:     item.is_all_day ? null : ns.toISOString(),
+    })
+    if (res.ok) {
+      const where = item.feed_source === 'event' && (item.source === 'google' || item.source === 'microsoft')
+        ? ` (${item.source === 'google' ? 'Google' : 'Microsoft'} Calendar updated)`
+        : item.feed_source?.startsWith('milestone_') ? ' (Pipeline deal date updated)' : ''
+      setMoveMsg({ ok: true, text: `Moved to ${toYmd}${where}` })
+    } else {
+      setMoveMsg({ ok: false, text: res.error ?? 'Move failed' })
+    }
+    void silentReload()
+    setTimeout(() => setMoveMsg(null), 4000)
+  }
+
   function handleCreateEvent(date: Date) {
     setCreateDate(date)
     setCreateMode('event')
@@ -664,7 +715,19 @@ export default function CalendarPage() {
           onCreateEvent={handleCreateEvent}
           onItemClick={setDetailItem}
           onRangeChange={loadItems as never}
+          onItemMove={handleItemMove}
         />
+      )}
+
+      {moveMsg && (
+        <div
+          className={cn(
+            'fixed bottom-4 right-4 z-50 rounded-md px-3 py-2 text-sm shadow-lg',
+            moveMsg.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white',
+          )}
+        >
+          {moveMsg.text}
+        </div>
       )}
 
       {/* Quick Event Modal */}

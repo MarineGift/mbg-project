@@ -1,12 +1,17 @@
 'use client'
 // src/components/calendar/calendar-event-chip.tsx
 import type { CalendarItem } from '@/lib/queries/calendar'
+import type React from 'react'
 import { cn } from '@/lib/utils'
 
 interface Props {
   item:      CalendarItem
   compact?:  boolean
   onClick?:  () => void
+  /** 2026-09-27: drag & drop rescheduling */
+  draggable?:   boolean
+  onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
+  onDragEnd?:   () => void
 }
 
 // Deterministic color by source/feed (source always wins so Google/URM/To-Do/etc.
@@ -50,7 +55,7 @@ function chipIcon(item: CalendarItem): string {
   return FEED_ICON[item.feed_source ?? ''] ?? FEED_ICON[item.type] ?? ''
 }
 
-export function CalendarEventChip({ item, compact, onClick }: Props) {
+export function CalendarEventChip({ item, compact, onClick, draggable, onDragStart, onDragEnd }: Props) {
   const icon = chipIcon(item)
   const timeStr = item.is_all_day
     ? null
@@ -59,9 +64,13 @@ export function CalendarEventChip({ item, compact, onClick }: Props) {
   return (
     <button
       onClick={onClick}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={cn(
         'w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate',
-        'hover:opacity-90 transition-opacity cursor-pointer',
+        'hover:opacity-90 transition-opacity',
+        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
         chipClass(item),
         compact && 'py-0'
       )}

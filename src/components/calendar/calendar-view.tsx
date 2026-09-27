@@ -1,6 +1,7 @@
 'use client'
 // src/components/calendar/calendar-view.tsx
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo, useTransition, useRef } from 'react'
+import type React from 'react'
 import type { CalendarItem } from '@/lib/queries/calendar'
 import { CalendarEventChip } from './calendar-event-chip'
 import { CALENDAR_FEED_META, CALENDAR_FEED_SOURCES } from '@/lib/queries/calendar-meta'
@@ -18,6 +19,8 @@ interface Props {
   onCreateEvent?:    (date: Date) => void
   onItemClick?:      (item: CalendarItem) => void
   onRangeChange?:    (start: Date, end: Date) => void
+  /** 2026-09-27: a chip was dropped on another day */
+  onItemMove?:       (item: CalendarItem, targetDay: Date) => void
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -72,18 +75,50 @@ function itemsForDay(items: CalendarItem[], day: Date): CalendarItem[] {
 }
 
 // ─────────────────────────────────────────────
+// Drag & drop (2026-09-27)
+// ─────────────────────────────────────────────
+
+/** communications are history; a recurring occurrence would move the series */
+export function isMovableItem(item: CalendarItem): boolean {
+  if (item.feed_source === 'communication' || item.type === 'communication') return false
+  if (item.source_event_id) return false
+  if (item.recurrence_rule) return false
+  return true
+}
+
+export interface DragApi {
+  enabled:   boolean
+  overKey:   string | null
+  chipProps: (item: CalendarItem) => {
+    draggable?:   boolean
+    onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
+    onDragEnd?:   () => void
+  }
+  dropProps: (day: Date) => {
+    onDragOver:  (e: React.DragEvent<HTMLElement>) => void
+    onDragLeave: (e: React.DragEvent<HTMLElement>) => void
+    onDrop:      (e: React.DragEvent<HTMLElement>) => void
+  }
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+// ─────────────────────────────────────────────
 // Month View
 // ─────────────────────────────────────────────
 
 function MonthGrid({
   year, month, items, today,
-  onDayClick, onItemClick,
+  onDayClick, onItemClick, drag,
 }: {
   year: number; month: number
   items: CalendarItem[]
   today: Date
   onDayClick: (d: Date) => void
   onItemClick: (item: CalendarItem) => void
+  drag: DragApi
 }) {
   // Build 6-week grid
   const firstDay  = new Date(year, month, 1)
@@ -124,10 +159,12 @@ function MonthGrid({
           <div
             key={idx}
             onClick={() => onDayClick(day)}
+            {...drag.dropProps(day)}
             className={cn(
               'border-r border-b border-border p-1 min-h-[80px] cursor-pointer',
               'hover:bg-accent/30 transition-colors group',
               isOtherMonth && 'bg-muted/30',
+              drag.overKey === dayKey(day) && 'bg-blue-100/70 ring-2 ring-inset ring-blue-400',
             )}
           >
             <div className="flex items-center justify-between mb-0.5">
@@ -151,6 +188,7 @@ function MonthGrid({
                   item={item}
                   compact
                   onClick={((e: any) => { (e as any).stopPropagation?.(); onItemClick(item) }) as never}
+                  {...drag.chipProps(item)}
                 />
               ))}
               {overflow > 0 && (
@@ -174,7 +212,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 function WeekGrid({
   weekStart, items, today,
-  onSlotClick, onItemClick, onDayClick,
+  onSlotClick, onItemClick, onDayClick, drag,
 }: {
   weekStart: Date
   items: CalendarItem[]
@@ -182,6 +220,7 @@ function WeekGrid({
   onSlotClick: (d: Date) => void
   onItemClick: (item: CalendarItem) => void
   onDayClick: (d: Date) => void
+  drag: DragApi
 }) {
   const days: Date[] = []
   for (let i = 0; i < 7; i++) {
@@ -250,9 +289,16 @@ function WeekGrid({
           const shown  = dayAll.slice(0, MAX_WEEK_ALLDAY)
           const extra  = dayAll.length - shown.length
           return (
-            <div key={i} className="border-l border-border min-h-[28px] p-0.5 space-y-0.5">
+            <div
+              key={i}
+              {...drag.dropProps(day)}
+              className={cn(
+                'border-l border-border min-h-[28px] p-0.5 space-y-0.5',
+                drag.overKey === dayKey(day) && 'bg-blue-100/70 ring-2 ring-inset ring-blue-400',
+              )}
+            >
               {shown.map(item => (
-                <CalendarEventChip key={item.id} item={item} compact onClick={() => onItemClick(item)} />
+                <CalendarEventChip key={item.id} item={item} compact onClick={() => onItemClick(item)} {...drag.chipProps(item)} />
               ))}
               {extra > 0 && (
                 <button
@@ -290,9 +336,11 @@ function WeekGrid({
               key={di}
               className={cn(
                 'border-l border-border relative',
-                isSameDay(day, today) && 'bg-blue-50/30 dark:bg-blue-900/10'
+                isSameDay(day, today) && 'bg-blue-50/30 dark:bg-blue-900/10',
+                drag.overKey === dayKey(day) && 'bg-blue-100/60',
               )}
               onClick={() => onSlotClick(day)}
+              {...drag.dropProps(day)}
             >
               {/* Hour grid lines */}
               {HOURS.map(h => (
@@ -314,7 +362,7 @@ function WeekGrid({
                   }}
                   onClick={e => { e.stopPropagation(); onItemClick(item) }}
                 >
-                  <CalendarEventChip item={item} />
+                  <CalendarEventChip item={item} {...drag.chipProps(item)} />
                 </div>
               ))}
             </div>
@@ -329,7 +377,7 @@ function WeekGrid({
 // Main CalendarView
 // ─────────────────────────────────────────────
 
-export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange }: Props) {
+export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange, onItemMove }: Props) {
   const today  = useMemo(() => startOfDay(new Date()), [])
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -338,6 +386,51 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
   const [dayModal, setDayModal] = useState<Date | null>(null)
   const [pivot, setPivot] = useState(startOfDay(new Date()))   // current month/week anchor
   const [showCrm, setShowCrm] = useState(false)                // tasks + communications hidden by default
+
+  // ── Drag & drop rescheduling (2026-09-27) ──
+  const dragItem = useRef<CalendarItem | null>(null)
+  const [overKey, setOverKey] = useState<string | null>(null)
+  const drag: DragApi = {
+    enabled: !!onItemMove,
+    overKey,
+    chipProps: (item) => {
+      if (!onItemMove || !isMovableItem(item)) return {}
+      return {
+        draggable: true,
+        onDragStart: (e) => {
+          e.stopPropagation()
+          dragItem.current = item
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', item.id)
+        },
+        onDragEnd: () => { dragItem.current = null; setOverKey(null) },
+      }
+    },
+    dropProps: (day) => ({
+      onDragOver: (e) => {
+        if (!dragItem.current) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        const k = dayKey(day)
+        if (overKey !== k) setOverKey(k)
+      },
+      onDragLeave: (e) => {
+        const next = e.relatedTarget as Node | null
+        if (next && (e.currentTarget as Node).contains(next)) return
+        setOverKey(prev => (prev === dayKey(day) ? null : prev))
+      },
+      onDrop: (e) => {
+        const it = dragItem.current
+        dragItem.current = null
+        setOverKey(null)
+        if (!it || !onItemMove) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (isSameDay(startOfDay(new Date(it.start_at)), day)) return
+        onItemMove(it, day)
+      },
+    }),
+  }
 
   // ── Filtered items (hide CRM items unless toggled) ──
   const visibleItems = useMemo(
@@ -469,6 +562,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           today={today}
           onDayClick={d => setDayModal(d)}
           onItemClick={item => onItemClick?.(item)}
+          drag={drag}
         />
       ) : view === 'week' ? (
         <WeekGrid
@@ -478,6 +572,7 @@ export function CalendarView({ items, onCreateEvent, onItemClick, onRangeChange 
           onSlotClick={d => onCreateEvent?.(d)}
           onItemClick={item => onItemClick?.(item)}
           onDayClick={d => setDayModal(d)}
+          drag={drag}
         />
       ) : (
         <DayBoard
