@@ -3,7 +3,7 @@
  * Greentown Labs investor-intro detection (rule-based, no AI).
  */
 import { describe, it, expect } from 'vitest';
-import { detectInvestorIntro, domainMatches, extractIntroFirm, extractPairFirm, hostOf, isPlatformHost, isRoleSender, mentionsUs } from '../../lib/email/investor-intro';
+import { detectInvestorIntro, domainLabel, domainMatches, extractIntroFirm, extractPairFirm, hostOf, isPlatformHost, isRoleSender, mentionsUs, nameKeys, personName } from '../../lib/email/investor-intro';
 
 describe('investor-intro', () => {
   it('reads the firm from the warm-intro subject', () => {
@@ -97,5 +97,36 @@ describe('sender-domain guards', () => {
     expect(mentionsUs({ subject: 'APV <> Marinebio intro', bodyPlain: '' })).toBe(true);
     expect(mentionsUs({ subject: 'Password reset', bodyPlain: 'Account yunyoung.heo@marinebiogroup.com' })).toBe(false);
     expect(mentionsUs({ subject: 'Hi', bodyPlain: 'x', headers: { 'in-reply-to': '<a@b>' } })).toBe(true);
+  });
+});
+
+describe('2026-09-27 intro participant / name-domain helpers', () => {
+  it('reads the firm from a Greentown intro subject with parentheses', () => {
+    expect(extractPairFirm('Introduction: Cooper Bates (Clean Energy Ventures) <> Yun-Young Heo (MarineBio Group)'))
+      .toBe('Clean Energy Ventures');
+    expect(extractPairFirm('Automatic reply: Introduction: Cooper Bates (Clean Energy Ventures) <> Yun-Young Heo (MarineBio Group)'))
+      .toBe('Clean Energy Ventures');
+    expect(extractPairFirm('Re: Introduction: Yun-Young Heo (MarineBio Group) <> Jane Roe (Acme Capital)'))
+      .toBe('Acme Capital');
+    // existing forms still work
+    expect(extractPairFirm('Acme Capital <> MBG follow-up')).toBe('Acme Capital');
+  });
+
+  it('matches a sender domain to an investor name', () => {
+    expect(domainLabel('cbates@CleanEnergyVentures.com')).toBe('cleanenergyventures');
+    expect(domainLabel('a@mail.clean-energy-ventures.co.uk')).toBe('cleanenergyventures');
+    expect(domainLabel('a@x.io')).toBeUndefined();
+    expect(nameKeys('Clean Energy Ventures')).toContain('cleanenergyventures');
+    expect(nameKeys('Clean Energy Ventures Group, LLC')).toContain('cleanenergyventures');
+    expect(nameKeys('Samsung Ventures')).not.toContain('samsung');
+  });
+
+  it('accepts real person names only', () => {
+    expect(personName('Cooper Bates')).toBe('Cooper Bates');
+    expect(personName('"Cooper Bates"')).toBe('Cooper Bates');
+    expect(personName('Yun Young Heo')).toBeUndefined();
+    expect(personName('Pulp & Paper Chronicle via LinkedIn')).toBeUndefined();
+    expect(personName('Indiegogo')).toBeUndefined();
+    expect(personName('cbates@x.com')).toBeUndefined();
   });
 });

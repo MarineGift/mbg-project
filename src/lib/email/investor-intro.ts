@@ -47,6 +47,8 @@ const INTRO_WORDS =
 
 export interface InvestorIntroInput {
   fromAddress?: string | null;
+  /** display name of the sender ("Cooper Bates") - rule E2 */
+  fromName?: string | null;
   subject?: string | null;
   bodyPlain?: string | null;
   headers?: Record<string, string>;
@@ -121,6 +123,12 @@ export function extractPairFirm(subject: string | null | undefined): string | un
     const f = (x ?? '').replace(/\s+@.*$/, '').replace(/[\s.!?|,]+$/, '').trim();
     return f.length >= 2 && f.length <= 120 ? f : undefined;
   };
+  // 2026-09-27: "Introduction: Cooper Bates (Clean Energy Ventures) <> Yun-Young
+  // Heo (MarineBio Group)" - the firm is the other side's parenthesis.
+  const p1 = new RegExp(`\\(([^()]+)\\)\\s*(?:<>|<->)\\s*[^()<>]*\\(\\s*${us}\\s*\\)`, 'i').exec(s);
+  if (p1) return clean(p1[1]);
+  const p2 = new RegExp(`\\(\\s*${us}\\s*\\)\\s*(?:<>|<->)\\s*[^()<>]*\\(([^()]+)\\)`, 'i').exec(s);
+  if (p2) return clean(p2[1]);
   const a = new RegExp(`${us}\\s*(?:<>|<->|x|&|\\/)\\s*([^|\\n@()]+)`, 'i').exec(s);
   if (a) return clean(a[1]);
   const b = new RegExp(`([^|\\n@()]+?)\\s*(?:<>|<->)\\s*${us}\\b`, 'i').exec(s);
@@ -139,7 +147,9 @@ export type InvestorReason =
   | NonNullable<InvestorIntroResult['reason']>
   | 'subject_firm'
   | 'sender_domain'
-  | 'prior_intro_sender';
+  | 'name_domain'
+  | 'prior_intro_sender'
+  | 'intro_participant';
 
 export interface InvestorIntroResolution {
   /** set when the message should be re-linked to an investor party */
@@ -294,6 +304,139 @@ async function uniqueInvestorByDomain(
   return ids.size === 1 ? [...ids][0] : undefined;
 }
 
+/** our own domains / names - never evidence of an investor */
+const OWN_DOMAINS = ['marinebiogroup.com', 'marinepad.com'];
+const OWN_NAME = /\b(yun[\s-]*young|heo)\b/i;
+
+function isOwnDomain(domain: string): boolean {
+  return OWN_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
+function isGreentownDomain(domain: string): boolean {
+  return GREENTOWN_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
+const LEGAL_SUFFIX = /(inc|llc|llp|lp|ltd|limited|corp|corporation|co|group|gmbh|ag|sa|bv|plc)$/;
+
+/**
+ * "Clean Energy Ventures" -> ["cleanenergyventures"],
+ * "Clean Energy Ventures Group, LLC" -> [..."cleanenergyventuresgroup", "cleanenergyventures"]
+ */
+export function nameKeys(name: string | null | undefined): string[] {
+  let k = (name ?? '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+  const out = new Set<string>();
+  for (let i = 0; i < 3 && k.length >= 6; i += 1) {
+    out.add(k);
+    const next = k.replace(LEGAL_SUFFIX, '');
+    if (next === k) break;
+    k = next;
+  }
+  return [...out].filter((x) => x.length >= 6);
+}
+
+/** "cbates@CleanEnergyVentures.com" -> "cleanenergyventures" (registrable label) */
+export function domainLabel(address: string): string | undefined {
+  const domain = address.toLowerCase().split('@')[1] ?? '';
+  const labels = domain.split('.').filter(Boolean);
+  if (labels.length < 2) return undefined;
+  // co.uk / com.au style second-level suffixes
+  const sld = labels.length >= 3 && /^(co|com|ac|or|ne|go)$/.test(labels[labels.length - 2] ?? '');
+  const label = labels[labels.length - (sld ? 3 : 2)] ?? '';
+  return label.replace(/-/g, '').length >= 6 ? label.replace(/-/g, '') : undefined;
+}
+
+/**
+ * Rule G: the sender's domain IS the investor's name
+ * (cbates@cleanenergyventures.com -> "Clean Energy Ventures"). Much tighter
+ * than rule F (website host), so it needs no "mentions us" condition - a
+ * calendar invite from the partner counts. Personal senders only.
+ */
+async function uniqueInvestorByNameDomain(
+  supabase: Sb,
+  organizationId: string,
+  sender: string,
+): Promise<string | undefined> {
+  const domain = sender.slice(sender.lastIndexOf('@') + 1);
+  if (!domain || GENERIC_DOMAINS.has(domain) || isPlatformHost(domain) || isOwnDomain(domain)) {
+    return undefined;
+  }
+  if (isRoleSender(sender)) return undefined;
+  const label = domainLabel(sender);
+  if (!label) return undefined;
+  const { data } = await supabase
+    .schema('app')
+    .from('parties')
+    .select('id, party_name, party_types!inner(code)')
+    .eq('organization_id', organizationId)
+    .eq('party_types.code', 'investor')
+    .is('deleted_at', null)
+    .ilike('party_name', `${escapeLike(label.slice(0, 3))}%`)
+    .limit(500);
+  const ids = new Set<string>();
+  for (const r of (data ?? []) as Array<{ id: string; party_name: string | null }>) {
+    if (nameKeys(r.party_name).includes(label)) ids.add(r.id);
+  }
+  return ids.size === 1 ? [...ids][0] : undefined;
+}
+
+/** a usable person name: two+ words, letters only, not us */
+export function personName(name: string | null | undefined): string | undefined {
+  const n = (name ?? '').replace(/["']/g, '').replace(/\s+/g, ' ').trim();
+  if (!n || n.includes('@') || OWN_NAME.test(n)) return undefined;
+  const words = n.split(' ');
+  if (words.length < 2 || words.length > 4) return undefined;
+  if (!words.every((w) => /^[A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F.-]+$/.test(w))) return undefined;
+  return n;
+}
+
+/**
+ * Rule E2: the sender was a participant of an earlier investor intro - named
+ * in its subject ("Introduction: Cooper Bates (Clean Energy Ventures) <> ...")
+ * or on its To/Cc. Returns that intro's investor party (or the firm its
+ * subject names).
+ */
+async function priorIntroParticipant(
+  supabase: Sb,
+  organizationId: string,
+  sender: string,
+  rawSender: string,
+  fromName: string | null | undefined,
+): Promise<{ found: boolean; partyId?: string }> {
+  const person = personName(fromName);
+  const addrs = [...new Set([sender, rawSender].filter((a) => a && !/[",{}()]/.test(a)))];
+  const ors: string[] = [];
+  for (const a of addrs) {
+    ors.push(`to_addresses.cs.{"${a}"}`, `cc_addresses.cs.{"${a}"}`);
+  }
+  if (person) ors.push(`subject.ilike.*${person.replace(/[*,()]/g, ' ')}*`);
+  if (ors.length === 0) return { found: false };
+  const since = new Date(Date.now() - 180 * 86400000).toISOString();
+  const { data } = await supabase
+    .schema('app')
+    .from('communications')
+    .select('party_id, subject')
+    .eq('organization_id', organizationId)
+    .eq('external_data->>inferred_party_type', 'investor')
+    .is('deleted_at', null)
+    .gte('occurred_at', since)
+    .or(ors.join(','))
+    .order('occurred_at', { ascending: false })
+    .limit(5);
+  const rows = (data ?? []) as Array<{ party_id: string | null; subject: string | null }>;
+  if (rows.length === 0) return { found: false };
+  for (const r of rows) {
+    if (r.party_id && (await partyTypeOf(supabase, r.party_id)) === 'investor') {
+      return { found: true, partyId: r.party_id };
+    }
+    const firm = extractPairFirm(r.subject) ?? extractIntroFirm(r.subject);
+    if (firm) {
+      const id = await uniqueInvestorByName(supabase, organizationId, firm);
+      if (id) return { found: true, partyId: id };
+    }
+  }
+  return { found: true };
+}
+
 /** latest earlier mail from this sender that was classified investor */
 async function priorInvestorMail(
   supabase: Sb,
@@ -330,9 +473,15 @@ async function priorInvestorMail(
  *        senders only (no role/no-reply locals), platform hosts (linkedin.com,
  *        microsoft.com, samsung.com, ...) never match, and the mail must be a
  *        reply or name MarineBio / MBG
+ *   G    (2026-09-27) the sender's domain label equals an investor party's
+ *        name (cbates@cleanenergyventures.com -> Clean Energy Ventures);
+ *        personal senders only, no "mentions us" requirement
  *   E    the same sender already had mail classified investor (e.g. the
  *        warm-intro reply) - later mail from them (calendar invites, follow-ups)
  *        follows it to the same investor party
+ *   E2   (2026-09-27) the sender was named in the subject or on To/Cc of an
+ *        earlier investor mail (Greentown intro "Cooper Bates (Clean Energy
+ *        Ventures) <> Yun-Young Heo (MarineBio Group)")
  *
  * Guard: a message already linked to a business party (paper mill, filler
  * supplier, partner, ...) is left alone, because our own signature mentions
@@ -373,7 +522,11 @@ export async function resolveInvestorIntro(
       return base;
     }
 
-    if (!overridable || currentType === 'investor') return { detection };
+    const senderDomain = sender.slice(sender.lastIndexOf('@') + 1);
+    // an intro sent by Greentown staff is linked to the Greentown party, but a
+    // subject naming an investor firm still makes it that firm's thread
+    const greentownIntro = isGreentownDomain(senderDomain) && !!extractPairFirm(input.subject);
+    if ((!overridable && !greentownIntro) || currentType === 'investor') return { detection };
     if (
       detectAutomated({
         subject: input.subject ?? '',
@@ -414,6 +567,20 @@ export async function resolveInvestorIntro(
       };
     }
 
+    if (greentownIntro) return { detection };
+
+    // G - sender's domain is the investor's name (cleanenergyventures.com ->
+    //     Clean Energy Ventures); no "mentions us" needed (calendar invites)
+    const byNameDomain = await uniqueInvestorByNameDomain(supabase, organizationId, sender);
+    if (byNameDomain) {
+      return {
+        detection,
+        inferredPartyType: 'investor',
+        reason: 'name_domain',
+        relinkPartyId: byNameDomain,
+      };
+    }
+
     // E - sender already known as an investor contact through an intro
     const prior = await priorInvestorMail(supabase, organizationId, sender);
     if (prior) {
@@ -424,6 +591,26 @@ export async function resolveInvestorIntro(
         reason: 'prior_intro_sender',
         ...(prior.partyId && priorType === 'investor' ? { relinkPartyId: prior.partyId } : {}),
       };
+    }
+
+    // E2 - sender was named / copied on an earlier investor intro
+    //      (Greentown intro "Cooper Bates (Clean Energy Ventures) <> ...")
+    if (!isOwnDomain(senderDomain) && !isGreentownDomain(senderDomain) && !isRoleSender(sender)) {
+      const part = await priorIntroParticipant(
+        supabase,
+        organizationId,
+        sender,
+        (input.fromAddress ?? '').trim(),
+        input.fromName,
+      );
+      if (part.found) {
+        return {
+          detection,
+          inferredPartyType: 'investor',
+          reason: 'intro_participant',
+          ...(part.partyId ? { relinkPartyId: part.partyId } : {}),
+        };
+      }
     }
     return { detection };
   } catch (e) {
