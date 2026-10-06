@@ -216,3 +216,141 @@ export async function searchParties(query: string): Promise<
   const { data } = await req;
   return (data ?? []) as Array<{ id: string; party_name: string; country_code: string | null }>;
 }
+
+// ============================================================
+// bulkUpdateDeals  (Bulk update modal, 2026-10-05)
+// ============================================================
+// Pasted investor feedback -> per deal: optional stage move + a 'note'
+// engagement on the deal timeline (party_id = lead company, so it also shows
+// on the company record). Each item is applied independently; the result
+// reports per-item success so one bad row never blocks the rest.
+
+interface BulkUpdateItem {
+  dealId: string;
+  /** null = keep the current stage */
+  stageId: string | null;
+  /** feedback text; empty = no note is logged */
+  note: string;
+}
+
+export async function bulkUpdateDeals(
+  pipelineCode: string,
+  items: BulkUpdateItem[]
+): Promise<{
+  ok: boolean;
+  results: Array<{ dealId: string; ok: boolean; error?: string }>;
+}> {
+  const results: Array<{ dealId: string; ok: boolean; error?: string }> = [];
+  if (!pipelineCode || !Array.isArray(items) || items.length === 0) {
+    return { ok: false, results };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Note type: prefer code 'note', else the first active type.
+  const { data: typeRows } = await supabase
+    .schema('app')
+    .from('engagement_types' as never)
+    .select('id, code, is_active, sort_order')
+    .order('sort_order', { ascending: true });
+  const types = (typeRows ?? []) as Array<{ id: number; code: string; is_active: boolean }>;
+  const noteType =
+    types.find((t) => t.code === 'note') ??
+    types.find((t) => t.is_active) ??
+    types[0] ??
+    null;
+
+  // Stage names for the note title.
+  const { data: stageRows } = await supabase
+    .schema('app')
+    .from('stages' as never)
+    .select('id, name');
+  const stageName = new Map(
+    ((stageRows ?? []) as Array<{ id: string; name: string }>).map((s) => [s.id, s.name])
+  );
+
+  const roleRank: Record<string, number> = {
+    lead: 0, co_investor: 1, participant: 2, advisor: 3, primary: 4,
+  };
+
+  for (const it of items.slice(0, 100)) {
+    try {
+      const { data: dealRow, error: dErr } = await supabase
+        .schema('app')
+        .from('deals' as never)
+        .select('id, organization_id, current_stage_id')
+        .eq('id', it.dealId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (dErr || !dealRow) {
+        results.push({ dealId: it.dealId, ok: false, error: 'Deal not found' });
+        continue;
+      }
+      const deal = dealRow as unknown as {
+        id: string; organization_id: string; current_stage_id: string;
+      };
+      const nowIso = new Date().toISOString();
+
+      const moving = !!it.stageId && it.stageId !== deal.current_stage_id;
+      const patch: Record<string, unknown> = { last_activity_at: nowIso };
+      if (moving) patch.current_stage_id = it.stageId;
+
+      const { error: uErr } = await supabase
+        .schema('app')
+        .from('deals' as never)
+        .update(patch as never)
+        .eq('id', deal.id);
+      if (uErr) {
+        results.push({ dealId: it.dealId, ok: false, error: uErr.message });
+        continue;
+      }
+
+      const note = (it.note ?? '').trim();
+      if (note && noteType) {
+        const { data: dpRows } = await supabase
+          .schema('app')
+          .from('deal_parties' as never)
+          .select('party_id, role')
+          .eq('deal_id', deal.id);
+        const leadPartyId =
+          ((dpRows ?? []) as Array<{ party_id: string; role: string }>)
+            .slice()
+            .sort((a, b) => (roleRank[a.role] ?? 9) - (roleRank[b.role] ?? 9))[0]
+            ?.party_id ?? null;
+
+        const finalStage = moving ? it.stageId! : deal.current_stage_id;
+        const title = moving
+          ? 'Investor feedback - moved to ' + (stageName.get(finalStage) ?? 'new stage')
+          : 'Investor feedback';
+
+        const { error: eErr } = await supabase
+          .schema('app')
+          .from('engagements' as never)
+          .insert({
+            organization_id: deal.organization_id,
+            deal_id: deal.id,
+            party_id: leadPartyId,
+            engagement_type_id: noteType.id,
+            title,
+            occurred_at: nowIso,
+            summary: note.length > 280 ? note.slice(0, 277) + '...' : note,
+            notes: note,
+            stage_id_at_time: finalStage,
+          } as never);
+        if (eErr) {
+          results.push({ dealId: it.dealId, ok: false, error: 'Stage saved, note failed: ' + eErr.message });
+          continue;
+        }
+      }
+      results.push({ dealId: it.dealId, ok: true });
+    } catch (e) {
+      results.push({ dealId: it.dealId, ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  revalidatePath('/pipelines/' + pipelineCode);
+  for (const r of results) {
+    if (r.ok) revalidatePath('/pipelines/' + pipelineCode + '/deals/' + r.dealId);
+  }
+  return { ok: results.every((r) => r.ok), results };
+}

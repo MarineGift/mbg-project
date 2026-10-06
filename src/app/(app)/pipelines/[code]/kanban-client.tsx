@@ -28,12 +28,13 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus } from 'lucide-react';
+import { Plus, Search, X, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { moveDealStage } from './actions';
 import { NewDealModal } from './new-deal-modal';
 import { DealCalendar, DealGantt } from './deal-timeline-views';
+import { BulkUpdateModal, normalize } from './bulk-update-modal';
 
 // ============================================================
 // Types
@@ -178,6 +179,9 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
   }, [campaigns, optimisticDeals]);
   const [view, setView] = useState<'kanban' | 'calendar' | 'gantt'>('kanban');
   const [modalOpen, setModalOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  // Board search (2026-10-05): deal name or any company name.
+  const [search, setSearch] = useState('');
 
   const showRounds = pipeline.code === 'investors' && rounds.length > 0;
 
@@ -230,8 +234,16 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
     let list = optimisticDeals;
     if (roundFilter !== 'all') list = list.filter((d) => d.round?.id === roundFilter);
     if (campaignFilter !== 'all') list = list.filter((d) => d.campaign_id === campaignFilter);
+    const q = normalize(search);
+    if (q) {
+      list = list.filter(
+        (d) =>
+          normalize(d.deal_name).includes(q) ||
+          (d.deal_parties ?? []).some((p) => normalize(p.parties?.party_name ?? '').includes(q))
+      );
+    }
     return list;
-  }, [optimisticDeals, roundFilter, campaignFilter]);
+  }, [optimisticDeals, roundFilter, campaignFilter, search]);
 
   const stageBuckets = useMemo(() => {
     const byStage = new Map<string, Deal[]>();
@@ -276,7 +288,7 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                 </p>
               ) : null}
             </div>
-            <div className="flex items-center gap-3 whitespace-nowrap">
+            <div className="flex flex-wrap items-center justify-end gap-3 whitespace-nowrap">
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{visibleDeals.length} deals</span>
                 {Object.entries(totalValue).map(([cur, sum]) => (
@@ -307,6 +319,36 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
                   )}
                 </div>
               )}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setSearch(''); }}
+                  placeholder="Search investor / deal"
+                  className="w-48 rounded-md border bg-background py-1.5 pl-7 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-ring lg:w-56"
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBulkOpen(true)}
+                className="gap-1.5"
+                title="Paste investor feedback and update many deals at once"
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                Bulk update
+              </Button>
               <Button
                 size="sm"
                 onClick={() => setModalOpen(true)}
@@ -423,6 +465,15 @@ export function KanbanClient({ pipeline, stages, deals, rounds, campaigns }: Pro
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Bulk update from pasted feedback */}
+      <BulkUpdateModal
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        pipelineCode={pipeline.code}
+        stages={stages}
+        deals={optimisticDeals}
+      />
 
       {/* New deal modal */}
       <NewDealModal
