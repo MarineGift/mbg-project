@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AccountScoreBadge } from '@/components/common/account-score-badge';
 import { ContactMethodBadge } from '@/components/common/contact-method-badge';
 import { PaginationBar } from '@/components/common/pagination-bar';
+import { MentorFilterPanel, type MentorFacet } from '@/components/parties/mentor-filter-panel';
 import { SavedViewsDropdown } from '@/components/common/saved-views-dropdown';
 import { fetchAccountScoresMany, type AccountScore, type AccountTier } from '@/lib/queries/account-score';
 import { fetchSavedViews } from '@/lib/queries/saved-views';
@@ -262,6 +263,95 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     }
   }
   const relevantMentorCount = Object.values(mentorRelevanceAll).filter((r) => r.tier === 'High' || r.tier === 'Medium').length;
+
+  // Mentor multi-criteria search (MentorFilterPanel). All 147-ish profiles are
+  // loaded once; filtering happens in memory. OR inside a category, AND across.
+  const spAll = (key: string): string[] => {
+    const v = (sp as any)[key];
+    const arr = Array.isArray(v) ? v : v != null ? [v] : [];
+    return arr.map((x: unknown) => String(x).trim()).filter(Boolean);
+  };
+  const mentorKeyword = isMentor ? spAll('mq').join(' ').trim() : '';
+  type MentorProfileLite = {
+    hay: string;
+    m_exp: string[]; m_sec: string[]; m_prod: string[]; m_tech: string[];
+    m_stage: string[]; m_avail: string[]; m_eng: string[]; m_loc: string[]; m_tier: string[];
+  };
+  const mentorProfileAll: Record<string, MentorProfileLite> = {};
+  const MENTOR_FACET_DEFS: { key: keyof Omit<MentorProfileLite, 'hay'>; label: string; minCount: number }[] = [
+    { key: 'm_exp',   label: 'Expertise',          minCount: 2 },
+    { key: 'm_sec',   label: 'Climatetech sector', minCount: 2 },
+    { key: 'm_tech',  label: 'Technologies',       minCount: 2 },
+    { key: 'm_prod',  label: 'Product types',      minCount: 2 },
+    { key: 'm_stage', label: 'Startup stage',      minCount: 1 },
+    { key: 'm_avail', label: 'Availability',       minCount: 1 },
+    { key: 'm_eng',   label: 'Engagement',         minCount: 1 },
+    { key: 'm_loc',   label: 'Location',           minCount: 1 },
+    { key: 'm_tier',  label: 'MBG relevance',      minCount: 1 },
+  ];
+  const mentorSelected: Record<string, string[]> = {};
+  let mentorFacets: MentorFacet[] = [];
+  if (isMentor) {
+    const strArr = (v: unknown): string[] =>
+      Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [];
+    const regionOf = (loc: string): string => {
+      const l = loc.toLowerCase();
+      if (!l) return 'Not specified';
+      if (/houston|katy|texas|\btx\b|dallas|austin|sugar land|the woodlands/.test(l)) return 'Texas / Houston area';
+      if (/boston|cambridge|somerville|massachusetts|\bma\b|new england/.test(l)) return 'Boston area';
+      if (/new york|\bny\b|nyc/.test(l)) return 'New York';
+      if (/canada|toronto|montreal|vancouver/.test(l)) return 'Canada';
+      if (/remote/.test(l)) return 'Remote';
+      return 'Other';
+    };
+    const engOf = (e: string): string[] => {
+      const l = e.toLowerCase();
+      const out: string[] = [];
+      if (l.includes('in-person')) out.push('In-person');
+      if (l.includes('virtual')) out.push('Virtual');
+      if (out.length === 0) out.push(l.includes('no preference') || l === '' ? 'No preference' : e);
+      return out;
+    };
+    const { data: mRows } = await supabase
+      .schema('app')
+      .from('mentors' as never)
+      .select('party_id, full_name, title, company, location, notes, why_mentor, expertise, sector_focus, product_types, technologies, startup_stage_focus, availability, preferred_engagement');
+    for (const r of ((mRows ?? []) as any[])) {
+      if (!r.party_id) continue;
+      const loc = String(r.location ?? '').trim();
+      const prof: MentorProfileLite = {
+        m_exp: strArr(r.expertise), m_sec: strArr(r.sector_focus), m_prod: strArr(r.product_types),
+        m_tech: strArr(r.technologies), m_stage: strArr(r.startup_stage_focus), m_avail: strArr(r.availability),
+        m_eng: engOf(String(r.preferred_engagement ?? '').trim()),
+        m_loc: [regionOf(loc)],
+        m_tier: [mentorRelevanceAll[r.party_id]?.tier ?? 'Low'],
+        hay: '',
+      };
+      prof.hay = [
+        r.full_name, r.title, r.company, loc, r.notes, r.why_mentor, r.preferred_engagement,
+        ...prof.m_exp, ...prof.m_sec, ...prof.m_prod, ...prof.m_tech, ...prof.m_stage, ...prof.m_avail,
+      ].filter(Boolean).join(' \n ').toLowerCase();
+      mentorProfileAll[r.party_id] = prof;
+    }
+    const TIER_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+    mentorFacets = MENTOR_FACET_DEFS.map((d) => {
+      const counts = new Map<string, number>();
+      for (const prof of Object.values(mentorProfileAll)) {
+        for (const v of new Set(prof[d.key])) counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+      const sel = spAll(d.key);
+      if (sel.length) mentorSelected[d.key] = sel;
+      const options = [...counts.entries()]
+        .filter(([v, c]) => c >= d.minCount || sel.includes(v))
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) =>
+          d.key === 'm_tier'
+            ? (TIER_ORDER[a.value] ?? 9) - (TIER_ORDER[b.value] ?? 9)
+            : b.count - a.count || a.value.localeCompare(b.value));
+      return { key: d.key, label: d.label, options };
+    });
+  }
+  const mentorFilterActive = isMentor && (mentorKeyword !== '' || Object.keys(mentorSelected).length > 0);
 
   // Show supply links column only for filler and paper_mill
   const showLinks = module === 'filler_supplier' || module === 'paper_mill';
@@ -544,7 +634,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
+  const needMemory = isInvestor || isMentor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
 
   let parties: PartyRow[];
   let totalCount: number;
@@ -617,6 +707,18 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
+    // Mentor multi-criteria search (keyword + facet dropdowns).
+    if (mentorFilterActive) {
+      const words = mentorKeyword.toLowerCase().split(/\s+/).filter(Boolean);
+      const sel = Object.entries(mentorSelected) as [keyof Omit<MentorProfileLite, 'hay'>, string[]][];
+      working = working.filter((p) => {
+        const prof = mentorProfileAll[p.id];
+        if (!prof) return false;
+        if (words.length && !words.every((w) => prof.hay.includes(w))) return false;
+        return sel.every(([k, vs]) => vs.some((v) => prof[k].includes(v)));
+      });
+    }
+
     // Null/locale-safe comparison key. localeCompare() on a null value throws,
     // which only surfaces when the primary key ties often (e.g. sorting
     // investors by city, where many rows share an empty city) so the party_name
@@ -674,7 +776,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
-    totalCount = (isInvestor || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
+    totalCount = (isInvestor || isMentor || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     // DB-ordered path. A sort column the DB cannot order by must never 500 the
@@ -750,6 +852,10 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (stageFilter) qs.set('stage', stageFilter);
     if (sectorFilter) qs.set('sector', sectorFilter);
     if (priorityFilter) qs.set('priority', priorityFilter);
+    if (relevantFilter) qs.set('relevant', '1');
+    if (greentownFilter) qs.set('greentown', '1');
+    if (mentorKeyword) qs.set('mq', mentorKeyword);
+    for (const [k, vs] of Object.entries(mentorSelected)) for (const v of vs) qs.append(k, v);
     if (value && value !== 'name_asc') qs.set('sort', value);
     const s = qs.toString();
     return `/${module}/parties${s ? `?${s}` : ''}`;
@@ -849,6 +955,16 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                 High &amp; Medium only
                 <span className="tabular-nums opacity-80">{relevantMentorCount}</span>
               </Link>
+            </div>
+          )}
+          {isMentor && mentorFacets.length > 0 && (
+            <div className="pt-2">
+              <MentorFilterPanel
+                facets={mentorFacets}
+                keyword={mentorKeyword}
+                selected={mentorSelected}
+                resultCount={totalCount}
+              />
             </div>
           )}
         </div>
