@@ -307,10 +307,11 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   type MentorProfileLite = {
     hay: string;
     m_exp: string[]; m_sec: string[]; m_prod: string[]; m_tech: string[];
-    m_stage: string[]; m_avail: string[]; m_eng: string[]; m_loc: string[]; m_tier: string[];
+    m_stage: string[]; m_avail: string[]; m_eng: string[]; m_loc: string[]; m_tier: string[]; m_gender: string[];
   };
   const mentorProfileAll: Record<string, MentorProfileLite> = {};
   const MENTOR_FACET_DEFS: { key: keyof Omit<MentorProfileLite, 'hay'>; label: string; minCount: number }[] = [
+    { key: 'm_gender', label: 'Gender',            minCount: 1 },
     { key: 'm_exp',   label: 'Expertise',          minCount: 2 },
     { key: 'm_sec',   label: 'Climatetech sector', minCount: 2 },
     { key: 'm_tech',  label: 'Technologies',       minCount: 2 },
@@ -347,7 +348,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     const { data: mRows } = await supabase
       .schema('app')
       .from('mentors' as never)
-      .select('party_id, full_name, title, company, location, notes, why_mentor, expertise, sector_focus, product_types, technologies, startup_stage_focus, availability, preferred_engagement');
+      .select('party_id, full_name, title, company, location, notes, why_mentor, expertise, sector_focus, product_types, technologies, startup_stage_focus, availability, preferred_engagement, gender');
     for (const r of ((mRows ?? []) as any[])) {
       if (!r.party_id) continue;
       const loc = String(r.location ?? '').trim();
@@ -357,6 +358,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         m_eng: engOf(String(r.preferred_engagement ?? '').trim()),
         m_loc: [regionOf(loc)],
         m_tier: [mentorRelevanceAll[r.party_id]?.tier ?? 'Low'],
+        m_gender: [r.gender === 'male' ? 'Male' : r.gender === 'female' ? 'Female' : 'Unconfirmed'],
         hay: '',
       };
       prof.hay = [
@@ -366,6 +368,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       mentorProfileAll[r.party_id] = prof;
     }
     const TIER_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+    const GENDER_ORDER: Record<string, number> = { Male: 0, Female: 1, Unconfirmed: 2 };
     mentorFacets = MENTOR_FACET_DEFS.map((d) => {
       const counts = new Map<string, number>();
       for (const prof of Object.values(mentorProfileAll)) {
@@ -379,6 +382,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
         .sort((a, b) =>
           d.key === 'm_tier'
             ? (TIER_ORDER[a.value] ?? 9) - (TIER_ORDER[b.value] ?? 9)
+            : d.key === 'm_gender'
+            ? (GENDER_ORDER[a.value] ?? 9) - (GENDER_ORDER[b.value] ?? 9)
             : b.count - a.count || a.value.localeCompare(b.value));
       return { key: d.key, label: d.label, options };
     });

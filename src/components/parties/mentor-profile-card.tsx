@@ -10,6 +10,7 @@ import { GraduationCap, ExternalLink, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { MentorHeadshot } from '@/components/parties/mentor-headshot';
+import { MentorGenderToggle } from '@/components/parties/mentor-gender-toggle';
 
 interface Props {
   partyId: string;
@@ -32,6 +33,7 @@ interface MentorRow {
   availability: string[] | null;
   preferred_engagement: string | null;
   location: string | null;
+  gender: 'male' | 'female' | 'unknown' | null;
 }
 
 const DASH = <span className="text-muted-foreground">-</span>;
@@ -65,7 +67,7 @@ export async function MentorProfileCard({ partyId }: Props) {
     .schema('app')
     .from('mentors' as never)
     .select(
-      'full_name, email, title, company, linkedin_url, headshot_url, notes, why_mentor, expertise, sector_focus, product_types, technologies, startup_stage_focus, availability, preferred_engagement, location',
+      'full_name, email, title, company, linkedin_url, headshot_url, notes, why_mentor, expertise, sector_focus, product_types, technologies, startup_stage_focus, availability, preferred_engagement, location, gender',
     )
     .eq('party_id' as never, partyId)
     .maybeSingle();
@@ -108,6 +110,7 @@ export async function MentorProfileCard({ partyId }: Props) {
                 </a>
               )}
             </div>
+            <MentorGenderToggle partyId={partyId} initial={m.gender ?? 'unknown'} />
           </div>
         </div>
 

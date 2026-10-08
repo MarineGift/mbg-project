@@ -5,7 +5,7 @@
  * Drives URL params only (server page filters in memory):
  *   ?mq=        keyword, every word must appear (name, title, company, bio,
  *               why-mentor, location, all tag lists)
- *   ?m_exp= ?m_sec= ?m_prod= ?m_tech= ?m_stage= ?m_avail= ?m_eng= ?m_loc= ?m_tier=
+ *   ?m_gender= ?m_exp= ?m_sec= ?m_prod= ?m_tech= ?m_stage= ?m_avail= ?m_eng= ?m_loc= ?m_tier=
  *               repeatable. OR inside one category, AND across categories.
  * Any change resets ?page.
  */
@@ -25,7 +25,7 @@ interface Props {
 }
 
 export const MENTOR_FILTER_KEYS = [
-  'm_exp', 'm_sec', 'm_prod', 'm_tech', 'm_stage', 'm_avail', 'm_eng', 'm_loc', 'm_tier',
+  'm_gender', 'm_exp', 'm_sec', 'm_prod', 'm_tech', 'm_stage', 'm_avail', 'm_eng', 'm_loc', 'm_tier',
 ] as const;
 
 function FacetDropdown({
