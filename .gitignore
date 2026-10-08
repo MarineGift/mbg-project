@@ -141,3 +141,4 @@ docs/handoff/**/personal_*
 
 # mentor data (contains emails) - keep local only
 sql/enrich_*_mentor_*.sql
+sql/backfill_*_mentors_*.sql
