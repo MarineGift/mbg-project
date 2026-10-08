@@ -138,3 +138,6 @@ form-scan-*.json
 # personal / immigration documents - never commit
 docs/handoff/**/handoff_I485_*
 docs/handoff/**/personal_*
+
+# mentor data (contains emails) - keep local only
+sql/enrich_*_mentor_*.sql
