@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { GraduationCap, ExternalLink, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { MentorHeadshot } from '@/components/parties/mentor-headshot';
 
 interface Props {
   partyId: string;
@@ -83,18 +84,7 @@ export async function MentorProfileCard({ partyId }: Props) {
       <CardContent className="pt-0">
         {/* Header: Headshot + Title/Company + LinkedIn/Email */}
         <div className="flex gap-4 mb-4">
-          {m.headshot_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={m.headshot_url}
-              alt={m.full_name ?? 'Mentor'}
-              className="h-24 w-24 rounded-lg object-cover border shrink-0"
-            />
-          ) : (
-            <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center shrink-0">
-              <GraduationCap className="h-8 w-8 text-muted-foreground" />
-            </div>
-          )}
+          <MentorHeadshot src={m.headshot_url} alt={m.full_name ?? 'Mentor'} />
           <div className="min-w-0 flex flex-col gap-1">
             {m.title && <div className="text-sm font-medium leading-snug">{m.title}</div>}
             {m.company && <div className="text-sm text-muted-foreground">{m.company}</div>}
