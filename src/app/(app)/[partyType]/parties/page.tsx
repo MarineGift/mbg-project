@@ -127,7 +127,7 @@ async function fetchAllRows<T = any>(
 
 /** Colour for an "MBG ..." interest tag chip (tier vs. category). */
 function mbgChipClass(tag: string): string {
-  if (tag === 'MBG Tier 1') return 'bg-amber-500 text-white';
+  if (tag === 'MBG Tier 1' || tag === 'MBG Priority Mentor') return 'bg-amber-500 text-white';
   if (tag === 'MBG Tier 2') return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200';
   if (tag === 'MBG Tier 3') return 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300';
   if (tag === 'MBG Low Relevance') return 'bg-muted text-muted-foreground';
@@ -279,8 +279,8 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       }
     }
   }
-  const mbgTierTags = [...mbgTagCounts.keys()].filter((t) => /^MBG Tier \d/.test(t)).sort();
-  const mbgCategoryTags = [...mbgTagCounts.keys()].filter((t) => !/^MBG Tier \d/.test(t))
+  const mbgTierTags = [...mbgTagCounts.keys()].filter((t) => /^MBG (Tier \d|Priority)/.test(t)).sort();
+  const mbgCategoryTags = [...mbgTagCounts.keys()].filter((t) => !/^MBG (Tier \d|Priority)/.test(t))
     .sort((a, b) => (mbgTagCounts.get(b) ?? 0) - (mbgTagCounts.get(a) ?? 0) || a.localeCompare(b));
 
   // Mentor MBG-relevance (from app.v_mentor_relevance) for sort/filter/column.
@@ -1295,7 +1295,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                             ))}
                             {(Array.isArray(p.interest_tags) ? p.interest_tags : [])
                               .filter((t): t is string => typeof t === 'string' && t.startsWith('MBG '))
-                              .sort((a, b) => (/^MBG Tier/.test(a) ? 0 : 1) - (/^MBG Tier/.test(b) ? 0 : 1))
+                              .sort((a, b) => (/^MBG (Tier|Priority)/.test(a) ? 0 : 1) - (/^MBG (Tier|Priority)/.test(b) ? 0 : 1))
                               .map((t) => (
                                 <Link
                                   key={t}
