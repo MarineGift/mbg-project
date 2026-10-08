@@ -125,6 +125,15 @@ async function fetchAllRows<T = any>(
   return out;
 }
 
+/** Colour for an "MBG ..." interest tag chip (tier vs. category). */
+function mbgChipClass(tag: string): string {
+  if (tag === 'MBG Tier 1') return 'bg-amber-500 text-white';
+  if (tag === 'MBG Tier 2') return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200';
+  if (tag === 'MBG Tier 3') return 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300';
+  if (tag === 'MBG Low Relevance') return 'bg-muted text-muted-foreground';
+  return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200';
+}
+
 export default async function PartiesListPage({ params, searchParams }: PageProps) {
   const { partyType: moduleParam } = await params;
   const sp = await searchParams;
@@ -250,6 +259,29 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     greentownPartyIds = new Set(((gtRows ?? []) as any[]).map((r) => r.party_id as string));
   }
   const greentownCount = greentownPartyIds.size;
+
+  // MBG priority / category tags (legacy jsonb interest_tags starting with
+  // "MBG "): counts for the header chip row + per-row chips in the TAGS column.
+  // Clicking a chip filters with ?tag=<full tag> (existing tag filter).
+  const mbgTagCounts = new Map<string, number>();
+  {
+    const { data: tagRows } = await supabase
+      .schema('app')
+      .from('parties' as never)
+      .select('interest_tags')
+      .eq('party_type_id' as never, partyTypeId)
+      .is('deleted_at' as never, null)
+      .range(0, 9999);
+    for (const r of ((tagRows ?? []) as any[])) {
+      const arr = Array.isArray(r.interest_tags) ? (r.interest_tags as unknown[]) : [];
+      for (const t of new Set(arr.filter((x): x is string => typeof x === 'string' && x.startsWith('MBG ')))) {
+        mbgTagCounts.set(t, (mbgTagCounts.get(t) ?? 0) + 1);
+      }
+    }
+  }
+  const mbgTierTags = [...mbgTagCounts.keys()].filter((t) => /^MBG Tier \d/.test(t)).sort();
+  const mbgCategoryTags = [...mbgTagCounts.keys()].filter((t) => !/^MBG Tier \d/.test(t))
+    .sort((a, b) => (mbgTagCounts.get(b) ?? 0) - (mbgTagCounts.get(a) ?? 0) || a.localeCompare(b));
 
   // Mentor MBG-relevance (from app.v_mentor_relevance) for sort/filter/column.
   const mentorRelevanceAll: Record<string, { score: number; tier: string; company: string | null; expertise: string[] }> = {};
@@ -776,7 +808,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
-    totalCount = (isInvestor || isMentor || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
+    totalCount = (isInvestor || isMentor || tagFilter !== '' || greentownFilter || relevantFilter || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     // DB-ordered path. A sort column the DB cannot order by must never 500 the
@@ -937,6 +969,33 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                 Greentown Labs
                 <span className="tabular-nums opacity-80">{greentownCount}</span>
               </Link>
+            </div>
+          )}
+          {mbgTagCounts.size > 0 && (
+            <div className="flex flex-col gap-1.5 pt-1">
+              {[{ label: 'MBG priority', list: mbgTierTags }, { label: 'MBG category', list: mbgCategoryTags }]
+                .filter((g) => g.list.length > 0)
+                .map((g) => (
+                  <div key={g.label} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs text-muted-foreground w-24 shrink-0">{g.label}</span>
+                    {g.list.map((t) => {
+                      const on = tagFilter === t;
+                      return (
+                        <Link
+                          key={t}
+                          href={on ? `/${module}/parties` : `/${module}/parties?tag=${encodeURIComponent(t)}`}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                            on ? 'bg-foreground text-background border-foreground' : `${mbgChipClass(t)} border-transparent hover:opacity-80`
+                          }`}
+                          title={on ? 'Clear filter' : `Show only ${t}`}
+                        >
+                          {t.slice(4)}
+                          <span className="tabular-nums opacity-70">{mbgTagCounts.get(t)}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
             </div>
           )}
           {isMentor && relevantMentorCount > 0 && (
@@ -1222,44 +1281,35 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       )}
                       {!showLinks && (
                         <td className="px-2 py-3 hidden md:table-cell">
-                          {tags.length <= 2 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[280px]">
-                              {tags.map((tag) => (
+                          <div className="flex flex-wrap gap-1 max-w-[300px]">
+                            {tags.map((tag) => (
+                              <Link
+                                key={tag}
+                                href={`/${module}/parties?greentown=1`}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded whitespace-nowrap bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                title="Curated by Greentown Labs - click to filter"
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                                {tag}
+                              </Link>
+                            ))}
+                            {(Array.isArray(p.interest_tags) ? p.interest_tags : [])
+                              .filter((t): t is string => typeof t === 'string' && t.startsWith('MBG '))
+                              .sort((a, b) => (/^MBG Tier/.test(a) ? 0 : 1) - (/^MBG Tier/.test(b) ? 0 : 1))
+                              .map((t) => (
                                 <Link
-                                  key={tag}
-                                  href={`/${module}/parties?greentown=1`}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded whitespace-nowrap bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
-                                  title="Curated by Greentown Labs — click to filter"
+                                  key={t}
+                                  href={`/${module}/parties?tag=${encodeURIComponent(t)}`}
+                                  className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded whitespace-nowrap ${mbgChipClass(t)} ${tagFilter === t ? 'ring-1 ring-offset-1 ring-current' : ''}`}
+                                  title={`Filter: ${t}`}
                                 >
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-                                  {tag}
+                                  {t.slice(4)}
                                 </Link>
                               ))}
-                            </div>
-                          ) : (
-                            <details className="group max-w-[280px]">
-                              <summary className="flex flex-wrap gap-1 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-                                {tags.slice(0, 2).map((tag) => (
-                                  <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
-                                    {tag}
-                                  </span>
-                                ))}
-                                <span className="inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap group-open:hidden">
-                                  +{tags.length - 2} {'\u25BE'}
-                                </span>
-                                <span className="hidden group-open:inline-flex px-1 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
-                                  {'\u25B4'}
-                                </span>
-                              </summary>
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {tags.slice(2).map((tag) => (
-                                  <span key={tag} className="inline-flex px-1.5 py-0.5 text-xs bg-muted rounded whitespace-nowrap">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            </details>
-                          )}
+                            {tags.length === 0 && !(Array.isArray(p.interest_tags) && p.interest_tags.some((t) => typeof t === 'string' && t.startsWith('MBG '))) && (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isInvestor && (
