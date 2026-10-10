@@ -3,12 +3,14 @@
  * Phase 8 + responsive + Phase 20d (lead score) + pagination + Phase 20f (saved views)
  * Phase 23: supply links column (connected mills / fillers)
  * Feature A: account scoring -> directory now reads app.v_account_scores
+ * 2026-10-10: Email coverage column + ?email=has|missing|form filter
+ *             (investor / paper_mill / filler_supplier) to target enrichment.
  *            (A/B/C tier + 0..100 score), with score sort + grade filter.
  */
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Plus, ExternalLink, Building2, Factory, Layers3, AlertTriangle } from 'lucide-react';
+import { Plus, ExternalLink, Building2, Factory, Layers3, AlertTriangle, Mail, MailX, FileText } from 'lucide-react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { requireAuthOrRedirect } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -72,6 +74,7 @@ interface PageProps {
   searchParams: Promise<{
     include_stubs?: string; sort?: string; page?: string; perPage?: string; q?: string;
     country?: string; type?: string; grade?: string; priority?: string; tag?: string; greentown?: string;
+    email?: string;
   }>;
 }
 
@@ -166,6 +169,12 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   const sectorFilter = (((sp as any).sector ?? '') as string).trim();
   // Manual investor Priority filter (relevance / who to contact now): ?priority=high|medium|low
   const priorityFilter = (((sp as any).priority ?? '') as string).trim().toLowerCase();
+  // Email coverage filter (?email=has|missing|form). Only for the directories
+  // where outreach needs an address: investors, paper mills, filler suppliers.
+  const showEmailCol = isInvestor || isPaperMill || isFiller;
+  const emailRaw = (((sp as any).email ?? '') as string).trim().toLowerCase();
+  const emailFilter: '' | 'has' | 'missing' | 'form' =
+    showEmailCol && (emailRaw === 'has' || emailRaw === 'missing' || emailRaw === 'form') ? emailRaw : '';
 
   const showStubs   = sp.include_stubs === '1';
   const sortParam   = sp.sort ?? 'name_asc';
@@ -264,21 +273,63 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   // "MBG "): counts for the header chip row + per-row chips in the TAGS column.
   // Clicking a chip filters with ?tag=<full tag> (existing tag filter).
   const mbgTagCounts = new Map<string, number>();
+  const typePartyIds: string[] = [];
+  const partyLevelEmail = new Set<string>();
   {
     const { data: tagRows } = await supabase
       .schema('app')
       .from('parties' as never)
-      .select('interest_tags')
+      .select('id, email, interest_tags')
       .eq('party_type_id' as never, partyTypeId)
       .is('deleted_at' as never, null)
       .range(0, 9999);
     for (const r of ((tagRows ?? []) as any[])) {
+      if (r.id) typePartyIds.push(r.id as string);
+      if (r.id && typeof r.email === 'string' && r.email.trim() !== '') partyLevelEmail.add(r.id as string);
       const arr = Array.isArray(r.interest_tags) ? (r.interest_tags as unknown[]) : [];
       for (const t of new Set(arr.filter((x): x is string => typeof x === 'string' && x.startsWith('MBG ')))) {
         mbgTagCounts.set(t, (mbgTagCounts.get(t) ?? 0) + 1);
       }
     }
   }
+  // Email coverage per party: count of contact emails (+ party-level email),
+  // and whether a contact-form marker exists (source = 'form', no email).
+  // Contacts are read in 1000-row pages so large directories stay complete.
+  const emailCountAll: Record<string, number> = {};
+  const emailListAll: Record<string, string[]> = {};
+  const formOnlyAll = new Set<string>();
+  if (showEmailCol && typePartyIds.length > 0) {
+    const typeIdSet = new Set(typePartyIds);
+    const cRows = await fetchAllRows((from, to) =>
+      supabase
+        .schema('app')
+        .from('contacts' as never)
+        .select('party_id, email, source')
+        .is('deleted_at' as never, null)
+        .or('email.not.is.null,source.eq.form')
+        .order('id' as never)
+        .range(from, to) as any,
+    );
+    for (const r of (cRows as any[])) {
+      const pid = r.party_id as string;
+      if (!pid || !typeIdSet.has(pid)) continue;
+      const em = typeof r.email === 'string' ? r.email.trim() : '';
+      if (em) {
+        emailCountAll[pid] = (emailCountAll[pid] ?? 0) + 1;
+        (emailListAll[pid] = emailListAll[pid] ?? []).push(em);
+      } else if (r.source === 'form') {
+        formOnlyAll.add(pid);
+      }
+    }
+    for (const pid of partyLevelEmail) {
+      if (!emailCountAll[pid]) { emailCountAll[pid] = 1; emailListAll[pid] = ['(party email)']; }
+    }
+  }
+  const hasEmail = (id: string) => (emailCountAll[id] ?? 0) > 0;
+  const emailHasCount = showEmailCol ? typePartyIds.filter(hasEmail).length : 0;
+  const emailMissingCount = showEmailCol ? typePartyIds.length - emailHasCount : 0;
+  const emailFormOnlyCount = showEmailCol ? typePartyIds.filter((id) => !hasEmail(id) && formOnlyAll.has(id)).length : 0;
+
   const mbgTierTags = [...mbgTagCounts.keys()].filter((t) => /^MBG (Tier \d|Priority)/.test(t)).sort();
   const mbgCategoryTags = [...mbgTagCounts.keys()].filter((t) => !/^MBG (Tier \d|Priority)/.test(t))
     .sort((a, b) => (mbgTagCounts.get(b) ?? 0) - (mbgTagCounts.get(a) ?? 0) || a.localeCompare(b));
@@ -671,15 +722,24 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   //   - grade filter (A/B/C, derived from the account score)
   // `isInvestor` forces the in-memory path so the always-on exclusion of
   // purely Fintech/SaaS investors (irrelevant to mbg) can be applied below.
-  const needMemory = isInvestor || isMentor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
+  const needMemory = emailFilter !== '' || isInvestor || isMentor || sortByScore || sortByType || gradeFilter !== '' || stageFilter !== '' || sectorFilter !== '' || priorityFilter !== '' || sortByPriority || sortByTags || tagFilter !== '' || greentownFilter;
 
   let parties: PartyRow[];
   let totalCount: number;
   let scores: Record<string, AccountScore> = {};
 
   if (needMemory) {
-    const { data: idData, count } = await query;
-    const allParties = (idData ?? []) as unknown as PartyRow[];
+    // Page past PostgREST's 1000-row cap so in-memory filters see every row.
+    void query;
+    const allParties: PartyRow[] = [];
+    let count: number | null = null;
+    for (let f = 0; f < 200000; f += 1000) {
+      const r = await buildBaseQuery().order('id' as never).range(f, f + 999);
+      if (count == null) count = r.count ?? null;
+      const rows = (r.data ?? []) as unknown as PartyRow[];
+      allParties.push(...rows);
+      if (rows.length < 1000) break;
+    }
     // scores for the full candidate set (needed to filter/sort by score)
     scores = await fetchAccountScoresMany(allParties.map((p) => p.id));
 
@@ -687,6 +747,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (gradeFilter) {
       working = working.filter((p) => (scores[p.id]?.tier ?? 'C') === gradeFilter);
     }
+    if (emailFilter === 'has') working = working.filter((p) => hasEmail(p.id));
+    else if (emailFilter === 'missing') working = working.filter((p) => !hasEmail(p.id));
+    else if (emailFilter === 'form') working = working.filter((p) => !hasEmail(p.id) && formOnlyAll.has(p.id));
     if (stageFilter) {
       working = working.filter((p) => (investorStageAll[p.id] ?? []).some((s) => s.code === stageFilter));
     }
@@ -813,7 +876,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
       });
     }
 
-    totalCount = (isInvestor || isMentor || tagFilter !== '' || greentownFilter || relevantFilter || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
+    totalCount = (emailFilter !== '' || isInvestor || isMentor || tagFilter !== '' || greentownFilter || relevantFilter || gradeFilter || stageFilter || sectorFilter || priorityFilter) ? working.length : (count ?? 0);
     parties = working.slice(from, to + 1);
   } else {
     // DB-ordered path. A sort column the DB cannot order by must never 500 the
@@ -891,6 +954,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
     if (priorityFilter) qs.set('priority', priorityFilter);
     if (relevantFilter) qs.set('relevant', '1');
     if (greentownFilter) qs.set('greentown', '1');
+    if (emailFilter) qs.set('email', emailFilter);
     if (mentorKeyword) qs.set('mq', mentorKeyword);
     for (const [k, vs] of Object.entries(mentorSelected)) for (const v of vs) qs.append(k, v);
     if (value && value !== 'name_asc') qs.set('sort', value);
@@ -974,6 +1038,32 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                 Greentown Labs
                 <span className="tabular-nums opacity-80">{greentownCount}</span>
               </Link>
+            </div>
+          )}
+          {showEmailCol && typePartyIds.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs text-muted-foreground">Email</span>
+              {([
+                { key: 'has', label: 'Has email', n: emailHasCount, on: 'bg-emerald-600 text-white border-emerald-600', dot: 'bg-emerald-500' },
+                { key: 'missing', label: 'Missing email', n: emailMissingCount, on: 'bg-red-600 text-white border-red-600', dot: 'bg-red-500' },
+                { key: 'form', label: 'Form only', n: emailFormOnlyCount, on: 'bg-amber-600 text-white border-amber-600', dot: 'bg-amber-500' },
+              ] as const).map((c) => {
+                const active = emailFilter === c.key;
+                return (
+                  <Link
+                    key={c.key}
+                    href={active ? `/${module}/parties` : `/${module}/parties?email=${c.key}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                      active ? c.on : 'bg-background hover:bg-muted border-input text-foreground'
+                    }`}
+                    title={active ? 'Clear filter' : `Show only: ${c.label}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${active ? 'bg-white' : c.dot}`} aria-hidden />
+                    {c.label}
+                    <span className="tabular-nums opacity-80">{c.n}</span>
+                  </Link>
+                );
+              })}
             </div>
           )}
           {mbgTagCounts.size > 0 && (
@@ -1069,6 +1159,9 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                       Name <span className={`text-[10px] ${hName.active ? '' : 'opacity-40'}`}>{hName.arrow}</span>
                     </Link>
                   </th>
+                  {showEmailCol && (
+                    <th className="px-2 py-3 font-medium whitespace-nowrap">Email</th>
+                  )}
                   {isMentor && (
                     <th className="px-4 py-3 font-medium whitespace-nowrap hidden sm:table-cell">Areas of expertise</th>
                   )}
@@ -1241,6 +1334,40 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
                           </div>
                         )}
                       </td>
+                      {showEmailCol && (
+                        <td className="px-2 py-3 whitespace-nowrap">
+                          {(() => {
+                            const n = emailCountAll[p.id] ?? 0;
+                            if (n > 0) {
+                              const list = emailListAll[p.id] ?? [];
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 max-w-[200px]"
+                                  title={list.join('\n')}
+                                >
+                                  <Mail className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{list[0]}</span>
+                                  {n > 1 && <span className="tabular-nums opacity-70">+{n - 1}</span>}
+                                </span>
+                              );
+                            }
+                            if (formOnlyAll.has(p.id)) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title="Contact form only - no email address yet">
+                                  <FileText className="h-3 w-3" />
+                                  Form only
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title="No email - research target">
+                                <MailX className="h-3 w-3" />
+                                Missing
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
                       {isMentor && (
                         <td className="px-4 py-3 hidden sm:table-cell align-top">
                           {(mentorRelevanceAll[p.id]?.expertise ?? []).length > 0 ? (
