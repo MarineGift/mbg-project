@@ -35,6 +35,7 @@ import {
   CalendarDays,
   CalendarCheck,
   Megaphone,
+  Target,
   Mail,
   BarChart3,
   Landmark,
@@ -113,6 +114,7 @@ const TOP_ITEMS: readonly NavItem[] = [
   { href: '/schedule', labelKey: 'schedule',  icon: CalendarCheck, label: 'Schedule' },
   { href: '/campaigns', labelKey: 'campaigns', icon: Megaphone, label: 'Campaigns', badgeKey: 'campaignsActiveCount' },
   { href: '/mailing', labelKey: 'mailing', icon: Mail, label: 'Mailing' },
+  { href: '/marketing', labelKey: 'mailing', icon: Target, label: 'Marketing' },
   { href: '/reports',  labelKey: 'reports',   icon: BarChart3, label: 'Reports' },
 ] as const;
 
