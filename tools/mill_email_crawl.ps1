@@ -1,4 +1,4 @@
-# mill_email_crawl.ps1  (PowerShell 5.1)  v2 - TLS fix, curl.exe fallback, -RetryFrom
+# mill_email_crawl.ps1  (PowerShell 5.1)  v3 - TLS fix, curl.exe fallback, -RetryFrom, contact pages first
 # Reads the mill worklist CSV (Supabase export of scan_20261010_mill_email_worklist.sql),
 # visits each company website (home page + contact/imprint pages on the same site),
 # and writes every e-mail address actually printed on those pages, with the page URL.
@@ -39,7 +39,8 @@ if ($RetryFrom) {
 Write-Output ('SITES ' + @($sites).Count + '   curl.exe: ' + [bool]$Curl)
 
 $UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-$linkWords = 'contact|kontakt|contacto|contato|contatti|iletisim|yhteys|kapcsolat|impressum|imprint|legal|mentions|about|company|offices|locations|sales|enquir|inquir|lien-he|lianxi'
+$linkWords = 'contact|kontakt|contacto|contato|contatti|iletisim|yhteys|kapcsolat|impressum|imprint|legal|mentions|about|company|offices|locations|sales|enquir|inquir|lien-he|lienhe|lianxi'
+$contactWords = 'contact|kontakt|contacto|contato|contatti|iletisim|yhteys|kapcsolat|lien-he|lienhe|lianxi|impressum|imprint|enquir|inquir'
 $badTail = '\.(png|jpe?g|gif|webp|svg|css|js|pdf)$'
 $badDom  = 'example\.|sentry|wixpress|domain\.com|email\.com|yourcompany|godaddy|cloudflare'
 
@@ -78,18 +79,21 @@ function Get-Emails([string]$html) {
     Select-Object -Unique
 }
 function Get-Links([string]$html, [string]$baseUrl) {
-  $base = [Uri]$baseUrl; $list = @()
+  # v3: contact / imprint pages first, then about / company pages, so the
+  # MaxPagesPerSite cap never cuts off the page that actually lists e-mails.
+  $base = [Uri]$baseUrl; $first = @(); $rest = @()
   foreach ($m in [regex]::Matches($html, '<a\b[^>]*href\s*=\s*["'']([^"''#]+)["''][^>]*>(.*?)</a>', 'IgnoreCase,Singleline')) {
     $href = $m.Groups[1].Value; $txt = ($m.Groups[2].Value -replace '<[^>]+>',' ')
     if ($href -match '^(mailto|tel|javascript):') { continue }
-    if (($href + ' ' + $txt) -notmatch $linkWords) { continue }
+    $key = $href + ' ' + $txt
+    if ($key -notmatch $linkWords) { continue }
     try { $u = New-Object Uri($base, $href) } catch { continue }
     $hb = $base.Host -replace '^www\.',''; $hu = $u.Host -replace '^www\.',''
     if ($hu -ne $hb -and -not $hu.EndsWith('.' + $hb)) { continue }
     if ($u.AbsoluteUri -match $badTail) { continue }
-    $list += $u.AbsoluteUri
+    if ($key -match $contactWords) { $first += $u.AbsoluteUri } else { $rest += $u.AbsoluteUri }
   }
-  $list | Select-Object -Unique
+  @($first + $rest) | Select-Object -Unique
 }
 
 $result = New-Object System.Collections.Generic.List[object]
@@ -105,8 +109,9 @@ foreach ($s in $sites) {
     $result.Add([pscustomobject]@{ company_key=$s.key; rows_in_key=$s.rows; email=''; on_domain=''; found_on='UNREACHABLE ' + $start })
     continue
   }
-  $pages = @($hp.url) + @(Get-Links $hp.html $hp.url)
   $root = ([Uri]$hp.url).GetLeftPart('Authority')
+  $links = @(Get-Links $hp.html $hp.url)
+  $pages = @($hp.url) + $links
   foreach ($p in @('/contact','/contact-us','/en/contact','/en/contact-us','/impressum')) { $pages += ($root + $p) }
   $pages = $pages | Select-Object -Unique | Select-Object -First ($MaxPagesPerSite + 1)
   $found = @{}
