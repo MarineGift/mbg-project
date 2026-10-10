@@ -25,6 +25,7 @@ import {
 } from '@/lib/actions/bulk-mail';
 import type { BulkMailPreview, RecipientMode } from '@/lib/queries/bulk-mail';
 import type { SegmentResult } from '@/lib/queries/marketing-segment';
+import { MailRunDetailDialog } from '@/components/mailing/mail-run-detail-dialog';
 
 type PartyType = { code: string; name: string };
 type Template = { id: string; name: string; subject: string; body: string; category: string | null; module: string | null };
@@ -96,6 +97,7 @@ export function MarketingClient({
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [runs, setRuns] = useState<MailRunStatus[]>([]);
+  const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
     const r = await listRecentMailRuns(8);
@@ -421,7 +423,7 @@ export function MarketingClient({
       {/* ---- Runs ---- */}
       {runs.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Recent runs</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Recent runs <span className="text-xs font-normal text-muted-foreground">(click a row for details)</span></CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
@@ -429,7 +431,7 @@ export function MarketingClient({
               </TableHeader>
               <TableBody>
                 {runs.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} onClick={() => setDetailRunId(r.id)} className="cursor-pointer hover:bg-muted/50" title="Show recipients">
                     <TableCell className="text-xs">{new Date(r.createdAt).toLocaleString()}</TableCell>
                     <TableCell className="text-xs">{r.status}</TableCell>
                     <TableCell className="text-xs">{r.sent}</TableCell>
@@ -443,6 +445,8 @@ export function MarketingClient({
           </CardContent>
         </Card>
       )}
+
+      <MailRunDetailDialog runId={detailRunId} onOpenChange={(o) => { if (!o) setDetailRunId(null); }} />
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

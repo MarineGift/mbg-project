@@ -32,6 +32,7 @@ import type { BulkMailPreview, BulkMailSource, RecipientMode } from '@/lib/queri
 import { searchPartiesForCampaign } from '@/lib/actions/campaigns';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { fetchPartyTypeMaps } from '@/lib/party-type-maps';
+import { MailRunDetailDialog } from '@/components/mailing/mail-run-detail-dialog';
 
 type Pipeline = { id: string; code: string; name: string };
 type Stage = { id: string; pipelineId: string; code: string | null; name: string };
@@ -117,6 +118,7 @@ export function BulkMailClient({
 
   // ---- background runs ----
   const [runs, setRuns] = useState<MailRunStatus[]>([]);
+  const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
   // Map plural pipeline codes (investors, filler_suppliers) to the singular
   // template module/party_type tags (investor, filler_supplier).
@@ -451,7 +453,7 @@ export function BulkMailClient({
               const pct = r.total > 0 ? Math.round((done / r.total) * 100) : 0;
               const active = !TERMINAL.includes(r.status);
               return (
-                <div key={r.id} className="space-y-1.5">
+                <div key={r.id} className="space-y-1.5 cursor-pointer rounded-md p-1 hover:bg-muted/50" onClick={() => setDetailRunId(r.id)} title="Show recipients">
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
                       {active ? <Clock className="h-3.5 w-3.5 animate-pulse text-blue-600" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
@@ -589,6 +591,7 @@ export function BulkMailClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <MailRunDetailDialog runId={detailRunId} onOpenChange={(o) => { if (!o) setDetailRunId(null); }} />
     </div>
   );
 }
