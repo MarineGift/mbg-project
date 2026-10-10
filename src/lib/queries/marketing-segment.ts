@@ -102,11 +102,11 @@ export async function resolveMarketingSegment(
   if (partyTypeId == null) throw new Error(`Unknown party type: ${f.partyTypeCode}`);
 
   // -- base parties ----------------------------------------------------------
-  const parties = await fetchAll<{ id: string; party_name: string | null; country_code: string | null }>(
+  const parties = await fetchAll<{ id: string; party_name: string | null; country_code: string | null; status: string | null; interest_tags: unknown }>(
     (a, b) =>
       db
         .from('parties' as never)
-        .select('id, party_name, country_code')
+        .select('id, party_name, country_code, status, interest_tags')
         .eq('organization_id', orgId)
         .eq('party_type_id', partyTypeId)
         .is('deleted_at', null)
@@ -164,7 +164,13 @@ export async function resolveMarketingSegment(
   const categories = profileByParty.size > 0 ? facet((id) => profileByParty.get(id)?.cat ?? '') : [];
 
   // -- filters ---------------------------------------------------------------
-  let ids = parties.map((p) => p.id);
+  // Never mail archived parties, nor mills tagged 'MBG Pulp Only' (market-pulp
+  // producers make no paper and use no filler - not FCC targets). The tag lives
+  // in the legacy interest_tags jsonb array; the directory shows it as a chip.
+  const isPulpOnly = (t: unknown) => Array.isArray(t) && t.some((x) => x === 'MBG Pulp Only');
+  let ids = parties
+    .filter((p) => (p.status ?? 'active') !== 'archived' && !isPulpOnly(p.interest_tags))
+    .map((p) => p.id);
 
   const inc = new Set((f.includeCountries ?? []).map(norm).filter(Boolean));
   const exc = new Set((f.excludeCountries ?? []).map(norm).filter(Boolean));
