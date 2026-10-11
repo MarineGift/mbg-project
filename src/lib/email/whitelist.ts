@@ -94,7 +94,8 @@ export async function isFromAllowedSender(
 
 /**
  * True when the sender is already in the CRM:
- *   1. contacts.email exact
+ *   1. contacts.email / contacts.email_secondary / app.contact_emails exact
+ *   1b. a mail-folder pin (exact address, or the domain / a parent domain)
  *   2. parties.email exact
  *   3. the domain of any contact's email
  *   4. the domain of a party's website (catches basf.com from BASF's record
@@ -129,10 +130,51 @@ async function isKnownCounterpartSender(
       .from('contacts')
       .select('id')
       .eq('organization_id', organizationId)
-      .or(`email.eq.${normalized},email.ilike.*@${domain}`)
+      .or(`email.eq.${normalized},email_secondary.eq.${normalized},email.ilike.*@${domain}`)
       .limit(1)
       .maybeSingle();
     if (contact) return true;
+
+    // [1a] 2026-10-11: an alternate address registered on a contact
+    const { data: altEmail } = await supabase
+      .schema('app')
+      .from('contact_emails' as never)
+      .select('contact_id')
+      .eq('email', normalized)
+      .limit(1)
+      .maybeSingle();
+    if (altEmail) return true;
+
+    // [1b] 2026-10-11: a mail folder pins this sender. A pin is the operator
+    // saying "this sender is that party" (Greentown Labs pins both
+    // greentownlabs.com and greentownlabs.org), so it is never a stranger.
+    const labels = domain.split('.');
+    const domainCandidates: string[] = [];
+    for (let i = 0; i < labels.length - 1; i += 1) {
+      domainCandidates.push(labels.slice(i).join('.'));
+    }
+    const { data: pinByAddress } = await supabase
+      .schema('app')
+      .from('mail_folders')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .contains('match_addresses', [normalized])
+      .limit(1)
+      .maybeSingle();
+    if (pinByAddress) return true;
+    if (domainCandidates.length > 0) {
+      const { data: pinByDomain } = await supabase
+        .schema('app')
+        .from('mail_folders')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .is('deleted_at', null)
+        .overlaps('match_domains', domainCandidates)
+        .limit(1)
+        .maybeSingle();
+      if (pinByDomain) return true;
+    }
 
     if (PUBLIC_DOMAINS.has(domain) || PUBLIC_DOMAINS.has(registrable)) return false;
 

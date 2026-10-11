@@ -301,22 +301,16 @@ export async function matchSenderToContactAndParty(
   }
   const lowered = fromAddress.toLowerCase();
 
-  // [1] exact match on contacts.email
-  const { data: contact } = await supabase
-    .schema('app')
-    .from('contacts')
-    .select('id, party_id')
-    .eq('organization_id', organizationId)
-    .eq('email', lowered)
-    .is('deleted_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
+  // [1] exact match on any address the contact owns.
+  // 2026-10-11: a person can mail from more than one address (Greentown Labs
+  // staff use both greentownlabs.com and greentownlabs.org). contacts.email,
+  // contacts.email_secondary and app.contact_emails all identify the same
+  // contact, so a mail from the second address must not land orphaned.
+  const contact = await findContactByAnyAddress(supabase, organizationId, [lowered]);
   if (contact) {
     return {
       contactId: contact.id,
-      partyId: contact.party_id ?? undefined,
+      partyId: contact.partyId ?? undefined,
       matchedBy: 'contact_email',
     };
   }
@@ -356,7 +350,30 @@ export async function matchSenderToContactAndParty(
   // first, because a pinned address on a shared relay (Luma, Mailchimp) must
   // win even though the relay domain itself is never trusted.
   const folderHit = await matchFolderPin(supabase, organizationId, lowered, domain);
-  if (folderHit) return folderHit;
+  if (folderHit) {
+    // 2026-10-11: sibling domains. A folder that pins several domains for one
+    // organisation (greentownlabs.com + greentownlabs.org) says those domains
+    // are the same mail system, so chloe@greentownlabs.org is the contact
+    // registered as chloe@greentownlabs.com. Same local part only - never a
+    // random colleague on the domain.
+    const local = lowered.slice(0, at);
+    const siblings = (folderHit.siblingDomains ?? []).filter((d) => d !== domain);
+    if (local && siblings.length > 0) {
+      const twin = await findContactByAnyAddress(
+        supabase,
+        organizationId,
+        siblings.map((d) => `${local}@${d}`),
+      );
+      if (twin) {
+        return {
+          contactId: twin.id,
+          partyId: twin.partyId ?? folderHit.partyId,
+          matchedBy: 'folder_pin',
+        };
+      }
+    }
+    return { partyId: folderHit.partyId, matchedBy: 'folder_pin' };
+  }
 
   // Exclude common mail domains from matching (avoid false positives)
   const generic = new Set([
@@ -397,6 +414,75 @@ export async function matchSenderToContactAndParty(
 }
 
 /**
+ * Contact that owns any of these addresses: contacts.email,
+ * contacts.email_secondary, or a row in app.contact_emails. Most recently
+ * updated contact wins. Addresses must already be lower-case.
+ */
+export async function findContactByAnyAddress(
+  supabase: SupabaseClient,
+  organizationId: string,
+  addresses: string[],
+): Promise<{ id: string; partyId: string | null } | null> {
+  const list = Array.from(
+    new Set(addresses.map((a) => a.trim().toLowerCase()).filter((a) => /^[^@\s,()"]+@[^@\s,()"]+$/.test(a))),
+  );
+  if (list.length === 0) return null;
+  const quoted = list.map((a) => `"${a}"`).join(',');
+  try {
+    const { data: direct } = await supabase
+      .schema('app')
+      .from('contacts')
+      .select('id, party_id')
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .or(`email.in.(${quoted}),email_secondary.in.(${quoted})`)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (direct) {
+      return { id: direct.id as string, partyId: (direct.party_id as string | null) ?? null };
+    }
+
+    // app.contact_emails has no organization_id: resolve the ids first, then
+    // scope through contacts.
+    const { data: extra } = await supabase
+      .schema('app')
+      .from('contact_emails' as never)
+      .select('contact_id')
+      .in('email', list)
+      .limit(20);
+    const ids = Array.from(
+      new Set(((extra ?? []) as Array<{ contact_id: string }>).map((r) => r.contact_id).filter(Boolean)),
+    );
+    if (ids.length === 0) return null;
+    const { data: owner } = await supabase
+      .schema('app')
+      .from('contacts')
+      .select('id, party_id')
+      .eq('organization_id', organizationId)
+      .is('deleted_at', null)
+      .in('id', ids)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (owner) {
+      return { id: owner.id as string, partyId: (owner.party_id as string | null) ?? null };
+    }
+  } catch (e) {
+    // a lookup failure must never block ingest
+    // eslint-disable-next-line no-console
+    console.error('[header-parser] contact address lookup failed:', e);
+  }
+  return null;
+}
+
+interface FolderPinHit {
+  partyId: string;
+  /** every domain pinned on the matched folder (domain pins only) */
+  siblingDomains?: string[];
+}
+
+/**
  * Sender -> party via app.mail_folders pins (leaf folders only: groups have
  * no party). Returns null when nothing is pinned for this sender.
  */
@@ -405,7 +491,7 @@ async function matchFolderPin(
   organizationId: string,
   lowered: string,
   domain: string,
-): Promise<SenderMatchResult | null> {
+): Promise<FolderPinHit | null> {
   try {
     // exact address pin
     const { data: byAddress } = await supabase
@@ -420,7 +506,7 @@ async function matchFolderPin(
       .limit(1)
       .maybeSingle();
     if (byAddress?.party_id) {
-      return { partyId: byAddress.party_id as string, matchedBy: 'folder_pin' };
+      return { partyId: byAddress.party_id as string };
     }
 
     // domain pin - the domain itself or a parent of it (a.b.example.com -> example.com)
@@ -434,7 +520,7 @@ async function matchFolderPin(
     const { data: byDomain } = await supabase
       .schema('app')
       .from('mail_folders')
-      .select('party_id')
+      .select('party_id, match_domains')
       .eq('organization_id', organizationId)
       .eq('is_group', false)
       .not('party_id', 'is', null)
@@ -443,7 +529,10 @@ async function matchFolderPin(
       .limit(1)
       .maybeSingle();
     if (byDomain?.party_id) {
-      return { partyId: byDomain.party_id as string, matchedBy: 'folder_pin' };
+      const pinned = ((byDomain.match_domains as string[] | null) ?? [])
+        .map((d) => String(d).trim().toLowerCase())
+        .filter(Boolean);
+      return { partyId: byDomain.party_id as string, siblingDomains: pinned };
     }
   } catch (e) {
     // a lookup failure must never block ingest
