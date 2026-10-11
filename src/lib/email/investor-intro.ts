@@ -34,9 +34,12 @@ import { detectAutomated, extractNewText } from './rule-classifier';
 export const GREENTOWN_INTRO_SENDERS: readonly string[] = [
   'will@greentownlabs.org',
   'will@greentownlabs.com',
+  'will@greentown.org',
 ];
 
-const GREENTOWN_DOMAINS = ['greentownlabs.org', 'greentownlabs.com'];
+// 2026-10-11: Greentown staff mail from three domains (Chloe Rose writes from
+// chloe@greentown.org). Staff mail must never be read as an investor intro.
+const GREENTOWN_DOMAINS = ['greentownlabs.org', 'greentownlabs.com', 'greentown.org'];
 
 const INTRO_SUBJECT = /exploring (a )?potential fit with\s+(.+?)\s*$/i;
 
