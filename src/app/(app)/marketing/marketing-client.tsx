@@ -66,6 +66,7 @@ export function MarketingClient({
   const [excludeCountries, setExcludeCountries] = useState(DEFAULT_EXCLUDE);
   const [keyword, setKeyword] = useState('');
   const [supplierQuery, setSupplierQuery] = useState('');
+  const [licenseeHosts, setLicenseeHosts] = useState<'exclude_all' | 'exclude_active' | 'include'>('exclude_all');
   const [batchSize, setBatchSize] = useState(100);
 
   // ---- message ----
@@ -124,6 +125,7 @@ export function MarketingClient({
         excludeCountries: splitCodes(excludeCountries),
         keyword: keyword.trim() || undefined,
         supplierQuery: supplierQuery.trim() || undefined,
+        licenseeHosts,
         receivedTemplateId: followUp ? receivedTemplateId : null,
         receivedMinDays: followUp ? receivedMinDays : undefined,
         batchSize,
@@ -238,6 +240,16 @@ export function MarketingClient({
             <input className={inputCls} value={supplierQuery} placeholder="e.g. Omya, Minerals Technologies, Imerys"
               onChange={(e) => { setSupplierQuery(e.target.value); reset(); }} />
           </div>
+          <div className="space-y-1.5">
+            <Label>Licensee host mills (Omya / Specialty Minerals)</Label>
+            <select className={inputCls} value={licenseeHosts}
+              onChange={(e) => { setLicenseeHosts(e.target.value as 'exclude_all' | 'exclude_active' | 'include'); reset(); }}>
+              <option value="exclude_all">Exclude: active + potential links</option>
+              <option value="exclude_active">Exclude: active links only</option>
+              <option value="include">Include (no licensee filter)</option>
+            </select>
+            <p className="text-xs text-muted-foreground">Read live from supply links. These mills are approached through the licensee HQ talks.</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -346,6 +358,7 @@ export function MarketingClient({
               <Badge variant="outline">Already sent: {segment.alreadySent}</Badge>
               <Badge variant="outline">In queue: {segment.inQueue}</Badge>
               <Badge variant="outline">Do-not-send: {segment.doNotSend}</Badge>
+              <Badge variant="outline">Licensee hosts excluded: {segment.licenseeExcluded}</Badge>
               <Badge>Remaining: {segment.remaining}</Badge>
               <Badge variant="secondary">This batch: {segment.batchPartyIds.length}</Badge>
             </div>

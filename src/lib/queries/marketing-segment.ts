@@ -44,6 +44,13 @@ export interface SegmentFilter {
   receivedTemplateId?: string | null;
   /** follow-up mode: ...at least this many days ago. */
   receivedMinDays?: number;
+  /**
+   * Mills linked to MBG's licensees (Omya / Specialty Minerals) in
+   * party_supply_links. 'exclude_all' (default for paper_mill) skips active,
+   * filler_supply and potential links; 'exclude_active' skips only active and
+   * filler_supply; 'include' keeps them. Historical links never exclude.
+   */
+  licenseeHosts?: 'exclude_all' | 'exclude_active' | 'include';
   batchSize: number;
 }
 
@@ -56,6 +63,8 @@ export interface SegmentResult {
   alreadySent: number;
   inQueue: number;
   doNotSend: number;
+  /** mills dropped because a licensee supplies (or may supply) them. */
+  licenseeExcluded: number;
   remaining: number;
   batchPartyIds: string[];
   countries: SegmentFacet[];
@@ -215,6 +224,43 @@ export async function resolveMarketingSegment(
     ids = ids.filter((id) => linked.has(id));
   }
 
+  // -- licensee host mills (Omya / Specialty Minerals) ------------------------
+  // These mills are approached through the licensee headquarters talks, not by
+  // MBG cold mail. Read live from party_supply_links, so adding or removing a
+  // link changes the segment immediately (no tag to maintain).
+  let licenseeExcluded = 0;
+  const lh = f.licenseeHosts ?? (f.partyTypeCode === 'paper_mill' ? 'exclude_all' : 'include');
+  if (lh !== 'include') {
+    const licRows = await fetchAll<{ id: string }>((a, b) =>
+      db
+        .from('parties' as never)
+        .select('id')
+        .eq('organization_id', orgId)
+        .is('deleted_at', null)
+        .or('party_name.ilike.*omya*,party_name.ilike.*specialty*minerals*,party_name.ilike.minerals*technologies*')
+        .order('id', { ascending: true })
+        .range(a, b) as unknown as PromiseLike<Res>,
+    );
+    const blocking = lh === 'exclude_all' ? ['active', 'filler_supply', 'potential'] : ['active', 'filler_supply'];
+    const hosts = new Set<string>();
+    for (const part of chunk(licRows.map((r) => r.id), 100)) {
+      const links = await fetchAll<{ mill_party_id: string; link_type: string | null }>((a, b) =>
+        db
+          .from('party_supply_links' as never)
+          .select('mill_party_id, link_type')
+          .eq('organization_id', orgId)
+          .is('deleted_at', null)
+          .in('filler_party_id', part)
+          .order('id', { ascending: true })
+          .range(a, b) as unknown as PromiseLike<Res>,
+      );
+      for (const l of links) if (blocking.includes(l.link_type ?? '')) hosts.add(l.mill_party_id);
+    }
+    const before = ids.length;
+    ids = ids.filter((id) => !hosts.has(id));
+    licenseeExcluded = before - ids.length;
+  }
+
   if (f.receivedTemplateId) {
     const cutoff = new Date(Date.now() - Math.max(0, f.receivedMinDays ?? 0) * 86_400_000).toISOString();
     const rec = await fetchAll<{ party_id: string | null }>((a, b) =>
@@ -307,6 +353,7 @@ export async function resolveMarketingSegment(
     alreadySent,
     inQueue,
     doNotSend,
+    licenseeExcluded,
     remaining: eligible.length,
     batchPartyIds: eligible.slice(0, size),
     countries,

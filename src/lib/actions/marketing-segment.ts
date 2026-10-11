@@ -22,6 +22,7 @@ const schema = z.object({
   supplierQuery: z.string().max(200).optional(),
   receivedTemplateId: z.string().uuid().nullable().optional(),
   receivedMinDays: z.number().int().min(0).max(365).optional(),
+  licenseeHosts: z.enum(['exclude_all', 'exclude_active', 'include']).optional(),
   batchSize: z.number().int().min(1).max(MAX_BATCH),
 });
 
