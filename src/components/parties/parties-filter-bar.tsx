@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { Globe, Search, X } from 'lucide-react';
+import { CountrySelect } from '@/components/common/country-select';
 
 const GRADE_OPTIONS: { value: string; label: string }[] = [
   { value: '',  label: 'All tiers' },
@@ -165,18 +166,14 @@ export function PartiesFilterBar({ countries, countryNames = {}, country, q, gra
         {/* Country */}
         <div className="flex items-center gap-1.5">
           <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <select
+          <CountrySelect
             value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="h-9 min-w-[140px] cursor-pointer rounded-md border border-input bg-background pl-2 pr-6 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">All countries</option>
-            {sortedCountries.map((cc) => (
-              <option key={cc} value={cc}>
-                {countryNames[cc] ?? cc}
-              </option>
-            ))}
-          </select>
+            onChange={setCountry}
+            names={countryNames}
+            codes={sortedCountries}
+            emptyLabel="All countries"
+            className="min-w-[180px]"
+          />
         </div>
 
         {/* Search box + button */}

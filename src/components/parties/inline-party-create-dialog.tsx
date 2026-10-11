@@ -23,6 +23,7 @@
 
 import { useEffect, useTransition } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { CountrySelect } from '@/components/common/country-select';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, Plus, Save, X } from 'lucide-react';
@@ -294,13 +295,12 @@ export function InlinePartyCreateDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="ipc-country">Country</Label>
-              <Input
+              <CountrySelect
                 id="ipc-country"
-                {...register('countryCode')}
+                value={watch('countryCode') ?? ''}
+                onChange={(code) => setValue('countryCode', code, { shouldDirty: true, shouldValidate: true })}
+                emptyLabel="Select a country"
                 disabled={isPending}
-                placeholder="US"
-                maxLength={2}
-                aria-invalid={errors.countryCode ? 'true' : undefined}
               />
               {errors.countryCode && (
                 <p className="text-xs text-destructive">{errors.countryCode.message}</p>

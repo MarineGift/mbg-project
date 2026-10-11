@@ -26,7 +26,7 @@ import {
 import type { BulkMailPreview, RecipientMode } from '@/lib/queries/bulk-mail';
 import type { SegmentResult } from '@/lib/queries/marketing-segment';
 import { MailRunDetailDialog } from '@/components/mailing/mail-run-detail-dialog';
-import { CountryMultiSelect, countryLabel } from '@/components/marketing/country-multi-select';
+import { CountryMultiSelect, countryLabel } from '@/components/common/country-select';
 
 type PartyType = { code: string; name: string };
 type Template = { id: string; name: string; subject: string; body: string; category: string | null; module: string | null };

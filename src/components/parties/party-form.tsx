@@ -53,7 +53,8 @@ import type {
   InvestorProfile,
 } from '@/types/party-detail';
 import type { InvestorTypeOption } from '@/lib/queries/investor-types';
-import { COUNTRIES, US_STATES } from '@/lib/constants/countries';
+import { US_STATES } from '@/lib/constants/countries';
+import { CountrySelect } from '@/components/common/country-select';
 
 interface Props {
   /** existing party in edit mode; null + initial partyType in create mode */
@@ -667,28 +668,13 @@ export function PartyForm({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="party-country">Country</Label>
-                <Select
-                  value={selectedCountry || '__none'}
-                  onValueChange={(v) => {
-                    const code = v === '__none' ? '' : v;
-                    setValue('countryCode', code, { shouldDirty: true });
-
-                  }}
+                <CountrySelect
+                  id="party-country"
+                  value={selectedCountry || ''}
+                  onChange={(code) => setValue('countryCode', code, { shouldDirty: true })}
+                  emptyLabel="Select a country"
                   disabled={isPending}
-                >
-                  <SelectTrigger id="party-country">
-                    <SelectValue placeholder="Select a country" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value="US">United States (US)</SelectItem>
-                    <SelectItem value="__none">(none)</SelectItem>
-                    {COUNTRIES.filter((c) => c.code !== 'US').map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        {c.name} ({c.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
                 {errors.countryCode && (
                   <p className="text-xs text-destructive">{errors.countryCode.message}</p>
                 )}

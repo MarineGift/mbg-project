@@ -2,6 +2,7 @@
 // src/components/settings/bulk-enroll-dialog.tsx
 
 import { useState, useTransition } from 'react';
+import { CountrySelect } from '@/components/common/country-select';
 import {
   previewBulkEnroll,
   bulkEnrollFiltered,
@@ -214,15 +215,8 @@ export function BulkEnrollDialog({ open, onClose, orgId, sequenceId, sequenceNam
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Country code (e.g. KR, JP, US)</label>
-                <input
-                  type="text"
-                  value={countryCode}
-                  onChange={e => setCountryCode(e.target.value)}
-                  placeholder="Leave blank for all"
-                  maxLength={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                <CountrySelect value={countryCode} onChange={setCountryCode} emptyLabel="All countries" />
               </div>
 
               {error && (

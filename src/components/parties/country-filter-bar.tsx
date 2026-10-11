@@ -1,5 +1,6 @@
 'use client';
 import { Globe, X } from 'lucide-react';
+import { CountrySelect } from '@/components/common/country-select';
 
 interface Props {
   countries: string[];
@@ -25,18 +26,14 @@ export function CountryFilterBar({ countries, countryNames = {}, current }: Prop
   return (
     <div className="flex items-center gap-2 flex-wrap mt-1">
       <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <select
-        defaultValue={current}
-        onChange={(e) => navigate(e.target.value)}
-        className="h-8 pl-2 pr-6 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer min-w-[140px]"
-      >
-        <option value="">All countries</option>
-        {sorted.map((cc) => (
-          <option key={cc} value={cc}>
-            {countryNames[cc] ?? cc}
-          </option>
-        ))}
-      </select>
+      <CountrySelect
+        value={current}
+        onChange={navigate}
+        names={countryNames}
+        codes={sorted}
+        emptyLabel="All countries"
+        className="min-w-[180px]"
+      />
       {current && (
         <button
           onClick={() => navigate('')}
