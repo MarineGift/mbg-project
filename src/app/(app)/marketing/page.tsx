@@ -5,6 +5,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { listMailAccountOptions } from '@/lib/actions/mail-account-options';
+import { fetchCountryNames } from '@/lib/queries/countries';
 import { MarketingClient } from './marketing-client';
 
 export const dynamic = 'force-dynamic';
@@ -51,5 +52,7 @@ export default async function MarketingPage() {
     isDefault: a.isDefault,
   }));
 
-  return <MarketingClient partyTypes={partyTypes} templates={templates} accounts={accounts} />;
+  const countryNames = await fetchCountryNames();
+
+  return <MarketingClient partyTypes={partyTypes} templates={templates} accounts={accounts} countryNames={countryNames} />;
 }

@@ -26,6 +26,7 @@ import {
 import type { BulkMailPreview, RecipientMode } from '@/lib/queries/bulk-mail';
 import type { SegmentResult } from '@/lib/queries/marketing-segment';
 import { MailRunDetailDialog } from '@/components/mailing/mail-run-detail-dialog';
+import { CountryMultiSelect, countryLabel } from '@/components/marketing/country-multi-select';
 
 type PartyType = { code: string; name: string };
 type Template = { id: string; name: string; subject: string; body: string; category: string | null; module: string | null };
@@ -33,10 +34,7 @@ type Account = { id: string; address: string; displayName: string | null; isDefa
 
 const inputCls = 'w-full rounded-md border px-3 py-2 text-sm bg-background';
 const TERMINAL = ['completed', 'failed', 'canceled'];
-const DEFAULT_EXCLUDE = 'KR, DE, AT';
-
-const splitCodes = (s: string) =>
-  s.split(/[\s,;]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
+const DEFAULT_EXCLUDE = ['KR', 'DE', 'AT'];
 
 function nextGoodSendLocal(): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -54,16 +52,16 @@ function nextGoodSendLocal(): string {
 }
 
 export function MarketingClient({
-  partyTypes, templates, accounts,
-}: { partyTypes: PartyType[]; templates: Template[]; accounts: Account[] }) {
+  partyTypes, templates, accounts, countryNames = {},
+}: { partyTypes: PartyType[]; templates: Template[]; accounts: Account[]; countryNames?: Record<string, string> }) {
   const [pending, startTransition] = useTransition();
 
   // ---- segment ----
   const [partyTypeCode, setPartyTypeCode] = useState(
     partyTypes.some((p) => p.code === 'paper_mill') ? 'paper_mill' : (partyTypes[0]?.code ?? ''),
   );
-  const [includeCountries, setIncludeCountries] = useState('');
-  const [excludeCountries, setExcludeCountries] = useState(DEFAULT_EXCLUDE);
+  const [includeCountries, setIncludeCountries] = useState<string[]>([]);
+  const [excludeCountries, setExcludeCountries] = useState<string[]>(DEFAULT_EXCLUDE);
   const [keyword, setKeyword] = useState('');
   const [supplierQuery, setSupplierQuery] = useState('');
   const [licenseeHosts, setLicenseeHosts] = useState<'exclude_all' | 'exclude_active' | 'include'>('exclude_all');
@@ -121,8 +119,8 @@ export function MarketingClient({
       const seg = await buildMarketingSegment({
         partyTypeCode,
         templateId,
-        includeCountries: splitCodes(includeCountries),
-        excludeCountries: splitCodes(excludeCountries),
+        includeCountries,
+        excludeCountries,
         keyword: keyword.trim() || undefined,
         supplierQuery: supplierQuery.trim() || undefined,
         licenseeHosts,
@@ -171,9 +169,9 @@ export function MarketingClient({
   };
 
   const addInclude = (code: string) => {
-    const cur = new Set(splitCodes(includeCountries));
+    const cur = new Set(includeCountries);
     if (cur.has(code)) cur.delete(code); else cur.add(code);
-    setIncludeCountries(Array.from(cur).join(', '));
+    setIncludeCountries(Array.from(cur));
     reset();
   };
 
@@ -220,15 +218,15 @@ export function MarketingClient({
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Include countries (ISO-2, comma separated; empty = all)</Label>
-            <input className={inputCls} value={includeCountries} placeholder="US, CN, BR, IN"
-              onChange={(e) => { setIncludeCountries(e.target.value); reset(); }} />
+            <Label>Include countries (empty = all)</Label>
+            <CountryMultiSelect value={includeCountries} names={countryNames} placeholder="All countries - type to search"
+              onChange={(v) => { setIncludeCountries(v); reset(); }} />
           </div>
           <div className="space-y-1.5">
             <Label>Exclude countries</Label>
-            <input className={inputCls} value={excludeCountries}
-              onChange={(e) => { setExcludeCountries(e.target.value); reset(); }} />
-            <p className="text-xs text-muted-foreground">Default KR, DE, AT: cold e-mail needs prior consent there. Contact those mills directly.</p>
+            <CountryMultiSelect value={excludeCountries} names={countryNames} placeholder="None - type to search"
+              onChange={(v) => { setExcludeCountries(v); reset(); }} />
+            <p className="text-xs text-muted-foreground">Default South Korea, Germany, Austria: cold e-mail needs prior consent there. Contact those mills directly.</p>
           </div>
           <div className="space-y-1.5">
             <Label>Keyword (name / grade / products)</Label>
@@ -366,11 +364,11 @@ export function MarketingClient({
               <div className="mb-1 text-xs text-muted-foreground">Countries (whole type, with e-mail / total). Click to toggle include.</div>
               <div className="flex flex-wrap gap-1.5">
                 {segment.countries.slice(0, 60).map((c) => {
-                  const on = splitCodes(includeCountries).includes(c.key);
+                  const on = includeCountries.includes(c.key);
                   return (
-                    <button key={c.key} type="button" onClick={() => addInclude(c.key)}
+                    <button key={c.key} type="button" onClick={() => addInclude(c.key)} title={c.key}
                       className={'rounded-full border px-2 py-0.5 text-xs ' + (on ? 'border-blue-600 bg-blue-50 text-blue-700' : 'hover:bg-muted')}>
-                      {c.key} {c.withEmail}/{c.parties}
+                      {c.key ? countryLabel(c.key, countryNames) : '(none)'} {c.withEmail}/{c.parties}
                     </button>
                   );
                 })}
