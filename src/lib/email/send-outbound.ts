@@ -21,6 +21,7 @@
 //   has no active smtp-ready accounts the legacy env/TABS_MAILER path applies
 //   unchanged (caller-provided fromAddress + sendingAddressKind).
 
+import { plainToHtml } from '@/lib/email/plain-to-html';
 import type { SbClient } from '@/lib/supabase/server';
 import type { SendingAddressKind, AttachmentInput, SmtpAccountConfig } from '@/types/email';
 import { createTabsMailer } from '@/lib/email/tabs-mailer';
@@ -282,22 +283,8 @@ async function getDefaultSignature(supabase: SbClient, orgId: string): Promise<s
   return (data as { html_content: string | null } | null)?.html_content ?? null;
 }
 
-/** Minimal plain-text -> HTML (used when a caller has only plain text, e.g. AI drafts). */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
-function plainToHtml(text: string): string {
-  const parts = text.split('\n').map((line) => {
-    const t = line.trim();
-    return t === '' ? '<br>' : `<p style="margin:0 0 8px 0">${escapeHtml(t)}</p>`;
-  });
-  return `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">${parts.join('\n')}</div>`;
-}
+
 
 /* ============================================================
  * Core
@@ -537,7 +524,7 @@ export async function sendOutboundEmail(input: SendOutboundInput): Promise<SendO
   if (input.useSignature !== false) {
     const sig = await getDefaultSignature(supabase, orgId);
     if (sig) {
-      finalBody = `${finalBody}<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sig}`;
+      finalBody = `${finalBody}<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">${sig}`;
     }
   }
 

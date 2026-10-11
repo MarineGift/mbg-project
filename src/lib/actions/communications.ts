@@ -20,43 +20,8 @@ import { z } from 'zod';
 import { requireAuth, type AuthContext } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { sendOutboundEmail } from '@/lib/email/send-outbound';
+import { plainToHtml } from '@/lib/email/plain-to-html';
 import type { SendingAddressKind } from '@/types/email';
-
-/* ──────────────────────────────────────────────────────────
- * Plain text -> HTML conversion (minimal conversion for pixel injection)
- * ────────────────────────────────────────────────────────── */
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/**
- * Convert plain text into minimal HTML.
- * Blank lines separate paragraphs; normal lines are wrapped in <p> tags.
- */
-function plainToHtml(text: string): string {
-  const lines = text.split('\n');
-  const parts: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === '') {
-      parts.push('<br>');
-    } else {
-      parts.push(
-        `<p style="margin:0 0 8px 0">${escapeHtml(trimmed)}</p>`,
-      );
-    }
-  }
-  return (
-    `<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">` +
-    parts.join('\n') +
-    `</div>`
-  );
-}
 
 /* ──────────────────────────────────────────────────────────
  * Result type + input schema

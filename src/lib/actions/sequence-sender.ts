@@ -8,6 +8,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { renderMergeFields } from '@/lib/utils/merge-fields';
+import { plainToHtml } from '@/lib/email/plain-to-html';
 import { revalidatePath } from 'next/cache';
 
 /* ----------------------------------------------------------------
@@ -173,15 +174,3 @@ export async function previewSequenceStep(input: {
   return { subject, html };
 }
 
-function plainToHtml(plain: string): string {
-  if (!plain) return '';
-  const escaped = plain
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-  return escaped
-    .split(/\n\n+/)
-    .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
-    .join('\n');
-}

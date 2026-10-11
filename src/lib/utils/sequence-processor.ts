@@ -14,6 +14,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rpc } from "@/lib/rpc/typed-rpc";
 import { renderMergeFields } from "@/lib/utils/merge-fields";
+import { plainToHtml } from "@/lib/email/plain-to-html";
 import { sendOutboundEmail } from "@/lib/email/send-outbound";
 import { evaluateQuietHours } from "@/lib/email/quiet-hours";
 import type { QuietHours } from "@/types/email";
@@ -236,15 +237,3 @@ export async function processSequence(sequenceId?: string | null): Promise<{
 // ============================================================
 // Helpers
 // ============================================================
-function plainToHtml(plain: string): string {
-  if (!plain) return "";
-  const escaped = plain
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-  return escaped
-    .split(/\n\n+/)
-    .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-    .join("\n");
-}
