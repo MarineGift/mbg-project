@@ -37,6 +37,7 @@ import { PartyIntroCard } from '@/components/parties/party-intro-card';
 import { InvestorProfileCard } from '@/components/parties/investor-profile-card';
 import { InvestorAnalysisPanel } from '@/components/parties/investor-analysis-panel';
 import { MentorProfileCard } from '@/components/parties/mentor-profile-card';
+import { PlantProfileCard } from '@/components/parties/plant-profile-card';
 
 // Party-type is validated dynamically against the DB: fetchPartyDetail resolves
 // the party's real type from app.party_types, and the URL module is checked
@@ -132,6 +133,13 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 <PartyStatsGrid party={full.party} />
                 <PartyIntroCard introKo={full.party.introKo} introEn={full.party.introEn} />
                 <PartyInfoCard party={full.party} contacts={full.contacts} />
+                {(full.party.partyType === 'paper_mill' ||
+                  full.party.partyType === 'filler_supplier') && (
+                  <PlantProfileCard
+                    partyId={full.party.id}
+                    partyType={full.party.partyType as 'paper_mill' | 'filler_supplier'}
+                  />
+                )}
                 <PartyApplicationPanel
                   partyId={full.party.id}
                   partyType={full.party.partyType}
