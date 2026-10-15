@@ -18,7 +18,6 @@ import { Globe } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { CountryMarketLinks } from './country-market-links';
-import type { ReportLink } from '@/lib/actions/country-markets';
 
 interface Props {
   partyId: string;
@@ -52,7 +51,9 @@ interface MarketRow {
   fcc_potential_low_t: number | string | null;
   fcc_potential_high_t: number | string | null;
   fcc_potential_basis_ko: string | null;
-  report_links: ReportLink[] | null;
+  chatgpt_url: string | null;
+  claude_url: string | null;
+  gemini_url: string | null;
   checked_at: string | null;
 }
 
@@ -132,7 +133,7 @@ export async function CountryMarketTab({ partyId, country, path }: Props) {
       .schema('app')
       .from('country_markets' as never)
       .select(
-        'country_code, country_name, priority, headline, summary, sections, headline_ko, summary_ko, sections_ko, fcc_potential_low_t, fcc_potential_high_t, fcc_potential_basis_ko, report_links, checked_at',
+        'country_code, country_name, priority, headline, summary, sections, headline_ko, summary_ko, sections_ko, fcc_potential_low_t, fcc_potential_high_t, fcc_potential_basis_ko, chatgpt_url, claude_url, gemini_url, checked_at',
       )
       .eq('country_code' as never, code)
       .is('deleted_at' as never, null)
@@ -252,7 +253,9 @@ export async function CountryMarketTab({ partyId, country, path }: Props) {
         <CardContent className="pt-0">
           <CountryMarketLinks
             countryCode={m.country_code}
-            initialLinks={Array.isArray(m.report_links) ? m.report_links : []}
+            chatgptUrl={m.chatgpt_url}
+            claudeUrl={m.claude_url}
+            geminiUrl={m.gemini_url}
             revalidate={path}
           />
           <h3 className="mb-1 pt-4 text-sm font-semibold">핵심 지표</h3>
