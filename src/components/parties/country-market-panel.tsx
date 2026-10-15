@@ -45,6 +45,14 @@ export async function CountryMarketPanel({ partyId, country }: Props) {
       .in('code' as never, MODULES as unknown as string[]),
   ]);
 
+  if (marketRes.error) {
+    // Show the reason instead of hiding the card (e.g. schema cache not reloaded, RLS, missing grant).
+    return (
+      <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+        Country market ({code}) could not be loaded: {marketRes.error.message}
+      </div>
+    );
+  }
   const market = marketRes.data as unknown as CountryMarket | null;
   if (!market) return null;
 
