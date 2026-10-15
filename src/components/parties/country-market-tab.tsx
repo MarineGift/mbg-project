@@ -17,10 +17,14 @@ import Link from 'next/link';
 import { Globe } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { CountryMarketLinks } from './country-market-links';
+import type { ReportLink } from '@/lib/actions/country-markets';
 
 interface Props {
   partyId: string;
   country: string | null;
+  /** page path to revalidate after a link is added or removed */
+  path?: string;
 }
 
 type Json = Record<string, unknown>;
@@ -48,6 +52,7 @@ interface MarketRow {
   fcc_potential_low_t: number | string | null;
   fcc_potential_high_t: number | string | null;
   fcc_potential_basis_ko: string | null;
+  report_links: ReportLink[] | null;
   checked_at: string | null;
 }
 
@@ -115,7 +120,7 @@ function MetricRow({ label, value, note }: { label: string; value: ReactNode; no
   );
 }
 
-export async function CountryMarketTab({ partyId, country }: Props) {
+export async function CountryMarketTab({ partyId, country, path }: Props) {
   if (!country) {
     return <p className="text-sm text-muted-foreground">국가 정보가 없어 시장현황을 표시할 수 없습니다.</p>;
   }
@@ -127,7 +132,7 @@ export async function CountryMarketTab({ partyId, country }: Props) {
       .schema('app')
       .from('country_markets' as never)
       .select(
-        'country_code, country_name, priority, headline, summary, sections, headline_ko, summary_ko, sections_ko, fcc_potential_low_t, fcc_potential_high_t, fcc_potential_basis_ko, checked_at',
+        'country_code, country_name, priority, headline, summary, sections, headline_ko, summary_ko, sections_ko, fcc_potential_low_t, fcc_potential_high_t, fcc_potential_basis_ko, report_links, checked_at',
       )
       .eq('country_code' as never, code)
       .is('deleted_at' as never, null)
@@ -245,7 +250,12 @@ export async function CountryMarketTab({ partyId, country }: Props) {
           )}
         </CardHeader>
         <CardContent className="pt-0">
-          <h3 className="mb-1 pt-2 text-sm font-semibold">핵심 지표</h3>
+          <CountryMarketLinks
+            countryCode={m.country_code}
+            initialLinks={Array.isArray(m.report_links) ? m.report_links : []}
+            revalidate={path}
+          />
+          <h3 className="mb-1 pt-4 text-sm font-semibold">핵심 지표</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>

@@ -131,7 +131,11 @@ export default async function PartyDetailPage({ params }: PageProps) {
             }
             market={
               full.party.partyType === 'paper_mill' || full.party.partyType === 'filler_supplier' ? (
-                <CountryMarketTab partyId={full.party.id} country={partyCountry} />
+                <CountryMarketTab
+                  partyId={full.party.id}
+                  country={partyCountry}
+                  path={`/${full.party.partyType}/parties/${full.party.id}`}
+                />
               ) : null
             }
             overview={
