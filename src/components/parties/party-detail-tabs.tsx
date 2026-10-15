@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 const TAB_VALUES = [
   'overview',
   'analysis',
+  'market',
   'activity',
   'communications',
   'contacts',
@@ -30,6 +31,8 @@ interface PartyDetailTabsProps {
   overview: ReactNode;
   /** investor-only research tab; omit for other party types */
   analysis?: ReactNode;
+  /** paper_mill / filler_supplier country market tab; omit for other party types */
+  market?: ReactNode;
   activity: ReactNode;
   communications: ReactNode;
   contacts: ReactNode;
@@ -40,6 +43,7 @@ interface PartyDetailTabsProps {
 export function PartyDetailTabs({
   overview,
   analysis,
+  market,
   activity,
   communications,
   contacts,
@@ -73,6 +77,9 @@ export function PartyDetailTabs({
         {analysis ? (
           <TabsTrigger value="analysis" className={TRIGGER}>Investor Analysis</TabsTrigger>
         ) : null}
+        {market ? (
+          <TabsTrigger value="market" className={TRIGGER}>Market</TabsTrigger>
+        ) : null}
         <TabsTrigger value="activity" className={TRIGGER}>Activity</TabsTrigger>
         <TabsTrigger value="communications" className={TRIGGER}>Communications</TabsTrigger>
         <TabsTrigger value="contacts" className={TRIGGER}>Contacts</TabsTrigger>
@@ -83,6 +90,9 @@ export function PartyDetailTabs({
       <TabsContent value="overview" className="space-y-4">{overview}</TabsContent>
       {analysis ? (
         <TabsContent value="analysis" className="space-y-4">{analysis}</TabsContent>
+      ) : null}
+      {market ? (
+        <TabsContent value="market" className="space-y-4">{market}</TabsContent>
       ) : null}
       <TabsContent value="activity" className="space-y-4">{activity}</TabsContent>
       <TabsContent value="communications" className="space-y-4">{communications}</TabsContent>

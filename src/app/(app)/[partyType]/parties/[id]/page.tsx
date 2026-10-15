@@ -38,7 +38,7 @@ import { InvestorProfileCard } from '@/components/parties/investor-profile-card'
 import { InvestorAnalysisPanel } from '@/components/parties/investor-analysis-panel';
 import { MentorProfileCard } from '@/components/parties/mentor-profile-card';
 import { PlantProfileCard } from '@/components/parties/plant-profile-card';
-import { CountryMarketPanel } from '@/components/parties/country-market-panel';
+import { CountryMarketTab } from '@/components/parties/country-market-tab';
 
 // Party-type is validated dynamically against the DB: fetchPartyDetail resolves
 // the party's real type from app.party_types, and the URL module is checked
@@ -129,6 +129,11 @@ export default async function PartyDetailPage({ params }: PageProps) {
                 />
               ) : null
             }
+            market={
+              full.party.partyType === 'paper_mill' || full.party.partyType === 'filler_supplier' ? (
+                <CountryMarketTab partyId={full.party.id} country={partyCountry} />
+              ) : null
+            }
             overview={
               <>
                 <PartyStatsGrid party={full.party} />
@@ -140,11 +145,6 @@ export default async function PartyDetailPage({ params }: PageProps) {
                     partyId={full.party.id}
                     partyType={full.party.partyType as 'paper_mill' | 'filler_supplier'}
                   />
-                )}
-                {partyCountry &&
-                  (full.party.partyType === 'paper_mill' ||
-                    full.party.partyType === 'filler_supplier') && (
-                  <CountryMarketPanel partyId={full.party.id} country={partyCountry} />
                 )}
                 <PartyApplicationPanel
                   partyId={full.party.id}
