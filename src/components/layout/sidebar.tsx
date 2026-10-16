@@ -39,6 +39,7 @@ import {
   Mail,
   BarChart3,
   Landmark,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -526,6 +527,14 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
                 />
               );
             })}
+            <NavLink
+              href="/markets"
+              icon={<Globe className="h-4 w-4 shrink-0" />}
+              label="Country Markets"
+              active={isActive(pathname, '/markets')}
+              collapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
           </ul>
 
           <Separator className="my-3" />

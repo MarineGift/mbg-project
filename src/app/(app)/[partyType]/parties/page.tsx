@@ -1019,6 +1019,18 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             sectors={isInvestor ? sectorFacets : undefined}
             sector={sectorFilter}
           />
+          {(isPaperMill || isFiller) && (
+            <div className="flex items-center gap-2 text-xs pt-1">
+              <Link
+                href={countryFilter ? `/markets/${countryFilter}` : '/markets'}
+                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted"
+              >
+                {countryFilter
+                  ? `${countryNames[countryFilter] ?? countryFilter} 시장현황`
+                  : '국가별 시장현황 (Country Markets)'}
+              </Link>
+            </div>
+          )}
           {greentownCount != null && greentownCount > 0 && (
             <div className="flex items-center gap-2 flex-wrap pt-1">
               <span className="text-xs text-muted-foreground">Curated by</span>
