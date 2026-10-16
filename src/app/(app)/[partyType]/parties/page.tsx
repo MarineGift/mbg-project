@@ -921,6 +921,14 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
   ]);
   scores = pageScores;
 
+  // Country combobox: every country in app.countries (full ISO list), plus any
+  // code used by a party but missing there - so countries with no rows yet
+  // (e.g. Timor-Leste) can still be picked.
+  const allCountryCodes: string[] = [...new Set([
+    ...Object.keys(countryNames),
+    ...distinctCountries,
+  ])].sort();
+
   // Org kind (entity_type) per visible party -> Type column + mobile sub-info.
   const entityTypeAll: Record<string, { en: string; ko: string }> = {};
   if (partyIds.length > 0) {
@@ -1003,7 +1011,7 @@ export default async function PartiesListPage({ params, searchParams }: PageProp
             )}
           </p>
           <PartiesFilterBar
-            countries={distinctCountries}
+            countries={allCountryCodes}
             countryNames={countryNames}
             country={countryFilter}
             q={searchQuery}
