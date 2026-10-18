@@ -6,8 +6,8 @@
 -- Mali update (reports 2026-10-17).
 -- 1) Filler if missing (1): Diamond Cement Mali (limestone).
 -- 2) Mills if missing (2, no priority, machine to confirm): SAP Mali, SCS
---    Malienne de Cartonnerie. Context (4): SOCEM, Graphique Industrie,
---    Emball'Print, CMP.
+--    Malienne de Cartonnerie. Context (7): SOCEM, TransFopam, SNFC,
+--    Graphique Industrie, Emball'Print, Barkana, CMP.
 -- 3) app.country_markets ML row (priority none).
 -- Idempotent. Last statement is a verification select.
 -- ============================================================
@@ -68,7 +68,7 @@ insert into app.filler_supplier_profile
                v.intro_ko, v.intro_en, v.notes, 'b25de8f2-1020-482f-9012-183f63883169'::uuid
         from (values
           ('soci[eé]t[eé] africaine de papier|sap mali', 'sotuba|bamako', 'dahdah|sap', 'SAP Mali (Société Africaine de Papiers) - Bamako', 'Bamako', 'Bamako', null, 'Dahdah 그룹 SAP(Sotuba 산업지구, Porte 31-42) — 그룹이 종이공장으로 소개, 생산능력·초지기 미공개.', 'Société Africaine de Papiers SARL (Dahdah Group, founded in Bamako 2000), Zone Industrielle, Route de Sotuba, Porte 31-42, Bamako - described by the group as a paper factory, capacity and paper machine not disclosed.', 'ML check 2026-10-16: ask products, machine, fibre and daily output. infosapmali@gmail.com, +223 20 21 39 39.'),
-  ('scs malienne|malienne de cartonnerie', 'kamal[eé]', 'scs', 'SCS Malienne de Cartonnerie - Kamalé', 'Koulikoro', 'Kamalé', null, 'SCS International 계열 Kamalé 공장(바마코 35 km, 2019 가동) — 골판지·식품 상자·시멘트용 크라프트 포대, 계획 판지 2만 t(2018), Diamond Cement 포대 2,000만 장+(2019 계약).', 'SCS Malienne de Cartonnerie (SCS International), Kamalé Soba (Mandé, about 35 km of Bamako) - corrugated packaging, food boxes and kraft cement sacks, production started 2019, 20,000 t/yr board planned (2018), over 20 m sacks contracted with Diamond Cement (2019).', 'ML check 2026-10-16: corrugator and sack lines, own paper machine not confirmed.')
+  ('scs malienne|malienne de cartonnerie', 'kamal[eé]', 'scs', 'SCS Malienne de Cartonnerie - Kamalé', 'Koulikoro', 'Kamalé', null, 'SCS International 계열 Kamalé 공장(바마코 35 km, 2019 가동) — 골판지·식품 상자·시멘트용 크라프트 포대, 계획 판지 2만 t(2018), Diamond Cement 포대 2,000만 장+(2019 계약).', 'SCS Malienne de Cartonnerie (SCS International), Kamalé Soba (Mandé, about 35 km of Bamako) - corrugated packaging, food boxes and kraft cement sacks, production started 2019, 20,000 t/yr board planned (2018), over 20 m sacks contracted with Diamond Cement (2019).', 'ML check 2026-10-16: corrugator and sack lines, own paper machine not confirmed. 2016 contacts +223 20 22 65 60 (recheck), director then Moussa Silvain Diakité.')
         ) as v(name_rx, city_rx, owner_rx, party_name, region, city, website, intro_ko, intro_en, notes)
         where (select y.id from app.parties y
           where y.party_type_id = 2 and y.deleted_at is null and y.country_code = 'ML'
@@ -93,11 +93,14 @@ insert into app.filler_supplier_profile
           limit 1) as id
       from (values
       ('soci[eé]t[eé] africaine de papier|sap mali', 'sotuba|bamako', 'dahdah|sap', 'Dahdah 그룹 SAP(Sotuba 산업지구, Porte 31-42) — 그룹이 종이공장으로 소개, 생산능력·초지기 미공개.', 'Société Africaine de Papiers SARL (Dahdah Group, founded in Bamako 2000), Zone Industrielle, Route de Sotuba, Porte 31-42, Bamako - described by the group as a paper factory, capacity and paper machine not disclosed.', 'ML check 2026-10-16: ask products, machine, fibre and daily output. infosapmali@gmail.com, +223 20 21 39 39.'),
-  ('scs malienne|malienne de cartonnerie', 'kamal[eé]', 'scs', 'SCS International 계열 Kamalé 공장(바마코 35 km, 2019 가동) — 골판지·식품 상자·시멘트용 크라프트 포대, 계획 판지 2만 t(2018), Diamond Cement 포대 2,000만 장+(2019 계약).', 'SCS Malienne de Cartonnerie (SCS International), Kamalé Soba (Mandé, about 35 km of Bamako) - corrugated packaging, food boxes and kraft cement sacks, production started 2019, 20,000 t/yr board planned (2018), over 20 m sacks contracted with Diamond Cement (2019).', 'ML check 2026-10-16: corrugator and sack lines, own paper machine not confirmed.'),
+  ('scs malienne|malienne de cartonnerie', 'kamal[eé]', 'scs', 'SCS International 계열 Kamalé 공장(바마코 35 km, 2019 가동) — 골판지·식품 상자·시멘트용 크라프트 포대, 계획 판지 2만 t(2018), Diamond Cement 포대 2,000만 장+(2019 계약).', 'SCS Malienne de Cartonnerie (SCS International), Kamalé Soba (Mandé, about 35 km of Bamako) - corrugated packaging, food boxes and kraft cement sacks, production started 2019, 20,000 t/yr board planned (2018), over 20 m sacks contracted with Diamond Cement (2019).', 'ML check 2026-10-16: corrugator and sack lines, own paper machine not confirmed. 2016 contacts +223 20 22 65 60 (recheck), director then Moussa Silvain Diakité.'),
   ('socem|cartons et emballages du mali', null, 'socem|cartons et emballages du mali', null, null, 'ML check 2026-10-16: SOCEM, Banancoro - board and packaging, machine not confirmed - context only.'),
   ('graphique industrie', null, 'graphique industrie', null, null, 'ML check 2026-10-16: Printing, exercise books, labels, boxes (1989, IFC) - context only.'),
   ('emball.?print', null, 'emball.?print', null, null, 'ML check 2026-10-16: Paper bags and boxes, Bamako - context only.'),
-  ('compagnie malienne du papier', null, 'compagnie malienne du papier', null, null, 'ML check 2026-10-16: Copy and printing paper distribution, Bamako - context only.')
+  ('compagnie malienne du papier', null, 'compagnie malienne du papier', null, null, 'ML check 2026-10-16: Copy and printing paper distribution, Bamako - context only.'),
+  ('transfopam', null, 'transfopam', null, null, 'ML check 2026-10-16: TransFopam, Niaréla Bamako - converts A3 / A4 80 gsm paper, notebooks, forms - context only.'),
+  ('\msnfc\M|nouvelle de fabrication de cahiers', null, '\msnfc\M|nouvelle de fabrication de cahiers', null, null, 'ML check 2026-10-16: SNFC, Dravéla Bamako - notebooks (with TransFopam about 35 staff, 9-10 k notebooks/hour, 2017) - context only.'),
+  ('barkana', null, 'barkana', null, null, 'ML check 2026-10-16: Printing and screen printing, Bamako - context only.')
       ) as v(name_rx, city_rx, owner_rx, intro_ko, intro_en, notes)
     ) m
     where p.id = m.id and coalesce(p.source, '') <> 'mali_update_20261016';
@@ -118,7 +121,10 @@ insert into app.filler_supplier_profile
   ('socem|cartons et emballages du mali', null, 'socem|cartons et emballages du mali'),
   ('graphique industrie', null, 'graphique industrie'),
   ('emball.?print', null, 'emball.?print'),
-  ('compagnie malienne du papier', null, 'compagnie malienne du papier')
+  ('compagnie malienne du papier', null, 'compagnie malienne du papier'),
+  ('transfopam', null, 'transfopam'),
+  ('\msnfc\M|nouvelle de fabrication de cahiers', null, '\msnfc\M|nouvelle de fabrication de cahiers'),
+  ('barkana', null, 'barkana')
       ) as v(name_rx, city_rx, owner_rx)
     ) m
     where m.id is not null
@@ -149,7 +155,13 @@ update app.paper_mill_profile mp
   ('emball.?print', null, 'emball.?print', true,
    $pj${"owner": "Emball'Print", "products": "Paper bags and boxes, Bamako", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
   ('compagnie malienne du papier', null, 'compagnie malienne du papier', true,
-   $pj${"owner": "CMP", "products": "Copy and printing paper distribution, Bamako", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb)
+   $pj${"owner": "CMP", "products": "Copy and printing paper distribution, Bamako", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('transfopam', null, 'transfopam', true,
+   $pj${"owner": "Yattassaye group", "products": "TransFopam, Niaréla Bamako - converts A3 / A4 80 gsm paper, notebooks, forms", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('\msnfc\M|nouvelle de fabrication de cahiers', null, '\msnfc\M|nouvelle de fabrication de cahiers', true,
+   $pj${"owner": "Yattassaye group", "products": "SNFC, Dravéla Bamako - notebooks (with TransFopam about 35 staff, 9-10 k notebooks/hour, 2017)", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('barkana', null, 'barkana', true,
+   $pj${"owner": "Barkana", "products": "Printing and screen printing, Bamako", "approach": "Converter or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb)
       ) as v(name_rx, city_rx, owner_rx, ctx, plant)
     ) m
     where mp.party_id = m.id;
@@ -161,8 +173,8 @@ insert into app.country_markets
 values
   ('b25de8f2-1020-482f-9012-183f63883169'::uuid, 'ML', 'Mali', 'none',
    $cm$No confirmed paper machine - SAP Mali (to confirm), SCS Kamalé corrugated and sacks, converters - limestone only via cement makers$cm$,
-   $cm$Mali's paper sector is SAP Mali (Dahdah Group 'paper factory' in Sotuba, machine not confirmed), SCS Malienne de Cartonnerie at Kamalé (corrugated and kraft cement sacks since 2019), SOCEM, plus printers and distributors (Graphique Industrie, Emball'Print, CMP). HS 48 imports about USD 42.6 m in 2024, 54 pct Côte d'Ivoire and Ghana. No paper PCC or GCC - limestone only at cement makers (Diamond Cement about 1 Mt clinker, CIMAF, CMM). Landlocked - FCC demand would be served by coastal mills.$cm$,
-   $cm${"fillers": "Limestone: Diamond Cement Mali. Cement grinders: CIMAF, CMM (not added). No PCC or GCC.", "mills": "To confirm: SAP Mali, SCS Malienne de Cartonnerie. Context: SOCEM, Graphique Industrie, Emball'Print, CMP.", "strategy": "Confirm SAP's machine. Otherwise serve via Ivorian and Ghanaian suppliers.", "risks": "Landlocked logistics, security situation.", "next_steps": ["Ask SAP Mali about its paper machine"], "key_numbers": [{"label": "HS 48 imports 2024", "value": "about USD 42.6 m"}, {"label": "CI + GH share", "value": "about 54 pct"}], "files": ["seed_20261016zzzb_mali_mills_fillers"]}$cm$::jsonb,
+   $cm$Mali's paper sector is SAP Mali (Dahdah Group 'paper factory' in Sotuba, machine not confirmed), SCS Malienne de Cartonnerie at Kamalé (corrugated and kraft cement sacks since 2019), SOCEM, plus converters, printers and distributors (TransFopam, SNFC, Graphique Industrie, Emball'Print, Barkana, CMP). HS 48 imports about USD 42.6 m in 2024, 54 pct Côte d'Ivoire and Ghana. No paper PCC or GCC - limestone only at cement makers (Diamond Cement about 1 Mt clinker, CIMAF, CMM). Landlocked - FCC demand would be served by coastal mills.$cm$,
+   $cm${"fillers": "Limestone: Diamond Cement Mali. Cement grinders: CIMAF, CMM (not added). No PCC or GCC.", "mills": "To confirm: SAP Mali, SCS Malienne de Cartonnerie. Context: SOCEM, TransFopam, SNFC, Graphique Industrie, Emball'Print, Barkana, CMP.", "strategy": "Confirm SAP's machine. Otherwise serve via Ivorian and Ghanaian suppliers.", "risks": "Landlocked logistics, security situation.", "next_steps": ["Ask SAP Mali about its paper machine"], "key_numbers": [{"label": "HS 48 imports 2024", "value": "about USD 42.6 m"}, {"label": "CI + GH share", "value": "about 54 pct"}], "files": ["seed_20261016zzzb_mali_mills_fillers"]}$cm$::jsonb,
    $cm$초지기 미확인 — SAP Mali(확인 필요), SCS Kamalé 골판지·포대, 가공업체 — 석회석은 시멘트사뿐$cm$,
    $cm$말리 제지 관련: SAP Mali(Dahdah 그룹이 Sotuba '종이공장'으로 소개, 초지기 미확인), SCS Malienne de Cartonnerie Kamalé(2019~ 골판지·시멘트 크라프트 포대), SOCEM, 인쇄·유통(Graphique Industrie, Emball'Print, CMP). HS 48 수입 2024 약 4,263만 달러, 54% 코트디부아르·가나. 제지용 PCC·GCC 없음 — 석회석은 시멘트사(Diamond Cement 클링커 약 100만 t, CIMAF, CMM). 내륙국 — 연안국 제지사 경유.$cm$,
    null, null,
@@ -182,7 +194,10 @@ on conflict (organization_id, country_code) do update
   ('socem|cartons et emballages du mali', null, 'socem|cartons et emballages du mali'),
   ('graphique industrie', null, 'graphique industrie'),
   ('emball.?print', null, 'emball.?print'),
-  ('compagnie malienne du papier', null, 'compagnie malienne du papier')
+  ('compagnie malienne du papier', null, 'compagnie malienne du papier'),
+  ('transfopam', null, 'transfopam'),
+  ('\msnfc\M|nouvelle de fabrication de cahiers', null, '\msnfc\M|nouvelle de fabrication de cahiers'),
+  ('barkana', null, 'barkana')
     )
     select 'mill' as kind, coalesce(p.party_name, 'MISSING ' || v.name_rx) as name,
            case when p.source = 'mali_update_20261016' then 'added now' when p.id is null then '-' else 'already there' end as status,
