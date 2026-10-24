@@ -5,7 +5,7 @@
 --
 -- Central African Republic (CF) update (reports 2026-10-17). No paper
 -- machine or filler plant - no rows created. Memos carry a sanctions note.
--- 1) Context, match only (7): Bangui stationers and printers.
+-- 1) Context, match only (12): Bangui stationers, printers, retailers.
 -- 2) app.country_markets CF row (priority none).
 -- Idempotent. Last statement is a verification select.
 -- ============================================================
@@ -31,7 +31,12 @@
   ('imprimerie centrafricaine', null, 'imprimerie centrafricaine', null, null, 'CF check 2026-10-16: Printing, Bangui BP 329 - context only. Screen against UN and US Central African Republic sanctions lists.'),
   ('imprimerie ipc', null, 'imprimerie ipc', null, null, 'CF check 2026-10-16: Printing, Bangui BP 1442 - context only. Screen against UN and US Central African Republic sanctions lists.'),
   ('imprimerie ipm', null, 'imprimerie ipm', null, null, 'CF check 2026-10-16: Printing, Bangui BP 1597 - context only. Screen against UN and US Central African Republic sanctions lists.'),
-  ('vopijus', null, 'vopijus', null, null, 'CF check 2026-10-16: Printing, Bangui BP 849 - context only. Screen against UN and US Central African Republic sanctions lists.')
+  ('vopijus', null, 'vopijus', null, null, 'CF check 2026-10-16: Printing, Bangui BP 849 - context only. Screen against UN and US Central African Republic sanctions lists.'),
+  ('printstech', null, 'printstech', null, null, 'CF check 2026-10-16: Printstech Centrafrique, Bangui (opened 2022-09-07, DRC Printstech group) - printing and screen printing - context only. Screen against UN and US Central African Republic sanctions lists.'),
+  ('emadeu', null, 'emadeu', null, null, 'CF check 2026-10-16: Emadeu Trade Corporation, Avenue des Martyrs Bangui (2015) - commercial printing - context only. Screen against UN and US Central African Republic sanctions lists.'),
+  ('watatu', null, 'watatu', null, null, 'CF check 2026-10-16: Watatu SARL - offset printing and stationery - context only. Screen against UN and US Central African Republic sanctions lists.'),
+  ('bonprix', null, 'bonprix', null, null, 'CF check 2026-10-16: Bonprix.cf, Bangui - online copy paper and stationery - context only. Screen against UN and US Central African Republic sanctions lists.'),
+  ('m nour', null, 'm nour', null, null, 'CF check 2026-10-16: Société M Nour, Bangui - office supplies distribution - context only. Screen against UN and US Central African Republic sanctions lists.')
       ) as v(name_rx, city_rx, owner_rx, intro_ko, intro_en, notes)
     ) m
     where p.id = m.id and coalesce(p.source, '') <> 'car_update_20261016';
@@ -53,7 +58,12 @@
   ('imprimerie centrafricaine', null, 'imprimerie centrafricaine'),
   ('imprimerie ipc', null, 'imprimerie ipc'),
   ('imprimerie ipm', null, 'imprimerie ipm'),
-  ('vopijus', null, 'vopijus')
+  ('vopijus', null, 'vopijus'),
+  ('printstech', null, 'printstech'),
+  ('emadeu', null, 'emadeu'),
+  ('watatu', null, 'watatu'),
+  ('bonprix', null, 'bonprix'),
+  ('m nour', null, 'm nour')
       ) as v(name_rx, city_rx, owner_rx)
     ) m
     where m.id is not null
@@ -86,7 +96,17 @@ update app.paper_mill_profile mp
   ('imprimerie ipm', null, 'imprimerie ipm', true,
    $pj${"owner": "IPM", "products": "Printing, Bangui BP 1597", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
   ('vopijus', null, 'vopijus', true,
-   $pj${"owner": "Vopijus", "products": "Printing, Bangui BP 849", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb)
+   $pj${"owner": "Vopijus", "products": "Printing, Bangui BP 849", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('printstech', null, 'printstech', true,
+   $pj${"owner": "Printstech", "products": "Printstech Centrafrique, Bangui (opened 2022-09-07, DRC Printstech group) - printing and screen printing", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('emadeu', null, 'emadeu', true,
+   $pj${"owner": "Emadeu Trade", "products": "Emadeu Trade Corporation, Avenue des Martyrs Bangui (2015) - commercial printing", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('watatu', null, 'watatu', true,
+   $pj${"owner": "Watatu", "products": "Watatu SARL - offset printing and stationery", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('bonprix', null, 'bonprix', true,
+   $pj${"owner": "Bonprix.cf", "products": "Bonprix.cf, Bangui - online copy paper and stationery", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('m nour', null, 'm nour', true,
+   $pj${"owner": "Société M Nour", "products": "Société M Nour, Bangui - office supplies distribution", "approach": "Printer or distributor.", "checked_at": "2026-10-16"}$pj$::jsonb)
       ) as v(name_rx, city_rx, owner_rx, ctx, plant)
     ) m
     where mp.party_id = m.id;
@@ -98,10 +118,10 @@ insert into app.country_markets
 values
   ('b25de8f2-1020-482f-9012-183f63883169'::uuid, 'CF', 'Central African Republic', 'none',
    $cm$No paper machine or paper filler plant - Bangui printers and stationers only - paper via Cameroon (SAMCO), Mali, Côte d'Ivoire$cm$,
-   $cm$The Central African Republic has no confirmed paper mill and no paper PCC or GCC maker. Paper firms are Bangui stationers (Akram, Papyrus) and printers (Dauphin Royal, Imprimerie Centrafricaine, IPC, IPM, Vopijus). HS 48 imports about USD 6.44 m in 2024 (Mali, Côte d'Ivoire, Cameroon, China, France). Cameroon's SAMCO Paper (Limbe, sheeting plant at Ombe) sells to CAR buyers. Sanctions screening applies.$cm$,
-   $cm${"fillers": "None.", "mills": "No paper machine. Context: two stationers, five printers in Bangui.", "strategy": "None direct - trace the base-paper mills behind SAMCO (CM) and Ivorian suppliers.", "risks": "Security, sanctions, landlocked logistics.", "next_steps": [], "key_numbers": [{"label": "HS 48 imports 2024", "value": "about USD 6.44 m"}], "files": ["seed_20261016zzzw_car_market"]}$cm$::jsonb,
+   $cm$The Central African Republic has no confirmed paper mill and no paper PCC or GCC maker. Paper firms are Bangui stationers (Akram, Papyrus) and printers (Dauphin Royal, Imprimerie Centrafricaine, IPC, IPM, Vopijus, Printstech, Emadeu, Watatu), plus retailers Bonprix.cf and M Nour. HS 48 imports about USD 6.44 m in 2024, incl. about 1,341 t of HS 4818 hygiene paper products (Mali, Côte d'Ivoire, Cameroon, China, France). Cameroon's SAMCO Paper (Limbe, sheeting plant at Ombe) sells to CAR buyers. Sanctions screening applies.$cm$,
+   $cm${"fillers": "None.", "mills": "No paper machine. Context: stationers, printers and retailers in Bangui (12).", "strategy": "None direct - trace the base-paper mills behind SAMCO (CM) and Ivorian suppliers.", "risks": "Security, sanctions, landlocked logistics.", "next_steps": [], "key_numbers": [{"label": "HS 48 imports 2024", "value": "about USD 6.44 m"}], "files": ["seed_20261016zzzw_car_market"]}$cm$::jsonb,
    $cm$초지기·제지용 충전제 공장 없음 — 방기 인쇄·문구업체뿐 — 카메룬(SAMCO)·말리·코트디부아르 경유$cm$,
-   $cm$중앙아프리카공화국에는 확인된 제지공장·제지용 PCC·GCC 제조사 없음. 종이 관련은 방기 문구점(Akram, Papyrus)과 인쇄소(Dauphin Royal, Imprimerie Centrafricaine, IPC, IPM, Vopijus). HS 48 수입 2024 약 644만 달러(말리·코트디부아르·카메룬·중국·프랑스). 카메룬 SAMCO Paper(Limbe, Ombe 재단공장)가 CAR 구매자에게 판매. 제재 확인 필요.$cm$,
+   $cm$중앙아프리카공화국에는 확인된 제지공장·제지용 PCC·GCC 제조사 없음. 종이 관련은 방기 문구점(Akram, Papyrus)과 인쇄소(Dauphin Royal, Imprimerie Centrafricaine, IPC, IPM, Vopijus, Printstech, Emadeu, Watatu), 소매 Bonprix.cf·M Nour. HS 48 수입 2024 약 644만 달러(위생용지 HS 4818 약 1,341 t 포함)(말리·코트디부아르·카메룬·중국·프랑스). 카메룬 SAMCO Paper(Limbe, Ombe 재단공장)가 CAR 구매자에게 판매. 제재 확인 필요.$cm$,
    null, null,
    $cm$초지기 없음 — 직접 수요 없음$cm$,
    '2026-10-15'::date)
@@ -120,7 +140,12 @@ on conflict (organization_id, country_code) do update
   ('imprimerie centrafricaine', null, 'imprimerie centrafricaine'),
   ('imprimerie ipc', null, 'imprimerie ipc'),
   ('imprimerie ipm', null, 'imprimerie ipm'),
-  ('vopijus', null, 'vopijus')
+  ('vopijus', null, 'vopijus'),
+  ('printstech', null, 'printstech'),
+  ('emadeu', null, 'emadeu'),
+  ('watatu', null, 'watatu'),
+  ('bonprix', null, 'bonprix'),
+  ('m nour', null, 'm nour')
     )
     select 'mill' as kind, coalesce(p.party_name, 'MISSING ' || v.name_rx) as name,
            case when p.source = 'car_update_20261016' then 'added now' when p.id is null then '-' else 'already there' end as status,
