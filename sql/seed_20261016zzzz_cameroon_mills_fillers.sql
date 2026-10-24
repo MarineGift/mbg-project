@@ -5,7 +5,7 @@
 --
 -- Cameroon update (reports 2026-10-17).
 -- 1) Filler if missing (1): CIMENCAM (Figuil limestone).
--- 2) Mill if missing (1, no priority): SITRACEL. Context (8).
+-- 2) Mill if missing (1, no priority): SITRACEL. Context (13).
 -- 3) app.country_markets CM row (priority none).
 -- Idempotent. Last statement is a verification select.
 -- ============================================================
@@ -90,14 +90,19 @@ insert into app.filler_supplier_profile
           limit 1) as id
       from (values
       ('sitracel', 'yaound[eé]|efoulan|douala', 'sitracel', 'SITRACEL(1978, Efoulan Yaoundé·Douala) 화장지·키친타월·냅킨·여성용품·기저귀·노트·복사용지, 생산장비 28대(디렉터리) — 초지기 여부 미확인.', 'SITRACEL S.A. (Société Industrielle de Traitement de Cellulose, 1978), Efoulan, Yaoundé, plus Douala - toilet tissue, towels, napkins, feminine and baby care, exercise books and copy paper, 28 production machines per a directory (not all paper machines).', 'CM check 2026-10-16: ask whether it runs a tissue machine or buys jumbo rolls. info@sitracel.com, +237 222 31 78 20.'),
-  ('sita industry', null, 'sita industry', null, null, 'CM check 2026-10-16: SITA Industry, Boadibo Douala (2000) - notebooks and reams - context only.'),
+  ('sita industry', null, 'sita industry', null, null, 'CM check 2026-10-16: SITA Industry, Boadibo Douala (2000) - notebooks and reams, absorbed by SITRACEL 2018 - context only.'),
   ('socarto', null, 'socarto', null, null, 'CM check 2026-10-16: SOCARTO (1972), Bassa Ndokoti Douala - 1-6 ply kraft sacks, paper cutting - corrugating reported idle - context only.'),
   ('samco paper', null, 'samco paper', null, null, 'CM check 2026-10-16: SAMCO Paper (1992), Ombe sheeting plant, Limbe - imports reels, sells to CF, TD, GQ - context only.'),
   ('moore paragon', null, 'moore paragon', null, null, 'CM check 2026-10-16: Moore Paragon Cameroun, Bonabéri - board and printing - status to confirm - context only.'),
   ('\msafca\M', null, '\msafca\M', null, null, 'CM check 2026-10-16: SAFCA, Douala - notebooks - context only.'),
   ('printpak', null, 'printpak', null, null, 'CM check 2026-10-16: Printpak, Douala - printing and packaging - context only.'),
   ('packing industry company|\mpic sarl', null, 'packing industry company|\mpic sarl', null, null, 'CM check 2026-10-16: Packing Industry Company, Bassa Douala - adhesive, coated and offset papers - context only.'),
-  ('cellucam', null, 'cellucam', null, null, 'CM check 2026-10-16: CELLUCAM, Edéa - pulp mill opened 1980, liquidated 1986 - context only.')
+  ('cellucam', null, 'cellucam', null, null, 'CM check 2026-10-16: CELLUCAM, Edéa - pulp mill opened 1980, liquidated 1986 - context only.'),
+  ('plasticam', null, 'plasticam', null, null, 'CM check 2026-10-16: PLASTICAM (1961), Bassa Douala - corrugated boxes plus plastic packaging, two plants - liner source to confirm - context only.'),
+  ('\msati sarl|africaine de transformation industrielle', null, '\msati sarl|africaine de transformation industrielle', null, null, 'CM check 2026-10-16: SATI SARL, Douala - corrugated boxes - context only.'),
+  ('greystone', null, 'greystone', null, null, 'CM check 2026-10-16: Greystone Manufacturing, Odza Yaoundé - PaperOne copy-paper distribution, 2,500 m2 warehouse, 20 kt/yr production plan - context only.'),
+  ('tiof', null, 'tiof', null, null, 'CM check 2026-10-16: TIOF Hygienic and Paper Industry, Yaoundé - listed converter - context only.'),
+  ('le menn', null, 'le menn', null, null, 'CM check 2026-10-16: Le Menn Paper Converting, Limbe - listed converter - context only.')
       ) as v(name_rx, city_rx, owner_rx, intro_ko, intro_en, notes)
     ) m
     where p.id = m.id and coalesce(p.source, '') <> 'cameroon_update_20261016';
@@ -121,7 +126,12 @@ insert into app.filler_supplier_profile
   ('\msafca\M', null, '\msafca\M'),
   ('printpak', null, 'printpak'),
   ('packing industry company|\mpic sarl', null, 'packing industry company|\mpic sarl'),
-  ('cellucam', null, 'cellucam')
+  ('cellucam', null, 'cellucam'),
+  ('plasticam', null, 'plasticam'),
+  ('\msati sarl|africaine de transformation industrielle', null, '\msati sarl|africaine de transformation industrielle'),
+  ('greystone', null, 'greystone'),
+  ('tiof', null, 'tiof'),
+  ('le menn', null, 'le menn')
       ) as v(name_rx, city_rx, owner_rx)
     ) m
     where m.id is not null
@@ -144,7 +154,7 @@ update app.paper_mill_profile mp
       ('sitracel', 'yaound[eé]|efoulan|douala', 'sitracel', false,
    $pj${"owner": "SITRACEL", "products": "Tissue products, notebooks", "grades": ["Tissue"], "approach": "Confirm tissue machine first.", "to_collect": ["Machine type and main grammages", "Virgin versus recycled fibre", "Softness, absorbency, tensile, dust limits", "Who approves a machine trial"], "checked_at": "2026-10-16"}$pj$::jsonb),
   ('sita industry', null, 'sita industry', true,
-   $pj${"owner": "SITRACEL group", "products": "SITA Industry, Boadibo Douala (2000) - notebooks and reams", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+   $pj${"owner": "SITRACEL group", "products": "SITA Industry, Boadibo Douala (2000) - notebooks and reams, absorbed by SITRACEL 2018", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
   ('socarto', null, 'socarto', true,
    $pj${"owner": "SOCARTO", "products": "SOCARTO (1972), Bassa Ndokoti Douala - 1-6 ply kraft sacks, paper cutting - corrugating reported idle", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
   ('samco paper', null, 'samco paper', true,
@@ -158,7 +168,17 @@ update app.paper_mill_profile mp
   ('packing industry company|\mpic sarl', null, 'packing industry company|\mpic sarl', true,
    $pj${"owner": "PIC", "products": "Packing Industry Company, Bassa Douala - adhesive, coated and offset papers", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
   ('cellucam', null, 'cellucam', true,
-   $pj${"owner": "(closed)", "products": "CELLUCAM, Edéa - pulp mill opened 1980, liquidated 1986", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb)
+   $pj${"owner": "(closed)", "products": "CELLUCAM, Edéa - pulp mill opened 1980, liquidated 1986", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('plasticam', null, 'plasticam', true,
+   $pj${"owner": "PLASTICAM", "products": "PLASTICAM (1961), Bassa Douala - corrugated boxes plus plastic packaging, two plants - liner source to confirm", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('\msati sarl|africaine de transformation industrielle', null, '\msati sarl|africaine de transformation industrielle', true,
+   $pj${"owner": "SATI", "products": "SATI SARL, Douala - corrugated boxes", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('greystone', null, 'greystone', true,
+   $pj${"owner": "Greystone Manufacturing", "products": "Greystone Manufacturing, Odza Yaoundé - PaperOne copy-paper distribution, 2,500 m2 warehouse, 20 kt/yr production plan", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('tiof', null, 'tiof', true,
+   $pj${"owner": "TIOF", "products": "TIOF Hygienic and Paper Industry, Yaoundé - listed converter", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb),
+  ('le menn', null, 'le menn', true,
+   $pj${"owner": "Le Menn", "products": "Le Menn Paper Converting, Limbe - listed converter", "approach": "Converter, distributor or closed.", "checked_at": "2026-10-16"}$pj$::jsonb)
       ) as v(name_rx, city_rx, owner_rx, ctx, plant)
     ) m
     where mp.party_id = m.id;
@@ -170,10 +190,10 @@ insert into app.country_markets
 values
   ('b25de8f2-1020-482f-9012-183f63883169'::uuid, 'CM', 'Cameroon', 'none',
    $cm$No confirmed paper machine since CELLUCAM closed (1986) - SITRACEL tissue (to confirm), SOCARTO sacks, SAMCO sheeting for CEMAC - CIMENCAM limestone$cm$,
-   $cm$Cameroon's paper sector converts imported reels: SITRACEL (Yaoundé and Douala tissue and notebooks - machine to confirm), SITA Industry, SOCARTO (kraft sacks), SAMCO Paper (Ombe sheeting, sells to CAR, Chad, Equatorial Guinea), Moore Paragon, SAFCA, Printpak, PIC. The Edéa pulp mill CELLUCAM closed in 1986. 2023 imports incl. about 7.6 kt HS 480560 and 5 kt hygiene products. No paper PCC or GCC: CIMENCAM (Figuil limestone 275 kt), cement makers, carbonate traders, Tunisian MBS imports, and 99 pct CaCO3 beds reported in the Douala basin (2026 study). Douala is the CEMAC paper hub.$cm$,
-   $cm${"fillers": "Limestone: CIMENCAM. Not added: CIMAF, Dangote, ASCOM, SPIEX, AFOMA-CM. No PCC or GCC.", "mills": "To confirm: SITRACEL. Context: SITA Industry, SOCARTO, SAMCO Paper, Moore Paragon, SAFCA, Printpak, PIC, CELLUCAM (closed).", "strategy": "Confirm SITRACEL's machine. Use SAMCO and SOCARTO to trace overseas reel suppliers serving CEMAC.", "risks": "No confirmed machine, past pulp-mill failure.", "next_steps": ["Ask SITRACEL about tissue machines", "Ask SAMCO which mills supply its reels"], "key_numbers": [{"label": "HS 4818 imports 2023", "value": "about 5 kt"}, {"label": "Figuil quarry", "value": "about 275 kt/yr"}], "files": ["seed_20261016zzzz_cameroon_mills_fillers"]}$cm$::jsonb,
+   $cm$Cameroon's paper sector converts imported reels: SITRACEL (Yaoundé and Douala tissue and notebooks - machine to confirm), SITA Industry, SOCARTO (kraft sacks), PLASTICAM and SATI (corrugated), SAMCO Paper (Ombe sheeting, sells to CAR, Chad, Equatorial Guinea), Moore Paragon, SAFCA (Fotso group), Printpak, PIC, TIOF, Le Menn, and Greystone (copy-paper distributor with a 20 kt plan). FAO listed about 5 kt capacity in 2002. The Edéa pulp mill CELLUCAM closed in 1986. 2023 imports incl. about 7.6 kt HS 480560 and 5 kt hygiene products. No paper PCC or GCC: CIMENCAM (Figuil limestone 275 kt), cement makers, carbonate traders, Tunisian MBS imports, and 99 pct CaCO3 beds reported in the Douala basin (2026 study). Douala is the CEMAC paper hub.$cm$,
+   $cm${"fillers": "Limestone: CIMENCAM. Not added: CIMAF, Dangote, ASCOM, SPIEX, AFOMA-CM. No PCC or GCC.", "mills": "To confirm: SITRACEL. Context: SITA Industry, SOCARTO, PLASTICAM, SATI, SAMCO Paper, Greystone (20 kt plan), Moore Paragon, SAFCA, Printpak, PIC, TIOF, Le Menn, CELLUCAM (closed).", "strategy": "Confirm SITRACEL's machine. Use SAMCO and SOCARTO to trace overseas reel suppliers serving CEMAC.", "risks": "No confirmed machine, past pulp-mill failure.", "next_steps": ["Ask SITRACEL about tissue machines", "Ask SAMCO which mills supply its reels"], "key_numbers": [{"label": "HS 4818 imports 2023", "value": "about 5 kt"}, {"label": "Figuil quarry", "value": "about 275 kt/yr"}], "files": ["seed_20261016zzzz_cameroon_mills_fillers"]}$cm$::jsonb,
    $cm$CELLUCAM 폐쇄(1986) 후 초지기 미확인 — SITRACEL 티슈(확인 필요), SOCARTO 포대, SAMCO CEMAC 재단 유통 — CIMENCAM 석회석$cm$,
-   $cm$카메룬 제지업은 수입 원지 가공: SITRACEL(Yaoundé·Douala 티슈·노트 — 초지기 확인), SITA Industry, SOCARTO(크라프트 포대), SAMCO Paper(Ombe 재단, CAR·차드·적도기니 판매), Moore Paragon, SAFCA, Printpak, PIC. Edéa 펄프공장 CELLUCAM 1986 폐쇄. 2023 수입 HS 480560 약 7.6천 t·위생지 5천 t 등. 제지용 PCC·GCC 없음: CIMENCAM(Figuil 석회석 27.5만 t), 시멘트사, 탄산칼슘 상사, 튀니지 MBS 수입, Douala 분지 99% CaCO3 층 보고(2026). Douala 가 CEMAC 종이 거점.$cm$,
+   $cm$카메룬 제지업은 수입 원지 가공: SITRACEL(Yaoundé·Douala 티슈·노트 — 초지기 확인), SITA Industry, SOCARTO(크라프트 포대), PLASTICAM·SATI(골판지), SAMCO Paper(Ombe 재단, CAR·차드·적도기니 판매), Moore Paragon, SAFCA(Fotso), Printpak, PIC, TIOF, Le Menn, Greystone(복사용지 유통, 2만 t 계획). FAO 2002 약 5천 t. Edéa 펄프공장 CELLUCAM 1986 폐쇄. 2023 수입 HS 480560 약 7.6천 t·위생지 5천 t 등. 제지용 PCC·GCC 없음: CIMENCAM(Figuil 석회석 27.5만 t), 시멘트사, 탄산칼슘 상사, 튀니지 MBS 수입, Douala 분지 99% CaCO3 층 보고(2026). Douala 가 CEMAC 종이 거점.$cm$,
    null, null,
    $cm$초지기 미확인 — 산정 안 함$cm$,
    '2026-10-15'::date)
@@ -194,7 +214,12 @@ on conflict (organization_id, country_code) do update
   ('\msafca\M', null, '\msafca\M'),
   ('printpak', null, 'printpak'),
   ('packing industry company|\mpic sarl', null, 'packing industry company|\mpic sarl'),
-  ('cellucam', null, 'cellucam')
+  ('cellucam', null, 'cellucam'),
+  ('plasticam', null, 'plasticam'),
+  ('\msati sarl|africaine de transformation industrielle', null, '\msati sarl|africaine de transformation industrielle'),
+  ('greystone', null, 'greystone'),
+  ('tiof', null, 'tiof'),
+  ('le menn', null, 'le menn')
     )
     select 'mill' as kind, coalesce(p.party_name, 'MISSING ' || v.name_rx) as name,
            case when p.source = 'cameroon_update_20261016' then 'added now' when p.id is null then '-' else 'already there' end as status,
